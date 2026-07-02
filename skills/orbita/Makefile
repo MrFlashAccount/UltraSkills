@@ -15,6 +15,7 @@ check-workflow-run-leaks:
 		-name 'workflow-runner-test-*' -o \
 		-name 'workflow-runner-reuse-hints-*' -o \
 		-name 'workflow-runner-fairness-*' -o \
+		-name 'workflow-runner-pointer-*' -o \
 		-name 'persisted-state-test-*' -o \
 		-name 'workflow-e2e-*' -o \
 		-name 'binding-*' \
