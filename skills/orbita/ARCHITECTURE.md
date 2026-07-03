@@ -117,7 +117,7 @@ layers is a file contract, not an entity behavior dependency for persistence.
 
 ### Runtime Helpers
 
-Owner: `lib/use-cases/runtime/**`
+Owner: `lib/use-cases/runtime/**` and `lib/runtime/**`
 
 Runtime helpers are deterministic and IO-free. They operate over supplied
 values, entities, DTOs, and supplied schema/path facts.
@@ -140,6 +140,10 @@ validation so inspect-before-mutate output cannot drift from mutation rules.
 Retained accepted-output detection must use the same per-step accepted-output
 surface in `baton.state[stepId]` that `continue` uses; if extracted, it remains a
 small runner-owned helper with tests for current `continue` reuse semantics.
+
+Recoverable blocker helpers under `lib/runtime/**` own public shaping and
+redaction of blocker/resolution records. They must receive path facts from the
+caller and must not discover workflow-run storage through persistence imports.
 
 ### Persistence
 
@@ -233,6 +237,30 @@ before and inside the run-state lock, rebuilds the projection while locked,
 validates the requested adjacent edge and retained-state acknowledgement, updates only baton
 cursor/status, validates persisted state, appends bounded pointer-move history,
 and updates run index through the durable writer path.
+
+## Recoverable Worker Blockers
+
+`baton.recoverableWorkerBlockers` is runner-owned durable recovery state. It is
+keyed by workflow step id and stores only public, bounded blocker and resolution
+records. It must not contain transcripts, hidden prompts, lease tokens, raw
+worker/approval outputs, private workflow-run paths, or arbitrary local paths.
+
+Lifecycle:
+
+- `write-output` validates the current host output and persists a sanitized
+  temporary value in `baton.state[stepId]`.
+- `continue` converts a blocked worker/approval output into
+  `recoverableWorkerBlockers[stepId]`, removes the blocked output from normal
+  baton state, keeps the run `running`, and asks the host to resolve the
+  blocker.
+- `write-output` for `resolve_worker_blocker` persists a sanitized resolution
+  value in `baton.state[stepId]`.
+- `continue` moves the sanitized resolution into the existing recoverable
+  blocker entry, renders the same step again with resolution context, and clears
+  the recoverable blocker only after that step emits normal accepted output.
+
+The final runner statuses remain `needs_host_actions` and `done`; a recoverable
+blocker is a host-action pause, not a terminal runner status.
 
 ## Dashboard Observer Architecture
 
@@ -362,6 +390,9 @@ Forbidden:
 - `use-cases/runtime -> node:fs`
 - `use-cases/runtime -> node:path`
 - `use-cases/runtime -> persistence`
+- `lib/runtime -> node:fs`
+- `lib/runtime -> node:path`
+- `lib/runtime -> persistence`
 - `persistence -> use-cases`
 - `persistence -> entities/Baton/schema/**` after schema ownership migration
 - supported command paths or exports for retired legacy surfaces

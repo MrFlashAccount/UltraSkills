@@ -14,7 +14,7 @@ export const legacyWorkflowRunsRoot = join(repositoryRoot, 'skills/orbita/.workf
 export const orbitaHome = resolve(process.env.ORBITA_HOME ?? join(homedir(), '.orbita'));
 export const defaultWorkflowRunsRoot = join(orbitaHome, 'workflow-runs/v1');
 
-const TEST_RUN_ID_RE = /^(workflow-runner-test-|workflow-runner-reuse-hints-|workflow-runner-fairness-|persisted-state-test-|workflow-e2e-|binding-)/;
+const TEST_RUN_ID_RE = /^(workflow-runner-test-|workflow-runner-reuse-hints-|workflow-runner-fairness-|workflow-runner-pointer-|persisted-state-test-|workflow-e2e-|binding-)/;
 
 function isNodeTestRunner() {
   if (typeof process.env.NODE_TEST_CONTEXT !== 'string' || process.env.NODE_TEST_CONTEXT.length === 0) return false;
@@ -58,6 +58,7 @@ function cleanupNewTestRuns(runsRoot, baselineTestRunIds) {
   }
 
   for (const runId of currentTestRunIds) {
+    if (!isCurrentProcessTestRunId(runId)) continue;
     if (baselineTestRunIds.has(runId)) continue;
     rmSync(join(runsRoot, runId), { recursive: true, force: true });
   }
@@ -68,6 +69,7 @@ function cleanupNewTestRuns(runsRoot, baselineTestRunIds) {
     const index = JSON.parse(readFileSync(indexPath, 'utf8'));
     let changed = false;
     for (const runId of Object.keys(index.runs ?? {})) {
+      if (!isCurrentProcessTestRunId(runId)) continue;
       if (!TEST_RUN_ID_RE.test(runId) || baselineTestRunIds.has(runId)) continue;
       delete index.runs[runId];
       changed = true;
@@ -80,6 +82,10 @@ function cleanupNewTestRuns(runsRoot, baselineTestRunIds) {
   } catch (error) {
     console.error(`workflow runs test cleanup failed for ${indexPath}: ${error.message}`);
   }
+}
+
+function isCurrentProcessTestRunId(runId) {
+  return new RegExp(`^(?:workflow-runner-test|workflow-runner-reuse-hints|workflow-runner-fairness|workflow-runner-pointer|persisted-state-test|workflow-e2e|binding)-${process.pid}(?:-|$)`).test(runId);
 }
 
 function configureWorkflowRunsRoot() {

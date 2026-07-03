@@ -26,7 +26,6 @@ const workflowDoc = {
   version: 1,
   start: 'prepare',
   done: 'done',
-  blocked: 'blocked',
   steps: {
     prepare: {
       name: 'Prepare',
@@ -50,7 +49,6 @@ const workflowDoc = {
       next: 'done',
     },
     done: { name: 'Done', kind: 'done', input: { prompt: 'Finished.' } },
-    blocked: { name: 'Blocked', kind: 'blocked', input: { prompt: 'Blocked.' } },
   },
 };
 
@@ -116,10 +114,11 @@ function snapshot(paths) {
 }
 
 function rawRunFiles(paths) {
+  const index = JSON.parse(readFileSync(paths.runsIndexPath, 'utf8'));
   return {
     baton: existsSync(paths.batonPath) ? readFileSync(paths.batonPath, 'utf8') : undefined,
     history: existsSync(paths.historyPath) ? readFileSync(paths.historyPath, 'utf8') : undefined,
-    index: readFileSync(paths.runsIndexPath, 'utf8'),
+    indexEntry: index.runs[paths.runId],
   };
 }
 
@@ -129,9 +128,6 @@ test('runner pointer API lists adjacent transitions and moves pointer with retai
   await bindAgent({ ...run, stepId: 'prepare', agentId: 'agent-prepare', now: new Date('2026-06-01T10:00:02.000Z') });
   await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared' });
   await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
-  const batonWithStaleBlocker = JSON.parse(readFileSync(run.paths.batonPath, 'utf8'));
-  batonWithStaleBlocker.blocker = { summary: 'preserve non-pointer baton field' };
-  writeJson(run.paths.batonPath, batonWithStaleBlocker);
   const beforeMove = snapshot(run.paths);
 
   const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });
@@ -159,7 +155,6 @@ test('runner pointer API lists adjacent transitions and moves pointer with retai
   assert.equal(afterMove.baton.status, 'running');
   assert.deepEqual(afterMove.baton.state, beforeMove.baton.state);
   assert.deepEqual(afterMove.baton.workerBindings, beforeMove.baton.workerBindings);
-  assert.deepEqual(afterMove.baton.blocker, beforeMove.baton.blocker);
   assert.equal(afterMove.baton.user_prompt_injected, beforeMove.baton.user_prompt_injected);
   assert.equal(afterMove.history.startsWith(beforeMove.history), true);
   assert.match(afterMove.history.slice(beforeMove.history.length), /source: workflow-runner-move-pointer/);

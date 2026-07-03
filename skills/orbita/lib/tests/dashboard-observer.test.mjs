@@ -126,6 +126,47 @@ test('dashboard projection exposes safe DTOs with lanes, parallel cursor, minima
   jsonDoesNotContainForbiddenValues(run);
 });
 
+test('dashboard projection treats resolved recoveries as worker continuation, not blocked', async () => {
+  const runsRoot = await makeRunsRoot('resolved-recovery');
+  const unresolvedId = `dashboard-unresolved-recovery-${process.pid}`;
+  const resolvedId = `dashboard-resolved-recovery-${process.pid}`;
+  await writeIndex(runsRoot, {
+    [unresolvedId]: indexRun(unresolvedId, { title: 'Unresolved recovery' }),
+    [resolvedId]: indexRun(resolvedId, { title: 'Resolved recovery' }),
+  });
+  const recovery = {
+    summary: 'Need approval before continuing.',
+    source_step_id: 'backend_implementation',
+    needed: 'Approve the smallest recovery question.',
+  };
+  await writeRunState(runsRoot, unresolvedId, {
+    cursor: 'backend_implementation',
+    status: 'running',
+    recoverableWorkerBlockers: { backend_implementation: recovery },
+    state: { artifacts: [], results: [] },
+  });
+  await writeRunState(runsRoot, resolvedId, {
+    cursor: 'backend_implementation',
+    status: 'running',
+    recoverableWorkerBlockers: {
+      backend_implementation: {
+        ...recovery,
+        resolution: {
+          summary: 'Approval was granted.',
+          decision: 'Proceed with the smallest recovery question approved.',
+        },
+      },
+    },
+    state: { artifacts: [], results: [] },
+  });
+
+  const runs = await listDashboardRuns({ runsRoot });
+  const byId = new Map(runs.map((run) => [run.runId, run]));
+
+  assert.equal(byId.get(unresolvedId).lane.id, 'blocked');
+  assert.equal(byId.get(resolvedId).lane.id, 'worker_running');
+});
+
 test('dashboard list isolates per-run read failures as degraded without hiding healthy runs', async () => {
   const runsRoot = await makeRunsRoot('degraded');
   const healthyId = `dashboard-healthy-${process.pid}`;
