@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 import { Baton } from '../entities/Baton/index.mjs';
 import {
   assertNoNestedMatchCasesTarget,

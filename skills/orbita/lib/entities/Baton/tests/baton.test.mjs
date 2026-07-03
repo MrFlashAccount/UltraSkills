@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 import { WorkflowRuntimeError } from '../../../errors.mjs';
 import { applyOutputToBatonState } from '../../../runtime/baton-state.mjs';
 import { Baton } from '../index.mjs';

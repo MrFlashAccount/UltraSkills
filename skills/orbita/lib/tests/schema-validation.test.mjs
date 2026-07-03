@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 import { validateJsonSchema } from '../../../../shared/scripts/schema-validation/schema-validation.mjs';
 import reviewJoinOutputSchema from '../../../../workflows/dev-harness/schemas/review-join-output.json' with { type: 'json' };
 import reviewerSelectionOutputSchema from '../../../../workflows/dev-harness/schemas/reviewer-selection-output.json' with { type: 'json' };
@@ -125,7 +125,7 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   const validRunWorker = {
     status: 'needs_host_actions',
     orchestratorInstruction: 'Execute host requests.',
-    orchestratorDebugCommand: 'node workflow-runner.mjs record-orchestrator',
+    orchestratorDebugCommand: 'bun workflow-runner.mjs record-orchestrator',
     baton: {
       cursor: 'worker_step',
       status: 'running',
@@ -136,10 +136,10 @@ test('runner host response schema enforces action-conditional reuse hint fields'
         id: 'worker_step',
         stepId: 'worker_step',
         action: 'run_worker',
-        loadInstructionsCommand: 'node workflow-runner.mjs instructions',
+        loadInstructionsCommand: 'bun workflow-runner.mjs instructions',
         preferredAgentId: null,
-        bindAgentCommand: 'node workflow-runner.mjs bind-agent --agent-id <agent-id>',
-        loadFollowupInstructionsCommand: 'node workflow-runner.mjs instructions --follow-up',
+        bindAgentCommand: 'bun workflow-runner.mjs bind-agent --agent-id <agent-id>',
+        loadFollowupInstructionsCommand: 'bun workflow-runner.mjs instructions --follow-up',
       },
     ],
   };
@@ -216,11 +216,11 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validApproval,
-    requests: [{ ...validApproval.requests[0], bindAgentCommand: 'node workflow-runner.mjs bind-agent' }],
+    requests: [{ ...validApproval.requests[0], bindAgentCommand: 'bun workflow-runner.mjs bind-agent' }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validApproval,
-    requests: [{ ...validApproval.requests[0], loadFollowupInstructionsCommand: 'node workflow-runner.mjs instructions --follow-up' }],
+    requests: [{ ...validApproval.requests[0], loadFollowupInstructionsCommand: 'bun workflow-runner.mjs instructions --follow-up' }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validApproval,

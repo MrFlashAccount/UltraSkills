@@ -14,13 +14,13 @@ You are the schema/workflow validation agent for this repository's inline workfl
 Run:
 
 ```sh
-npm run workflow:validate
+bun run workflow:validate
 ```
 
 If the full project gate is requested, run:
 
 ```sh
-npm run validate
+bun run validate
 ```
 
 Treat deterministic validation failures as blockers. Do not replace this gate with human review.

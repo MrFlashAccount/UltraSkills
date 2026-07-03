@@ -12,7 +12,7 @@ const run = (command, args) => {
   }
 };
 
-run('node', ['scripts/generate-codex-agents.mjs']);
+run(process.execPath, ['scripts/generate-codex-agents.mjs']);
 run('git', ['diff', '--exit-code', '--', 'agents']);
 run('git', ['diff', '--cached', '--exit-code', '--', 'agents']);
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { WorkflowRuntimeError } from '../../errors.mjs';
 import { validateWorkflowFile } from '../validate-workflow-file.mjs';
 

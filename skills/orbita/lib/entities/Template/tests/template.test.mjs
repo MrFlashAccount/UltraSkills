@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 import { renderWorkflowPrompt as renderCompiledWorkflowPrompt } from '../compiler/index.mjs';
 import { Template, renderWorkflowPrompt } from '../index.mjs';
 
@@ -209,7 +209,7 @@ test('renderWorkflowPrompt injects provided validating writer command into outpu
     step: workflow.steps.consumer,
     resources: {
       ...resources,
-      validatingWriterCommand: "node ./lib/entrypoints/cli/workflow-runner.mjs write-output --run-id example --step-id consumer --lease-token example-token --debug-summary-file /tmp/workflow-runner-test/consumer/debug-summary.md <<'JSON'\n<paste strict JSON here>\nJSON",
+      validatingWriterCommand: "bun ./lib/entrypoints/cli/workflow-runner.mjs write-output --run-id example --step-id consumer --lease-token example-token --debug-summary-file /tmp/workflow-runner-test/consumer/debug-summary.md <<'JSON'\n<paste strict JSON here>\nJSON",
       debugSummaryPath: '/tmp/workflow-runner-test/consumer/debug-summary.md',
     },
   });

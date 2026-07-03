@@ -152,7 +152,7 @@ function runNegativeBoundaryCheck(setup, teardown) {
   selfTestMode = false;
   const accepted = process.exitCode !== 1;
   teardown();
-  process.exitCode = before;
+  process.exitCode = before ?? 0;
   return accepted;
 }
 

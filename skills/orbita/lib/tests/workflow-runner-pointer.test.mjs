@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import {
   bindAgent,
@@ -52,7 +52,7 @@ const workflowDoc = {
   },
 };
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
@@ -313,7 +313,7 @@ test('runner pointer CLI matches API behavior and validates mode-specific argume
     '--run-id', run.runId,
     '--workflow', run.workflowPath,
     '--lease-token', run.leaseToken,
-  ], { cwd: root, encoding: 'utf8' });
+  ], { cwd: root, encoding: 'utf8', env: process.env });
   assert.equal(kebabList.status, 0, kebabList.stderr);
 
   const listed = JSON.parse(kebabList.stdout);
@@ -325,7 +325,7 @@ test('runner pointer CLI matches API behavior and validates mode-specific argume
     '--run-id', run.runId,
     '--workflow', run.workflowPath,
     '--lease-token', run.leaseToken,
-  ], { cwd: root, encoding: 'utf8' });
+  ], { cwd: root, encoding: 'utf8', env: process.env });
   assert.notEqual(camelList.status, 0);
   assert.match(camelList.stderr, /usage:/);
 
@@ -336,7 +336,7 @@ test('runner pointer CLI matches API behavior and validates mode-specific argume
     '--workflow', run.workflowPath,
     '--lease-token', run.leaseToken,
     '--transition-id', listed.transitions[0].id,
-  ], { cwd: root, encoding: 'utf8' });
+  ], { cwd: root, encoding: 'utf8', env: process.env });
   assert.notEqual(invalidList.status, 0);
   assert.match(invalidList.stderr, /usage:/);
 
@@ -348,7 +348,7 @@ test('runner pointer CLI matches API behavior and validates mode-specific argume
     '--lease-token', run.leaseToken,
     '--transition-id', listed.transitions[0].id,
     '--acknowledge-retained-state',
-  ], { cwd: root, encoding: 'utf8' });
+  ], { cwd: root, encoding: 'utf8', env: process.env });
   assert.equal(move.status, 0, move.stderr);
   assert.equal(JSON.parse(move.stdout).current.cursor, 'prepare');
 
@@ -360,7 +360,7 @@ test('runner pointer CLI matches API behavior and validates mode-specific argume
     '--lease-token', run.leaseToken,
     '--target-position-id', listed.transitions[0].id,
     '--acknowledge-retained-state',
-  ], { cwd: root, encoding: 'utf8' });
+  ], { cwd: root, encoding: 'utf8', env: process.env });
   assert.notEqual(targetAliasMove.status, 0);
   assert.match(targetAliasMove.stderr, /usage:/);
 });

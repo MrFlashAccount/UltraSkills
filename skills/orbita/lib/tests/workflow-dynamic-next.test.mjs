@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -142,7 +142,7 @@ function runInspect(label, batonDoc, expectSuccess = true, workflowDoc = workflo
   return runCli(label, 'inspect', batonDoc, expectSuccess, workflowDoc);
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('dynamic output string routes to the selected existing step', () => {
   const response = runApply('output-string', baton(), { outcome: 'ready', next: 'review_a' });

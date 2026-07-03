@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +10,7 @@ function fail(message) {
 }
 
 function usage() {
-  return 'usage: node skills/orbita/lib/entrypoints/cli/workflow-catalog.mjs list [--human|--json] [--workflows-root <dir>] | resolve <query> [--human|--json] [--workflows-root <dir>]';
+  return 'usage: bun skills/orbita/lib/entrypoints/cli/workflow-catalog.mjs list [--human|--json] [--workflows-root <dir>] | resolve <query> [--human|--json] [--workflows-root <dir>]';
 }
 
 function repoRoot() {

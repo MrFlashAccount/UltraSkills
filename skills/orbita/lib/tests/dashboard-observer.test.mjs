@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { get } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { listDashboardRuns, getDashboardRun, startDashboardServer } from '../entrypoints/api/dashboard.mjs';
 import { DashboardEventPublisher } from '../dashboard/server/dashboard-event-publisher.mjs';
@@ -13,7 +13,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const defaultWorkflow = path.join(root, 'workflows/dev-harness/workflow.json');
 const tempRoots = [];
 
-after(async () => {
+afterAll(async () => {
   for (const dir of tempRoots) rmSync(dir, { recursive: true, force: true });
 });
 

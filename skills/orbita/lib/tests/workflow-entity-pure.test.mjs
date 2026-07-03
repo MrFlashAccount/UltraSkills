@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 import { Workflow } from '../entities/Workflow/index.mjs';
 import { WorkflowRuntimeError } from '../errors.mjs';
 

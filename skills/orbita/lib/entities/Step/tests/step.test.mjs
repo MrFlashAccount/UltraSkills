@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 import { assertNoNestedMatchCasesTarget, isDynamicTransitionNext, isStaticParallelNext, normalizeTransitionNext } from '../../../runtime/transition-next.mjs';
 import { joinForParallelTargets } from '../../../runtime/transition-targets.mjs';
 import { Step, resolveTransition } from '../index.mjs';

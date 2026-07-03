@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { resolveRunPaths } from '../../persistence/run-state/paths.mjs';
 
@@ -51,7 +51,7 @@ function claimRunForRunnerArgs(args) {
   const createArgs = ['skills/orbita/lib/entrypoints/cli/workflow-runs.mjs', 'create', '--claim', '--run-id', runIdValue];
   const workflow = valueAfter(args, '--workflow');
   if (workflow !== undefined) createArgs.push('--workflow', workflow);
-  const created = spawnSync(process.execPath, createArgs, { cwd: root, encoding: 'utf8' });
+  const created = spawnSync(process.execPath, createArgs, { cwd: root, encoding: 'utf8', env: process.env });
   assert.equal(created.status, 0, `claim ${runIdValue} failed\nstdout:\n${created.stdout}\nstderr:\n${created.stderr}`);
   const token = JSON.parse(created.stdout).leaseToken;
   leaseTokensByRunId.set(runIdValue, token);
@@ -68,6 +68,7 @@ function runRunner(args, options = {}) {
   return spawnSync(process.execPath, ['skills/orbita/lib/entrypoints/cli/workflow-runner.mjs', ...withLeaseToken(args, token)], {
     cwd: root,
     encoding: 'utf8',
+    env: process.env,
     input: options.input,
   });
 }
@@ -153,7 +154,7 @@ function writeRunArtifact(run, artifactPath, content) {
   writeFileSync(fullPath, content);
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('E2E fixture: long happy path loops through review revision and preserves latest state', () => {
   const workflow = fixture('long-revision.workflow.json');
