@@ -72,7 +72,7 @@ If no run fits, resolve the workflow, then create/register one run identity:
 bun ./lib/entrypoints/cli/workflow-runs.mjs create --workflow <absolute-catalog-workflow-path> --title '<title>' --summary '<summary>' --owner <owner> --harness <harness> --session-id <session-id>
 ```
 
-Never pass repo-relative workflow paths such as `workflows/.../workflow.json` into `workflow-runs create` or runner `--workflow` commands. If a relative workflow path error appears, rerun `workflow-catalog resolve`/`list` and use the returned absolute catalog `path`; do not guess cwd or repair the path manually.
+Never pass repo-relative workflow paths such as `workflows/.../workflow.toml` or `workflows/.../workflow.json` into `workflow-runs create` or runner `--workflow` commands. If a relative workflow path error appears, rerun `workflow-catalog resolve`/`list` and use the returned absolute catalog `path`; do not guess cwd or repair the path manually.
 
 Claim the selected run before calling the runner:
 
