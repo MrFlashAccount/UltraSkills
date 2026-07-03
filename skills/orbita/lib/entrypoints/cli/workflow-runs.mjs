@@ -10,7 +10,7 @@ function fail(message) {
 }
 
 function usage() {
-  return 'usage: bun ./lib/entrypoints/cli/workflow-runs.mjs list [--human] | create [--claim] [--run-id <id>] [--workflow <workflow.json>] [--workflow-identity <identity>] [--title <title>] [--summary <summary>] [--task-key <key>] [--task-fingerprint <fingerprint>] [--lease-token <token> + diagnostics metadata] | claim --run-id <id> [--workflow <workflow.json>] [--takeover] [--print-lease-token] [--lease-token <token> + diagnostics metadata] | heartbeat --run-id <id> [--workflow <workflow.json>] [--lease-token <token> + diagnostics metadata]';
+  return 'usage: bun ./lib/entrypoints/cli/workflow-runs.mjs list [--human] | create [--claim] [--run-id <id>] [--workflow <workflow-file>] [--workflow-identity <identity>] [--title <title>] [--summary <summary>] [--task-key <key>] [--task-fingerprint <fingerprint>] [--lease-token <token> + diagnostics metadata] | claim --run-id <id> [--workflow <workflow-file>] [--takeover] [--print-lease-token] [--lease-token <token> + diagnostics metadata] | heartbeat --run-id <id> [--workflow <workflow-file>] [--lease-token <token> + diagnostics metadata]';
 }
 
 const options = {

@@ -58,7 +58,7 @@ Prompt input artifact required reads are derived only from explicit prompt refer
 
 ## Resource Resolution
 
-`input.template`, `output.template`, and `output.schema` are resolved relative to the directory containing the active `workflow.json`. Shared resources must be referenced explicitly with normal relative paths such as `../../shared/templates/...`.
+`input.template`, `output.template`, and `output.schema` are resolved relative to the directory containing the active `workflow.toml` or `workflow.json`. Shared resources must be referenced explicitly with normal relative paths such as `../../shared/templates/...`.
 
 Missing or escaping files fail deterministically. The renderer performs no network IO and does not infer repository-root fallbacks for workflow-local refs.
 

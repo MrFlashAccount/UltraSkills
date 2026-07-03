@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
+import { readWorkflowDocument } from '../../persistence/workflow-resources/workflow-document-reader.mjs';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -41,6 +42,16 @@ function parseCliArgs(argv) {
   }
 }
 
+const WORKFLOW_FILENAMES = Object.freeze(['workflow.toml', 'workflow.json']);
+
+function workflowPathForDirectory(workflowsRoot, workflowName) {
+  const matches = WORKFLOW_FILENAMES
+    .map((filename) => join(workflowsRoot, workflowName, filename))
+    .filter((pathname) => existsSync(pathname));
+  if (matches.length > 1) fail(`multiple workflow definitions found for ${workflowName}: ${matches.map((pathname) => relative(repoRoot(), pathname)).join(', ')}`);
+  return matches[0];
+}
+
 function readWorkflowCatalog({ workflowsRoot = join(repoRoot(), 'workflows') } = {}) {
   workflowsRoot = resolve(workflowsRoot);
   if (!existsSync(workflowsRoot)) fail(`workflows directory not found: ${workflowsRoot}`);
@@ -49,12 +60,12 @@ function readWorkflowCatalog({ workflowsRoot = join(repoRoot(), 'workflows') } =
   const workflows = [];
   for (const entry of readdirSync(workflowsRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
-    const workflowPath = join(workflowsRoot, entry.name, 'workflow.json');
-    if (!existsSync(workflowPath)) continue;
+    const workflowPath = workflowPathForDirectory(workflowsRoot, entry.name);
+    if (!workflowPath) continue;
 
     let workflow;
     try {
-      workflow = JSON.parse(readFileSync(workflowPath, 'utf8'));
+      workflow = readWorkflowDocument(workflowPath, 'workflow');
     } catch (error) {
       fail(`failed to read ${relative(root, workflowPath)}: ${error.message}`);
     }
@@ -82,7 +93,7 @@ function formatHuman(workflows) {
 function normalize(value) {
   return String(value)
     .toLowerCase()
-    .replace(/\.json$/u, '')
+    .replace(/\.(?:json|toml)$/u, '')
     .replace(/[^a-z0-9]+/gu, '-')
     .replace(/^-|-$/gu, '');
 }

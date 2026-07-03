@@ -7,7 +7,7 @@ Canonical validation agent instructions live at `./lib/validate/validation-agent
 Run the deterministic validator through the existing CLI wrapper:
 
 ```sh
-bun ./lib/entrypoints/cli/validate-workflow.mjs ../../workflows/dev-harness/workflow.json
+bun ./lib/entrypoints/cli/validate-workflow.mjs ../../workflows/dev-harness
 ```
 
 or:

@@ -38,6 +38,6 @@ test-workflow-e2e:
 	exit $$status
 
 workflow-validate:
-	bun ./lib/entrypoints/cli/validate-workflow.mjs ../../workflows/*/workflow.json
+	bun ./lib/entrypoints/cli/validate-workflow.mjs ../../workflows
 
 validate: test workflow-validate

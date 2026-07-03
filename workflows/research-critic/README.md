@@ -2,5 +2,5 @@
 
 This package keeps the existing `research-critic` name to match the repo's skill and workflow naming convention. It intentionally does not use `research-critique` so existing callers only need path updates, not a workflow identity change.
 
-- Workflow: `workflow.json`
+- Workflow: `workflow.toml`
 - Output schemas: `schemas/*.json`
