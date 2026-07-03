@@ -19,11 +19,30 @@ The canonical workflow-runner command surface is:
 - `continue`
 - `bind-agent`
 - `record-orchestrator`
+- API `listPointerTransitions` / CLI `list-pointer-transitions`
+- API `movePointer` / CLI `move-pointer`
 
 Validation and persistence behavior that supports these commands belongs to the
 current runtime architecture. `record-orchestrator` is a current bounded
 debug/history command; it does not navigate workflow state or accept worker
 output. Obsolete backward-compatibility surfaces do not.
+
+`listPointerTransitions` and `movePointer` are runner API control-plane recovery
+surfaces for repositioning only the current baton pointer along already observed
+history. Their shell-facing CLI modes are `list-pointer-transitions` and
+`move-pointer`. Both require an active run lease. `listPointerTransitions` is a
+logical read: it may use the run-state boundary for consistency, but it must not
+initialize missing run state, append history, update the run index, or mutate the
+baton/current pointer. It is not an unleased public read because it exposes
+pointer/history and retained-output recovery metadata. `movePointer` mutates only
+baton cursor/status through the existing lease, lock, validation, durable writer,
+history, and run-index path. Neither surface rolls back, prunes, rewrites, or cleans
+`baton.state`, accepted outputs, artifacts/results, worker bindings, prompt
+markers, attempts, or existing history. The first supported slice is limited to
+one adjacent observed transition edge from the current pointer/status; terminal
+`done`/`blocked` runs and parallel/array cursors are explicitly unsupported.
+Targets with retained accepted output require visible retained-state disclosure
+and explicit acknowledgement before mutation.
 
 Retired surfaces:
 
@@ -45,6 +64,11 @@ Owner: `lib/entrypoints/**`
 Entrypoints are transport shells. They parse CLI/API input, coordinate IO with
 persistence adapters, acquire or pass through leases where needed, call named
 use-case APIs, and format public output.
+
+Pointer recovery entrypoints must keep API and CLI behavior aligned: both
+`listPointerTransitions` and `movePointer` require active lease authority, return
+only bounded DTOs/errors, and redact lease tokens, token hashes, raw private
+paths, raw baton dumps, and full private history text.
 
 Entrypoints may depend on:
 
@@ -108,6 +132,14 @@ Runtime helpers must not import:
 Output validation in runtime helpers consumes loaded schemas and explicit path
 facts. Schema loading, realpath probing, symlink checks, and artifact path facts
 belong to adapters or file-contract owners.
+
+Pointer transition projection belongs under runner-owned runtime/use-case
+internals, not the dashboard. It derives adjacent observed transition edges from
+persisted baton plus durable history and must be shared by list and move
+validation so inspect-before-mutate output cannot drift from mutation rules.
+Retained accepted-output detection must use the same per-step accepted-output
+surface in `baton.state[stepId]` that `continue` uses; if extracted, it remains a
+small runner-owned helper with tests for current `continue` reuse semantics.
 
 ### Persistence
 
@@ -191,6 +223,16 @@ values or contracts across the boundary.
 
 Entrypoints format current public output and errors. They do not reach into
 runtime helper internals to assemble behavior.
+
+Pointer recovery follows the same runtime flow. `listPointerTransitions` checks
+the active lease, reads existing persisted run state, builds the shared pointer
+transition projection, and returns bounded transition and retained-state metadata
+without initializing missing run files, appending history, updating the run index,
+or mutating baton/current pointer state. `movePointer` checks the active lease
+before and inside the run-state lock, rebuilds the projection while locked,
+validates the requested adjacent edge and retained-state acknowledgement, updates only baton
+cursor/status, validates persisted state, appends bounded pointer-move history,
+and updates run index through the durable writer path.
 
 ## Dashboard Observer Architecture
 
@@ -277,8 +319,9 @@ leases, or delay `workflow-runner` control commands.
 Binding rules for dashboard code:
 
 - `lib/dashboard/**` must not import runner mutation/control entrypoints, CLI
-  command builders, lease authority, write-output/continue/next/bind-agent
-  handlers, or host worker lifecycle code.
+  command builders, lease authority, write-output/continue/next/bind-agent/
+  listPointerTransitions/movePointer API handlers, list-pointer-transitions/
+  move-pointer CLI modes, or host worker lifecycle code.
 - Browser UI code must depend only on dashboard DTO contracts and browser
   platform APIs; it must not import persistence, filesystem helpers,
   workflow-runner API shells, or Node-only modules.
@@ -323,8 +366,8 @@ Forbidden:
 - `persistence -> entities/Baton/schema/**` after schema ownership migration
 - supported command paths or exports for retired legacy surfaces
 - dashboard code mutating run state, acquiring leases, invoking runner
-  navigation/output commands, or exposing private runner control data through
-  browser-visible DTOs
+  navigation/output/pointer-recovery commands, or exposing private runner
+  control data through browser-visible DTOs
 
 ## Review Gates
 
@@ -336,6 +379,11 @@ Architecture review must verify:
 - helper/schema zones are colocated unless shared ownership pressure is proven
 - docs, checks, and source agree on supported command surface and dependency
   rules
+- pointer recovery docs, API exports, CLI modes, tests, and source agree that
+  `listPointerTransitions` and `movePointer` require active lease authority,
+  preserve baton state, reject terminal/parallel first-slice scope, require
+  retained-output acknowledgement where applicable, and expose only redacted
+  bounded metadata
 - dashboard changes preserve the read-only observer boundary, safe projection
   layer, SSE/poll recovery behavior, degraded per-run isolation, and
   `DESIGN.md` board/drawer/no-control contract

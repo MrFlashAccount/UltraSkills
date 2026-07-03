@@ -26,9 +26,30 @@ node ./lib/entrypoints/cli/workflow-runner.mjs continue --lease-token <token> --
 node ./lib/entrypoints/cli/workflow-runner.mjs instructions [--follow-up] --run-id <run-id> --step-id <id> --lease-token <token>
 node ./lib/entrypoints/cli/workflow-runner.mjs bind-agent --run-id <run-id> --step-id <id> --agent-id <agent-id> --lease-token <token>
 node ./lib/entrypoints/cli/workflow-runner.mjs record-orchestrator --lease-token <token> --run-id <run-id> [--json <json>] [--workflow <workflow.json>]
+node ./lib/entrypoints/cli/workflow-runner.mjs list-pointer-transitions --lease-token <token> --run-id <run-id> [--workflow <workflow.json>]
+node ./lib/entrypoints/cli/workflow-runner.mjs move-pointer --lease-token <token> --run-id <run-id> --transition-id <id> [--acknowledge-retained-state] [--workflow <workflow.json>]
 ```
 
 `next` and `continue` also accept `--only-instructions`; with that flag stdout is exactly the `orchestratorInstruction` text instead of the full JSON host response. `next` creates the run files if needed and returns the current host work. `write-output` validates and accepts one current request output directly into baton/state, then returns only acceptance JSON or validation errors; it does not accept `--only-instructions`, does not drive orchestrator navigation, and must not accept or mutate worker binding metadata. `record-orchestrator` accepts one host/orchestrator debug JSON note for the current non-terminal host action and appends a bounded, redacted, deduplicated history entry without changing baton state. `continue` applies already-accepted outputs from baton/state, persists the new baton, and returns the next host work. `instructions` prints only the compiled instructions for one current requested step, does not accept `--only-instructions`, and fails for unknown or unsafe step ids. `bind-agent` validates the same explicit lease and updates only top-level `baton.workerBindings[stepId]` with the supplied opaque worker id. Current requests and instructions are rendered from the indexed workflow plus `baton.json`; durable runner state is baton plus history plus advisory top-level worker bindings. Every write-capable, bind-capable, or instruction-loading command validates a fresh explicit `--lease-token` before creating run directories, locks, index entries, baton/history, binding metadata, or durable commit files; `runId` is identity only, and durable lease state keeps only token hash, token epoch, and lease expiry.
+
+The API functions `listPointerTransitions` and `movePointer` are exposed through
+the CLI modes `list-pointer-transitions` and `move-pointer`. They are operator
+recovery commands, not normal workflow-loop commands. Both validate a fresh
+explicit `--lease-token`. `listPointerTransitions` is a logical read but remains
+lease-required because it exposes bounded pointer/history and retained-output
+recovery metadata. It returns only current pointer, adjacent observed transition
+options, unsupported reasons, and retained-state warnings; it must not initialize
+missing run state, append history, update the run index, mutate baton/current
+pointer state, or emit raw baton, raw history, private paths, lease data, or
+token-bearing commands. `movePointer` accepts one listed adjacent transition id
+and mutates only baton cursor/status through the existing lease, lock,
+validation, durable writer, history append, and run-index path. It
+must not roll back, prune, rewrite, or clean `baton.state`, accepted outputs,
+artifacts/results, worker bindings, prompt markers, attempts, or existing
+history. Terminal `done`/`blocked` runs and parallel/array cursors are
+unsupported in the first pointer-recovery slice. If the target has retained
+accepted output that a later `continue` may reuse, the command requires explicit
+`--acknowledge-retained-state`.
 
 Commands returned in host responses are rendered with the absolute path to `workflow-runner.mjs` and an explicit absolute `--runs-root`, quoted for shell execution, so a worker or host can run them from any current working directory. The relative examples above are only for humans running the CLI from the skill root.
 
@@ -79,6 +100,12 @@ A CLI failure is an execution error and should be reported by the host adapter i
 ## Output capture
 
 The host wrapper writes each request result through `workflow-runner write-output`. The command validates strict JSON against the current request/step output schema and accepts the normalized value directly into baton/state. For `run_worker` requests, the same command also requires the generated `--debug-summary-file` path and reads that side-channel only after the JSON output validates. It is a pure task-output path: it must not accept, store, emit, or mutate worker binding/control-plane metadata. There is no output-path handoff from worker to orchestrator, and `workflow-runner continue` does not accept output paths.
+
+Retained accepted-output detection for pointer recovery uses the same per-step
+accepted-output surface in `baton.state[stepId]` that `continue` reads. Pointer
+recovery must not invent a separate scanner over arbitrary baton state. If the
+accepted-output lookup is extracted for reuse, it remains runner-owned and must
+preserve current `continue` reuse semantics.
 
 `write-output` owns accepted-output history projection. After schema validation, artifact path validation, and required worker debug-summary side-channel validation succeed, it may append a deterministic entry to the run's managed `history.md` from the accepted output, accepted step metadata, and the bounded side-channel debug summary. This entry is part of the same durable output acceptance path as the baton update; hidden host transcripts, subagent sessions, private prompts, lease tokens, instruction storage paths, and worker/control-plane metadata must never be scraped or written into history.
 
@@ -149,6 +176,15 @@ For parallel branch requests, call `write-output` once per requested `stepId`; `
 Public runner failure history is allowed only when all attribution checks pass: the command has a safe run directory, the lease context matches the run being operated on, and the target is the managed `history.md` path for that run. The recorded text must be exact relevant public error text after host-safe redaction, bounded after normalization to 2 KiB or 40 lines, whichever limit is hit first, with an explicit truncation marker when shortened. If any context is unsafe or missing, no failure-history write occurs. Durable retry/recovery must not duplicate failure entries, corrupt history, or advance misleading history ahead of baton state.
 
 History entries must preserve the public boundary: no hidden transcripts, session registries, worker lifecycle internals, private prompts, lease tokens, raw instruction storage paths, or other host control-plane metadata. Artifact manifests may be referenced only through accepted output metadata; rich worker debug-summary content may be read only through the exact generated `--debug-summary-file` side-channel and only under the enabled policy above. Orchestrator debug notes must go through `record-orchestrator`; the host must not inspect or mutate `history.md` directly.
+
+Pointer recovery history is append-only and bounded. A successful `movePointer`
+entry records the transition id, direction, before/after cursor/status edge, and
+retained-output step ids or `none`. State preservation is enforced by the
+pointer-only mutation boundary and validation, not by copying full state into the
+history entry. The entry must not copy full accepted outputs, raw baton/history,
+private paths, lease tokens, or token hashes. Existing history content is never
+rewritten by pointer
+recovery.
 
 ## OpenClaw mapping example
 
