@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { publicErrorMessage } from '../public-error.mjs';
 import { next } from '../entrypoints/workflow-runner-command.mjs';
@@ -20,7 +20,7 @@ function runId(label) {
   return id;
 }
 
-after(() => {
+afterAll(() => {
   for (const dir of tempRoots) rmSync(dir, { recursive: true, force: true });
   for (const id of runIds) rmSync(resolveRunPaths({ runId: id }).runDir, { recursive: true, force: true });
 });

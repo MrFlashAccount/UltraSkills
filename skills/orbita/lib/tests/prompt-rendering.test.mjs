@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { renderStepPrompts } from '../use-cases/runtime/parallel/render.mjs';
 import { selectState } from '../runtime/state-selection.mjs';
@@ -133,7 +133,7 @@ function baton(overrides = {}) {
   };
 }
 
-function runNode(args, cwd = root) {
+function runBun(args, cwd = root) {
   return spawnSync(process.execPath, args, { cwd, encoding: 'utf8' });
 }
 
@@ -181,7 +181,7 @@ function expectCliResult(label, result, expectSuccess) {
   return response;
 }
 
-after(() => {
+afterAll(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -1308,7 +1308,7 @@ test('prompt renderer: validation feedback appends to prompt arrays', () => {
   const batonPath = writeJson('prompt-array-feedback-baton.json', baton());
   const outputPath = writeJson('prompt-array-feedback-output.json', { outcome: 'invalid' });
 
-  const result = runNode(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', workflowPath, batonPath, outputPath]);
+  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', workflowPath, batonPath, outputPath]);
   const response = expectCliResult('prompt-array-feedback', result, true);
 
   assert.equal(response.steps[0].step.input.prompt.includes('Run worker.\n\nUse strict output.'), true);
@@ -1321,7 +1321,7 @@ test('CLI render: prompt input expressions cannot read aggregate runtime state',
   const workflowPath = writeJson('runtime-reserved-render-workflow.json', workflowDoc);
   const batonPath = writeJson('runtime-reserved-render-baton.json', baton({ cursor: 'approval_step', status: 'running', state: { artifacts: [{ producerStepId: 'worker_step', artifact: { id: 'packet', content_type: 'text/markdown', path: '/runs/worker_step/artifacts/packet.md', summary: 'leaked' } }], results: [] } }));
 
-  const result = runNode(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]);
+  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]);
   const response = expectCliResult('runtime-reserved-render', result, false);
 
   assert.match(response.stderr, /input step 'artifacts' is not a declared workflow step/);
@@ -1338,7 +1338,7 @@ test('CLI render: fixture returns compiledPrompt and does not mutate baton', () 
   const batonPath = writeJson('fixture-render-baton.json', baton({ state: { artifacts: [], results: [], worker_step: { outcome: 'ready', summary: 'ready' } } }));
   const before = readFileSync(batonPath, 'utf8');
 
-  const result = runNode(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]);
+  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]);
   const response = expectCliResult('fixture-render', result, true);
 
   assert.equal(readFileSync(batonPath, 'utf8'), before, 'render mutated baton file');
@@ -1369,14 +1369,14 @@ test('CLI render: diagnostics are included only when explicitly requested', () =
 
   const defaultResponse = expectCliResult(
     'render-diagnostics-default',
-    runNode(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]),
+    runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]),
     true,
   );
   assert.equal(Object.hasOwn(defaultResponse.steps[0].compiledPrompt, 'diagnostics'), false);
 
   const diagnosticsResponse = expectCliResult(
     'render-diagnostics-opt-in',
-    runNode(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', '--diagnostics', workflowPath, batonPath]),
+    runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', '--diagnostics', workflowPath, batonPath]),
     true,
   );
   assert.deepEqual(diagnosticsResponse.steps[0].compiledPrompt.diagnostics.map((diagnostic) => diagnostic.code), ['default_prompt_used']);

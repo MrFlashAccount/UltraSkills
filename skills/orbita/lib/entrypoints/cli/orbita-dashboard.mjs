@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { parseArgs } from 'node:util';
 import { startDashboardServer } from '../../dashboard/server/dashboard-server.mjs';
 import { publicErrorMessage } from './public-error.mjs';
@@ -9,7 +9,7 @@ function fail(message) {
 }
 
 function usage() {
-  return 'usage: node ./lib/entrypoints/cli/orbita-dashboard.mjs serve [--host <host>] [--port <port>] [--runs-root <path>] [--poll-ms <ms>] [--static-root <path>]';
+  return 'usage: bun ./lib/entrypoints/cli/orbita-dashboard.mjs serve [--host <host>] [--port <port>] [--runs-root <path>] [--poll-ms <ms>] [--static-root <path>]';
 }
 
 function parseCliArgs(argv) {

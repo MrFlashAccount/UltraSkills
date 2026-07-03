@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { resolveRunPaths } from '../../persistence/run-state/paths.mjs';
 
@@ -153,7 +153,7 @@ function writeRunArtifact(run, artifactPath, content) {
   writeFileSync(fullPath, content);
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('E2E fixture: long happy path loops through review revision and preserves latest state', () => {
   const workflow = fixture('long-revision.workflow.json');

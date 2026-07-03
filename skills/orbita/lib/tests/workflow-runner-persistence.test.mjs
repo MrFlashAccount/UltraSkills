@@ -4,7 +4,7 @@ import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { next as runnerNext } from '../entrypoints/workflow-runner-command.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
@@ -244,7 +244,7 @@ function workerOutput(summary) {
   return { outcome: 'ready', results: [{ type: 'check', summary }] };
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('runner: persisted user prompt injection marker survives workflow drift on resume', () => {
   const { runId, runDir } = runCase('user-prompt-workflow-drift');

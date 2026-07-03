@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,7 +16,7 @@ import { loadWorkflowResources } from '../persistence/workflow-resources/runtime
 import { validateAgainstOutputSchema as validateLoadedOutputSchema } from '../use-cases/runtime/output/output-schema-validation.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-function runNode(args) {
+function runBun(args) {
   return spawnSync(process.execPath, args, { cwd: REPO_ROOT, encoding: 'utf8' });
 }
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-semantic-validation-'));
@@ -66,7 +66,7 @@ function assertSemanticFailure(doc, pattern) {
   });
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 function writeSchema(name, schema) {
   writeFileSync(path.join(tempDir, name), `${JSON.stringify(schema, null, 2)}\n`);
@@ -1235,7 +1235,7 @@ test('validateWorkflowFile rejects a missing workflow path with a controlled err
 });
 
 test('validate-workflow CLI requires an explicit workflow path', () => {
-  const result = runNode(['skills/orbita/lib/entrypoints/cli/validate-workflow.mjs']);
+  const result = runBun(['skills/orbita/lib/entrypoints/cli/validate-workflow.mjs']);
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /validate-workflow: workflow path is required/);

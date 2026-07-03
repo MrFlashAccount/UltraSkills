@@ -24,7 +24,7 @@ Hard rules:
 Most Orbita branches overlap. Do not treat routing as durable modes. Classify only enough to choose the next public command:
 
 - If the latest runner stdout is already active, follow that stdout. Do not inspect the workflow catalog.
-- If the user only asks to list/show available workflows, run `node ./lib/entrypoints/cli/workflow-catalog.mjs list --human`, show the list, and stop.
+- If the user only asks to list/show available workflows, run `bun ./lib/entrypoints/cli/workflow-catalog.mjs list --human`, show the list, and stop.
 - If the user asks to continue/resume/reclaim an existing run, list public run identities first. If no existing run fits and the user still wants work executed, create a new run through workflow resolution.
 - Before creating any new run, resolve the workflow first, even when the user named a workflow.
 
@@ -35,13 +35,13 @@ Resolve the workflow before creating/registering a run. The only executable work
 List workflows:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-catalog.mjs list --json
+bun ./lib/entrypoints/cli/workflow-catalog.mjs list --json
 ```
 
 Resolve a named, aliased, or fuzzy workflow:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-catalog.mjs resolve '<workflow name>' --json
+bun ./lib/entrypoints/cli/workflow-catalog.mjs resolve '<workflow name>' --json
 ```
 
 Use workflow `name` and top-level `description` for routing; use `path` only after selection/resolution as `--workflow`. Do not walk `../../workflows`, read private runtime state, or inspect `steps.*.input.prompt` to choose.
@@ -53,7 +53,7 @@ Branch closure:
 - No resolver match: rank catalog candidates from task and workflow descriptions.
 - No named workflow: ask one selection question with at most three `name - short reason` candidates; use `request_user_input` when available. The user may pick one, ask for all workflows, or type a workflow name/alias. Resolve fuzzy replies again.
 - No candidate fits: say so and offer to list workflows or create/design a workflow if that exists in the catalog.
-- List-only requests stop after `node ./lib/entrypoints/cli/workflow-catalog.mjs list --human` unless the user also asked to run a workflow.
+- List-only requests stop after `bun ./lib/entrypoints/cli/workflow-catalog.mjs list --human` unless the user also asked to run a workflow.
 - Never accept user-typed workflow paths as executable paths.
 
 ## Bootstrap
@@ -61,7 +61,7 @@ Branch closure:
 Prepare compact title, summary, owner, harness, session id, and dense user prompt. List public run identities:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runs.mjs list
+bun ./lib/entrypoints/cli/workflow-runs.mjs list
 ```
 
 Select an existing run only from public fields: `runId`, title, summary, workflow identity/path, status, timestamps, task key/fingerprint, and occupancy. If exactly one candidate fits, use its exact `runId`; if several fit, ask by human-readable summary; if occupied, ask whether to wait, choose another run, or explicitly resolve the lease.
@@ -69,7 +69,7 @@ Select an existing run only from public fields: `runId`, title, summary, workflo
 If no run fits, resolve the workflow, then create/register one run identity:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runs.mjs create --workflow <absolute-catalog-workflow-path> --title '<title>' --summary '<summary>' --owner <owner> --harness <harness> --session-id <session-id>
+bun ./lib/entrypoints/cli/workflow-runs.mjs create --workflow <absolute-catalog-workflow-path> --title '<title>' --summary '<summary>' --owner <owner> --harness <harness> --session-id <session-id>
 ```
 
 Never pass repo-relative workflow paths such as `workflows/.../workflow.json` into `workflow-runs create` or runner `--workflow` commands. If a relative workflow path error appears, rerun `workflow-catalog resolve`/`list` and use the returned absolute catalog `path`; do not guess cwd or repair the path manually.
@@ -77,7 +77,7 @@ Never pass repo-relative workflow paths such as `workflows/.../workflow.json` in
 Claim the selected run before calling the runner:
 
 ```bash
-lease_token=$(node ./lib/entrypoints/cli/workflow-runs.mjs claim --run-id <run-id> --owner <owner> --harness <harness> --session-id <session-id> --print-lease-token)
+lease_token=$(bun ./lib/entrypoints/cli/workflow-runs.mjs claim --run-id <run-id> --owner <owner> --harness <harness> --session-id <session-id> --print-lease-token)
 ```
 
 Extract and preserve exact `runId` and `lease_token`; never invent, shorten, or retype the token from memory. If missing, claim again or report the missing runner authority without inventing a workflow terminal state.
@@ -85,7 +85,7 @@ Extract and preserve exact `runId` and `lease_token`; never invent, shorten, or 
 Start by asking the runner for the first instruction:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runner.mjs next --run-id <run-id> --user-prompt '<clear dense user task prompt>' --lease-token "$lease_token" --only-instructions
+bun ./lib/entrypoints/cli/workflow-runner.mjs next --run-id <run-id> --user-prompt '<clear dense user task prompt>' --lease-token "$lease_token" --only-instructions
 ```
 
 Follow stdout text exactly.

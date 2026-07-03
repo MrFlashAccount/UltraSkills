@@ -11,12 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
       - name: Validate existing tests and workflows
-        run: npm run validate
+        run: bun run validate
       - name: Workflow E2E fixture tests
-        run: npm run test:workflow-e2e
+        run: bun run test:workflow-e2e

@@ -21,7 +21,7 @@ export const WORKFLOW_RUNNER_CLI_PATH = fileURLToPath(
   new URL("../../../entrypoints/cli/workflow-runner.mjs", import.meta.url),
 );
 
-export const WORKFLOW_RUNNER_COMMAND = `node ${shellQuote(WORKFLOW_RUNNER_CLI_PATH)}`;
+export const WORKFLOW_RUNNER_COMMAND = `bun ${shellQuote(WORKFLOW_RUNNER_CLI_PATH)}`;
 
 export function loadInstructionsCommandForStep(
   runId,

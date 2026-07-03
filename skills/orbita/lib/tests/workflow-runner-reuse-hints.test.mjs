@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { bindAgent, continueRun, loadInstructions, next, writeOutput } from '../entrypoints/workflow-runner-command.mjs';
 import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../entrypoints/internal/runner/runner-command-builder.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
@@ -243,7 +243,7 @@ function requestsFromOrchestratorInstruction(instruction) {
   return JSON.parse(match[1]);
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('runner reuse hints: run_worker request exposes only approved reuse fields', async () => {
   const workflow = structuredClone(workflowDoc);

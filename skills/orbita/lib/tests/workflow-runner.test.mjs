@@ -4,7 +4,7 @@ import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { next as runnerNext } from '../entrypoints/workflow-runner-command.mjs';
 import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../entrypoints/internal/runner/runner-command-builder.mjs';
@@ -247,7 +247,7 @@ function continueWithOutputs({ runId, runDir, workflowPath, refs, label = 'conti
   return expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], label);
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('runner: next returns a single host action request with load command only', () => {
   const { runId, runDir } = runCase('single');
@@ -282,10 +282,10 @@ test('runner: next returns a single host action request with load command only',
   assert.equal(response.requests[0].stepId, 'prepare');
   assert.equal(Object.hasOwn(response.requests[0], 'instructionRef'), false);
   assert.equal(response.requests[0].loadInstructionsCommand, `${workflowRunnerCommand} instructions --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`);
-  assert.equal(response.requests[0].loadInstructionsCommand.startsWith("node './"), false);
-  assert.equal(response.requests[0].loadFollowupInstructionsCommand.startsWith("node './"), false);
-  assert.equal(response.requests[0].bindAgentCommand.startsWith("node './"), false);
-  assert.equal(response.orchestratorInstruction.includes("node ./lib/entrypoints/cli/workflow-runner.mjs"), false);
+  assert.equal(response.requests[0].loadInstructionsCommand.startsWith("bun './"), false);
+  assert.equal(response.requests[0].loadFollowupInstructionsCommand.startsWith("bun './"), false);
+  assert.equal(response.requests[0].bindAgentCommand.startsWith("bun './"), false);
+  assert.equal(response.orchestratorInstruction.includes("bun ./lib/entrypoints/cli/workflow-runner.mjs"), false);
   assert.equal(Object.hasOwn(response.requests[0], 'outputPath'), false);
 
   const loadedFromOtherCwd = spawnSync(response.requests[0].loadInstructionsCommand, {
@@ -439,7 +439,7 @@ test('runner: next rejects existing unindexed legacy run state instead of mintin
     '--run-id', runId,
     '--workflow', workflowPath,
     '--lease-token', 'legacy-token-must-not-create-authority',
-  ], { cwd: root, encoding: 'utf8' });
+  ], { cwd: root, encoding: 'utf8', env: process.env });
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /requires indexed lease authority/);
@@ -622,7 +622,7 @@ test('runner: CLI resume ignores deleted startup user prompt file and preserves 
 test('runner: non-next modes reject empty user prompt file option', () => {
   const result = runRunner(['instructions', '--run-id', runCase('unsupported-user-prompt-file').runId, '--step-id', 'prepare', '--user-prompt-file', '']);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /usage: node \.\/lib\/entrypoints\/cli\/workflow-runner\.mjs/);
+  assert.match(result.stderr, /usage: bun \.\/lib\/entrypoints\/cli\/workflow-runner\.mjs/);
 });
 
 test('runner: user prompt is included in first worker when workflow starts with approval step', () => {
@@ -853,7 +853,7 @@ test('runner: write-output rejects --only-instructions because it is not an orch
   expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next before write-output only instructions');
   const written = runRunner(['write-output', '--run-id', runId, '--step-id', 'prepare', '--only-instructions'], { input: JSON.stringify(workerOutput('prepared')) });
   assert.notEqual(written.status, 0);
-  assert.match(written.stderr, /usage: node \.\/lib\/entrypoints\/cli\/workflow-runner\.mjs/);
+  assert.match(written.stderr, /usage: bun \.\/lib\/entrypoints\/cli\/workflow-runner\.mjs/);
   const batonAfterWrite = JSON.parse(readFileSync(path.join(runDir, 'baton.json'), 'utf8'));
   assert.equal(Object.hasOwn(batonAfterWrite.state, 'prepare'), false);
 });

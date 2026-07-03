@@ -1,0 +1,2 @@
+[test]
+preload = ["./skills/orbita/lib/tests/setupTests.mjs"]

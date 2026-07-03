@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 import { Workflow } from '../index.mjs';
 import { compileWorkflowOutputSchema } from '../schema-ref-validation.mjs';
 import { assertRoleDirectoryName, isRoleDirectoryName } from '../../../runtime/role-ref.mjs';

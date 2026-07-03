@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import test from 'node:test';
+import { test } from 'bun:test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import workflowDoc from '../../../../workflows/dev-harness/workflow.json' with { type: 'json' };
