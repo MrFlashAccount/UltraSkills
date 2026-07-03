@@ -20,17 +20,17 @@ The host adapter is thin. It executes requests with whatever capabilities the en
 ## Runner commands
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runner.mjs next --lease-token <token> --run-id <run-id> [--workflow <workflow.json>] [--user-prompt <text> | --user-prompt-file <path>]
-node ./lib/entrypoints/cli/workflow-runner.mjs write-output --lease-token <token> --run-id <run-id> --step-id <id> [--debug-summary-file <path>] [--json <json>] [--workflow <workflow.json>]
-node ./lib/entrypoints/cli/workflow-runner.mjs continue --lease-token <token> --run-id <run-id> [--workflow <workflow.json>]
-node ./lib/entrypoints/cli/workflow-runner.mjs instructions [--follow-up] --run-id <run-id> --step-id <id> --lease-token <token>
-node ./lib/entrypoints/cli/workflow-runner.mjs bind-agent --run-id <run-id> --step-id <id> --agent-id <agent-id> --lease-token <token>
-node ./lib/entrypoints/cli/workflow-runner.mjs record-orchestrator --lease-token <token> --run-id <run-id> [--json <json>] [--workflow <workflow.json>]
-node ./lib/entrypoints/cli/workflow-runner.mjs list-pointer-transitions --lease-token <token> --run-id <run-id> [--workflow <workflow.json>]
-node ./lib/entrypoints/cli/workflow-runner.mjs move-pointer --lease-token <token> --run-id <run-id> --transition-id <id> [--acknowledge-retained-state] [--workflow <workflow.json>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs next --lease-token <token> --run-id <run-id> [--workflow <workflow-file>] [--user-prompt <text> | --user-prompt-file <path>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs write-output --lease-token <token> --run-id <run-id> --step-id <id> [--debug-summary-file <path>] [--json <json>] [--workflow <workflow-file>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs continue --lease-token <token> --run-id <run-id> [--workflow <workflow-file>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs instructions [--follow-up] --run-id <run-id> --step-id <id> --lease-token <token>
+bun ./lib/entrypoints/cli/workflow-runner.mjs bind-agent --run-id <run-id> --step-id <id> --agent-id <agent-id> --lease-token <token>
+bun ./lib/entrypoints/cli/workflow-runner.mjs record-orchestrator --lease-token <token> --run-id <run-id> [--json <json>] [--workflow <workflow-file>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs list-pointer-transitions --lease-token <token> --run-id <run-id> [--workflow <workflow-file>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs move-pointer --lease-token <token> --run-id <run-id> --transition-id <id> [--acknowledge-retained-state] [--workflow <workflow-file>]
 ```
 
-`next` and `continue` also accept `--only-instructions`; with that flag stdout is exactly the `orchestratorInstruction` text instead of the full JSON host response. `next` creates the run files if needed and returns the current host work. `write-output` validates and accepts one current request output directly into baton/state, then returns only acceptance JSON or validation errors; it does not accept `--only-instructions`, does not drive orchestrator navigation, and must not accept or mutate worker binding metadata. `record-orchestrator` accepts one host/orchestrator debug JSON note for the current non-terminal host action and appends a bounded, redacted, deduplicated history entry without changing baton state. `continue` applies already-accepted outputs from baton/state, persists the new baton, and returns the next host work. `instructions` prints only the compiled instructions for one current requested step, does not accept `--only-instructions`, and fails for unknown or unsafe step ids. `bind-agent` validates the same explicit lease and updates only top-level `baton.workerBindings[stepId]` with the supplied opaque worker id. Current requests and instructions are rendered from the indexed workflow plus `baton.json`; durable runner state is baton plus history plus advisory top-level worker bindings. Every write-capable, bind-capable, or instruction-loading command validates a fresh explicit `--lease-token` before creating run directories, locks, index entries, baton/history, binding metadata, or durable commit files; `runId` is identity only, and durable lease state keeps only token hash, token epoch, and lease expiry.
+`--workflow` accepts either a TOML or JSON workflow file. `next` and `continue` also accept `--only-instructions`; with that flag stdout is exactly the `orchestratorInstruction` text instead of the full JSON host response. `next` creates the run files if needed and returns the current host work. `write-output` validates and accepts one current request output directly into baton/state, then returns only acceptance JSON or validation errors; it does not accept `--only-instructions`, does not drive orchestrator navigation, and must not accept or mutate worker binding metadata. `record-orchestrator` accepts one host/orchestrator debug JSON note for the current non-terminal host action and appends a bounded, redacted, deduplicated history entry without changing baton state. `continue` applies already-accepted outputs from baton/state, persists the new baton, and returns the next host work. `instructions` prints only the compiled instructions for one current requested step, does not accept `--only-instructions`, and fails for unknown or unsafe step ids. `bind-agent` validates the same explicit lease and updates only top-level `baton.workerBindings[stepId]` with the supplied opaque worker id. Current requests and instructions are rendered from the indexed workflow plus `baton.json`; durable runner state is baton plus history plus advisory top-level worker bindings. Every write-capable, bind-capable, or instruction-loading command validates a fresh explicit `--lease-token` before creating run directories, locks, index entries, baton/history, binding metadata, or durable commit files; `runId` is identity only, and durable lease state keeps only token hash, token epoch, and lease expiry.
 
 The API functions `listPointerTransitions` and `movePointer` are exposed through
 the CLI modes `list-pointer-transitions` and `move-pointer`. They are operator
@@ -68,7 +68,7 @@ When host work is needed, the runner returns:
 ```json
 {
   "status": "needs_host_actions",
-  "orchestratorInstruction": "Supersedes all previous workflow-runner stdout.\nExecute every host request in this JSON and wait until all requested actions finish: [{\"id\":\"step_id\",\"stepId\":\"step_id\",\"action\":\"run_worker\",\"preferredAgentId\":null,\"loadInstructionsCommand\":\"node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>\",\"loadFollowupInstructionsCommand\":\"node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --follow-up --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>\",\"bindAgentCommand\":\"node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' bind-agent --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --agent-id <agent-id> --lease-token <lease-token>\"}]\nThen run:\nnode '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' continue --run-id 'run_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token> --only-instructions\nFollow that stdout instruction exactly.",
+  "orchestratorInstruction": "Supersedes all previous workflow-runner stdout.\nExecute every host request in this JSON and wait until all requested actions finish: [{\"id\":\"step_id\",\"stepId\":\"step_id\",\"action\":\"run_worker\",\"preferredAgentId\":null,\"loadInstructionsCommand\":\"bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>\",\"loadFollowupInstructionsCommand\":\"bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --follow-up --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>\",\"bindAgentCommand\":\"bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' bind-agent --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --agent-id <agent-id> --lease-token <lease-token>\"}]\nThen run:\nbun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' continue --run-id 'run_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token> --only-instructions\nFollow that stdout instruction exactly.",
   "baton": {},
   "requests": [
     {
@@ -76,9 +76,9 @@ When host work is needed, the runner returns:
       "stepId": "step_id",
       "action": "run_worker",
       "preferredAgentId": null,
-      "loadInstructionsCommand": "node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>",
-      "loadFollowupInstructionsCommand": "node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --follow-up --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>",
-      "bindAgentCommand": "node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' bind-agent --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --agent-id <agent-id> --lease-token <lease-token>"
+      "loadInstructionsCommand": "bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>",
+      "loadFollowupInstructionsCommand": "bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --follow-up --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>",
+      "bindAgentCommand": "bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' bind-agent --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --agent-id <agent-id> --lease-token <lease-token>"
     }
   ]
 }
@@ -153,7 +153,7 @@ Missing host capability is represented as blocked output, not as a transition de
 For each requested step, accept output first:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runner.mjs write-output --lease-token "$WORKFLOW_RUN_TOKEN" --run-id "$RUN_ID" --step-id "step_id" --debug-summary-file "$RUN_DIR/step_id/debug-summary.md" --workflow "$WORKFLOW" <<'JSON'
+bun ./lib/entrypoints/cli/workflow-runner.mjs write-output --lease-token "$WORKFLOW_RUN_TOKEN" --run-id "$RUN_ID" --step-id "step_id" --debug-summary-file "$RUN_DIR/step_id/debug-summary.md" --workflow "$WORKFLOW" <<'JSON'
 { "outcome": "ready", "artifacts": [], "results": [] }
 JSON
 ```
@@ -161,7 +161,7 @@ JSON
 After every current request has accepted output, continue without `--output`:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runner.mjs continue --lease-token "$WORKFLOW_RUN_TOKEN" --run-id "$RUN_ID" --workflow "$WORKFLOW" --only-instructions
+bun ./lib/entrypoints/cli/workflow-runner.mjs continue --lease-token "$WORKFLOW_RUN_TOKEN" --run-id "$RUN_ID" --workflow "$WORKFLOW" --only-instructions
 ```
 
 For parallel branch requests, call `write-output` once per requested `stepId`; `continue` collects the accepted values from baton/state into the existing portable `{ "steps": { ... } }` envelope internally before applying workflow state.

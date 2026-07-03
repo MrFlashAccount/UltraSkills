@@ -8,6 +8,7 @@ import { renderAppliedResponse } from '../use-cases/ContinueRun.mjs';
 import { runNext } from '../use-cases/RunNext.mjs';
 import { resolveStartupUserPrompt, startupUserPromptTarget } from '../use-cases/user-prompt.mjs';
 import { loadWorkflowRuntime } from '../persistence/workflow-resources/runtime-reader.mjs';
+import { readWorkflowDocument } from '../persistence/workflow-resources/workflow-document-reader.mjs';
 import { artifactPathBoundaryErrors } from '../persistence/workflow-resources/artifact-path-boundaries.mjs';
 import { writePersistedRunStateUpdate } from '../persistence/run-state/PersistedRunStateWriter.mjs';
 import { toHostResponse, workerBindingKeyForStep } from './internal/runner/host-requests.mjs';
@@ -40,7 +41,7 @@ async function readJson(pathname, kind) {
 }
 
 async function runnerResponseForRendered(paths, rendered, { initialized, resumed, leaseToken, includeInlineInstructions = false }) {
-  const workflowDoc = await readJson(paths.workflowPath, 'workflow');
+  const workflowDoc = readWorkflowDocument(paths.workflowPath, 'workflow');
   return {
     ...toHostResponse(rendered, {
       runId: paths.runId,
@@ -209,7 +210,7 @@ async function nextInternal({ runId, workflowPath, includeDiagnostics = false, u
       }
       const userPromptFileContent = (!hasExistingBaton && userPromptFile !== undefined) ? await readText(userPromptFile, '--user-prompt-file') : undefined;
       const startupUserPrompt = hasExistingBaton ? undefined : resolveStartupUserPrompt({ userPrompt, userPromptFileContent });
-      const workflowDoc = startupUserPrompt === undefined ? undefined : await readJson(paths.workflowPath, 'workflow');
+      const workflowDoc = startupUserPrompt === undefined ? undefined : readWorkflowDocument(paths.workflowPath, 'workflow');
       const startupPromptTarget = startupUserPrompt === undefined
         ? undefined
         : startupUserPromptTarget({ workflow: workflowDoc, start: workflowDoc?.start });

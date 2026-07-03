@@ -4,6 +4,7 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defaultRepositoryRootForWorkflow } from '../workflow-resources/resource-resolver.mjs';
+import { readWorkflowDocument } from '../workflow-resources/workflow-document-reader.mjs';
 import { assertManagedRunStateFile, createManagedDirectory } from './atomic-file.mjs';
 import { runsIndexPathsForRoot } from './run-index.mjs';
 
@@ -226,7 +227,7 @@ export async function ensureRunFiles(paths, { userPrompt, userPromptTarget } = {
   const batonExists = await exists(paths.batonPath);
   if (batonExists) await assertManagedRunStateFile(paths.batonPath, 'workflow baton');
   if (!batonExists) {
-    const workflowDoc = await readJson(paths.workflowPath, 'workflow');
+    const workflowDoc = readWorkflowDocument(paths.workflowPath, 'workflow');
     const start = workflowStart(workflowDoc, paths.workflowPath);
     const initialBaton = { cursor: start, status: 'running', state: { artifacts: [], results: [] } };
     if (typeof userPrompt === 'string') {

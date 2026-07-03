@@ -6,6 +6,7 @@ import { isInside } from '../filesystem/path-safety.mjs';
 import { WorkflowRuntimeError } from '../../errors.mjs';
 import { listAllowedWorkflowRoles, workflowRoleMaterialPath, REQUIRED_WORKFLOW_ROLE_MATERIAL_FILES } from './role-material-catalog.mjs';
 import { assertWorkflowSchema } from '../../file-contracts/workflow-document-schema.mjs';
+import { readWorkflowDocument } from './workflow-document-reader.mjs';
 import { assertBatonSchema, batonSchema } from '../../entities/Baton/schema/baton-schema.mjs';
 
 function readJson(pathname, kind) {
@@ -150,7 +151,7 @@ export function loadWorkflowResources({ workflow, workflowPath, repositoryRoot =
 }
 
 export function loadWorkflowRuntime({ workflowPath, batonPath, baton }) {
-  const workflow = readJson(workflowPath, 'workflow');
+  const workflow = readWorkflowDocument(workflowPath, 'workflow');
   assertWorkflowSchema(workflow);
   const batonDoc = baton ?? readJson(batonPath, 'baton');
   assertBatonSchema(batonDoc);

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
+import { readWorkflowDocument } from '../persistence/workflow-resources/workflow-document-reader.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-catalog-'));
@@ -30,7 +31,7 @@ test('workflow catalog lists checked-in workflows from top-level descriptions', 
     parsed.workflows.map((workflow) => workflow.path),
     [
       path.join(root, 'workflows/dev-harness/workflow.json'),
-      path.join(root, 'workflows/research-critic/workflow.json'),
+      path.join(root, 'workflows/research-critic/workflow.toml'),
       path.join(root, 'workflows/workflow-authoring/workflow.json'),
     ],
   );
@@ -56,7 +57,7 @@ test('workflow catalog resolves exact and fuzzy workflow names', () => {
     candidates: [
       {
         name: 'dev-harness',
-        description: JSON.parse(readFileSync(path.join(root, 'workflows/dev-harness/workflow.json'), 'utf8')).description,
+        description: readWorkflowDocument(path.join(root, 'workflows/dev-harness/workflow.json')).description,
         path: path.join(root, 'workflows/dev-harness/workflow.json'),
       },
     ],

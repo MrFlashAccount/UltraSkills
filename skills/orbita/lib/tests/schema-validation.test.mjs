@@ -189,7 +189,7 @@ test('runner host response schema enforces action-conditional reuse hint fields'
         stepId: 'worker_step',
         action: 'resolve_worker_blocker',
         recoverableBlocker: validRecoverableRunWorker.requests[0].recoverableBlocker,
-        writeResolutionCommand: 'node workflow-runner.mjs write-output',
+        writeResolutionCommand: 'bun workflow-runner.mjs write-output',
       },
     ],
   };
@@ -248,6 +248,6 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validResolveWorkerBlocker,
-    requests: [{ ...validResolveWorkerBlocker.requests[0], loadInstructionsCommand: 'node workflow-runner.mjs instructions' }],
+    requests: [{ ...validResolveWorkerBlocker.requests[0], loadInstructionsCommand: 'bun workflow-runner.mjs instructions' }],
   }, { schemas: runtimeSchemas }).ok, false);
 });

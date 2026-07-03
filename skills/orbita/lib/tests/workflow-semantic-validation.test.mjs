@@ -6,16 +6,17 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import workflowDoc from '../../../../workflows/dev-harness/workflow.json' with { type: 'json' };
-import researchCriticWorkflowDoc from '../../../../workflows/research-critic/workflow.json' with { type: 'json' };
 import workflowAuthoringWorkflowDoc from '../../../../workflows/workflow-authoring/workflow.json' with { type: 'json' };
 import { WorkflowRuntimeError } from '../errors.mjs';
 import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
 import { validateWorkflowFile } from '../entrypoints/api/validateWorkflow.mjs';
-import { readOutputSchemas, readAllowedRoles } from '../persistence/workflow-resources/workflow-file-reader.mjs';
+import { read, readOutputSchemas, readAllowedRoles } from '../persistence/workflow-resources/workflow-file-reader.mjs';
 import { loadWorkflowResources } from '../persistence/workflow-resources/runtime-reader.mjs';
 import { validateAgainstOutputSchema as validateLoadedOutputSchema } from '../use-cases/runtime/output/output-schema-validation.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
+const RESEARCH_CRITIC_WORKFLOW_PATH = path.join(REPO_ROOT, 'workflows/research-critic/workflow.toml');
+const researchCriticWorkflowDoc = read(RESEARCH_CRITIC_WORKFLOW_PATH).toJSON();
 function runBun(args) {
   return spawnSync(process.execPath, args, { cwd: REPO_ROOT, encoding: 'utf8' });
 }
@@ -317,7 +318,7 @@ test('research critic save step uses persistence metadata template matching its 
   assert.equal(step.output.template, '../../shared/templates/research-canvas-save-metadata-template.md');
   assert.equal(step.output.schema, 'schemas/save-research-canvas-output.json');
   assert.equal(researchCriticWorkflowDoc.steps.research_draft.output.template, '../../shared/templates/reasons/reasons-canvas-template.md');
-  assert.deepEqual(validateWithRuntimeArchitecture(researchCriticWorkflowDoc, { workflowPath: path.join(REPO_ROOT, 'workflows/research-critic/workflow.json') }), {
+  assert.deepEqual(validateWithRuntimeArchitecture(researchCriticWorkflowDoc, { workflowPath: RESEARCH_CRITIC_WORKFLOW_PATH }), {
     ok: true,
     workflow: 'research-critic',
     steps: Object.keys(researchCriticWorkflowDoc.steps).length,
@@ -340,7 +341,7 @@ test('research critic research draft always requires a first-class REASONS Canva
   assert.match(prompt, /Do not create any separate legacy research artifact or structured legacy output/);
   assert.match(promptText(researchCriticWorkflowDoc.steps.research_attack), /Treat a missing `reasons-canvas-research` artifact as a blocking research failure/);
 
-  const workflowPath = path.join(REPO_ROOT, 'workflows/research-critic/workflow.json');
+  const workflowPath = RESEARCH_CRITIC_WORKFLOW_PATH;
   const schemaContext = {
     workflow: researchCriticWorkflowDoc,
     workflowPath,
@@ -399,7 +400,7 @@ test('research critic research draft always requires a first-class REASONS Canva
 });
 
 test('research critic saved Canvas output requires artifacts and results payloads', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/research-critic/workflow.json');
+  const workflowPath = RESEARCH_CRITIC_WORKFLOW_PATH;
   const step = researchCriticWorkflowDoc.steps.save_research_canvas;
 
   const missingAggregates = validateAgainstOutputSchema({
@@ -473,7 +474,7 @@ test('research critic saved Canvas output requires artifacts and results payload
 });
 
 test('research critic save Canvas output keeps saved and blocked branches exclusive', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/research-critic/workflow.json');
+  const workflowPath = RESEARCH_CRITIC_WORKFLOW_PATH;
   const step = researchCriticWorkflowDoc.steps.save_research_canvas;
   const schemaContext = {
     workflow: researchCriticWorkflowDoc,
@@ -1239,6 +1240,28 @@ test('validate-workflow CLI requires an explicit workflow path', () => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /validate-workflow: workflow path is required/);
+});
+
+test('validate-workflow CLI resolves workflow package directories to workflow.toml or workflow.json', () => {
+  const result = runBun(['skills/orbita/lib/entrypoints/cli/validate-workflow.mjs', 'workflows/research-critic']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    ok: true,
+    workflow: 'research-critic',
+    steps: 7,
+  });
+});
+
+test('validate-workflow CLI expands a workflows root directory', () => {
+  const result = runBun(['skills/orbita/lib/entrypoints/cli/validate-workflow.mjs', 'workflows']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), [
+    { ok: true, workflow: 'dev-harness', steps: 24 },
+    { ok: true, workflow: 'research-critic', steps: 7 },
+    { ok: true, workflow: 'workflow-authoring', steps: 11 },
+  ]);
 });
 
 test('workflow semantic validation uses approval output.schema for output match cases when declared', () => {

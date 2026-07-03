@@ -161,7 +161,7 @@ If a skill needs reusable instructions that are not a runnable skill:
 - `bun run test` runs the repo test suite.
 - `bun run schema-validation:bundle-vendor-ajv` rebuilds the committed `shared/scripts/schema-validation/vendor/ajv.mjs` bundle.
 - `bun run schema-validation:check-vendor-ajv` rebuilds that vendor bundle and fails if the committed file is stale.
-- `bun run workflow:validate` runs deterministic semantic validation for the checked-in flat workflow files under `workflows/*/workflow.json`.
+- `bun run workflow:validate` runs deterministic semantic validation for the checked-in flat workflow files under `workflows/*/workflow.{toml,json}`.
 - `bun run agents:generate` rebuilds generated Codex custom-agent TOML files from `roles/`.
 - `bun run agents:check` regenerates Codex custom-agent TOML files and fails if `agents/` is stale.
 - `bun run validate` runs tests, workflow semantic validation, generated Codex-agent freshness, and the schema-validation vendor bundle freshness check.

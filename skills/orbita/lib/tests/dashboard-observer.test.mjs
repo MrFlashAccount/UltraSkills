@@ -99,7 +99,7 @@ test('dashboard projection exposes safe DTOs with lanes, parallel cursor, minima
     },
   }, [
     'visible line',
-    "node workflow-runner.mjs instructions --run-id secret --lease-token lease-secret",
+    "bun workflow-runner.mjs instructions --run-id secret --lease-token lease-secret",
     'WORKFLOW_RUN_TOKEN=lease-secret bind-agent preferred agent',
     'kept line',
   ].join('\n'));
