@@ -32,7 +32,7 @@ test('workflow catalog lists checked-in workflows from top-level descriptions', 
     [
       path.join(root, 'workflows/dev-harness/workflow.toml'),
       path.join(root, 'workflows/research-critic/workflow.toml'),
-      path.join(root, 'workflows/workflow-authoring/workflow.json'),
+      path.join(root, 'workflows/workflow-authoring/workflow.toml'),
     ],
   );
   assert.equal(parsed.workflows.every((workflow) => path.isAbsolute(workflow.path)), true);

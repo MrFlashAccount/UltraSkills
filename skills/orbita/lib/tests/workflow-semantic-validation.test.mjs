@@ -5,7 +5,6 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import workflowAuthoringWorkflowDoc from '../../../../workflows/workflow-authoring/workflow.json' with { type: 'json' };
 import { WorkflowRuntimeError } from '../errors.mjs';
 import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
 import { validateWorkflowFile } from '../entrypoints/api/validateWorkflow.mjs';
@@ -16,8 +15,10 @@ import { validateAgainstOutputSchema as validateLoadedOutputSchema } from '../us
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const DEV_HARNESS_WORKFLOW_PATH = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
 const RESEARCH_CRITIC_WORKFLOW_PATH = path.join(REPO_ROOT, 'workflows/research-critic/workflow.toml');
+const WORKFLOW_AUTHORING_WORKFLOW_PATH = path.join(REPO_ROOT, 'workflows/workflow-authoring/workflow.toml');
 const workflowDoc = read(DEV_HARNESS_WORKFLOW_PATH).toJSON();
 const researchCriticWorkflowDoc = read(RESEARCH_CRITIC_WORKFLOW_PATH).toJSON();
+const workflowAuthoringWorkflowDoc = read(WORKFLOW_AUTHORING_WORKFLOW_PATH).toJSON();
 function runBun(args) {
   return spawnSync(process.execPath, args, { cwd: REPO_ROOT, encoding: 'utf8' });
 }
@@ -566,10 +567,9 @@ test('workflow authoring implementation revision inlines review findings', () =>
 });
 
 test('workflow authoring design output requires branch payloads', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/workflow-authoring/workflow.json');
   const schemaContext = {
     workflow: workflowAuthoringWorkflowDoc,
-    workflowPath,
+    workflowPath: WORKFLOW_AUTHORING_WORKFLOW_PATH,
     schemaRef: workflowAuthoringWorkflowDoc.steps.workflow_design_draft.output.schema,
     repositoryRoot: REPO_ROOT,
   };
