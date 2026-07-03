@@ -102,7 +102,12 @@ test('direct bun test import isolates default workflow runs root and cleans it o
   delete env.WORKFLOW_RUNS_ROOT;
   delete env.ORBITA_HOME;
   delete env.NODE_TEST_CONTEXT;
-  const result = spawnSync(process.execPath, ['test', testFile], { cwd: root, encoding: 'utf8', env });
+  const result = spawnSync(process.execPath, [
+    'test',
+    '--preload',
+    path.join(root, 'skills/orbita/lib/tests/setupTests.mjs'),
+    testFile,
+  ], { cwd: root, encoding: 'utf8', env });
 
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(readFileSync(markerFile, 'utf8'));

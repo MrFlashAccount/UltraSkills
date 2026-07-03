@@ -119,7 +119,7 @@ test('workflow runner CLI errors do not expose raw workflow pathnames', async ()
     '--run-id', id,
     '--workflow', workflowPath,
     '--lease-token', `redaction-cli-token-${process.pid}`,
-  ], { cwd: root, encoding: 'utf8' });
+  ], { cwd: root, encoding: 'utf8', env: process.env });
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /failed to read workflow JSON: ENOENT|cannot read workflow: ENOENT/);

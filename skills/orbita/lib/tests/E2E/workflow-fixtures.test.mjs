@@ -51,7 +51,7 @@ function claimRunForRunnerArgs(args) {
   const createArgs = ['skills/orbita/lib/entrypoints/cli/workflow-runs.mjs', 'create', '--claim', '--run-id', runIdValue];
   const workflow = valueAfter(args, '--workflow');
   if (workflow !== undefined) createArgs.push('--workflow', workflow);
-  const created = spawnSync(process.execPath, createArgs, { cwd: root, encoding: 'utf8' });
+  const created = spawnSync(process.execPath, createArgs, { cwd: root, encoding: 'utf8', env: process.env });
   assert.equal(created.status, 0, `claim ${runIdValue} failed\nstdout:\n${created.stdout}\nstderr:\n${created.stderr}`);
   const token = JSON.parse(created.stdout).leaseToken;
   leaseTokensByRunId.set(runIdValue, token);
@@ -68,6 +68,7 @@ function runRunner(args, options = {}) {
   return spawnSync(process.execPath, ['skills/orbita/lib/entrypoints/cli/workflow-runner.mjs', ...withLeaseToken(args, token)], {
     cwd: root,
     encoding: 'utf8',
+    env: process.env,
     input: options.input,
   });
 }
