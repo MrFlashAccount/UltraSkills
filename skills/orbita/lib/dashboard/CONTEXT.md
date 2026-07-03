@@ -25,6 +25,11 @@ uses `../../DESIGN.md` as the board/drawer UI input.
 - Dashboard code is read-only. It must not write run directories, mutate baton
   or history, acquire or refresh leases, advance workflow cursors, or repair
   run state.
+- Pointer recovery remains a runner control-plane concern. Dashboard code must
+  not call, wrap, expose, or provide controls for the `listPointerTransitions` /
+  `movePointer` API functions or the `list-pointer-transitions` /
+  `move-pointer` CLI modes, and must not display lease-required recovery
+  metadata as a browser action surface.
 - `contracts/**` is the shared source for the browser-visible DTO surface. The
   server, projection, UI fixtures, and renderer must agree on the same list,
   detail, event, degraded diagnostic, artifact, history excerpt, cursor, and
@@ -51,6 +56,8 @@ Dashboard runtime code must not import, execute, shell out to, expose, or wrap:
 
 - workflow-runner `next`, `continue`, `write-output`, `instructions`, or
   `bind-agent` command surfaces;
+- workflow-runner `listPointerTransitions` / `movePointer` API functions or
+  `list-pointer-transitions` / `move-pointer` CLI modes;
 - run claiming, lease authority, heartbeat, lock mutation, or persisted-state
   writer code;
 - host worker lifecycle/session concepts;
@@ -72,6 +79,8 @@ Dashboard changes must include focused evidence for:
 
 - no runner mutation/control imports or command strings in dashboard runtime
   code;
+- no pointer-recovery controls, imports, command strings, lease acquisition, or
+  manual current-pointer movement affordances in dashboard runtime or browser UI;
 - safe DTO redaction for forbidden fields above;
 - per-run degraded read isolation without hiding healthy runs;
 - restart rebuild from durable state;

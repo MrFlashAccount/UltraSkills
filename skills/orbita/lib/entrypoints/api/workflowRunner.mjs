@@ -1,7 +1,9 @@
 export {
   bindAgent,
   continueRun,
+  listPointerTransitions,
   loadInstructions,
+  movePointer,
   next,
   recordOrchestrator,
   writeOutput,

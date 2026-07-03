@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { applyWorkflowOutput } from '../use-cases/ApplyWorkflowOutput.mjs';
 import { validateRunnerAcceptedOutput } from '../use-cases/WorkflowRunnerOutputValidation.mjs';
 import { acceptedOutputHistoryDetails, orchestratorDebugHistoryDetails, publicFailureHistoryDetails, transitionHistoryDetails } from './internal/runner/history-projection.mjs';
+import { pointerMoveHistoryDetails, projectPointerTransitions, resolvePointerMove } from './internal/runner/pointer-transition-projection.mjs';
 import { renderAppliedResponse } from '../use-cases/ContinueRun.mjs';
 import { runNext } from '../use-cases/RunNext.mjs';
 import { resolveStartupUserPrompt, startupUserPromptTarget } from '../use-cases/user-prompt.mjs';
@@ -153,7 +154,7 @@ async function recordPublicRunnerFailure(error, options = {}) {
 async function publicApiCall(callback, options = {}) {
   try { return await callback(); }
   catch (error) {
-    await recordPublicRunnerFailure(error, options);
+    if (options.recordFailure !== false) await recordPublicRunnerFailure(error, options);
     throw publicApiError(error, options);
   }
 }
@@ -364,6 +365,73 @@ async function continueRunInternal({ runId, workflowPath, output, includeDiagnos
 
 export async function continueRun(options = {}) {
   return publicApiCall(() => continueRunInternal(options), { ...options, command: 'continue' });
+}
+
+async function listPointerTransitionsInternal({ runId, workflowPath, leaseToken, now = new Date(), runsRoot } = {}) {
+  await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
+  const lockPaths = resolveRunPaths({ runId, runsRoot });
+  await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
+  const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
+  await assertWorkerLeaseAuthority(paths, { leaseToken, now });
+  const current = await readPersistedRunState(paths);
+  const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
+  return {
+    runId: paths.runId,
+    ...projectPointerTransitions({
+      workflow: runtime.workflow,
+      baton: runtime.baton,
+      historyText: current.history?.text,
+    }),
+  };
+}
+
+export async function listPointerTransitions(options = {}) {
+  return publicApiCall(() => listPointerTransitionsInternal(options), { ...options, command: 'list-pointer-transitions', recordFailure: false });
+}
+
+async function movePointerInternal({ runId, workflowPath, transitionId, acknowledgeRetainedState = false, leaseToken, now = new Date(), runsRoot } = {}) {
+  await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
+  const lockPaths = resolveRunPaths({ runId, runsRoot });
+  await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
+  return withRunStateLock(lockPaths, async () => {
+    const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
+    await assertWorkerLeaseAuthority(paths, { leaseToken, now });
+    await recoverDurableCommit(paths);
+    const current = await readPersistedRunState(paths);
+    const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
+    const resolved = resolvePointerMove({
+      workflow: runtime.workflow,
+      baton: runtime.baton,
+      historyText: current.history?.text,
+      transitionId,
+      acknowledgeRetainedState,
+    });
+    await writePersistedRunStateUpdate(paths, {
+      baton: resolved.baton,
+      history: {
+        source: 'workflow-runner-move-pointer',
+        baton: resolved.baton,
+        output: `pointer:${resolved.transition.id}`,
+        details: pointerMoveHistoryDetails({ transition: resolved.transition }),
+      },
+    });
+    const { response } = await renderCurrentHostResponse(paths, resolved.baton, { leaseToken });
+    const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
+    await upsertRunIndexEntry(paths, { status: response.status, workflowPath: paths.workflowPath, workerLease });
+    return {
+      ok: true,
+      runId: paths.runId,
+      moved: resolved.transition,
+      current: {
+        cursor: resolved.baton.cursor,
+        status: resolved.baton.status,
+      },
+    };
+  });
+}
+
+export async function movePointer(options = {}) {
+  return publicApiCall(() => movePointerInternal(options), { ...options, command: 'move-pointer', recordFailure: false });
 }
 
 function parseOutputJson(json) {
