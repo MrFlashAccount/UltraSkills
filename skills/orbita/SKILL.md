@@ -99,6 +99,21 @@ After each `--only-instructions` runner command, follow stdout exactly. `instruc
 
 Call `workflow-runner continue` only from the latest stdout command. Do not call `next` as a substitute, and never report cursor, next instruction, pending request, accepted output, or `needs_host_actions` as final completion.
 
+## Pointer recovery
+
+If the user asks to roll back, return to an earlier stage, or "go back to
+research/planning/etc.", use the public pointer commands instead of editing
+private baton/run-state files.
+
+Run `workflow-runner list-pointer-transitions --run-id <run-id> --lease-token
+"$lease_token"` to inspect valid adjacent moves. Choose the transition whose
+`to.cursor` matches the requested stage, then run `workflow-runner move-pointer
+--run-id <run-id> --transition-id <id> --lease-token "$lease_token"`. Add
+`--acknowledge-retained-state` only when the listed transition requires it and
+the user intentionally wants to keep existing accepted outputs/artifacts/state.
+If no listed transition matches the requested rollback target, stop blocked and
+explain which transitions are available.
+
 ## Host actions
 
 Complete every current stdout request unless impossible; if a required request cannot be completed, submit a validated blocked output for that same request when the current instructions provide a writer, then continue from the latest runner stdout. Known actions: `run_worker`, `resolve_worker_blocker`, `wait_for_approval`. Unknown action is a runner contract bug, not a workflow terminal state.
