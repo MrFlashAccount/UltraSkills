@@ -3,6 +3,8 @@ import { assertLoadedWorkflowAndBaton } from '../../runtime/guards/workflow.mjs'
 import { applyNextTransition } from '../../runtime/transition/next.mjs';
 import { applyParallelOutputs } from '../../runtime/parallel/apply.mjs';
 import { normalizeCursor } from '../../../runtime/cursor.mjs';
+import { isShardedStep } from '../../../entities/Baton/sharding.mjs';
+import { applyShardedStepOutputs } from '../../../runtime/sharded-step.mjs';
 import { assertOutputSchemaIfDeclared, isParallelOutputEnvelope, readWorkerOutputForStep } from '../../runtime/output/worker-output.mjs';
 
 function parseCandidateOutput({ outputContent, outputValue }) {
@@ -36,6 +38,16 @@ export function applyWorkflowOutput({ workflowDoc, batonDoc, outputContent, outp
   }
 
   const stepId = cursorStepIds[0];
+  if (isShardedStep(cursorStep)) {
+    return applyShardedStepOutputs({
+      workflow,
+      baton,
+      ownerStepId: stepId,
+      ownerStep: cursorStep,
+      allOutput: candidateOutput,
+      resources,
+    });
+  }
   const readResult = readWorkerOutputForStep({ baton, stepId, step: cursorStep, allOutput: candidateOutput, outputParseError: parsed.error });
   if (readResult.retryResponse) return readResult.retryResponse;
   const { workerOutput, retryResponse } = assertOutputSchemaIfDeclared({

@@ -19,9 +19,28 @@
       "required": ["id", "action", "step"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
+        "ownerStepId": { "type": "string", "minLength": 1 },
         "action": { "enum": ["run_worker", "wait_for_approval", "stop_done"] },
         "step": { "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/workflow#/$defs/step" },
+        "shard": { "$ref": "#/$defs/shardWork" },
         "compiledPrompt": { "$ref": "#/$defs/compiledPrompt" }
+      },
+      "additionalProperties": false
+    },
+    "shardWork": {
+      "type": "object",
+      "required": ["obligation_id", "shard_id", "reviewer_role", "required", "privacy_route", "max_attempts", "source_evidence"],
+      "properties": {
+        "obligation_id": { "type": "string", "minLength": 1 },
+        "shard_id": { "type": "string", "minLength": 1 },
+        "reviewer_role": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "privacy_route": { "const": "safe_context" },
+        "max_attempts": { "type": "integer", "minimum": 1 },
+        "source_evidence": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
       },
       "additionalProperties": false
     },

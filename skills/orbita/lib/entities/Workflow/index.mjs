@@ -10,6 +10,7 @@ import { RESERVED_STATE_KEYS, DANGEROUS_OBJECT_KEYS, isDangerousObjectKey, isRes
 import { statusForStep } from '../../runtime/step-status.mjs';
 import { assertLoopPolicies } from '../../runtime/loop-policies.mjs';
 import { assertTransitionDescriptorTargets, normalizeTransitionNext } from '../../runtime/transition-next.mjs';
+import { assertWorkflowShardingPolicies, isShardedStep } from '../Baton/sharding.mjs';
 import { compileWorkflowOutputSchema } from './schema-ref-validation.mjs';
 
 function cloneBoundaryData(dto) {
@@ -195,6 +196,7 @@ function normalizeStepOutputSchemas({ workflow, outputSchemas = new Map(), warni
       continue;
     }
     const normalizedSchema = validateOutputSchemaDocument(schema, schemaRef, workflow, undefined, warnings, { stepId, step, requireWorkerOutcomeContract, externalSchemas });
+    if (isShardedStep(step)) assertShardedOutputContract({ stepId, schema: normalizedSchema });
     schemasByStep.set(stepId, normalizedSchema);
   }
   return schemasByStep;
@@ -272,6 +274,18 @@ function assertWorkerOutputContract({ stepId, schema }) {
   const outcomeSchemas = schemaForPath(schema, ['outcome']);
   if (outcomeSchemas.length === 0 || outcomeSchemas.some((outcomeSchema) => schemaAllowsNonString(outcomeSchema))) {
     fail(`step '${stepId}' output.schema field 'outcome' must allow only strings`);
+  }
+}
+
+function assertShardedOutputContract({ stepId, schema }) {
+  for (const field of ['shard_id', 'reviewer_role']) {
+    if (!schemaRequiresPath(schema, [field])) {
+      fail(`step '${stepId}' sharding requires output.schema to require string field '${field}'`);
+    }
+    const fieldSchemas = schemaForPath(schema, [field]);
+    if (fieldSchemas.length === 0 || fieldSchemas.some((fieldSchema) => schemaAllowsNonString(fieldSchema))) {
+      fail(`step '${stepId}' sharding output.schema field '${field}' must allow only strings`);
+    }
   }
 }
 
@@ -659,6 +673,7 @@ function validateWorkflowDocument(workflow, options = {}) {
   assertWorkflowStepIds(workflow);
   assertWorkflowRootTargets(workflow);
   assertWorkflowStepRoles(workflow, options.allowedRoles);
+  assertWorkflowShardingPolicies(workflow, { allowedRoles: normalizeAllowedRoleCatalog(options.allowedRoles) });
   const warnings = [];
   const schemasByStep = normalizeStepOutputSchemas({
     workflow,

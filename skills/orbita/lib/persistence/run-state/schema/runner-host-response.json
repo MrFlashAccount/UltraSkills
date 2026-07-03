@@ -4,7 +4,7 @@
   "title": "Workflow Runner Host Response",
   "type": "object",
   "required": ["status", "orchestratorInstruction", "baton"],
-  "properties": {
+        "properties": {
     "status": { "enum": ["needs_host_actions", "done"] },
     "orchestratorInstruction": { "type": "string", "minLength": 1 },
     "orchestratorDebugCommand": { "type": "string", "minLength": 1 },
@@ -17,8 +17,10 @@
         "properties": {
           "id": { "type": "string", "minLength": 1 },
           "stepId": { "type": "string", "minLength": 1 },
+          "ownerStepId": { "type": "string", "minLength": 1 },
           "action": { "enum": ["run_worker", "wait_for_approval", "resolve_worker_blocker"] },
           "loadInstructionsCommand": { "type": "string", "minLength": 1 },
+          "shard": { "$ref": "#/$defs/shardWorkRequest" },
           "preferredAgentId": {
             "description": "Advisory opaque worker id previously bound for this step, or null when no binding exists.",
             "type": ["string", "null"],
@@ -113,5 +115,45 @@
     "initialized": { "type": "boolean" },
     "resumed": { "type": "boolean" }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "shardWorkRequest": {
+      "type": "object",
+      "required": [
+        "obligation_id",
+        "shard_id",
+        "reviewer_role",
+        "required",
+        "privacy_route",
+        "max_attempts",
+        "source_evidence"
+      ],
+      "properties": {
+        "obligation_id": { "type": "string", "minLength": 1 },
+        "shard_id": { "type": "string", "minLength": 1 },
+        "reviewer_role": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "privacy_route": { "const": "safe_context" },
+        "max_attempts": { "type": "integer", "minimum": 1 },
+        "source_evidence": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false,
+      "not": {
+        "anyOf": [
+          { "required": ["leaseToken"] },
+          { "required": ["token"] },
+          { "required": ["prompt"] },
+          { "required": ["transcript"] },
+          { "required": ["session"] },
+          { "required": ["lifecycle"] },
+          { "required": ["storagePath"] },
+          { "required": ["outputPath"] },
+          { "required": ["controlPlane"] }
+        ]
+      }
+    }
+  }
 }

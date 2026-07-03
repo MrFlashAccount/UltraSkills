@@ -38,7 +38,12 @@ function schemaRefs(workflow) {
 
 function roleNames(workflow) {
   const roles = new Set();
-  for (const step of Object.values(workflow?.steps ?? {})) if (step?.input?.role) roles.add(step.input.role);
+  for (const step of Object.values(workflow?.steps ?? {})) {
+    if (step?.input?.role) roles.add(step.input.role);
+    for (const obligation of step?.sharding?.obligations ?? []) {
+      if (typeof obligation?.reviewer_role === 'string' && obligation.reviewer_role.length > 0) roles.add(obligation.reviewer_role);
+    }
+  }
   return roles;
 }
 

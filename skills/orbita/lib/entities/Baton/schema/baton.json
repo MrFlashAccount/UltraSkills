@@ -66,6 +66,16 @@
             "type": "integer",
             "minimum": 0
           }
+        },
+        "shards": {
+          "description": "Runner-owned native sharding records keyed by owner workflow step id. Shards are not workflow step ids and do not store private host lifecycle metadata.",
+          "type": "object",
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_-]*$": {
+              "$ref": "#/$defs/shardPlan"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "patternProperties": {
@@ -271,6 +281,318 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512
+        }
+      },
+      "additionalProperties": false
+    },
+    "shardPlan": {
+      "type": "object",
+      "required": [
+        "plan_id",
+        "owner_step_id",
+        "source_evidence",
+        "status",
+        "obligations",
+        "accepted_outputs",
+        "blocked",
+        "join_proof"
+      ],
+      "properties": {
+        "plan_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner_step_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_evidence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "status": {
+          "enum": [
+            "dispatching",
+            "joined",
+            "blocked"
+          ]
+        },
+        "obligations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/shardObligationRecord"
+          }
+        },
+        "accepted_outputs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/shardAcceptedOutputRecord"
+          }
+        },
+        "blocked": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/shardBlockedRecord"
+          }
+        },
+        "join_proof": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/shardJoinProof"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "shardObligationRecord": {
+      "type": "object",
+      "required": [
+        "obligation_id",
+        "shard_id",
+        "reviewer_role",
+        "required",
+        "privacy_route",
+        "max_attempts",
+        "source_evidence",
+        "request_id",
+        "status",
+        "attempts"
+      ],
+      "properties": {
+        "obligation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "shard_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer_role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "privacy_route": {
+          "const": "safe_context"
+        },
+        "max_attempts": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_evidence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "accepted",
+            "blocked"
+          ]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "shardAcceptedOutputRecord": {
+      "type": "object",
+      "required": [
+        "obligation_id",
+        "shard_id",
+        "reviewer_role",
+        "request_id",
+        "status",
+        "output"
+      ],
+      "properties": {
+        "obligation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "shard_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer_role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "const": "accepted"
+        },
+        "output": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "shardBlockedRecord": {
+      "type": "object",
+      "required": [
+        "obligation_id",
+        "shard_id",
+        "reviewer_role",
+        "request_id",
+        "reason",
+        "output"
+      ],
+      "properties": {
+        "obligation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "shard_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer_role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "shardJoinProof": {
+      "type": "object",
+      "required": [
+        "owner_step_id",
+        "plan_id",
+        "required_shards",
+        "optional_shards",
+        "accepted_shards",
+        "blocked_shards",
+        "required_obligation_ids",
+        "optional_obligation_ids",
+        "accepted_obligation_ids",
+        "blocked_obligation_ids",
+        "missing_required_obligation_ids",
+        "coverage_complete",
+        "outcome",
+        "reason"
+      ],
+      "properties": {
+        "owner_step_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plan_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required_shards": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "optional_shards": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "accepted_shards": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "blocked_shards": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required_obligation_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "optional_obligation_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "accepted_obligation_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "blocked_obligation_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "missing_required_obligation_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "coverage_complete": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "enum": [
+            "pass",
+            "block"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false

@@ -121,6 +121,10 @@ function preferredAgentIdForStep(baton, stepId, stepDoc) {
     : null;
 }
 
+function workflowStepIdForExecutableStep(step) {
+  return step.ownerStepId ?? step.id;
+}
+
 function recoverableBlockerForStep(baton, stepId, options = {}) {
   const blocker = baton?.recoverableWorkerBlockers?.[stepId];
   if (!blocker || typeof blocker !== "object" || Array.isArray(blocker)) return undefined;
@@ -153,6 +157,7 @@ export function buildHostRequests(
       const request = {
         id: step.id,
         stepId: step.id,
+        ...(step.ownerStepId ? { ownerStepId: step.ownerStepId } : {}),
         action: step.action,
         loadInstructionsCommand: loadInstructionsCommandForStep(
           runId,
@@ -160,10 +165,11 @@ export function buildHostRequests(
           { runsRoot, leaseToken },
         ),
       };
+      if (step.shard) request.shard = structuredClone(step.shard);
       if (step.action === "run_worker") {
         request.preferredAgentId = preferredAgentIdForStep(
           interpreterResponse.baton,
-          step.id,
+          workflowStepIdForExecutableStep(step),
           step.step,
         );
         request.loadFollowupInstructionsCommand =
