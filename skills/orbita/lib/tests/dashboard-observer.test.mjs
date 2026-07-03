@@ -10,7 +10,7 @@ import { listDashboardRuns, getDashboardRun, startDashboardServer } from '../ent
 import { DashboardEventPublisher } from '../dashboard/server/dashboard-event-publisher.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-const defaultWorkflow = path.join(root, 'workflows/dev-harness/workflow.json');
+const defaultWorkflow = path.join(root, 'workflows/dev-harness/workflow.toml');
 const tempRoots = [];
 
 afterAll(async () => {

@@ -5,7 +5,6 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import workflowDoc from '../../../../workflows/dev-harness/workflow.json' with { type: 'json' };
 import workflowAuthoringWorkflowDoc from '../../../../workflows/workflow-authoring/workflow.json' with { type: 'json' };
 import { WorkflowRuntimeError } from '../errors.mjs';
 import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
@@ -15,7 +14,9 @@ import { loadWorkflowResources } from '../persistence/workflow-resources/runtime
 import { validateAgainstOutputSchema as validateLoadedOutputSchema } from '../use-cases/runtime/output/output-schema-validation.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
+const DEV_HARNESS_WORKFLOW_PATH = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
 const RESEARCH_CRITIC_WORKFLOW_PATH = path.join(REPO_ROOT, 'workflows/research-critic/workflow.toml');
+const workflowDoc = read(DEV_HARNESS_WORKFLOW_PATH).toJSON();
 const researchCriticWorkflowDoc = read(RESEARCH_CRITIC_WORKFLOW_PATH).toJSON();
 function runBun(args) {
   return spawnSync(process.execPath, args, { cwd: REPO_ROOT, encoding: 'utf8' });
@@ -31,7 +32,7 @@ function validateWithRuntimeArchitecture(doc, { workflowPath }) {
 }
 
 function validate(doc) {
-  return validateWithRuntimeArchitecture(doc, { workflowPath: path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json') });
+  return validateWithRuntimeArchitecture(doc, { workflowPath: DEV_HARNESS_WORKFLOW_PATH });
 }
 
 function validateAgainstOutputSchema({ workflow, workflowPath, schemaRef, repositoryRoot = REPO_ROOT, schema, externalSchemas, ...context }) {
@@ -216,7 +217,7 @@ test('DevHarness research always requires a first-class REASONS Canvas artifact'
 
   const schemaContext = {
     workflow: workflowDoc,
-    workflowPath: path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json'),
+    workflowPath: path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml'),
     schemaRef: workflowDoc.steps.research_draft.output.schema,
     repositoryRoot: REPO_ROOT,
   };
@@ -675,7 +676,7 @@ test('dev harness implementation rework branches inline review findings', () => 
 });
 
 test('dev harness blocked outputs require only blocker plus routing fields, not success payloads', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json');
+  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
   const blockedCases = [
     ['research_draft', { outcome: 'blocked', blocker: { summary: 'Missing input.', source_step_id: 'research_draft', needed: 'Task context.' } }],
     ['research_attack', { outcome: 'blocked', blocker: { summary: 'Unsafe research.', source_step_id: 'research_attack', needed: 'Evidence.' } }],
@@ -711,7 +712,7 @@ test('dev harness blocked outputs require only blocker plus routing fields, not 
 });
 
 test('dev harness planning draft always requires selected review steps', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json');
+  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
   const result = validateAgainstOutputSchema({
     workflow: workflowDoc,
     workflowPath,
@@ -726,7 +727,7 @@ test('dev harness planning draft always requires selected review steps', () => {
 
 
 test('dev harness review join schema keeps outcome and next route consistent', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json');
+  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
   const schemaContext = {
     workflow: workflowDoc,
     workflowPath,
@@ -769,7 +770,7 @@ test('dev harness review join schema keeps outcome and next route consistent', (
 });
 
 test('dev harness review gates reject needs_changes without a rework target', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json');
+  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
   const output = {
     outcome: 'needs_changes',
     verdict: { summary: ['Needs work.'], evidence_checked: ['diff'], findings: [{ summary: 'Bug.' }] },
@@ -788,7 +789,7 @@ test('dev harness review gates reject needs_changes without a rework target', ()
 });
 
 test('dev harness success outputs still require their success payloads', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json');
+  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
   for (const [stepId, output, missingField] of [
     ['research_draft', { outcome: 'ready_for_attack' }, 'artifacts'],
     ['planning_draft', { outcome: 'ready_for_attack' }, 'implementation_plan'],

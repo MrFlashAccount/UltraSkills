@@ -3,9 +3,10 @@ import { readFileSync } from 'node:fs';
 import { test } from 'bun:test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import workflowDoc from '../../../../workflows/dev-harness/workflow.json' with { type: 'json' };
+import { readWorkflowDocument } from '../persistence/workflow-resources/workflow-document-reader.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
+const workflowDoc = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml'));
 
 function promptText(step) {
   const prompt = step.input?.prompt ?? '';
