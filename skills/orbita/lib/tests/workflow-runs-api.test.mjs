@@ -17,7 +17,7 @@ const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runs-api-'));
 const runsRoot = path.join(tempDir, 'runs');
 const cliRunsRoot = path.join(tempDir, 'cli-runs');
 const runsIndexPath = path.join(runsRoot, 'runs.json');
-const defaultWorkflow = path.join(root, 'workflows/dev-harness/workflow.json');
+const defaultWorkflow = path.join(root, 'workflows/dev-harness/workflow.toml');
 const runPrefix = `runs-api-${process.pid}-`;
 
 function makeSymlinkedRunsRoot() {
@@ -236,7 +236,7 @@ test('workflow-runs create rejects relative workflow paths clearly', async () =>
     () => registerWorkflowRunAtRoot({
       runsRoot,
       runId: `${runPrefix}relative-workflow-api`,
-      workflowPath: 'workflows/dev-harness/workflow.json',
+      workflowPath: 'workflows/dev-harness/workflow.toml',
     }),
     /workflow path must be absolute.*workflow-catalog.*absolute catalog path/,
   );
@@ -248,7 +248,7 @@ test('workflow-runs create rejects relative workflow paths clearly', async () =>
     '--run-id',
     `${runPrefix}relative-workflow-cli`,
     '--workflow',
-    'workflows/dev-harness/workflow.json',
+    'workflows/dev-harness/workflow.toml',
   ], { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUNS_ROOT: cliRunsRoot } });
 
   assert.equal(result.status, 1);

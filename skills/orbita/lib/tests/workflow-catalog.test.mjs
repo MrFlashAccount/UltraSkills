@@ -30,7 +30,7 @@ test('workflow catalog lists checked-in workflows from top-level descriptions', 
   assert.deepEqual(
     parsed.workflows.map((workflow) => workflow.path),
     [
-      path.join(root, 'workflows/dev-harness/workflow.json'),
+      path.join(root, 'workflows/dev-harness/workflow.toml'),
       path.join(root, 'workflows/research-critic/workflow.toml'),
       path.join(root, 'workflows/workflow-authoring/workflow.json'),
     ],
@@ -44,7 +44,7 @@ test('workflow catalog human output prefers names and shows absolute workflow pa
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /dev-harness - /);
-  assert.match(result.stdout, new RegExp(`absolute workflow path for --workflow: ${path.join(root, 'workflows/dev-harness/workflow.json').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  assert.match(result.stdout, new RegExp(`absolute workflow path for --workflow: ${path.join(root, 'workflows/dev-harness/workflow.toml').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   assert.doesNotMatch(result.stdout, /workflow: workflows\/dev-harness\/workflow\.json/);
 });
 
@@ -57,8 +57,8 @@ test('workflow catalog resolves exact and fuzzy workflow names', () => {
     candidates: [
       {
         name: 'dev-harness',
-        description: readWorkflowDocument(path.join(root, 'workflows/dev-harness/workflow.json')).description,
-        path: path.join(root, 'workflows/dev-harness/workflow.json'),
+        description: readWorkflowDocument(path.join(root, 'workflows/dev-harness/workflow.toml')).description,
+        path: path.join(root, 'workflows/dev-harness/workflow.toml'),
       },
     ],
   });
