@@ -4,9 +4,9 @@ import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
-import { bindAgent as runnerBindAgent, continueRun as runnerContinueRun, loadInstructions as runnerLoadInstructions, next as runnerNext, writeOutput as runnerWriteOutput } from '../entrypoints/api/workflowRunner.mjs';
+import { bindAgent as runnerBindAgent, continueRun as runnerContinueRun, loadInstructions as runnerLoadInstructions, next as runnerNext, writeOutput as runnerWriteOutput } from '../entrypoints/workflow-runner-command.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -21,7 +21,6 @@ const workflowDoc = {
     version: 1,
     start: 'prepare',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       prepare: {
         name: 'Prepare',
@@ -52,7 +51,6 @@ const workflowDoc = {
         next: 'done',
       },
       done: { name: 'Done', kind: 'done', input: { prompt: 'Finished.' } },
-      blocked: { name: 'Blocked', kind: 'blocked', input: { prompt: 'Blocked.' } },
     },
 
 };
@@ -202,7 +200,7 @@ function workerOutput(summary) {
   return { outcome: 'ready', results: [{ type: 'check', summary }] };
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('runner: next resolves external workflow package shared resources from repo boundary', () => {
   const repoDir = path.join(tempDir, 'external-runner-shared-repo');

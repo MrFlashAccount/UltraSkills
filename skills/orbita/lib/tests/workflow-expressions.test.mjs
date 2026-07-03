@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 import { evaluatePathExpression } from '../entities/Step/expressions/index.mjs';
 import { WorkflowRuntimeError } from '../errors.mjs';
 import { parsePathExpression } from '../runtime/expression.mjs';

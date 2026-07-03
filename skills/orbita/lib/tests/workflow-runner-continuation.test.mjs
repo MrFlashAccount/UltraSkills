@@ -4,11 +4,11 @@ import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
-import { next as runnerNext } from '../entrypoints/api/workflowRunner.mjs';
+import { next as runnerNext } from '../entrypoints/workflow-runner-command.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
-import { publicFailureHistoryDetails } from '../use-cases/runtime/output/history-projection.mjs';
+import { publicFailureHistoryDetails } from '../entrypoints/internal/runner/history-projection.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-check-'));
@@ -31,7 +31,6 @@ const workflowDoc = {
     version: 1,
     start: 'prepare',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       prepare: {
         name: 'Prepare',
@@ -62,7 +61,6 @@ const workflowDoc = {
         next: 'done',
       },
       done: { name: 'Done', kind: 'done', input: { prompt: 'Finished.' } },
-      blocked: { name: 'Blocked', kind: 'blocked', input: { prompt: 'Blocked.' } },
     },
 
 };
@@ -248,7 +246,7 @@ function workerOutput(summary) {
   return { outcome: 'ready', results: [{ type: 'check', summary }] };
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('runner: dynamic parallel with one branch still applies branch output as parallel envelope', () => {
   const { runId, runDir } = runCase('dynamic-single-branch-parallel');

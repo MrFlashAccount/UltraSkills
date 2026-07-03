@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 import { applyWorkflowOutput } from '../../ApplyWorkflowOutput.mjs';
 import { inspectWorkflow } from '../../InspectWorkflow.mjs';
 
@@ -8,7 +8,6 @@ const workflowDoc = {
   version: 1,
   start: 'producer',
   done: 'done',
-  blocked: 'blocked',
   steps: {
     producer: {
       name: 'Producer',
@@ -20,7 +19,6 @@ const workflowDoc = {
     branch_b: { name: 'Branch B', kind: 'worker', output: { template: 'branch-b.md' }, next: 'join' },
     join: { name: 'Join', kind: 'worker', next: 'done' },
     done: { name: 'Done', kind: 'done' },
-    blocked: { name: 'Blocked', kind: 'blocked' },
   },
 };
 

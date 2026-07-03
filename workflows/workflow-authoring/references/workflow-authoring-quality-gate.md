@@ -14,4 +14,4 @@ Use this gate for every new or materially changed workflow:
 - Top-level output-schema `required` fields must be common to all outcomes only. Put success-only fields inside the success branch. A `blocked` branch must validate with `outcome` plus `blocker` and must not require success payloads.
 - Prompt-input expressions must reference real prior step ids as `${{ input.<step_id>... }}`. Non-default expressions must be covered by that step's output schema. Optional or conditionally absent step outputs must use `| default: ...`.
 - Smoke evidence must exercise the workflow path that is most likely to expose prompt/schema/route drift, not only the happy path.
-- Semantic review must compare `workflow.json`, every touched output schema, and worker prompt text as one contract.
+- Semantic review must compare `workflow.toml`, every touched output schema, and worker prompt text as one contract.

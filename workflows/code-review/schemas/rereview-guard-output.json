@@ -5,8 +5,7 @@
   "description": "Bounds iterative code-review passes to at most three total passes.",
   "type": "object",
   "required": [
-    "outcome",
-    "next"
+    "outcome"
   ],
   "properties": {
     "outcome": {
@@ -17,8 +16,7 @@
     },
     "next": {
       "enum": [
-        "review_context",
-        "blocked"
+        "review_context"
       ]
     },
     "next_review_iteration": {
@@ -52,7 +50,8 @@
       },
       "then": {
         "required": [
-          "next_review_iteration"
+          "next_review_iteration",
+          "next"
         ],
         "properties": {
           "next": {
@@ -76,10 +75,11 @@
         "required": [
           "blocker"
         ],
-        "properties": {
-          "next": {
-            "const": "blocked"
-          }
+        "properties": {},
+        "not": {
+          "required": [
+            "next"
+          ]
         }
       }
     }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 import { validateJsonSchema } from '../../../../shared/scripts/schema-validation/schema-validation.mjs';
 import reviewJoinOutputSchema from '../../../../workflows/dev-harness/schemas/review-join-output.json' with { type: 'json' };
 import reviewerSelectionOutputSchema from '../../../../workflows/dev-harness/schemas/reviewer-selection-output.json' with { type: 'json' };
@@ -15,7 +15,6 @@ function minimalWorkflowDoc(overrides = {}) {
     version: 1,
     start: 'worker_step',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       worker_step: {
         name: 'Worker step',
@@ -24,7 +23,6 @@ function minimalWorkflowDoc(overrides = {}) {
         next: 'done',
       },
       done: { name: 'Done', kind: 'done' },
-      blocked: { name: 'Blocked', kind: 'blocked' },
     },
     ...overrides,
   };
@@ -119,7 +117,6 @@ test('workflow schema accepts prompt arrays for multiline authoring', () => {
         next: 'done',
       },
       done: { name: 'Done', kind: 'done', input: { prompt: ['Finished.'] } },
-      blocked: { name: 'Blocked', kind: 'blocked', input: { prompt: ['Blocked.'] } },
     },
   })));
 });
@@ -128,7 +125,7 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   const validRunWorker = {
     status: 'needs_host_actions',
     orchestratorInstruction: 'Execute host requests.',
-    orchestratorDebugCommand: 'node workflow-runner.mjs record-orchestrator',
+    orchestratorDebugCommand: 'bun workflow-runner.mjs record-orchestrator',
     baton: {
       cursor: 'worker_step',
       status: 'running',
@@ -139,10 +136,37 @@ test('runner host response schema enforces action-conditional reuse hint fields'
         id: 'worker_step',
         stepId: 'worker_step',
         action: 'run_worker',
-        loadInstructionsCommand: 'node workflow-runner.mjs instructions',
+        loadInstructionsCommand: 'bun workflow-runner.mjs instructions',
         preferredAgentId: null,
-        bindAgentCommand: 'node workflow-runner.mjs bind-agent --agent-id <agent-id>',
-        loadFollowupInstructionsCommand: 'node workflow-runner.mjs instructions --follow-up',
+        bindAgentCommand: 'bun workflow-runner.mjs bind-agent --agent-id <agent-id>',
+        loadFollowupInstructionsCommand: 'bun workflow-runner.mjs instructions --follow-up',
+      },
+    ],
+  };
+  const validRecoverableRunWorker = {
+    ...validRunWorker,
+    baton: {
+      ...validRunWorker.baton,
+      recoverableWorkerBlockers: {
+        worker_step: {
+          summary: 'Need a decision.',
+          source_step_id: 'worker_step',
+          needed: 'Provide approved input.',
+          evidence: ['bounded public evidence'],
+          risk: 'Cannot continue safely without the decision.',
+        },
+      },
+    },
+    requests: [
+      {
+        ...validRunWorker.requests[0],
+        recoverableBlocker: {
+          summary: 'Need a decision.',
+          source_step_id: 'worker_step',
+          needed: 'Provide approved input.',
+          evidence: ['bounded public evidence'],
+          risk: 'Cannot continue safely without the decision.',
+        },
       },
     ],
   };
@@ -156,8 +180,24 @@ test('runner host response schema enforces action-conditional reuse hint fields'
       },
     ],
   };
+  const validResolveWorkerBlocker = {
+    ...validRunWorker,
+    baton: validRecoverableRunWorker.baton,
+    requests: [
+      {
+        id: 'worker_step',
+        stepId: 'worker_step',
+        action: 'resolve_worker_blocker',
+        recoverableBlocker: validRecoverableRunWorker.requests[0].recoverableBlocker,
+        writeResolutionCommand: 'bun workflow-runner.mjs write-output',
+      },
+    ],
+  };
 
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validRunWorker, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, validRecoverableRunWorker, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, validApproval, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, validResolveWorkerBlocker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validRunWorker,
     requests: [{ ...validRunWorker.requests[0], preferredAgentId: undefined }],
@@ -176,14 +216,38 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validApproval,
-    requests: [{ ...validApproval.requests[0], bindAgentCommand: 'node workflow-runner.mjs bind-agent' }],
+    requests: [{ ...validApproval.requests[0], bindAgentCommand: 'bun workflow-runner.mjs bind-agent' }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validApproval,
-    requests: [{ ...validApproval.requests[0], loadFollowupInstructionsCommand: 'node workflow-runner.mjs instructions --follow-up' }],
+    requests: [{ ...validApproval.requests[0], loadFollowupInstructionsCommand: 'bun workflow-runner.mjs instructions --follow-up' }],
+  }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, {
+    ...validApproval,
+    requests: [{ ...validApproval.requests[0], recoverableBlocker: validRecoverableRunWorker.requests[0].recoverableBlocker }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validRunWorker,
     requests: [{ ...validRunWorker.requests[0], attemptId: 'attempt-1' }],
+  }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, {
+    ...validRecoverableRunWorker,
+    requests: [{ ...validRecoverableRunWorker.requests[0], recoverableBlocker: { summary: 'missing required fields' } }],
+  }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, {
+    ...validRecoverableRunWorker,
+    requests: [{ ...validRecoverableRunWorker.requests[0], loadInstructionsCommand: undefined }],
+  }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, {
+    ...validResolveWorkerBlocker,
+    requests: [{ ...validResolveWorkerBlocker.requests[0], writeResolutionCommand: undefined }],
+  }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, {
+    ...validResolveWorkerBlocker,
+    requests: [{ ...validResolveWorkerBlocker.requests[0], preferredAgentId: null }],
+  }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, {
+    ...validResolveWorkerBlocker,
+    requests: [{ ...validResolveWorkerBlocker.requests[0], loadInstructionsCommand: 'bun workflow-runner.mjs instructions' }],
   }, { schemas: runtimeSchemas }).ok, false);
 });

@@ -16,7 +16,7 @@ Hard rules:
 - `workflow-runner write-output` accepts or rejects one host request output only; it is not navigation.
 - Use only public run/runner commands from the skill root. Do not inspect or mutate private runtime files, task repository source, workflow source, runner `lib/**`, schemas, or CLI help to infer protocol.
 - Orbita is not the task implementer. While a worker owns a step, do not do independent research, implementation, review, or tests for that task.
-- Execute only the current stdout and its embedded commands. Do not reconstruct missing `write-output`, `continue`, or approval JSON from source. If stdout lacks enough executable instruction, stop as blocked and report a runner contract bug.
+- Execute only the current stdout and its embedded commands. Do not reconstruct missing `write-output`, `continue`, or approval JSON from source. If stdout lacks enough executable instruction, report a runner contract bug without inventing a workflow terminal state.
 - After spawning a worker, wait for that worker's accepted output or blocker before continuing the run.
 
 ## Routing model
@@ -24,7 +24,7 @@ Hard rules:
 Most Orbita branches overlap. Do not treat routing as durable modes. Classify only enough to choose the next public command:
 
 - If the latest runner stdout is already active, follow that stdout. Do not inspect the workflow catalog.
-- If the user only asks to list/show available workflows, run `node ./lib/entrypoints/cli/workflow-catalog.mjs list --human`, show the list, and stop.
+- If the user only asks to list/show available workflows, run `bun ./lib/entrypoints/cli/workflow-catalog.mjs list --human`, show the list, and stop.
 - If the user asks to continue/resume/reclaim an existing run, list public run identities first. If no existing run fits and the user still wants work executed, create a new run through workflow resolution.
 - Before creating any new run, resolve the workflow first, even when the user named a workflow.
 
@@ -35,13 +35,13 @@ Resolve the workflow before creating/registering a run. The only executable work
 List workflows:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-catalog.mjs list --json
+bun ./lib/entrypoints/cli/workflow-catalog.mjs list --json
 ```
 
 Resolve a named, aliased, or fuzzy workflow:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-catalog.mjs resolve '<workflow name>' --json
+bun ./lib/entrypoints/cli/workflow-catalog.mjs resolve '<workflow name>' --json
 ```
 
 Use workflow `name` and top-level `description` for routing; use `path` only after selection/resolution as `--workflow`. Do not walk `../../workflows`, read private runtime state, or inspect `steps.*.input.prompt` to choose.
@@ -53,7 +53,7 @@ Branch closure:
 - No resolver match: rank catalog candidates from task and workflow descriptions.
 - No named workflow: ask one selection question with at most three `name - short reason` candidates; use `request_user_input` when available. The user may pick one, ask for all workflows, or type a workflow name/alias. Resolve fuzzy replies again.
 - No candidate fits: say so and offer to list workflows or create/design a workflow if that exists in the catalog.
-- List-only requests stop after `node ./lib/entrypoints/cli/workflow-catalog.mjs list --human` unless the user also asked to run a workflow.
+- List-only requests stop after `bun ./lib/entrypoints/cli/workflow-catalog.mjs list --human` unless the user also asked to run a workflow.
 - Never accept user-typed workflow paths as executable paths.
 
 ## Bootstrap
@@ -61,7 +61,7 @@ Branch closure:
 Prepare compact title, summary, owner, harness, session id, and dense user prompt. List public run identities:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runs.mjs list
+bun ./lib/entrypoints/cli/workflow-runs.mjs list
 ```
 
 Select an existing run only from public fields: `runId`, title, summary, workflow identity/path, status, timestamps, task key/fingerprint, and occupancy. If exactly one candidate fits, use its exact `runId`; if several fit, ask by human-readable summary; if occupied, ask whether to wait, choose another run, or explicitly resolve the lease.
@@ -69,23 +69,23 @@ Select an existing run only from public fields: `runId`, title, summary, workflo
 If no run fits, resolve the workflow, then create/register one run identity:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runs.mjs create --workflow <absolute-catalog-workflow-path> --title '<title>' --summary '<summary>' --owner <owner> --harness <harness> --session-id <session-id>
+bun ./lib/entrypoints/cli/workflow-runs.mjs create --workflow <absolute-catalog-workflow-path> --title '<title>' --summary '<summary>' --owner <owner> --harness <harness> --session-id <session-id>
 ```
 
-Never pass repo-relative workflow paths such as `workflows/.../workflow.json` into `workflow-runs create` or runner `--workflow` commands. If a relative workflow path error appears, rerun `workflow-catalog resolve`/`list` and use the returned absolute catalog `path`; do not guess cwd or repair the path manually.
+Never pass repo-relative workflow paths such as `workflows/.../workflow.toml` or `workflows/.../workflow.json` into `workflow-runs create` or runner `--workflow` commands. If a relative workflow path error appears, rerun `workflow-catalog resolve`/`list` and use the returned absolute catalog `path`; do not guess cwd or repair the path manually.
 
 Claim the selected run before calling the runner:
 
 ```bash
-lease_token=$(node ./lib/entrypoints/cli/workflow-runs.mjs claim --run-id <run-id> --owner <owner> --harness <harness> --session-id <session-id> --print-lease-token)
+lease_token=$(bun ./lib/entrypoints/cli/workflow-runs.mjs claim --run-id <run-id> --owner <owner> --harness <harness> --session-id <session-id> --print-lease-token)
 ```
 
-Extract and preserve exact `runId` and `lease_token`; never invent, shorten, or retype the token from memory. If missing, claim again or stop blocked.
+Extract and preserve exact `runId` and `lease_token`; never invent, shorten, or retype the token from memory. If missing, claim again or report the missing runner authority without inventing a workflow terminal state.
 
 Start by asking the runner for the first instruction:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runner.mjs next --run-id <run-id> --user-prompt '<clear dense user task prompt>' --lease-token "$lease_token" --only-instructions
+bun ./lib/entrypoints/cli/workflow-runner.mjs next --run-id <run-id> --user-prompt '<clear dense user task prompt>' --lease-token "$lease_token" --only-instructions
 ```
 
 Follow stdout text exactly.
@@ -95,14 +95,28 @@ Follow stdout text exactly.
 After each `--only-instructions` runner command, follow stdout exactly. `instructions` prints loaded instruction text and never accepts `--only-instructions`.
 
 - `done`: stop and report the completed result from terminal stdout JSON, extracting workflow-specific result from included baton/projection, not a presumed `result` field.
-- `blocked`: stop and report blocker details from terminal stdout JSON, extracting from included baton/projection, not a presumed `blocker` field.
 - `needs_host_actions`: complete every current inline JSON request through Host actions, wait until each requested action has accepted output, then run the exact embedded `continue` command.
 
 Call `workflow-runner continue` only from the latest stdout command. Do not call `next` as a substitute, and never report cursor, next instruction, pending request, accepted output, or `needs_host_actions` as final completion.
 
+## Pointer recovery
+
+If the user asks to roll back, return to an earlier stage, or "go back to
+research/planning/etc.", use the public pointer commands instead of editing
+private baton/run-state files.
+
+Run `workflow-runner list-pointer-transitions --run-id <run-id> --lease-token
+"$lease_token"` to inspect valid adjacent moves. Choose the transition whose
+`to.cursor` matches the requested stage, then run `workflow-runner move-pointer
+--run-id <run-id> --transition-id <id> --lease-token "$lease_token"`. Add
+`--acknowledge-retained-state` only when the listed transition requires it and
+the user intentionally wants to keep existing accepted outputs/artifacts/state.
+If no listed transition matches the requested rollback target, stop blocked and
+explain which transitions are available.
+
 ## Host actions
 
-Complete every current stdout request unless impossible; if any required request cannot be completed, stop blocked. Known actions: `run_worker`, `wait_for_approval`. Unknown action means blocked.
+Complete every current stdout request unless impossible; if a required request cannot be completed, submit a validated blocked output for that same request when the current instructions provide a writer, then continue from the latest runner stdout. Known actions: `run_worker`, `resolve_worker_blocker`, `wait_for_approval`. Unknown action is a runner contract bug, not a workflow terminal state.
 
 For `run_worker`:
 
@@ -132,17 +146,32 @@ If the instructions cannot be loaded, stop with an error and do not continue.
 
 `run_worker` watchdog:
 
-- Wait at most 10 minutes for the worker to return accepted output or a blocker.
-- If the worker is still running, interrupt that same worker with a focused status request asking it to immediately run validating `write-output` or report the exact blocker.
-- Wait at most 2 more minutes for that status request.
-- If the worker still gives no accepted output or blocker, close that worker and retry the same current host request once with a fresh worker.
-- If the retry also gives no accepted output or blocker within the same 10 minute plus 2 minute watchdog window, stop as blocked and report the hung worker/request ids.
-- Do not use heartbeat as a substitute for this watchdog; worker bootstrap hangs must be detected before waiting out the run lease.
+- Treat bootstrap/instruction-load silence separately from active implementation progress. If instructions cannot load, or the worker stays silent before showing concrete progress, use the existing bounded startup path: wait at most 10 minutes, interrupt that same worker with a focused status request, then wait at most 2 more minutes.
+- Concrete active implementation progress must name current work, inspected or changed surfaces, verification state, and the next bounded checkpoint. Generic reassurance, heartbeat, or "still working" is not enough evidence.
+- If the same worker returns concrete active implementation progress evidence, continue that same worker and ask for the next bounded checkpoint instead of forcing immediate terminal `write-output`.
+- If the worker gives vague status, misses a checkpoint, or cannot show progress evidence, ask it to immediately run validating `write-output` or report the exact blocker.
+- If the worker still gives no accepted output, concrete progress evidence, or blocker after the bootstrap/status-pressure window, close that worker and retry the same current host request once with a fresh worker.
+- If the retry also gives no accepted output, concrete progress evidence, or blocker within the same 10 minute plus 2 minute watchdog window, submit a validated blocked output for the same current request when possible and keep the run recoverable from that request id.
+- Do not use heartbeat as a substitute for this watchdog; worker bootstrap hangs must be detected before waiting out the run lease. Do not persist progress in baton, scrape transcripts, read private runner state, or add durable worker status storage.
+
+For `resolve_worker_blocker`, the orchestrator handles the request directly. Read `recoverableBlocker`, resolve the missing decision/input/capability through the smallest safe action, then write strict JSON with `writeResolutionCommand`:
+
+```json
+{
+  "resolution": {
+    "summary": "What was resolved.",
+    "decision": "The concrete answer or action that resolved it.",
+    "evidence": ["Optional bounded public evidence."]
+  }
+}
+```
+
+After the resolution output is accepted, run the exact embedded `continue` command. The next runner response will dispatch the owning worker step again with resolution context in the loaded instructions. Treat that dispatch as continuation from the blocked point, not as a workflow restart.
 
 For `wait_for_approval`, the orchestrator handles the request directly from the latest stdout compiled approval prompt. Treat that prompt as the complete user-facing source: workflow prompt, required-read files, prompt input context, output contract, and validating `write-output` command.
 
-Before asking for a decision, read and show required approval context/artifacts and attach required-read files or prompt input artifact paths through the host/platform approval mechanism. In Codex/Codex Desktop, attach each listed local artifact as a Markdown file link with an absolute target, for example `[research-packet.md](/absolute/path/research-packet.md)`; a plain path, artifact id, or summary is not an attachment. Do not replace attachments with summaries, plain paths, or inline full artifact bodies. If attachment/link rendering is unavailable, state that capability gap and name the affected path/reference.
+Before asking for a decision, read and show required approval context/artifacts and attach required-read files or prompt input artifact paths through the host/platform approval mechanism. In Codex/Codex Desktop, attach each listed local artifact as a Markdown file link with an absolute target, for example `[reasons-canvas-research.md](/absolute/path/reasons-canvas-research.md)`; a plain path, artifact id, or summary is not an attachment. Do not replace attachments with summaries, plain paths, or inline full artifact bodies. If attachment/link rendering is unavailable, state that capability gap and name the affected path/reference.
 
 Do not reduce approval to a summary-only question. When user approval/input blocks the next step, put the full approval/request message in final, not commentary, and do not send a separate short final. Normalize the user's answer to strict JSON, run the validating `write-output` command from the compiled prompt, treat accepted output as request completion, then continue from the latest stdout instruction.
 
-Final answer only when stdout instruction explicitly says to stop and report `done` or `blocked`; use the terminal response JSON embedded in that stdout as the source of final result or blocker details.
+Final answer only when stdout instruction explicitly says to stop and report `done`; use the terminal response JSON embedded in that stdout as the source of final result.

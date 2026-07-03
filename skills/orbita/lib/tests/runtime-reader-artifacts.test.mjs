@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { readRunArtifactContent } from '../persistence/workflow-resources/runtime-reader.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'runtime-reader-artifacts-'));
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 function runDir(label) {
   const dir = path.join(tempDir, label);

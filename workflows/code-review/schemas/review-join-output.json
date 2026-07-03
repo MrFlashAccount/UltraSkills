@@ -5,8 +5,7 @@
   "description": "Strict merge of exactly selected reviewer verdicts into one pass/fail result.",
   "type": "object",
   "required": [
-    "outcome",
-    "next"
+    "outcome"
   ],
   "properties": {
     "outcome": {
@@ -19,8 +18,7 @@
     "next": {
       "enum": [
         "done",
-        "rereview_gate",
-        "blocked"
+        "rereview_gate"
       ]
     },
     "verdict": {
@@ -179,7 +177,8 @@
       },
       "then": {
         "required": [
-          "verdict"
+          "verdict",
+          "next"
         ],
         "properties": {
           "next": {
@@ -218,7 +217,8 @@
       },
       "then": {
         "required": [
-          "verdict"
+          "verdict",
+          "next"
         ],
         "properties": {
           "next": {
@@ -263,10 +263,11 @@
         "required": [
           "blocker"
         ],
-        "properties": {
-          "next": {
-            "const": "blocked"
-          }
+        "properties": {},
+        "not": {
+          "required": [
+            "next"
+          ]
         }
       }
     }

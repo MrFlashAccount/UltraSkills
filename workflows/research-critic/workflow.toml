@@ -1,0 +1,221 @@
+name = "research-critic"
+version = 1
+description = "Pre-implementation Researcher draft -> Researcher attack workflow for closing task context before downstream planning or implementation. Use when a task needs evidence gathering, assumption pressure, ambiguity cleanup, readiness judgment, or a reusable reasons-canvas-research artifact. Do not use when the task is already approved for direct implementation, needs PR/code review, or should be executed through a larger planning/development workflow."
+start = "research_draft"
+done = "done"
+
+[steps.research_draft]
+name = "Research draft"
+kind = "worker"
+
+[steps.research_draft.input]
+role = "researcher"
+prompt = '''
+Normalize the task input, inspect available evidence, and produce exactly one first-class research artifact named `reasons-canvas-research`. Do not create any separate legacy research artifact or structured legacy output. Fill only the research-owned depth with evidence-backed Requirements, observed domain Entities, candidate options, research-level constraints, risks, norms, safeguards, and explicit open questions or tensions. Do not finalize architecture, file-level operations, or implementation work. Return ready_for_attack when the required Canvas artifact is ready for researcher attack, needs_input when user answers are required, or blocked when progress is unsafe without external input. If revising after attack feedback or user answers, preserve answered decisions and close only evidence-backed questions.
+Loop continuity across workflow loop iterations is prompt based: rely only on explicit input.prompt context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations. If concise clarification is needed, do not ask the user directly; return a clarification request for the orchestrator to relay, then continue in the same clarification session after the orchestrator forwards the user's reply without restart or context widening.
+
+Input context:
+Previous research artifacts:
+${{ input.research_draft.artifacts | default: "No previous research artifacts." }}
+
+Critic verdict:
+${{ input.research_attack.verdict | default: "No previous research attack verdict." }}
+
+User answers:
+${{ input.ask_research_questions | default: "No previous user answers." }}
+'''
+
+[steps.research_draft.output]
+template = "../../shared/templates/reasons/reasons-canvas-template.md"
+schema = "schemas/research-draft-output.json"
+
+[steps.research_draft.next]
+match = "${{ output.outcome }}"
+
+[steps.research_draft.next.cases]
+ready_for_attack = "research_attack"
+needs_input = "ask_research_questions"
+
+[steps.ask_research_questions]
+name = "Ask research questions"
+kind = "approval"
+
+[steps.ask_research_questions.input]
+prompt = '''
+Ask the user only the blocking research questions from the latest available draft-producing output and latest research_attack output. Prefer draft-producing outputs in this deterministic freshness order: research_revision, then research_answered_draft, then research_draft. Continue with approval approved after the user answer is captured in the approval output; use blocked only when the user cannot or will not provide required input.
+
+Input context:
+Research revision questions:
+${{ input.research_revision.questions | default: "No research_revision questions." }}
+
+Research answered draft questions:
+${{ input.research_answered_draft.questions | default: "No research_answered_draft questions." }}
+
+Research draft questions:
+${{ input.research_draft.questions | default: "No research_draft questions." }}
+
+Critic questions:
+${{ input.research_attack.questions | default: "No research_attack questions." }}
+'''
+
+[steps.ask_research_questions.output]
+schema = "schemas/approval-output.json"
+
+[steps.ask_research_questions.next]
+match = "${{ output.approval }}"
+
+[steps.ask_research_questions.next.cases]
+approved = "research_answered_draft"
+
+[steps.research_answered_draft]
+name = "Research answered draft"
+kind = "worker"
+
+[steps.research_answered_draft.input]
+role = "researcher"
+prompt = '''
+Revise the `reasons-canvas-research` artifact using the approved user answers from ask_research_questions and any attack feedback if present. Preserve answered decisions and close only evidence-backed questions. Always emit a fresh immutable `reasons-canvas-research` artifact at research-owned depth. Return ready_for_attack when the required Canvas artifact is ready for researcher attack, needs_input when more user answers are required, or blocked when progress is unsafe without external input.
+Loop continuity across workflow loop iterations is prompt based: rely only on explicit input.prompt context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations. If concise clarification is needed, do not ask the user directly; return a clarification request for the orchestrator to relay, then continue in the same clarification session after the orchestrator forwards the user's reply without restart or context widening.
+
+Input context:
+User answers:
+${{ input.ask_research_questions }}
+
+Critic verdict:
+${{ input.research_attack.verdict | default: "No prior research_attack verdict." }}
+
+Latest research revision artifacts:
+${{ input.research_revision.artifacts | default: "No research_revision artifacts." }}
+
+Prior answered draft artifacts:
+${{ input.research_answered_draft.artifacts | default: "No research_answered_draft artifacts." }}
+
+Initial research draft artifacts:
+${{ input.research_draft.artifacts | default: "No research_draft artifacts." }}
+'''
+
+[steps.research_answered_draft.output]
+template = "../../shared/templates/reasons/reasons-canvas-template.md"
+schema = "schemas/research-draft-output.json"
+
+[steps.research_answered_draft.next]
+match = "${{ output.outcome }}"
+
+[steps.research_answered_draft.next.cases]
+ready_for_attack = "research_attack"
+needs_input = "ask_research_questions"
+
+[steps.research_attack]
+name = "Research attack"
+kind = "worker"
+
+[steps.research_attack.input]
+role = "researcher"
+prompt = '''
+Start from a hostile prior: assume the change, proposal, draft, or Canvas is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
+Attack the latest available `reasons-canvas-research` artifact for weak evidence, unsafe assumptions, missing user input, misclassified blockers, over-broad candidate approaches, and fake architecture/implementation certainty. Verify the artifact captures research-owned Requirements and observed Entities while leaving architecture/implementation-owned detail as explicit questions, constraints, or tensions. Treat a missing `reasons-canvas-research` artifact as a blocking research failure. Prefer draft-producing outputs in this deterministic freshness order: research_revision, then research_answered_draft, then research_draft. Return approved only when the Canvas is ready for downstream handoff, needs_revision when a bounded revision should loop through a fresh draft-producing output, needs_input when user answers are required, or blocked for an unsafe recoverable pause.
+Loop continuity across workflow loop iterations is prompt based: rely only on explicit input.prompt context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations. If concise clarification is needed, do not ask the user directly; return a clarification request for the orchestrator to relay, then continue in the same clarification session after the orchestrator forwards the user's reply without restart or context widening.
+
+Input context:
+Research revision artifacts:
+${{ input.research_revision.artifacts | default: "No research_revision artifacts." }}
+
+Research answered draft artifacts:
+${{ input.research_answered_draft.artifacts | default: "No research_answered_draft artifacts." }}
+
+Research draft artifacts:
+${{ input.research_draft.artifacts | default: "No research_draft artifacts." }}
+'''
+
+[steps.research_attack.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/research-attack-output.json"
+
+[steps.research_attack.next]
+match = "${{ output.outcome }}"
+
+[steps.research_attack.next.cases]
+approved = "save_research_canvas"
+needs_revision = "research_revision"
+needs_input = "ask_research_questions"
+
+[steps.research_revision]
+name = "Research revision"
+kind = "worker"
+
+[steps.research_revision.input]
+role = "researcher"
+prompt = '''
+Revise the latest available `reasons-canvas-research` artifact using the latest research_attack verdict and any approved user answers. Prefer draft-producing outputs in this deterministic freshness order: research_revision, then research_answered_draft, then research_draft. Preserve answered decisions, address each bounded attack finding, and always emit a fresh immutable `reasons-canvas-research` artifact at research-owned depth. Return ready_for_attack when the required Canvas artifact is ready for another researcher attack, needs_input when user answers are required, or blocked when progress is unsafe without external input.
+Loop continuity across workflow loop iterations is prompt based: rely only on explicit input.prompt context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations. If concise clarification is needed, do not ask the user directly; return a clarification request for the orchestrator to relay, then continue in the same clarification session after the orchestrator forwards the user's reply without restart or context widening.
+
+Input context:
+Latest research revision artifacts:
+${{ input.research_revision.artifacts | default: "No research_revision artifacts." }}
+
+Research answered draft artifacts:
+${{ input.research_answered_draft.artifacts | default: "No research_answered_draft artifacts." }}
+
+Research draft artifacts:
+${{ input.research_draft.artifacts | default: "No research_draft artifacts." }}
+
+Critic verdict:
+${{ input.research_attack.verdict }}
+
+User answers:
+${{ input.ask_research_questions | default: "No user answers." }}
+'''
+
+[steps.research_revision.output]
+template = "../../shared/templates/reasons/reasons-canvas-template.md"
+schema = "schemas/research-draft-output.json"
+
+[steps.research_revision.next]
+match = "${{ output.outcome }}"
+
+[steps.research_revision.next.cases]
+ready_for_attack = "research_attack"
+needs_input = "ask_research_questions"
+
+[steps.save_research_canvas]
+name = "Save research Canvas"
+kind = "worker"
+
+[steps.save_research_canvas.input]
+role = "researcher"
+prompt = '''
+Finalize persistence metadata for the approved `reasons-canvas-research` artifact using the latest approved research artifacts and latest research_attack verdict. Prefer draft-producing outputs in this deterministic freshness order: research_revision, then research_answered_draft, then research_draft. Return saved after emitting artifact/result references to the saved research Canvas, or blocked if the artifact cannot be safely saved.
+Loop continuity across workflow loop iterations is prompt based: rely only on explicit input.prompt context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations. If concise clarification is needed, do not ask the user directly; return a clarification request for the orchestrator to relay, then continue in the same clarification session after the orchestrator forwards the user's reply without restart or context widening.
+
+Input context:
+Research revision artifacts:
+${{ input.research_revision.artifacts | default: "No research_revision artifacts." }}
+
+Research answered draft artifacts:
+${{ input.research_answered_draft.artifacts | default: "No research_answered_draft artifacts." }}
+
+Research draft artifacts:
+${{ input.research_draft.artifacts | default: "No research_draft artifacts." }}
+
+Critic verdict:
+${{ input.research_attack.verdict }}
+'''
+
+[steps.save_research_canvas.output]
+template = "../../shared/templates/research-canvas-save-metadata-template.md"
+schema = "schemas/save-research-canvas-output.json"
+
+[steps.save_research_canvas.next]
+match = "${{ output.outcome }}"
+
+[steps.save_research_canvas.next.cases]
+saved = "done"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''
+Research Canvas approved and saved.
+'''

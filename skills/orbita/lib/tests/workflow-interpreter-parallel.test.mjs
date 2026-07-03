@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -33,7 +33,6 @@ const parallelWorkflowDoc = {
     version: 1,
     start: 'prepare',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       prepare: {
         name: 'Prepare',
@@ -64,7 +63,6 @@ const parallelWorkflowDoc = {
         next: 'done',
       },
       done: { name: 'Done', kind: 'done', input: { prompt: 'Finished.' } },
-      blocked: { name: 'Blocked', kind: 'blocked', input: { prompt: 'Blocked.' } },
     },
 
 };
@@ -98,7 +96,7 @@ function writeReadableArtifact(artifactPath = 'worker_step/artifacts/packet.md',
   writeFileSync(fullPath, content);
 }
 
-function runNode(args, cwd = root) {
+function runBun(args, cwd = root) {
   return spawnSync(process.execPath, args, { cwd, encoding: 'utf8' });
 }
 
@@ -124,7 +122,7 @@ function runInspect(label, batonDoc, expectSuccess = true, workflowDoc = paralle
   const wfPath = writeJson(`${prefix}-workflow.json`, workflowDoc);
   const before = readFileSync(batonPath, 'utf8');
 
-  const result = runNode(['skills/orbita/lib/entrypoints/cli/workflow-interpreter.mjs', 'inspect', wfPath, batonPath]);
+  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'inspect', wfPath, batonPath]);
   const response = expectCliResult(label, result, expectSuccess);
   assert.equal(readFileSync(batonPath, 'utf8'), before, `check '${label}' mutated baton file during inspect`);
   return response;
@@ -137,7 +135,7 @@ function runApply(label, batonDoc, workerOutput, expectSuccess = true, workflowD
   const wfPath = writeJson(`${prefix}-workflow.json`, workflowDoc);
   const before = readFileSync(batonPath, 'utf8');
 
-  const result = runNode(['skills/orbita/lib/entrypoints/cli/workflow-interpreter.mjs', 'apply', wfPath, batonPath, outputPath]);
+  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', wfPath, batonPath, outputPath]);
   const response = expectCliResult(label, result, expectSuccess);
   assert.equal(readFileSync(batonPath, 'utf8'), before, `check '${label}' mutated baton file during apply`);
   return response;
@@ -149,13 +147,13 @@ function runRender(label, batonDoc, expectSuccess = true, workflowDoc = parallel
   const wfPath = writeJson(`${prefix}-workflow.json`, workflowDoc);
   const before = readFileSync(batonPath, 'utf8');
 
-  const result = runNode(['skills/orbita/lib/entrypoints/cli/workflow-interpreter.mjs', 'render', wfPath, batonPath]);
+  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', wfPath, batonPath]);
   const response = expectCliResult(label, result, expectSuccess);
   assert.equal(readFileSync(batonPath, 'utf8'), before, `check '${label}' mutated baton file during render`);
   return response;
 }
 
-after(() => {
+afterAll(() => {
   rmSync(tempDir, { recursive: true, force: true });
   for (const filePath of renderWorkflowPaths) rmSync(filePath, { force: true });
 });

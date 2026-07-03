@@ -1,22 +1,27 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import workflowDoc from '../../../../workflows/dev-harness/workflow.json' with { type: 'json' };
-import researchCriticWorkflowDoc from '../../../../workflows/research-critic/workflow.json' with { type: 'json' };
-import workflowAuthoringWorkflowDoc from '../../../../workflows/workflow-authoring/workflow.json' with { type: 'json' };
-import codeReviewWorkflowDoc from '../../../../workflows/code-review/workflow.json' with { type: 'json' };
 import { WorkflowRuntimeError } from '../errors.mjs';
 import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
 import { validateWorkflowFile } from '../entrypoints/api/validateWorkflow.mjs';
-import { readOutputSchemas, readAllowedRoles } from '../persistence/workflow-resources/workflow-file-reader.mjs';
-import { validateAgainstOutputSchema } from '../use-cases/runtime/output/output-schema-validation.mjs';
+import { read, readOutputSchemas, readAllowedRoles } from '../persistence/workflow-resources/workflow-file-reader.mjs';
+import { loadWorkflowResources } from '../persistence/workflow-resources/runtime-reader.mjs';
+import { validateAgainstOutputSchema as validateLoadedOutputSchema } from '../use-cases/runtime/output/output-schema-validation.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-function runNode(args) {
+const DEV_HARNESS_WORKFLOW_PATH = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
+const RESEARCH_CRITIC_WORKFLOW_PATH = path.join(REPO_ROOT, 'workflows/research-critic/workflow.toml');
+const WORKFLOW_AUTHORING_WORKFLOW_PATH = path.join(REPO_ROOT, 'workflows/workflow-authoring/workflow.toml');
+const CODE_REVIEW_WORKFLOW_PATH = path.join(REPO_ROOT, 'workflows/code-review/workflow.toml');
+const workflowDoc = read(DEV_HARNESS_WORKFLOW_PATH).toJSON();
+const researchCriticWorkflowDoc = read(RESEARCH_CRITIC_WORKFLOW_PATH).toJSON();
+const workflowAuthoringWorkflowDoc = read(WORKFLOW_AUTHORING_WORKFLOW_PATH).toJSON();
+const codeReviewWorkflowDoc = read(CODE_REVIEW_WORKFLOW_PATH).toJSON();
+function runBun(args) {
   return spawnSync(process.execPath, args, { cwd: REPO_ROOT, encoding: 'utf8' });
 }
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-semantic-validation-'));
@@ -30,7 +35,19 @@ function validateWithRuntimeArchitecture(doc, { workflowPath }) {
 }
 
 function validate(doc) {
-  return validateWithRuntimeArchitecture(doc, { workflowPath: path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json') });
+  return validateWithRuntimeArchitecture(doc, { workflowPath: DEV_HARNESS_WORKFLOW_PATH });
+}
+
+function validateAgainstOutputSchema({ workflow, workflowPath, schemaRef, repositoryRoot = REPO_ROOT, schema, externalSchemas, ...context }) {
+  const loadedSchema = schema ?? (workflow && workflowPath && schemaRef
+    ? loadWorkflowResources({ workflow, workflowPath, repositoryRoot }).outputSchemas[schemaRef]?.schema
+    : undefined);
+  return validateLoadedOutputSchema({
+    ...context,
+    schemaRef,
+    schema: loadedSchema,
+    externalSchemas,
+  });
 }
 
 function promptText(step) {
@@ -54,7 +71,7 @@ function assertSemanticFailure(doc, pattern) {
   });
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 function writeSchema(name, schema) {
   writeFileSync(path.join(tempDir, name), `${JSON.stringify(schema, null, 2)}\n`);
@@ -66,7 +83,7 @@ const routeSchema = {
   required: ['outcome', 'route', 'next_steps'],
   properties: {
     outcome: { enum: ['ready', 'blocked'] },
-    route: { enum: ['review', 'blocked'] },
+    route: { enum: ['review'] },
     next_steps: {
       type: 'array',
       minItems: 1,
@@ -116,7 +133,6 @@ function genericWorkflowWithWorkerRole(role) {
       version: 1,
       start: 'worker_step',
       done: 'done',
-      blocked: 'blocked',
       steps: {
         worker_step: {
           name: 'Worker step',
@@ -126,7 +142,6 @@ function genericWorkflowWithWorkerRole(role) {
           next: 'done',
         },
         done: { name: 'Done', kind: 'done' },
-        blocked: { name: 'Blocked', kind: 'blocked' },
       },
 
   };
@@ -138,13 +153,12 @@ function syntheticWorkflow(overrides) {
       version: 1,
       start: 'producer',
       done: 'done',
-      blocked: 'blocked',
       steps: {
         producer: {
           name: 'Producer',
           kind: 'worker',
           output: { template: 'producer.md', schema: 'route-output.schema.json' },
-          next: { match: '${{ output.outcome }}', cases: { ready: 'consumer', blocked: 'blocked' } },
+          next: { match: '${{ output.outcome }}', cases: { ready: 'consumer' } },
         },
         consumer: {
           name: 'Consumer',
@@ -175,7 +189,6 @@ function syntheticWorkflow(overrides) {
           next: 'done',
         },
         done: { name: 'Done', kind: 'done' },
-        blocked: { name: 'Blocked', kind: 'blocked' },
       },
 
   };
@@ -187,13 +200,52 @@ test('workflow semantic validation accepts the checked-in flat DevHarness workfl
   assert.deepEqual(validate(workflowDoc), { ok: true, workflow: 'dev-harness', steps: Object.keys(workflowDoc.steps).length });
 });
 
-test('DevHarness proposal handoff prompts use baton artifacts instead of temp files', () => {
-  assert.match(promptText(workflowDoc.steps.architecture_draft), /emit it as workflow artifact `architecture-proposal`/);
+test('DevHarness architecture handoff uses architecture contract and architecture canvas artifact', () => {
+  assert.match(promptText(workflowDoc.steps.architecture_draft), /derive one new immutable human-facing workflow artifact named `reasons-canvas-architecture`/);
+  assert.equal(workflowDoc.steps.architecture_draft.output.template, '../../shared/templates/reasons/reasons-canvas-template.md');
   assert.match(promptText(workflowDoc.steps.architecture_draft), /artifact metadata\/path accepted into baton is the source of truth/);
-  assert.match(promptText(workflowDoc.steps.approve_architecture), /`architecture-proposal` artifact from architecture_draft/);
   assert.match(promptText(workflowDoc.steps.approve_architecture), /retrieve\/export the existing artifact referenced by baton\/output artifacts/);
-  assert.match(promptText(workflowDoc.steps.approve_architecture), /do not ask a worker to recreate it in a temp path/);
+  assert.match(promptText(workflowDoc.steps.approve_architecture), /Do not ask a worker to recreate it in a temp path/);
   assert.match(promptText(workflowDoc.steps.approve_plan), /retrieve\/export the existing artifact referenced by baton\/output artifacts/);
+});
+
+test('DevHarness research always requires a first-class REASONS Canvas artifact', () => {
+  assert.match(promptText(workflowDoc.steps.research_draft), /Create exactly one first-class human-facing research artifact named `reasons-canvas-research`/);
+  assert.match(promptText(workflowDoc.steps.research_draft), /Do not create any separate legacy research artifact or structured legacy output/);
+  assert.match(promptText(workflowDoc.steps.research_draft), /Emit artifact metadata for `reasons-canvas-research` in artifacts\[\]/);
+  assert.doesNotMatch(promptText(workflowDoc.steps.research_draft), /do not create a placeholder Canvas artifact/);
+  assert.match(promptText(workflowDoc.steps.research_attack), /Treat a missing `reasons-canvas-research` artifact as a blocking research failure/);
+  assert.match(promptText(workflowDoc.steps.approve_research), /Present artifact `reasons-canvas-research`/);
+  assert.doesNotMatch(promptText(workflowDoc.steps.approve_research), /research-packet/);
+
+  const schemaContext = {
+    workflow: workflowDoc,
+    workflowPath: path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml'),
+    schemaRef: workflowDoc.steps.research_draft.output.schema,
+    repositoryRoot: REPO_ROOT,
+  };
+  const wrongArtifactId = validateAgainstOutputSchema({
+    ...schemaContext,
+    output: {
+      outcome: 'ready_for_attack',
+      artifacts: [{ id: 'research-packet', content_type: 'text/markdown', summary: 'Legacy research.', path: '/runs/research_draft/artifacts/research-packet.md' }],
+    },
+  });
+  assert.equal(wrongArtifactId.ok, false);
+  assert.match(wrongArtifactId.errors, /reasons-canvas-research|must contain/);
+
+  const extraArtifact = validateAgainstOutputSchema({
+    ...schemaContext,
+    output: {
+      outcome: 'ready_for_attack',
+      artifacts: [
+        { id: 'reasons-canvas-research', content_type: 'text/markdown', summary: 'Research Canvas.', path: '/runs/research_draft/artifacts/reasons-canvas-research.md' },
+        { id: 'extra-research-note', content_type: 'text/markdown', summary: 'Extra.', path: '/runs/research_draft/artifacts/extra-research-note.md' },
+      ],
+    },
+  });
+  assert.equal(extraArtifact.ok, false);
+  assert.match(extraArtifact.errors, /must NOT have more than 1 items|must NOT have more than 1 item/);
 });
 
 test('DevHarness worker and approval prompts expose explicit input context templates', () => {
@@ -206,7 +258,6 @@ test('DevHarness worker and approval prompts expose explicit input context templ
 
   assert.match(promptText(workflowDoc.steps.research_draft), /\$\{\{ input\.research_attack\.verdict \| default:/);
   assert.match(promptText(workflowDoc.steps.research_draft), /\$\{\{ input\.approve_research \| default:/);
-  assert.match(promptText(workflowDoc.steps.approve_research), /\$\{\{ input\.research_draft\.research_packet \}\}/);
   assert.match(promptText(workflowDoc.steps.approve_research), /\$\{\{ input\.research_attack\.verdict \}\}/);
   assert.match(promptText(workflowDoc.steps.approve_architecture), /\$\{\{ input\.architecture_draft\.architecture_contract \}\}/);
   assert.match(promptText(workflowDoc.steps.approve_plan), /\$\{\{ input\.planning_draft\.implementation_plan \}\}/);
@@ -266,12 +317,12 @@ test('workflow semantic validation rejects workflow wrapper field on flat docume
 });
 
 test('research critic save step uses persistence metadata template matching its output schema', () => {
-  const step = researchCriticWorkflowDoc.steps.save_research_packet;
+  const step = researchCriticWorkflowDoc.steps.save_research_canvas;
 
-  assert.equal(step.output.template, '../../shared/templates/research-save-metadata-template.md');
-  assert.equal(step.output.schema, 'schemas/save-research-packet-output.json');
-  assert.notEqual(step.output.template, '../../shared/templates/research-packet-template.md');
-  assert.deepEqual(validateWithRuntimeArchitecture(researchCriticWorkflowDoc, { workflowPath: path.join(REPO_ROOT, 'workflows/research-critic/workflow.json') }), {
+  assert.equal(step.output.template, '../../shared/templates/research-canvas-save-metadata-template.md');
+  assert.equal(step.output.schema, 'schemas/save-research-canvas-output.json');
+  assert.equal(researchCriticWorkflowDoc.steps.research_draft.output.template, '../../shared/templates/reasons/reasons-canvas-template.md');
+  assert.deepEqual(validateWithRuntimeArchitecture(researchCriticWorkflowDoc, { workflowPath: RESEARCH_CRITIC_WORKFLOW_PATH }), {
     ok: true,
     workflow: 'research-critic',
     steps: Object.keys(researchCriticWorkflowDoc.steps).length,
@@ -279,7 +330,7 @@ test('research critic save step uses persistence metadata template matching its 
 });
 
 test('research critic attack and save steps receive latest research artifacts', () => {
-  for (const stepId of ['research_attack', 'save_research_packet']) {
+  for (const stepId of ['research_attack', 'save_research_canvas']) {
     const prompt = promptText(researchCriticWorkflowDoc.steps[stepId]);
 
     assert.match(prompt, /\$\{\{ input\.research_revision\.artifacts \| default:/, `${stepId} should receive research_revision artifacts`);
@@ -288,9 +339,73 @@ test('research critic attack and save steps receive latest research artifacts', 
   }
 });
 
-test('research critic saved packet output requires artifacts and results payloads', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/research-critic/workflow.json');
-  const step = researchCriticWorkflowDoc.steps.save_research_packet;
+test('research critic research draft always requires a first-class REASONS Canvas artifact', () => {
+  const prompt = promptText(researchCriticWorkflowDoc.steps.research_draft);
+  assert.match(prompt, /produce exactly one first-class research artifact named `reasons-canvas-research`/);
+  assert.match(prompt, /Do not create any separate legacy research artifact or structured legacy output/);
+  assert.match(promptText(researchCriticWorkflowDoc.steps.research_attack), /Treat a missing `reasons-canvas-research` artifact as a blocking research failure/);
+
+  const workflowPath = RESEARCH_CRITIC_WORKFLOW_PATH;
+  const schemaContext = {
+    workflow: researchCriticWorkflowDoc,
+    workflowPath,
+    schemaRef: researchCriticWorkflowDoc.steps.research_draft.output.schema,
+    repositoryRoot: REPO_ROOT,
+  };
+  const missingArtifacts = validateAgainstOutputSchema({
+    ...schemaContext,
+    output: { outcome: 'ready_for_attack' },
+  });
+  assert.equal(missingArtifacts.ok, false);
+  assert.match(missingArtifacts.errors, /artifacts/);
+
+  const legacyResearchPacketOutput = validateAgainstOutputSchema({
+    ...schemaContext,
+    output: {
+      outcome: 'ready_for_attack',
+      research_packet: { summary: ['legacy packet'] },
+      artifacts: [{ id: 'reasons-canvas-research', content_type: 'text/markdown', summary: 'Research Canvas.', path: '/runs/research_draft/artifacts/reasons-canvas-research.md' }],
+    },
+  });
+  assert.equal(legacyResearchPacketOutput.ok, false);
+  assert.match(legacyResearchPacketOutput.errors, /additional properties/);
+
+  const wrongArtifactId = validateAgainstOutputSchema({
+    ...schemaContext,
+    output: {
+      outcome: 'ready_for_attack',
+      artifacts: [{ id: 'research-packet', content_type: 'text/markdown', summary: 'Legacy research.', path: '/runs/research_draft/artifacts/research-packet.md' }],
+    },
+  });
+  assert.equal(wrongArtifactId.ok, false);
+  assert.match(wrongArtifactId.errors, /reasons-canvas-research|must contain/);
+
+  const extraArtifact = validateAgainstOutputSchema({
+    ...schemaContext,
+    output: {
+      outcome: 'ready_for_attack',
+      artifacts: [
+        { id: 'reasons-canvas-research', content_type: 'text/markdown', summary: 'Research Canvas.', path: '/runs/research_draft/artifacts/reasons-canvas-research.md' },
+        { id: 'extra-research-note', content_type: 'text/markdown', summary: 'Extra.', path: '/runs/research_draft/artifacts/extra-research-note.md' },
+      ],
+    },
+  });
+  assert.equal(extraArtifact.ok, false);
+  assert.match(extraArtifact.errors, /must NOT have more than 1 items|must NOT have more than 1 item/);
+
+  const withRequiredArtifacts = validateAgainstOutputSchema({
+    ...schemaContext,
+    output: {
+      outcome: 'ready_for_attack',
+      artifacts: [{ id: 'reasons-canvas-research', content_type: 'text/markdown', summary: 'Research Canvas.', path: '/runs/research_draft/artifacts/reasons-canvas-research.md' }],
+    },
+  });
+  assert.equal(withRequiredArtifacts.ok, true);
+});
+
+test('research critic saved Canvas output requires artifacts and results payloads', () => {
+  const workflowPath = RESEARCH_CRITIC_WORKFLOW_PATH;
+  const step = researchCriticWorkflowDoc.steps.save_research_canvas;
 
   const missingAggregates = validateAgainstOutputSchema({
     workflow: researchCriticWorkflowDoc,
@@ -314,6 +429,39 @@ test('research critic saved packet output requires artifacts and results payload
   assert.match(emptyAggregates.errors, /artifacts/);
   assert.match(emptyAggregates.errors, /results/);
 
+  const wrongArtifactId = validateAgainstOutputSchema({
+    workflow: researchCriticWorkflowDoc,
+    workflowPath,
+    schemaRef: step.output.schema,
+    repositoryRoot: REPO_ROOT,
+    output: {
+      outcome: 'saved',
+      saved: { summary: 'Saved.' },
+      artifacts: [{ id: 'research-packet', content_type: 'text/markdown', summary: 'Legacy research.', path: '/runs/save_research_canvas/artifacts/research-packet.md' }],
+      results: [{ summary: 'Saved Canvas.' }],
+    },
+  });
+  assert.equal(wrongArtifactId.ok, false);
+  assert.match(wrongArtifactId.errors, /reasons-canvas-research|must contain/);
+
+  const extraArtifact = validateAgainstOutputSchema({
+    workflow: researchCriticWorkflowDoc,
+    workflowPath,
+    schemaRef: step.output.schema,
+    repositoryRoot: REPO_ROOT,
+    output: {
+      outcome: 'saved',
+      saved: { summary: 'Saved.' },
+      artifacts: [
+        { id: 'reasons-canvas-research', content_type: 'text/markdown', summary: 'Saved Canvas.', path: '/runs/save_research_canvas/artifacts/reasons-canvas-research.md' },
+        { id: 'extra-research-note', content_type: 'text/markdown', summary: 'Extra.', path: '/runs/save_research_canvas/artifacts/extra-research-note.md' },
+      ],
+      results: [{ summary: 'Saved Canvas.' }],
+    },
+  });
+  assert.equal(extraArtifact.ok, false);
+  assert.match(extraArtifact.errors, /must NOT have more than 1 items|must NOT have more than 1 item/);
+
   const withAggregates = validateAgainstOutputSchema({
     workflow: researchCriticWorkflowDoc,
     workflowPath,
@@ -322,16 +470,16 @@ test('research critic saved packet output requires artifacts and results payload
     output: {
       outcome: 'saved',
       saved: { summary: 'Saved.' },
-      artifacts: [{ id: 'research-packet', content_type: 'text/markdown', summary: 'Saved packet.', path: '/runs/save_research_packet/artifacts/research-packet.md' }],
-      results: [{ summary: 'Saved packet.' }],
+      artifacts: [{ id: 'reasons-canvas-research', content_type: 'text/markdown', summary: 'Saved Canvas.', path: '/runs/save_research_canvas/artifacts/reasons-canvas-research.md' }],
+      results: [{ summary: 'Saved Canvas.' }],
     },
   });
   assert.equal(withAggregates.ok, true);
 });
 
-test('research critic save packet output keeps saved and blocked branches exclusive', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/research-critic/workflow.json');
-  const step = researchCriticWorkflowDoc.steps.save_research_packet;
+test('research critic save Canvas output keeps saved and blocked branches exclusive', () => {
+  const workflowPath = RESEARCH_CRITIC_WORKFLOW_PATH;
+  const step = researchCriticWorkflowDoc.steps.save_research_canvas;
   const schemaContext = {
     workflow: researchCriticWorkflowDoc,
     workflowPath,
@@ -343,9 +491,9 @@ test('research critic save packet output keeps saved and blocked branches exclus
     ...schemaContext,
     output: {
       outcome: 'blocked',
-      blocker: { summary: 'Cannot save.', source_step_id: 'save_research_packet', needed: 'Writable target.' },
+      blocker: { summary: 'Cannot save.', source_step_id: 'save_research_canvas', needed: 'Writable target.' },
       saved: { summary: 'Should not coexist.' },
-      artifacts: [{ id: 'research-packet', content_type: 'text/markdown', summary: 'Should not aggregate.', path: '/runs/save_research_packet/artifacts/research-packet.md' }],
+      artifacts: [{ id: 'reasons-canvas-research', content_type: 'text/markdown', summary: 'Should not aggregate.', path: '/runs/save_research_canvas/artifacts/reasons-canvas-research.md' }],
       results: [{ summary: 'Should not aggregate.' }],
     },
   });
@@ -356,16 +504,16 @@ test('research critic save packet output keeps saved and blocked branches exclus
     output: {
       outcome: 'saved',
       saved: { summary: 'Saved.' },
-      artifacts: [{ id: 'research-packet', content_type: 'text/markdown', summary: 'Saved packet.', path: '/runs/save_research_packet/artifacts/research-packet.md' }],
-      results: [{ summary: 'Saved packet.' }],
-      blocker: { summary: 'Should not coexist.', source_step_id: 'save_research_packet', needed: 'Nothing.' },
+      artifacts: [{ id: 'reasons-canvas-research', content_type: 'text/markdown', summary: 'Saved Canvas.', path: '/runs/save_research_canvas/artifacts/reasons-canvas-research.md' }],
+      results: [{ summary: 'Saved Canvas.' }],
+      blocker: { summary: 'Should not coexist.', source_step_id: 'save_research_canvas', needed: 'Nothing.' },
     },
   });
   assert.equal(savedWithBlocker.ok, false);
 
   const blockedOnly = validateAgainstOutputSchema({
     ...schemaContext,
-    output: { outcome: 'blocked', blocker: { summary: 'Cannot save.', source_step_id: 'save_research_packet', needed: 'Writable target.' } },
+    output: { outcome: 'blocked', blocker: { summary: 'Cannot save.', source_step_id: 'save_research_canvas', needed: 'Writable target.' } },
   });
   assert.equal(blockedOnly.ok, true);
 });
@@ -421,10 +569,9 @@ test('workflow authoring implementation revision inlines review findings', () =>
 });
 
 test('workflow authoring design output requires branch payloads', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/workflow-authoring/workflow.json');
   const schemaContext = {
     workflow: workflowAuthoringWorkflowDoc,
-    workflowPath,
+    workflowPath: WORKFLOW_AUTHORING_WORKFLOW_PATH,
     schemaRef: workflowAuthoringWorkflowDoc.steps.workflow_design_draft.output.schema,
     repositoryRoot: REPO_ROOT,
   };
@@ -445,8 +592,7 @@ test('workflow authoring design output requires branch payloads', () => {
 });
 
 test('workflow semantic validation accepts the checked-in Code Review workflow', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/code-review/workflow.json');
-  assert.deepEqual(validateWithRuntimeArchitecture(codeReviewWorkflowDoc, { workflowPath }), {
+  assert.deepEqual(validateWithRuntimeArchitecture(codeReviewWorkflowDoc, { workflowPath: CODE_REVIEW_WORKFLOW_PATH }), {
     ok: true,
     workflow: 'code-review',
     steps: Object.keys(codeReviewWorkflowDoc.steps).length,
@@ -462,10 +608,9 @@ test('workflow semantic validation accepts the checked-in Code Review workflow',
 });
 
 test('code review reviewer selection blocked output does not require dispatch payloads', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/code-review/workflow.json');
   const schemaContext = {
     workflow: codeReviewWorkflowDoc,
-    workflowPath,
+    workflowPath: CODE_REVIEW_WORKFLOW_PATH,
     schemaRef: codeReviewWorkflowDoc.steps.reviewer_selection.output.schema,
     repositoryRoot: REPO_ROOT,
   };
@@ -498,7 +643,7 @@ test('workflow authoring hardens prompt schema route review against generated wo
   }
 
   assert.match(designPrompt, /prompt\/schema\/route consistency gate/);
-  assert.match(implementationPrompt, /Before returning implemented, self-check workflow\.json plus every touched output schema/);
+  assert.match(implementationPrompt, /Before returning implemented, self-check workflow\.toml plus every touched output schema/);
   assert.match(analyzerPrompt, /Treat prompt\/schema\/route drift as a finding/);
   assert.match(attackPrompt, /blocked branches must not require success-only payloads/);
 });
@@ -528,7 +673,7 @@ test('revision loop continuity separates prompt context from clarification-sessi
     assert.doesNotMatch(prompt, contradictorySameSessionWording);
   }
 
-  for (const stepId of ['research_draft', 'research_answered_draft', 'research_attack', 'research_revision', 'save_research_packet']) {
+  for (const stepId of ['research_draft', 'research_answered_draft', 'research_attack', 'research_revision', 'save_research_canvas']) {
     const prompt = promptText(researchCriticWorkflowDoc.steps[stepId]);
     assert.match(prompt, loopIterationContinuityPrompt);
     assert.match(prompt, noPersistentDraftAttackReuse);
@@ -538,17 +683,18 @@ test('revision loop continuity separates prompt context from clarification-sessi
 
   assert.match(
     promptText(researchCriticWorkflowDoc.steps.research_draft),
-    /Return ready_for_attack when the packet is ready for researcher attack, needs_input when user answers are required, or blocked when progress is unsafe without external input\./,
+    /Return ready_for_attack when the required Canvas artifact is ready for researcher attack, needs_input when user answers are required, or blocked when progress is unsafe without external input\./,
   );
   assert.equal(researchCriticWorkflowDoc.steps.research_draft.next.cases.needs_input, 'ask_research_questions');
 });
 
 test('workflow attack gates keep draft role ownership and hostile prior', () => {
   const hostilePrior = /Start from a hostile prior: assume the change, proposal, draft, or packet is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise\./;
+  const researchCanvasHostilePrior = /Start from a hostile prior: assume the change, proposal, draft, or Canvas is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise\./;
 
   assert.equal(workflowDoc.steps.research_draft.input.role, 'researcher');
   assert.equal(workflowDoc.steps.research_attack.input.role, 'researcher');
-  assert.match(promptText(workflowDoc.steps.research_attack), hostilePrior);
+  assert.match(promptText(workflowDoc.steps.research_attack), researchCanvasHostilePrior);
 
   assert.equal(workflowDoc.steps.architecture_draft.input.role, 'architect');
   assert.equal(workflowDoc.steps.architecture_attack.input.role, 'architect');
@@ -556,7 +702,7 @@ test('workflow attack gates keep draft role ownership and hostile prior', () => 
 
   assert.equal(researchCriticWorkflowDoc.steps.research_draft.input.role, 'researcher');
   assert.equal(researchCriticWorkflowDoc.steps.research_attack.input.role, 'researcher');
-  assert.match(promptText(researchCriticWorkflowDoc.steps.research_attack), hostilePrior);
+  assert.match(promptText(researchCriticWorkflowDoc.steps.research_attack), researchCanvasHostilePrior);
 });
 
 
@@ -589,7 +735,7 @@ test('dev harness implementation rework branches inline review findings', () => 
 });
 
 test('dev harness blocked outputs require only blocker plus routing fields, not success payloads', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json');
+  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
   const blockedCases = [
     ['research_draft', { outcome: 'blocked', blocker: { summary: 'Missing input.', source_step_id: 'research_draft', needed: 'Task context.' } }],
     ['research_attack', { outcome: 'blocked', blocker: { summary: 'Unsafe research.', source_step_id: 'research_attack', needed: 'Evidence.' } }],
@@ -609,7 +755,7 @@ test('dev harness blocked outputs require only blocker plus routing fields, not 
     ['security_review', { outcome: 'blocked', blocker: { summary: 'Cannot review.', source_step_id: 'security_review', needed: 'Trust boundary.' } }],
     ['privacy_review', { outcome: 'blocked', blocker: { summary: 'Cannot review.', source_step_id: 'privacy_review', needed: 'Data flow.' } }],
     ['qa_review', { outcome: 'blocked', blocker: { summary: 'Cannot review.', source_step_id: 'qa_review', needed: 'Verification evidence.' } }],
-    ['review_join', { outcome: 'blocked', next: 'blocked', blocker: { summary: 'Join blocked.', source_step_id: 'review_join', needed: 'All review outputs.' } }],
+    ['review_join', { outcome: 'blocked', blocker: { summary: 'Join blocked.', source_step_id: 'review_join', needed: 'All review outputs.' } }],
   ];
 
   for (const [stepId, output] of blockedCases) {
@@ -624,10 +770,8 @@ test('dev harness blocked outputs require only blocker plus routing fields, not 
   }
 });
 
-
-
 test('dev harness planning draft always requires selected review steps', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json');
+  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
   const result = validateAgainstOutputSchema({
     workflow: workflowDoc,
     workflowPath,
@@ -642,7 +786,7 @@ test('dev harness planning draft always requires selected review steps', () => {
 
 
 test('dev harness review join schema keeps outcome and next route consistent', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json');
+  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
   const schemaContext = {
     workflow: workflowDoc,
     workflowPath,
@@ -680,12 +824,12 @@ test('dev harness review join schema keeps outcome and next route consistent', (
   }).ok, false);
   assert.equal(validateAgainstOutputSchema({
     ...schemaContext,
-    output: { outcome: 'blocked', blocker: { summary: 'Blocked.', source_step_id: 'review_join', needed: 'Missing review.' }, next: 'blocked' },
+    output: { outcome: 'blocked', blocker: { summary: 'Blocked.', source_step_id: 'review_join', needed: 'Missing review.' } },
   }).ok, true);
 });
 
 test('dev harness review gates reject needs_changes without a rework target', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json');
+  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
   const output = {
     outcome: 'needs_changes',
     verdict: { summary: ['Needs work.'], evidence_checked: ['diff'], findings: [{ summary: 'Bug.' }] },
@@ -704,9 +848,9 @@ test('dev harness review gates reject needs_changes without a rework target', ()
 });
 
 test('dev harness success outputs still require their success payloads', () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.json');
+  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
   for (const [stepId, output, missingField] of [
-    ['research_draft', { outcome: 'ready_for_attack' }, 'research_packet'],
+    ['research_draft', { outcome: 'ready_for_attack' }, 'artifacts'],
     ['planning_draft', { outcome: 'ready_for_attack' }, 'implementation_plan'],
     ['implementation_join', { outcome: 'ready_for_review' }, 'reviewer_handoff'],
     ['review_join', { outcome: 'passed' }, 'verdict'],
@@ -799,7 +943,7 @@ test('workflow semantic validation warns when DevHarness described fields lack x
 
   assert.equal(result.ok, true);
   assert.equal(result.warnings.length, 1);
-  assert.match(result.warnings[0], /research_packet\.scope.*no x-usage/);
+  assert.match(result.warnings[0], /research_canvas\.scope.*no x-usage/);
 });
 
 test('workflow semantic validation rejects optional output paths used for routing expressions', () => {
@@ -809,7 +953,7 @@ test('workflow semantic validation rejects optional output paths used for routin
     required: ['outcome'],
     properties: {
       outcome: { enum: ['ready', 'blocked'] },
-      route: { enum: ['done', 'blocked'] },
+      route: { enum: ['done'] },
     },
     additionalProperties: false,
   });
@@ -880,7 +1024,7 @@ test('workflow semantic validation normalizes local refs before semantic introsp
         additionalProperties: false,
       },
       outcome: { type: 'string', enum: ['ready', 'blocked'] },
-      route: { type: 'string', enum: ['consumer', 'blocked'] },
+      route: { type: 'string', enum: ['consumer'] },
       branch: { type: 'string', enum: ['branch_a', 'branch_b'] },
     },
   });
@@ -890,14 +1034,14 @@ test('workflow semantic validation normalizes local refs before semantic introsp
     draft.steps.producer.next = '${{ output.route }}';
     return draft;
   });
-  assert.deepEqual(validateSynthetic(dynamicTargetDoc), { ok: true, workflow: 'synthetic-validation-fixture', steps: 7 });
+  assert.deepEqual(validateSynthetic(dynamicTargetDoc), { ok: true, workflow: 'synthetic-validation-fixture', steps: 6 });
 
   const matchDoc = syntheticWorkflow((draft) => {
     draft.steps.producer.output.schema = 'ref-outcome-output.schema.json';
-    draft.steps.producer.next = { match: '${{ output.outcome }}', cases: { ready: 'consumer', blocked: 'blocked' } };
+    draft.steps.producer.next = { match: '${{ output.outcome }}', cases: { ready: 'consumer' } };
     return draft;
   });
-  assert.deepEqual(validateSynthetic(matchDoc), { ok: true, workflow: 'synthetic-validation-fixture', steps: 7 });
+  assert.deepEqual(validateSynthetic(matchDoc), { ok: true, workflow: 'synthetic-validation-fixture', steps: 6 });
 });
 
 test('workflow semantic validation rejects schema-declared dynamic targets that are not workflow steps', () => {
@@ -909,15 +1053,29 @@ test('workflow semantic validation rejects schema-declared dynamic targets that 
 });
 
 test('workflow semantic validation rejects missing match cases from output schema enums', () => {
-  const doc = structuredClone(workflowDoc);
-  delete doc.steps.research_draft.next.cases.blocked;
+  writeSchema('two-way-output.schema.json', {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome'],
+    properties: {
+      outcome: { enum: ['ready', 'retry'] },
+    },
+    additionalProperties: false,
+  });
 
-  assertSemanticFailure(doc, /research_draft.*next\.cases is missing schema-declared case 'blocked'/);
+  assertSemanticFailure(
+    syntheticWorkflow((draft) => {
+      draft.steps.producer.output.schema = 'two-way-output.schema.json';
+      draft.steps.producer.next = { match: '${{ output.outcome }}', cases: { ready: 'consumer' } };
+      return draft;
+    }),
+    /producer.*next\.cases is missing schema-declared case 'retry'/,
+  );
 });
 
 test('workflow semantic validation rejects unreachable match cases not present in output schema enums', () => {
   const doc = structuredClone(workflowDoc);
-  doc.steps.research_draft.next.cases.unreachable = 'blocked';
+  doc.steps.research_draft.next.cases.unreachable = 'done';
 
   assert.throws(() => validate(doc), /research_draft.*unreachable case 'unreachable'/);
 });
@@ -932,20 +1090,20 @@ test('workflow semantic validation rejects malformed workflow names', () => {
 });
 
 test('workflow semantic validation accepts prompt input expressions that reference declared workflow step ids', () => {
-  assert.deepEqual(validateSynthetic(syntheticWorkflow()), { ok: true, workflow: 'synthetic-validation-fixture', steps: 7 });
+  assert.deepEqual(validateSynthetic(syntheticWorkflow()), { ok: true, workflow: 'synthetic-validation-fixture', steps: 6 });
 
   const doc = syntheticWorkflow((draft) => {
     draft.steps.approval_gate = {
       name: 'Approval gate',
       kind: 'approval',
       output: { schema: 'approval-output.schema.json' },
-      next: { match: '${{ output.approval }}', cases: { approved: 'consumer', blocked: 'blocked' } },
+      next: { match: '${{ output.approval }}', cases: { approved: 'consumer' } },
     };
     draft.steps.consumer.input.prompt = 'Approval result:\n${{ input.approval_gate }}';
     return draft;
   });
 
-  assert.deepEqual(validateSynthetic(doc), { ok: true, workflow: 'synthetic-validation-fixture', steps: 8 });
+  assert.deepEqual(validateSynthetic(doc), { ok: true, workflow: 'synthetic-validation-fixture', steps: 7 });
 });
 
 test('workflow semantic validation rejects optional input paths used for dynamic routing expressions', () => {
@@ -978,7 +1136,7 @@ test('workflow semantic validation rejects optional input paths used for match r
     required: ['outcome'],
     properties: {
       outcome: { enum: ['ready'] },
-      route: { enum: ['done', 'blocked'] },
+      route: { enum: ['done'] },
     },
     additionalProperties: false,
   });
@@ -987,7 +1145,7 @@ test('workflow semantic validation rejects optional input paths used for match r
     syntheticWorkflow((draft) => {
       draft.steps.producer.output.schema = 'optional-input-match-output.schema.json';
       draft.steps.producer.next = 'consumer';
-      draft.steps.consumer.next = { match: '${{ input.producer.route }}', cases: { done: 'done', blocked: 'blocked' } };
+      draft.steps.consumer.next = { match: '${{ input.producer.route }}', cases: { done: 'done' } };
       return draft;
     }),
     /consumer.*next\.match expression \$\{\{ input\.producer\.route \}\}.*required output\.schema path/,
@@ -996,11 +1154,11 @@ test('workflow semantic validation rejects optional input paths used for match r
 
 test('workflow semantic validation accepts input expressions in dynamic transitions without separate selectors', () => {
   const doc = syntheticWorkflow((draft) => {
-    draft.steps.consumer.next = { match: '${{ input.branch_a.outcome }}', cases: { ready: 'done', blocked: 'blocked' } };
+    draft.steps.consumer.next = { match: '${{ input.branch_a.route }}', cases: { review: 'done' } };
     return draft;
   });
 
-  assert.deepEqual(validateSynthetic(doc), { ok: true, workflow: 'synthetic-validation-fixture', steps: 7 });
+  assert.deepEqual(validateSynthetic(doc), { ok: true, workflow: 'synthetic-validation-fixture', steps: 6 });
 });
 
 test('workflow semantic validation rejects prompt input expressions that do not name own workflow step ids', () => {
@@ -1062,7 +1220,7 @@ test('workflow semantic validation rejects unsupported nested prompt input paths
 test('workflow semantic validation rejects input expressions with unknown schema fields', () => {
   assertSemanticFailure(
     syntheticWorkflow((draft) => {
-      draft.steps.consumer.next = { match: '${{ input.producer.missing_route }}', cases: { review: 'done', blocked: 'blocked' } };
+      draft.steps.consumer.next = { match: '${{ input.producer.missing_route }}', cases: { review: 'done' } };
       return draft;
     }),
     /consumer.*input\.producer\.missing_route.*no schema-covered path/,
@@ -1072,7 +1230,7 @@ test('workflow semantic validation rejects input expressions with unknown schema
 test('workflow semantic validation rejects aggregate runtime state expressions in input transitions', () => {
   assertSemanticFailure(
     syntheticWorkflow((draft) => {
-      draft.steps.consumer.next = { match: '${{ input.results.producer.route }}', cases: { review: 'done', blocked: 'blocked' } };
+      draft.steps.consumer.next = { match: '${{ input.results.producer.route }}', cases: { review: 'done' } };
       return draft;
     }),
     /consumer.*input\.results\.producer\.route.*input step 'results' is not a declared workflow step/,
@@ -1138,10 +1296,33 @@ test('validateWorkflowFile rejects a missing workflow path with a controlled err
 });
 
 test('validate-workflow CLI requires an explicit workflow path', () => {
-  const result = runNode(['skills/orbita/lib/entrypoints/cli/validate-workflow.mjs']);
+  const result = runBun(['skills/orbita/lib/entrypoints/cli/validate-workflow.mjs']);
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /validate-workflow: workflow path is required/);
+});
+
+test('validate-workflow CLI resolves workflow package directories to workflow.toml or workflow.json', () => {
+  const result = runBun(['skills/orbita/lib/entrypoints/cli/validate-workflow.mjs', 'workflows/research-critic']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    ok: true,
+    workflow: 'research-critic',
+    steps: 7,
+  });
+});
+
+test('validate-workflow CLI expands a workflows root directory', () => {
+  const result = runBun(['skills/orbita/lib/entrypoints/cli/validate-workflow.mjs', 'workflows']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), [
+    { ok: true, workflow: 'code-review', steps: 16 },
+    { ok: true, workflow: 'dev-harness', steps: 24 },
+    { ok: true, workflow: 'research-critic', steps: 7 },
+    { ok: true, workflow: 'workflow-authoring', steps: 11 },
+  ]);
 });
 
 test('workflow semantic validation uses approval output.schema for output match cases when declared', () => {
@@ -1151,7 +1332,6 @@ test('workflow semantic validation uses approval output.schema for output match 
       version: 1,
       start: 'approve',
       done: 'done',
-      blocked: 'blocked',
       steps: {
         approve: {
           name: 'Approve',
@@ -1161,7 +1341,6 @@ test('workflow semantic validation uses approval output.schema for output match 
           next: { match: '${{ output.choice }}', cases: { ship: 'done' } },
         },
         done: { name: 'Done', kind: 'done' },
-        blocked: { name: 'Blocked', kind: 'blocked' },
       },
 
   };

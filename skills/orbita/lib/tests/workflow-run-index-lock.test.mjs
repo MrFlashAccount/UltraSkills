@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { createLockMetadata, refreshLockHeartbeat, startLockHeartbeat } from '../persistence/run-state/lock-metadata.mjs';
 import { runsIndexPathsForRoot, withRunsIndexLock } from '../persistence/run-state/run-index.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-run-index-lock-'));
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 function indexPathsFor(label) {
   const runsRoot = path.join(tempDir, label);

@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { resolveRunPaths } from '../../persistence/run-state/paths.mjs';
 
@@ -51,7 +51,7 @@ function claimRunForRunnerArgs(args) {
   const createArgs = ['skills/orbita/lib/entrypoints/cli/workflow-runs.mjs', 'create', '--claim', '--run-id', runIdValue];
   const workflow = valueAfter(args, '--workflow');
   if (workflow !== undefined) createArgs.push('--workflow', workflow);
-  const created = spawnSync(process.execPath, createArgs, { cwd: root, encoding: 'utf8' });
+  const created = spawnSync(process.execPath, createArgs, { cwd: root, encoding: 'utf8', env: process.env });
   assert.equal(created.status, 0, `claim ${runIdValue} failed\nstdout:\n${created.stdout}\nstderr:\n${created.stderr}`);
   const token = JSON.parse(created.stdout).leaseToken;
   leaseTokensByRunId.set(runIdValue, token);
@@ -68,6 +68,7 @@ function runRunner(args, options = {}) {
   return spawnSync(process.execPath, ['skills/orbita/lib/entrypoints/cli/workflow-runner.mjs', ...withLeaseToken(args, token)], {
     cwd: root,
     encoding: 'utf8',
+    env: process.env,
     input: options.input,
   });
 }
@@ -153,7 +154,7 @@ function writeRunArtifact(run, artifactPath, content) {
   writeFileSync(fullPath, content);
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('E2E fixture: long happy path loops through review revision and preserves latest state', () => {
   const workflow = fixture('long-revision.workflow.json');
@@ -222,7 +223,7 @@ test('E2E fixture: DevHarness-style artifact path is required-read context for d
   assert.doesNotMatch(reviewInstructions, /Concrete implementation artifact content for reviewer\./);
 });
 
-test('E2E fixture: match route covers retry loop and blocked terminal variant', () => {
+test('E2E fixture: match route covers retry loop and recoverable blocked output', () => {
   const workflow = fixture('route-retry-blocked.workflow.json');
   const retryRun = runDir('route-retry');
 
@@ -241,10 +242,16 @@ test('E2E fixture: match route covers retry loop and blocked terminal variant', 
   const blockedRun = runDir('route-blocked');
   next(blockedRun, workflow);
   const blocked = continueWith(blockedRun, workflow, output('triage-blocked.json'), 'continue triage blocked');
-  assert.equal(blocked.status, 'blocked');
-  assert.equal(blocked.baton.cursor, 'blocked');
-  assert.deepEqual(blocked.baton.blocker, { reason: 'missing decision' });
-  assert.match(readHistory(blockedRun), /blocker: \{"reason":"missing decision"\}/);
+  assert.equal(blocked.status, 'needs_host_actions');
+  assert.equal(blocked.baton.cursor, 'triage');
+  assert.deepEqual(blocked.baton.recoverableWorkerBlockers.triage, {
+    summary: 'missing decision',
+    source_step_id: 'triage',
+    needed: 'Provide the missing decision.',
+  });
+  assert.equal(blocked.requests[0].stepId, 'triage');
+  assert.match(readHistory(blockedRun), /blocker summary: missing decision/);
+  assert.match(readHistory(blockedRun), /action=resolve_worker_blocker/);
 });
 
 test('E2E fixture: mixed static and match fanout requires named branch outputs and exposes join state', () => {

@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
+import { readWorkflowDocument } from '../persistence/workflow-resources/workflow-document-reader.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-catalog-'));
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 function runCatalog(args) {
   return spawnSync(process.execPath, ['skills/orbita/lib/entrypoints/cli/workflow-catalog.mjs', ...args], {
@@ -29,10 +30,10 @@ test('workflow catalog lists checked-in workflows from top-level descriptions', 
   assert.deepEqual(
     parsed.workflows.map((workflow) => workflow.path),
     [
-      path.join(root, 'workflows/code-review/workflow.json'),
-      path.join(root, 'workflows/dev-harness/workflow.json'),
-      path.join(root, 'workflows/research-critic/workflow.json'),
-      path.join(root, 'workflows/workflow-authoring/workflow.json'),
+      path.join(root, 'workflows/code-review/workflow.toml'),
+      path.join(root, 'workflows/dev-harness/workflow.toml'),
+      path.join(root, 'workflows/research-critic/workflow.toml'),
+      path.join(root, 'workflows/workflow-authoring/workflow.toml'),
     ],
   );
   assert.equal(parsed.workflows.every((workflow) => path.isAbsolute(workflow.path)), true);
@@ -45,7 +46,7 @@ test('workflow catalog human output prefers names and shows absolute workflow pa
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /dev-harness - /);
-  assert.match(result.stdout, new RegExp(`absolute workflow path for --workflow: ${path.join(root, 'workflows/dev-harness/workflow.json').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  assert.match(result.stdout, new RegExp(`absolute workflow path for --workflow: ${path.join(root, 'workflows/dev-harness/workflow.toml').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   assert.doesNotMatch(result.stdout, /workflow: workflows\/dev-harness\/workflow\.json/);
 });
 
@@ -58,8 +59,8 @@ test('workflow catalog resolves exact and fuzzy workflow names', () => {
     candidates: [
       {
         name: 'dev-harness',
-        description: JSON.parse(readFileSync(path.join(root, 'workflows/dev-harness/workflow.json'), 'utf8')).description,
-        path: path.join(root, 'workflows/dev-harness/workflow.json'),
+        description: readWorkflowDocument(path.join(root, 'workflows/dev-harness/workflow.toml')).description,
+        path: path.join(root, 'workflows/dev-harness/workflow.toml'),
       },
     ],
   });
@@ -97,10 +98,8 @@ test('workflow catalog rejects catalog workflows without top-level description',
     version: 1,
     start: 'done',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       done: { name: 'Done', kind: 'done' },
-      blocked: { name: 'Blocked', kind: 'blocked' },
     },
   }, null, 2)}\n`);
 

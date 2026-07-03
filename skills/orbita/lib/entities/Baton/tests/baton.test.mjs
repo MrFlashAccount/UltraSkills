@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 import { WorkflowRuntimeError } from '../../../errors.mjs';
 import { applyOutputToBatonState } from '../../../runtime/baton-state.mjs';
 import { Baton } from '../index.mjs';
@@ -10,11 +10,9 @@ const workflow = {
   version: 1,
   start: 'worker',
   done: 'done',
-  blocked: 'blocked',
   steps: {
     worker: { name: 'Worker', kind: 'worker', next: 'done' },
     done: { name: 'Done', kind: 'done' },
-    blocked: { name: 'Blocked', kind: 'blocked' },
   },
 };
 

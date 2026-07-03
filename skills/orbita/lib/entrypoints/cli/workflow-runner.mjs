@@ -1,8 +1,8 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { parseArgs } from 'node:util';
 import { WorkflowRuntimeError } from '../../errors.mjs';
-import { bindAgent, continueRun, loadInstructions, next, recordOrchestrator, writeOutput } from '../api/workflowRunner.mjs';
-import { publicErrorMessage } from './public-error.mjs';
+import { bindAgent, continueRun, listPointerTransitions, loadInstructions, movePointer, next, recordOrchestrator, writeOutput } from '../workflow-runner-command.mjs';
+import { publicErrorMessage } from '../../public-error.mjs';
 
 
 function fail(message) {
@@ -11,7 +11,7 @@ function fail(message) {
 }
 
 function usage() {
-  return 'usage: node ./lib/entrypoints/cli/workflow-runner.mjs next --run-id <id> [--workflow <workflow.json>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--user-prompt <text> | --user-prompt-file <path>] [--lease-token <token> + diagnostics metadata] | continue --run-id <id> [--workflow <workflow.json>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--lease-token <token> + diagnostics metadata] | instructions --run-id <id> --step-id <id> [--follow-up] [--workflow <workflow.json>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | bind-agent --run-id <id> --step-id <id> --agent-id <id> [--workflow <workflow.json>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | write-output --run-id <id> --step-id <id> [--json <json>] [--debug-summary-file <path>] [--workflow <workflow.json>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | record-orchestrator --run-id <id> [--json <json>] [--workflow <workflow.json>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata]';
+  return 'usage: bun ./lib/entrypoints/cli/workflow-runner.mjs next --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--user-prompt <text> | --user-prompt-file <path>] [--lease-token <token> + diagnostics metadata] | continue --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--lease-token <token> + diagnostics metadata] | instructions --run-id <id> --step-id <id> [--follow-up] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | bind-agent --run-id <id> --step-id <id> --agent-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | write-output --run-id <id> --step-id <id> [--json <json>] [--debug-summary-file <path>] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | record-orchestrator --run-id <id> [--json <json>] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | list-pointer-transitions --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | move-pointer --run-id <id> --transition-id <id> [--acknowledge-retained-state] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata]';
 }
 
 async function readStdin() {
@@ -22,7 +22,7 @@ async function readStdin() {
 
 function parseCliArgs(argv) {
   const [mode, ...rest] = argv;
-  if (!['next', 'continue', 'instructions', 'bind-agent', 'write-output', 'record-orchestrator'].includes(mode)) fail(usage());
+  if (!['next', 'continue', 'instructions', 'bind-agent', 'write-output', 'record-orchestrator', 'list-pointer-transitions', 'move-pointer'].includes(mode)) fail(usage());
   try {
     const parsed = parseArgs({
       args: rest,
@@ -38,6 +38,8 @@ function parseCliArgs(argv) {
         'user-prompt': { type: 'string' },
         'user-prompt-file': { type: 'string' },
         'debug-summary-file': { type: 'string' },
+        'transition-id': { type: 'string' },
+        'acknowledge-retained-state': { type: 'boolean', default: false },
         owner: { type: 'string' },
         harness: { type: 'string' },
         'session-id': { type: 'string' },
@@ -48,6 +50,7 @@ function parseCliArgs(argv) {
       strict: true,
       allowPositionals: false,
     });
+    const hasTransitionId = parsed.values['transition-id'] !== undefined;
     if (!parsed.values['run-id']) fail(usage());
     if (['instructions', 'bind-agent', 'write-output'].includes(mode) && !parsed.values['step-id']) fail(usage());
     if (!['instructions', 'bind-agent', 'write-output'].includes(mode) && parsed.values['step-id']) fail(usage());
@@ -59,7 +62,10 @@ function parseCliArgs(argv) {
     if (!['next', 'continue'].includes(mode) && parsed.values['only-instructions']) fail(usage());
     if (!['write-output', 'record-orchestrator'].includes(mode) && parsed.values.json !== undefined) fail(usage());
     if (mode !== 'write-output' && parsed.values['debug-summary-file'] !== undefined) fail(usage());
-    if (['bind-agent', 'write-output', 'record-orchestrator'].includes(mode) && parsed.values.diagnostics) fail(usage());
+    if (!['next', 'continue'].includes(mode) && parsed.values.diagnostics) fail(usage());
+    if (mode === 'move-pointer' && !hasTransitionId) fail(usage());
+    if (mode !== 'move-pointer' && hasTransitionId) fail(usage());
+    if (mode !== 'move-pointer' && parsed.values['acknowledge-retained-state']) fail(usage());
     return { mode, values: parsed.values };
   } catch (error) {
     fail(`${error.message}\n${usage()}`);
@@ -122,6 +128,24 @@ try {
       workflowPath: values.workflow,
       runsRoot: values['runs-root'],
       json: values.json ?? await readStdin(),
+      ...leaseArgs(values),
+    });
+    console.log(JSON.stringify(response, null, 2));
+  } else if (mode === 'list-pointer-transitions') {
+    const response = await listPointerTransitions({
+      runId: values['run-id'],
+      workflowPath: values.workflow,
+      runsRoot: values['runs-root'],
+      ...leaseArgs(values),
+    });
+    console.log(JSON.stringify(response, null, 2));
+  } else if (mode === 'move-pointer') {
+    const response = await movePointer({
+      runId: values['run-id'],
+      workflowPath: values.workflow,
+      runsRoot: values['runs-root'],
+      transitionId: values['transition-id'],
+      acknowledgeRetainedState: values['acknowledge-retained-state'],
       ...leaseArgs(values),
     });
     console.log(JSON.stringify(response, null, 2));

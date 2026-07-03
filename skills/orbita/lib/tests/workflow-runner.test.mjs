@@ -4,10 +4,10 @@ import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
-import { next as runnerNext } from '../entrypoints/api/workflowRunner.mjs';
-import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../entrypoints/api/runner/runner-command-builder.mjs';
+import { next as runnerNext } from '../entrypoints/workflow-runner-command.mjs';
+import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../entrypoints/internal/runner/runner-command-builder.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -22,7 +22,6 @@ const workflowDoc = {
     version: 1,
     start: 'prepare',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       prepare: {
         name: 'Prepare',
@@ -53,7 +52,6 @@ const workflowDoc = {
         next: 'done',
       },
       done: { name: 'Done', kind: 'done', input: { prompt: 'Finished.' } },
-      blocked: { name: 'Blocked', kind: 'blocked', input: { prompt: 'Blocked.' } },
     },
 
 };
@@ -249,7 +247,7 @@ function continueWithOutputs({ runId, runDir, workflowPath, refs, label = 'conti
   return expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], label);
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('runner: next returns a single host action request with load command only', () => {
   const { runId, runDir } = runCase('single');
@@ -284,10 +282,10 @@ test('runner: next returns a single host action request with load command only',
   assert.equal(response.requests[0].stepId, 'prepare');
   assert.equal(Object.hasOwn(response.requests[0], 'instructionRef'), false);
   assert.equal(response.requests[0].loadInstructionsCommand, `${workflowRunnerCommand} instructions --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`);
-  assert.equal(response.requests[0].loadInstructionsCommand.startsWith("node './"), false);
-  assert.equal(response.requests[0].loadFollowupInstructionsCommand.startsWith("node './"), false);
-  assert.equal(response.requests[0].bindAgentCommand.startsWith("node './"), false);
-  assert.equal(response.orchestratorInstruction.includes("node ./lib/entrypoints/cli/workflow-runner.mjs"), false);
+  assert.equal(response.requests[0].loadInstructionsCommand.startsWith("bun './"), false);
+  assert.equal(response.requests[0].loadFollowupInstructionsCommand.startsWith("bun './"), false);
+  assert.equal(response.requests[0].bindAgentCommand.startsWith("bun './"), false);
+  assert.equal(response.orchestratorInstruction.includes("bun ./lib/entrypoints/cli/workflow-runner.mjs"), false);
   assert.equal(Object.hasOwn(response.requests[0], 'outputPath'), false);
 
   const loadedFromOtherCwd = spawnSync(response.requests[0].loadInstructionsCommand, {
@@ -359,23 +357,23 @@ test('runner: approval host instruction lists prompt input artifact content as r
     name: 'Approve research',
     kind: 'approval',
     input: {
-      prompt: 'Present artifact `research-packet` from prepare to the user before asking for approval.\n\nArtifacts:\n${{ input.prepare.artifacts }}',
+      prompt: 'Present artifact `reasons-canvas-research` from prepare to the user before asking for approval.\n\nArtifacts:\n${{ input.prepare.artifacts }}',
     },
     output: { schema: path.basename(schemaPath) },
-    next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'prepare', blocked: 'blocked' } },
+    next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'prepare' } },
   };
   writeJson(workflowPath, approvalWorkflow);
 
   expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next before approval inline');
-  const artifactPath = path.join(runDir, 'prepare', 'artifacts', 'research-packet.md');
+  const artifactPath = path.join(runDir, 'prepare', 'artifacts', 'reasons-canvas-research.md');
   mkdirSync(path.dirname(artifactPath), { recursive: true });
-  writeFileSync(artifactPath, '# Research Packet\n\nFull packet body for approval.\n');
+  writeFileSync(artifactPath, '# REASONS Canvas\n\nFull Canvas body for approval.\n');
   const prepareOutputPath = path.join(tempDir, 'approval-inline-instructions-output.json');
   writeJson(prepareOutputPath, {
     outcome: 'ready',
     artifacts: [
       {
-        id: 'research-packet',
+        id: 'reasons-canvas-research',
         content_type: 'text/markdown',
         path: artifactPath,
         summary: 'summary only is insufficient',
@@ -395,7 +393,7 @@ test('runner: approval host instruction lists prompt input artifact content as r
   assert.match(response.orchestratorInstruction, /Use the following compiled approval prompt as the complete source/);
   assert.match(response.orchestratorInstruction, /When the compiled approval prompt lists required-read files or prompt input artifact paths, attach those files through the host\/platform approval mechanism before asking for a decision\./);
   assert.match(response.orchestratorInstruction, /In Codex\/Codex Desktop, attaching means rendering each listed local artifact as a Markdown file link with an absolute target/);
-  assert.match(response.orchestratorInstruction, /\[research-packet\.md\]\(\/absolute\/path\/research-packet\.md\)/);
+  assert.match(response.orchestratorInstruction, /\[reasons-canvas-research\.md\]\(\/absolute\/path\/reasons-canvas-research\.md\)/);
   assert.match(response.orchestratorInstruction, /A plain text path, artifact id, or summary is not an attachment\./);
   assert.match(response.orchestratorInstruction, /Do not replace artifact attachments with summaries, plain paths, or inline full artifact bodies\./);
   assert.match(response.orchestratorInstruction, /If the host cannot attach or render a file link for a listed artifact, state that capability gap explicitly in the approval message and include the path\/reference that could not be attached\./);
@@ -405,14 +403,14 @@ test('runner: approval host instruction lists prompt input artifact content as r
   assert.match(response.orchestratorInstruction, /<paste strict JSON here>/);
   assert.match(response.orchestratorInstruction, /# Approve research/);
   assert.match(response.orchestratorInstruction, /## Required reads/);
-  assert.match(response.orchestratorInstruction, /Prompt input artifact 'research-packet' from 'prepare' \(text\/markdown\):/);
-  assert.match(response.orchestratorInstruction, /prepare\/artifacts\/research-packet\.md/);
+  assert.match(response.orchestratorInstruction, /Prompt input artifact 'reasons-canvas-research' from 'prepare' \(text\/markdown\):/);
+  assert.match(response.orchestratorInstruction, /prepare\/artifacts\/reasons-canvas-research\.md/);
   assert.match(response.orchestratorInstruction, /## Output contract/);
   assert.doesNotMatch(response.orchestratorInstruction, /## Prompt input context/);
   assert.doesNotMatch(response.orchestratorInstruction, /### Prompt input artifact content/);
-  assert.doesNotMatch(response.orchestratorInstruction, /Full packet body for approval\./);
+  assert.doesNotMatch(response.orchestratorInstruction, /Full Canvas body for approval\./);
   assert.match(response.orchestratorInstruction, /## Workflow step prompt/);
-  assert.match(response.orchestratorInstruction, /Present artifact `research-packet`/);
+  assert.match(response.orchestratorInstruction, /Present artifact `reasons-canvas-research`/);
   assert.match(response.orchestratorInstruction, new RegExp(`--lease-token '${leaseToken}'`));
 
 });
@@ -441,7 +439,7 @@ test('runner: next rejects existing unindexed legacy run state instead of mintin
     '--run-id', runId,
     '--workflow', workflowPath,
     '--lease-token', 'legacy-token-must-not-create-authority',
-  ], { cwd: root, encoding: 'utf8' });
+  ], { cwd: root, encoding: 'utf8', env: process.env });
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /requires indexed lease authority/);
@@ -624,7 +622,7 @@ test('runner: CLI resume ignores deleted startup user prompt file and preserves 
 test('runner: non-next modes reject empty user prompt file option', () => {
   const result = runRunner(['instructions', '--run-id', runCase('unsupported-user-prompt-file').runId, '--step-id', 'prepare', '--user-prompt-file', '']);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /usage: node \.\/lib\/entrypoints\/cli\/workflow-runner\.mjs/);
+  assert.match(result.stderr, /usage: bun \.\/lib\/entrypoints\/cli\/workflow-runner\.mjs/);
 });
 
 test('runner: user prompt is included in first worker when workflow starts with approval step', () => {
@@ -677,7 +675,7 @@ test('runner: startup prompt target rejects match-cases with worker and terminal
       name: 'Gate',
       kind: 'approval',
       input: { prompt: 'Approve startup task.' },
-      next: { match: '${{ output.approval }}', cases: { approved: 'prepare', blocked: 'blocked' } },
+      next: { match: '${{ output.approval }}', cases: { approved: 'prepare', rejected: 'done' } },
     },
     ...approvalFirstWorkflow.steps,
   };
@@ -735,7 +733,6 @@ test('runner: startup prompt target rejects dynamic fanout before prompt selecti
     branch_b: approvalWorkflow.steps.branch_b,
     join: approvalWorkflow.steps.join,
     done: approvalWorkflow.steps.done,
-    blocked: approvalWorkflow.steps.blocked,
   };
   approvalWorkflow.steps.join.next = 'done';
   writeJson(workflowPath, approvalWorkflow);
@@ -847,29 +844,6 @@ test('runner: continue --only-instructions prints terminal instruction text', ()
   assert.match(continued.stdout, /status done is the terminal result/);
 });
 
-test('runner: blocked --only-instructions prints terminal blocker data', () => {
-  const { runId } = runCase('blocked-only-instructions');
-  const workflowPath = path.join(tempDir, 'blocked-only-instructions-workflow.json');
-  const workflow = schemaCoveredWorkflow({ prepare: { next: 'blocked' } });
-  writeJson(workflowPath, workflow);
-
-  expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next before blocked only instructions');
-  const output = {
-    ...workerOutput('blocked'),
-    blocker: { reason: 'needs human decision' },
-  };
-  const written = runRunner(['write-output', '--run-id', runId, '--step-id', 'prepare'], { input: JSON.stringify(output), debugSummary: true });
-  assert.equal(written.status, 0, written.stderr);
-  const continued = runRunner(['continue', '--run-id', runId, '--workflow', workflowPath, '--only-instructions']);
-  assert.equal(continued.status, 0, continued.stderr);
-  assert.throws(() => JSON.parse(continued.stdout));
-  assert.match(continued.stdout, /^Supersedes all previous workflow-runner stdout\./);
-  const terminalResponse = terminalResponseFromOrchestratorInstruction(continued.stdout);
-  assert.equal(terminalResponse.status, 'blocked');
-  assert.deepEqual(terminalResponse.baton.blocker, { reason: 'needs human decision' });
-  assert.match(continued.stdout, /status blocked is the terminal result/);
-});
-
 test('runner: write-output rejects --only-instructions because it is not an orchestrator command', () => {
   const { runId, runDir } = runCase('write-output-only-instructions');
   const workflowPath = path.join(tempDir, 'write-output-only-instructions-workflow.json');
@@ -879,7 +853,7 @@ test('runner: write-output rejects --only-instructions because it is not an orch
   expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next before write-output only instructions');
   const written = runRunner(['write-output', '--run-id', runId, '--step-id', 'prepare', '--only-instructions'], { input: JSON.stringify(workerOutput('prepared')) });
   assert.notEqual(written.status, 0);
-  assert.match(written.stderr, /usage: node \.\/lib\/entrypoints\/cli\/workflow-runner\.mjs/);
+  assert.match(written.stderr, /usage: bun \.\/lib\/entrypoints\/cli\/workflow-runner\.mjs/);
   const batonAfterWrite = JSON.parse(readFileSync(path.join(runDir, 'baton.json'), 'utf8'));
   assert.equal(Object.hasOwn(batonAfterWrite.state, 'prepare'), false);
 });
@@ -970,7 +944,6 @@ test('runner: repeated parallel fanout uses cursor branches and latest overwritt
     version: 1,
     start: 'implementation_join',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       implementation_join: {
         name: 'Implementation join',
@@ -1021,7 +994,6 @@ test('runner: repeated parallel fanout uses cursor branches and latest overwritt
         },
       },
       done: { name: 'Done', kind: 'done', input: { prompt: 'Done.' } },
-      blocked: { name: 'Blocked', kind: 'blocked', input: { prompt: 'Blocked.' } },
     },
   };
   writeJson(workflowPath, workflow);

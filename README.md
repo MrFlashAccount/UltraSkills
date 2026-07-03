@@ -137,7 +137,7 @@ If a skill needs a reusable specialist voice:
 - for sibling skills from a skill, use paths like `../<skill-name>/...`; reserve `skills/<skill-name>/...` for repo-map prose, not runtime load paths
 - adapt it to the current phase
 - keep role identity in `roles/`, not in local copied prose
-- after changing role material, regenerate Codex custom agents with `npm run agents:generate`
+- after changing role material, regenerate Codex custom agents with `bun run agents:generate`
 
 ### Reuse a shared reference package
 
@@ -158,13 +158,13 @@ If a skill needs reusable instructions that are not a runnable skill:
 
 ### Validate maintainer changes
 
-- `npm test` runs the repo test suite.
-- `npm run schema-validation:bundle-vendor-ajv` rebuilds the committed `shared/scripts/schema-validation/vendor/ajv.mjs` bundle.
-- `npm run schema-validation:check-vendor-ajv` rebuilds that vendor bundle and fails if the committed file is stale.
-- `npm run workflow:validate` runs deterministic semantic validation for the checked-in flat workflow files under `workflows/*/workflow.json`.
-- `npm run agents:generate` rebuilds generated Codex custom-agent TOML files from `roles/`.
-- `npm run agents:check` regenerates Codex custom-agent TOML files and fails if `agents/` is stale.
-- `npm run validate` runs tests, workflow semantic validation, generated Codex-agent freshness, and the schema-validation vendor bundle freshness check.
+- `bun run test` runs the repo test suite.
+- `bun run schema-validation:bundle-vendor-ajv` rebuilds the committed `shared/scripts/schema-validation/vendor/ajv.mjs` bundle.
+- `bun run schema-validation:check-vendor-ajv` rebuilds that vendor bundle and fails if the committed file is stale.
+- `bun run workflow:validate` runs deterministic semantic validation for the checked-in flat workflow files under `workflows/*/workflow.{toml,json}`.
+- `bun run agents:generate` rebuilds generated Codex custom-agent TOML files from `roles/`.
+- `bun run agents:check` regenerates Codex custom-agent TOML files and fails if `agents/` is stale.
+- `bun run validate` runs tests, workflow semantic validation, generated Codex-agent freshness, and the schema-validation vendor bundle freshness check.
 
 Fresh clones can use the committed schema-validation library dist artifact directly; normal users do not need to build it after cloning. Maintainer checks and the pre-commit hook regenerate it when source changes.
 
@@ -294,8 +294,8 @@ Shared packages are reference material for skill authors and workflow skills. Th
   - Do not use when: the task only needs a standalone workflow or artifact-specific execution with no shared context dependency.
 
 - `shared/templates`
-  - What it is: reusable artifact-format/output templates for research packets, architecture proposals, immutable REASONS Canvas prompt/spec artifacts, implementation plans, implementation handoffs, review handoffs, review verdicts, and fix-pass handoffs.
-  - Use when: a workflow needs a concise packet/proposal/plan/review answer shape with clear source context, evidence, checklist, verdict, and transition fields.
+  - What it is: reusable artifact-format/output templates for immutable REASONS Canvas prompt/spec artifacts, architecture proposals, implementation plans, implementation handoffs, review handoffs, review verdicts, and fix-pass handoffs.
+  - Use when: a workflow needs a concise Canvas/proposal/plan/review answer shape with clear source context, evidence, checklist, verdict, and transition fields.
   - Do not use when: the task is already approved for direct implementation or only needs a short ad hoc note.
 
 ## Codex custom agents
@@ -311,7 +311,7 @@ Source of truth:
 Generation:
 
 ```bash
-npm run agents:generate
+bun run agents:generate
 ```
 
 The generator writes one TOML file per role into `agents/<role>.toml`. Each generated file embeds the full role-local material so the spawned Codex agent can follow the role even when it cannot read this repository at runtime. YAML frontmatter in role material is omitted from embedded instructions.
@@ -330,7 +330,7 @@ Use quoted table names for role names that contain hyphens:
 config_file = "/absolute/path/to/Skills/agents/frontend-taste.toml"
 ```
 
-Do not edit generated TOML files directly. Update the role source under `roles/`, rerun `npm run agents:generate`, and use `npm run agents:check` before opening or updating a PR. Then restart Codex or start a new thread so Codex reloads the agent definitions.
+Do not edit generated TOML files directly. Update the role source under `roles/`, rerun `bun run agents:generate`, and use `bun run agents:check` before opening or updating a PR. Then restart Codex or start a new thread so Codex reloads the agent definitions.
 
 ## Role index
 
@@ -358,7 +358,7 @@ Use them when a skill needs a stable specialist identity across phases.
 - `roles/qa-reliability`
   - Failure handling, rollback/recovery, degraded mode, diagnosability, and test signal.
 - `roles/researcher`
-  - Research packet building, context closure, ambiguity cleanup, and readiness preparation before critique and downstream ownership.
+  - Research Canvas building, context closure, ambiguity cleanup, and readiness preparation before critique and downstream ownership.
 - `roles/security`
   - Exploitability, auth, injection, secrets, and trust-boundary review.
 - `roles/tech-writer`

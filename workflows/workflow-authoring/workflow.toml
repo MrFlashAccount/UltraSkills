@@ -1,0 +1,337 @@
+name = "workflow-authoring"
+version = 1
+description = "Create or materially update workflow-runner workflows, including workflow.toml, output schemas, catalog description, validation coverage, smoke evidence, analyzer findings, human-reviewed improvement approval, and before/after rerun comparison. Use when the user asks to create, design, add, or significantly change a workflow, or when an Orbita task has no suitable existing workflow and the user wants a reusable workflow built. Do not use when the user only wants to run an existing workflow, list workflows, perform ordinary direct implementation, make a small runner engine fix, or add a runner-level analyzer subsystem."
+start = "workflow_design_draft"
+done = "done"
+
+[steps.workflow_design_draft]
+name = "Workflow design draft"
+kind = "worker"
+
+[steps.workflow_design_draft.input]
+role = "architect"
+prompt = '''Design the smallest useful workflow-runner workflow for the user's task. Inspect existing workflows and repo rules. Required reads before designing: workflows/workflow-authoring/references/workflow-authoring-quality-gate.md, skills/orbita/lib/docs/workflow-prompt-input-rendering.md, skills/orbita/lib/docs/workflow-dynamic-next-expressions.md, skills/orbita/lib/docs/workflow-semantic-validation.md, and skills/orbita/lib/validate/validation-agent-instructions.md. Produce a workflow contract with name, path, top-level description, use/do-not-use boundaries, steps, roles, approval gates, output schemas, validation plan, smoke scenario, analyzer finding contract, rerun comparison plan, and non-goals. The contract must include a prompt/schema/route consistency gate: prompt literals naming routes or next targets must match declared steps or schema-allowed values exactly, dynamic routes must be schema-covered, prompt-input expressions must inline real prior step outputs or declare defaults, and blocked branches must not require success-only payload fields. When revising after workflow_design_attack feedback or approve_workflow_design rejection, read prompt input feedback and address it explicitly while preserving approved constraints. Return ready_for_attack when the contract is ready for critic review, or blocked when the workflow should not be created or required context is unavailable. Do not edit files in this step.
+
+Input context:
+Previous workflow design draft:
+${{ input.workflow_design_draft.workflow_contract | default: "No previous workflow design draft." }}
+
+Workflow design attack verdict:
+${{ input.workflow_design_attack.verdict | default: "No previous workflow design attack verdict." }}
+
+Workflow design approval output:
+${{ input.approve_workflow_design | default: "No previous workflow design approval." }}'''
+
+[steps.workflow_design_draft.output]
+template = "../../shared/templates/architecture-proposal-template.md"
+schema = "schemas/workflow-design-draft-output.json"
+
+[steps.workflow_design_draft.next]
+match = "${{ output.outcome }}"
+
+[steps.workflow_design_draft.next.cases]
+ready_for_attack = "workflow_design_attack"
+
+[steps.workflow_design_attack]
+name = "Workflow design attack"
+kind = "worker"
+
+[steps.workflow_design_attack.input]
+role = "critic"
+prompt = '''Attack the proposed workflow contract. Assume the workflow is unnecessary, overcomplicated, too vague, missing validation, or should be a direct skill/task instead. Required read before review: workflows/workflow-authoring/references/workflow-authoring-quality-gate.md. Check routing description quality, step/gate necessity, role ownership, output schemas, smoke evidence, analyzer findings, human-reviewed edit gate, rerun comparison, validation surface, and whether an existing workflow already fits. Also check prompt/schema/route consistency: prompt literals naming next targets must match declared steps or schema enums, dynamic routes must be schema-covered, prompt-input expressions must inline real prior step outputs or have defaults, and blocked branches must validate without success-only fields. Return approved, needs_revision, or blocked.
+
+Input context:
+Workflow contract:
+${{ input.workflow_design_draft.workflow_contract }}'''
+
+[steps.workflow_design_attack.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/workflow-gate-verdict-output.json"
+
+[steps.workflow_design_attack.next]
+match = "${{ output.outcome }}"
+
+[steps.workflow_design_attack.next.cases]
+approved = "approve_workflow_design"
+needs_revision = "workflow_design_draft"
+
+[steps.approve_workflow_design]
+name = "Approve workflow design"
+kind = "approval"
+
+[steps.approve_workflow_design.input]
+prompt = '''Show the workflow contract and critic verdict to the user. Continue only after explicit approval. Return approval approved to implement the workflow, rejected to revise the design, or blocked with the blocker.
+
+Input context:
+Workflow contract:
+${{ input.workflow_design_draft.workflow_contract }}
+
+Critic verdict:
+${{ input.workflow_design_attack.verdict }}
+
+Critic findings:
+${{ input.workflow_design_attack.findings | default: "No critic findings provided." }}'''
+
+[steps.approve_workflow_design.output]
+schema = "schemas/reviewed-improvement-approval-output.json"
+
+[steps.approve_workflow_design.next]
+match = "${{ output.approval }}"
+
+[steps.approve_workflow_design.next.cases]
+approved = "workflow_implementation"
+rejected = "workflow_design_draft"
+
+[steps.workflow_implementation]
+name = "Workflow implementation"
+kind = "worker"
+
+[steps.workflow_implementation.input]
+role = "architect"
+prompt = '''Implement exactly the approved workflow contract. Add or update workflow.toml, schemas, and any minimal docs/tests needed for catalog, validation, and deterministic smoke comparison. Required reads before editing: workflows/workflow-authoring/references/workflow-authoring-quality-gate.md, skills/orbita/lib/docs/workflow-prompt-input-rendering.md, skills/orbita/lib/docs/workflow-dynamic-next-expressions.md, skills/orbita/lib/docs/workflow-semantic-validation.md, and skills/orbita/lib/validate/validation-agent-instructions.md. Keep workflow routing in top-level description. On the first pass, implement the approved workflow design. On later passes after reviewed_edit_intent, apply only the human-reviewed improvement boundary from reviewed_edit_intent and preserve the original approved design constraints. Before returning implemented, self-check workflow.toml plus every touched output schema for prompt/schema/route consistency: prompt literals naming routes or next targets must match declared steps or schema-allowed values exactly, blocked outputs must validate without success-only fields, and prompt-input references must be renderable or defaulted. When revising after workflow_implementation_attack feedback or rerun_comparison needs_revision feedback, read prompt input feedback and address it explicitly while preserving the approved workflow design and reviewed edit boundary. Use an explicit isolated WORKFLOW_RUNS_ROOT for smoke/test contexts, clean it up, and verify no source-tree .workflow-runs artifacts are created. Run the narrow validation available for the changed workflow and report changed files plus validation results. Return implemented or blocked.
+
+Input context:
+Approved workflow contract:
+${{ input.workflow_design_draft.workflow_contract }}
+
+Workflow design attack verdict:
+${{ input.workflow_design_attack.verdict }}
+
+Workflow design approval output:
+${{ input.approve_workflow_design }}
+
+Baseline smoke evidence:
+${{ input.smoke_evidence | default: "No smoke evidence has been collected yet." }}
+
+Analyzer findings:
+${{ input.analyzer_findings | default: "No analyzer findings have been produced yet." }}
+
+Reviewed improvement approval:
+${{ input.approve_reviewed_improvement | default: "No reviewed improvement approval has been recorded." }}
+
+Reviewed edit intent:
+${{ input.reviewed_edit_intent | default: "No reviewed edit intent has been captured." }}
+
+Rerun comparison:
+${{ input.rerun_comparison | default: "No rerun comparison has been produced." }}
+
+Previous implementation output:
+${{ input.workflow_implementation | default: "No previous workflow implementation." }}
+
+Implementation attack verdict:
+${{ input.workflow_implementation_attack.verdict | default: "No previous implementation attack verdict." }}
+
+Implementation attack findings:
+${{ input.workflow_implementation_attack.findings | default: "No implementation attack findings." }}'''
+
+[steps.workflow_implementation.output]
+template = "../../shared/templates/implementer-handoff-template.md"
+schema = "schemas/workflow-implementation-output.json"
+
+[steps.workflow_implementation.next]
+match = "${{ output.outcome }}"
+
+[steps.workflow_implementation.next.cases]
+implemented = "smoke_evidence"
+
+[steps.smoke_evidence]
+name = "Smoke evidence"
+kind = "worker"
+
+[steps.smoke_evidence.input]
+role = "qa-reliability"
+prompt = '''Collect deterministic smoke evidence for the workflow-authoring task. Use the same smoke scenario before and after any reviewed edit. Use an explicit isolated WORKFLOW_RUNS_ROOT, clean it up, and include a negative source-tree artifact leakage check. Prefer a smoke path that can expose prompt/schema/route drift: blocked branches, needs_revision/rereview gates, dynamic route fanout, or prompt-input interpolation, depending on the changed workflow. Emit run id, history.md path, artifact refs, expected behavior, actual outcome, and failure summary. If reviewed_edit_intent does not exist, collect baseline smoke evidence and return baseline_collected with smoke_evidence. If reviewed_edit_intent exists, first preserve the previous baseline from input.smoke_evidence, then collect rerun smoke evidence for the same scenario and return rerun_collected with both baseline_smoke_evidence and rerun_smoke_evidence. Do not return rerun_collected unless both before and after runs are present. Do not authorize edits or inspect private runner state.
+
+Input context:
+Approved workflow contract:
+${{ input.workflow_design_draft.workflow_contract }}
+
+Implementation output:
+${{ input.workflow_implementation }}
+
+Reviewed edit intent:
+${{ input.reviewed_edit_intent | default: "No reviewed edit intent has been captured." }}
+
+Previous smoke evidence:
+${{ input.smoke_evidence | default: "No previous smoke evidence." }}'''
+
+[steps.smoke_evidence.output]
+template = "../../shared/templates/implementer-handoff-template.md"
+schema = "schemas/smoke-evidence-output.json"
+
+[steps.smoke_evidence.next]
+match = "${{ output.outcome }}"
+
+[steps.smoke_evidence.next.cases]
+baseline_collected = "analyzer_findings"
+rerun_collected = "rerun_comparison"
+
+[steps.analyzer_findings]
+name = "Analyzer findings"
+kind = "worker"
+
+[steps.analyzer_findings.input]
+role = "architect"
+prompt = '''Analyze the workflow-authoring implementation and smoke evidence. Required read before analysis: workflows/workflow-authoring/references/workflow-authoring-quality-gate.md. Emit evidence-backed findings with evidence path, affected workflow contract surface, severity, and next action. Findings are recommendations only and must not authorize edits directly. Treat prompt/schema/route drift as a finding even when deterministic validation passes: prompt literals naming nonexistent next targets, success-only fields required by blocked outputs, missing prompt-input defaults for conditionally absent step outputs, or smoke evidence that misses the risky route. Return ready_for_review when a human-reviewed improvement decision is needed, no_changes when no improvement edit should be proposed, or blocked with the blocker.
+
+Input context:
+Approved workflow contract:
+${{ input.workflow_design_draft.workflow_contract }}
+
+Implementation output:
+${{ input.workflow_implementation }}
+
+Smoke evidence:
+${{ input.smoke_evidence }}
+
+Previous rerun comparison:
+${{ input.rerun_comparison | default: "No previous rerun comparison." }}'''
+
+[steps.analyzer_findings.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/analyzer-findings-output.json"
+
+[steps.analyzer_findings.next]
+match = "${{ output.outcome }}"
+
+[steps.analyzer_findings.next.cases]
+ready_for_review = "approve_reviewed_improvement"
+no_changes = "workflow_implementation_attack"
+
+[steps.approve_reviewed_improvement]
+name = "Approve reviewed improvement"
+kind = "approval"
+
+[steps.approve_reviewed_improvement.input]
+prompt = '''Show the smoke evidence and analyzer findings to the user. Continue into improvement edits only after explicit human approval. Return approval approved to capture reviewed edit intent, rejected to skip improvement edits and continue to final implementation attack, or blocked with the blocker.
+
+Input context:
+Approved workflow contract:
+${{ input.workflow_design_draft.workflow_contract }}
+
+Smoke evidence:
+${{ input.smoke_evidence }}
+
+Analyzer findings:
+${{ input.analyzer_findings }}'''
+
+[steps.approve_reviewed_improvement.output]
+schema = "schemas/approval-output.json"
+
+[steps.approve_reviewed_improvement.next]
+match = "${{ output.approval }}"
+
+[steps.approve_reviewed_improvement.next.cases]
+approved = "reviewed_edit_intent"
+rejected = "workflow_implementation_attack"
+
+[steps.reviewed_edit_intent]
+name = "Reviewed edit intent"
+kind = "worker"
+
+[steps.reviewed_edit_intent.input]
+role = "architect"
+prompt = '''Capture the human-reviewed approval boundary before any improvement edit. Convert approve_reviewed_improvement and analyzer_findings into a reviewed edit intent record with approved findings, explicit allowed edit surfaces, explicit non-goals, and required validation evidence. Do not edit workflow files in this step. Return ready_for_implementation or blocked.
+
+Input context:
+Approved workflow contract:
+${{ input.workflow_design_draft.workflow_contract }}
+
+Smoke evidence:
+${{ input.smoke_evidence }}
+
+Analyzer findings:
+${{ input.analyzer_findings }}
+
+Reviewed improvement approval:
+${{ input.approve_reviewed_improvement }}'''
+
+[steps.reviewed_edit_intent.output]
+template = "../../shared/templates/architecture-proposal-template.md"
+schema = "schemas/reviewed-edit-intent-output.json"
+
+[steps.reviewed_edit_intent.next]
+match = "${{ output.outcome }}"
+
+[steps.reviewed_edit_intent.next.cases]
+ready_for_implementation = "workflow_implementation"
+
+[steps.rerun_comparison]
+name = "Rerun comparison"
+kind = "worker"
+
+[steps.rerun_comparison.input]
+role = "qa-reliability"
+prompt = '''Compare the same smoke scenario before and after the reviewed edit. Read the rerun smoke package from input.smoke_evidence and require both baseline_smoke_evidence and rerun_smoke_evidence before comparing. Emit before and after run ids, history.md paths, artifact refs, expected behavior, actual outcomes, failure summaries, and outcome delta. Verify the rerun used explicit isolated WORKFLOW_RUNS_ROOT and did not create source-tree .workflow-runs artifacts. Return compared when the reviewed edit is ready for final implementation attack, needs_revision when evidence requires another analyzer-reviewed improvement pass, or blocked.
+
+Input context:
+Approved workflow contract:
+${{ input.workflow_design_draft.workflow_contract }}
+
+Reviewed edit intent:
+${{ input.reviewed_edit_intent }}
+
+Implementation output:
+${{ input.workflow_implementation }}
+
+Rerun smoke evidence package:
+${{ input.smoke_evidence }}'''
+
+[steps.rerun_comparison.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/rerun-comparison-output.json"
+
+[steps.rerun_comparison.next]
+match = "${{ output.outcome }}"
+
+[steps.rerun_comparison.next.cases]
+compared = "workflow_implementation_attack"
+needs_revision = "analyzer_findings"
+
+[steps.workflow_implementation_attack]
+name = "Workflow implementation attack"
+kind = "worker"
+
+[steps.workflow_implementation_attack.input]
+role = "critic"
+prompt = '''Review the implemented workflow against the approved contract. Required read before review: workflows/workflow-authoring/references/workflow-authoring-quality-gate.md. Check that catalog description is useful for routing, workflow files/schemas exist, smoke evidence was collected with isolated WORKFLOW_RUNS_ROOT, analyzer findings cannot authorize edits directly, human-reviewed improvement approval guards edits, rerun comparison exists when reviewed edits were applied, validation was run or the blocker is explicit, and the implementation did not change runner engine behavior unnecessarily. Also perform a semantic prompt/schema/route pass over workflow.toml and every touched output schema: prompt literals naming next targets must match declared steps or schema enums, blocked branches must not require success-only payloads, prompt-input expressions must render real previous outputs or have defaults, and smoke evidence must cover the riskiest route. Return approved, needs_revision, or blocked.
+
+Input context:
+Approved workflow contract:
+${{ input.workflow_design_draft.workflow_contract }}
+
+Implementation output:
+${{ input.workflow_implementation }}
+
+Smoke evidence:
+${{ input.smoke_evidence | default: "No smoke evidence." }}
+
+Analyzer findings:
+${{ input.analyzer_findings | default: "No analyzer findings." }}
+
+Reviewed improvement approval:
+${{ input.approve_reviewed_improvement | default: "No reviewed improvement approval." }}
+
+Reviewed edit intent:
+${{ input.reviewed_edit_intent | default: "No reviewed edit intent." }}
+
+Rerun comparison:
+${{ input.rerun_comparison | default: "No rerun comparison." }}'''
+
+[steps.workflow_implementation_attack.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/workflow-gate-verdict-output.json"
+
+[steps.workflow_implementation_attack.next]
+match = "${{ output.outcome }}"
+
+[steps.workflow_implementation_attack.next.cases]
+approved = "done"
+needs_revision = "workflow_implementation"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = "Workflow has been implemented, smoke-tested, analyzer-reviewed, human-reviewed when improvements were needed, compared after reviewed edits, and reviewed."

@@ -3,13 +3,14 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { renderStepPrompts } from '../use-cases/runtime/parallel/render.mjs';
 import { selectState } from '../runtime/state-selection.mjs';
 import { renderWorkflowPrompt } from '../entities/Template/index.mjs';
 import { validateAgainstOutputSchema } from '../use-cases/runtime/output/output-schema-validation.mjs';
 import { loadWorkflowResources } from '../persistence/workflow-resources/runtime-reader.mjs';
+import { loadOutputSchema } from '../persistence/workflow-resources/output-schema-loader.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), 'prompt-rendering-check-')));
@@ -55,13 +56,13 @@ writeFileSync(path.join(tempDir, 'approval-output.schema.json'), `${JSON.stringi
 }, null, 2)}\n`);
 mkdirSync(path.join(tempDir, 'templates'), { recursive: true });
 writeFileSync(path.join(tempDir, 'templates', 'implementation-plan-template.md'), '## Implementation plan\nReturn implementation plan.\n');
-writeFileSync(path.join(tempDir, 'templates', 'research-packet-template.md'), '## Research packet\nReturn research packet.\n');
+writeFileSync(path.join(tempDir, 'templates', 'reasons-canvas-template.md'), '## REASONS Canvas\nReturn research Canvas.\n');
 writeFileSync(path.join(tempDir, 'templates', 'review-verdict-template.md'), '## Review verdict\nReturn review verdict.\n');
 
 function outputContract(name = 'worker') {
   const templates = {
     worker: 'templates/implementation-plan-template.md',
-    research: 'templates/research-packet-template.md',
+    research: 'templates/reasons-canvas-template.md',
     review: 'templates/review-verdict-template.md',
   };
   const schemas = {
@@ -78,20 +79,19 @@ const schemaWorkflowDoc = {
     version: 1,
     start: 'worker_step',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       worker_step: {
         name: 'Worker step',
         kind: 'worker',
         input: { template: 'worker.md', role: 'backend', prompt: 'Run worker.' },
         output: outputContract(),
-        next: { match: '${{ output.outcome }}', cases: { ready: 'approval_step', retry: 'worker_step', blocked: 'blocked' } },
+        next: { match: '${{ output.outcome }}', cases: { ready: 'approval_step', retry: 'worker_step' } },
       },
       approval_step: {
         name: 'Approval step',
         kind: 'approval',
         input: { prompt: 'Approve.' },
-        next: { match: '${{ output.approval }}', cases: { approved: 'direct_next_worker', rejected: 'worker_step', blocked: 'blocked' } },
+        next: { match: '${{ output.approval }}', cases: { approved: 'direct_next_worker', rejected: 'worker_step' } },
       },
       direct_next_worker: {
         name: 'Direct next worker',
@@ -101,7 +101,6 @@ const schemaWorkflowDoc = {
         next: 'done',
       },
       done: { name: 'Done', kind: 'done', input: { prompt: 'Finished.' } },
-      blocked: { name: 'Blocked', kind: 'blocked', input: { prompt: 'Blocked.' } },
     },
 
 };
@@ -134,7 +133,7 @@ function baton(overrides = {}) {
   };
 }
 
-function runNode(args, cwd = root) {
+function runBun(args, cwd = root) {
   return spawnSync(process.execPath, args, { cwd, encoding: 'utf8' });
 }
 
@@ -182,7 +181,7 @@ function expectCliResult(label, result, expectSuccess) {
   return response;
 }
 
-after(() => {
+afterAll(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -956,7 +955,6 @@ test('workflow resource refs resolve from the workflow package directory after p
     version: 1,
     start: 'worker_step',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       worker_step: {
         name: 'Worker step',
@@ -966,7 +964,6 @@ test('workflow resource refs resolve from the workflow package directory after p
         next: 'done',
       },
       done: { name: 'Done', kind: 'done' },
-      blocked: { name: 'Blocked', kind: 'blocked' },
     },
   };
   const workflowPath = path.join(workflowDir, 'workflow.json');
@@ -983,18 +980,18 @@ test('workflow resource refs resolve from the workflow package directory after p
 
   const compiled = render(workflowPath);
   assertMarkersInOrder(compiled.prompt, ['# Local input template', '<!-- output template: templates/output.md -->', '## Local output template', '<!-- output schema: schemas/output.schema.json -->']);
-  assert.equal(validateAgainstOutputSchema({ workflow, workflowPath, schemaRef: 'schemas/output.schema.json', output: { outcome: 'ready' }, repositoryRoot: repoDir }).ok, true);
+  assert.equal(validateAgainstOutputSchema({ schema: loadOutputSchema({ workflow, workflowPath, schemaRef: 'schemas/output.schema.json', repositoryRoot: repoDir }).schema, schemaRef: 'schemas/output.schema.json', output: { outcome: 'ready' } }).ok, true);
 
   cpSync(workflowDir, copiedWorkflowDir, { recursive: true });
   const copiedWorkflowPath = path.join(copiedWorkflowDir, 'workflow.json');
   const copied = render(copiedWorkflowPath);
   assertMarkersInOrder(copied.prompt, ['# Local input template', '## Local output template', '"const": "ready"']);
-  assert.equal(validateAgainstOutputSchema({ workflow, workflowPath: copiedWorkflowPath, schemaRef: 'schemas/output.schema.json', output: { outcome: 'ready' }, repositoryRoot: repoDir }).ok, true);
+  assert.equal(validateAgainstOutputSchema({ schema: loadOutputSchema({ workflow, workflowPath: copiedWorkflowPath, schemaRef: 'schemas/output.schema.json', repositoryRoot: repoDir }).schema, schemaRef: 'schemas/output.schema.json', output: { outcome: 'ready' } }).ok, true);
 
   mkdirSync(path.join(repoDir, 'workflows', 'portable', 'schemas'), { recursive: true });
   writeFileSync(path.join(repoDir, 'workflows', 'portable', 'schemas', 'output.schema.json'), JSON.stringify({ type: 'object' }));
   assert.throws(
-    () => validateAgainstOutputSchema({ workflow, workflowPath, schemaRef: 'workflows/portable/schemas/output.schema.json', output: { outcome: 'ready' }, repositoryRoot: repoDir }),
+    () => loadOutputSchema({ workflow, workflowPath, schemaRef: 'workflows/portable/schemas/output.schema.json', repositoryRoot: repoDir }),
     /output\.schema not found: workflows\/portable\/schemas\/output\.schema\.json/,
   );
 });
@@ -1081,7 +1078,6 @@ test('prompt renderer: shared template refs are explicit and reusable across wor
     version: 1,
     start: 'worker_step',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       worker_step: {
         name: 'Worker step',
@@ -1091,7 +1087,6 @@ test('prompt renderer: shared template refs are explicit and reusable across wor
         next: 'done',
       },
       done: { name: 'Done', kind: 'done' },
-      blocked: { name: 'Blocked', kind: 'blocked' },
     },
   };
 
@@ -1138,11 +1133,9 @@ test('prompt renderer: workflow resource refs cannot escape repository root', ()
     version: 1,
     start: 'worker_step',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       worker_step: { name: 'Worker step', kind: 'worker', input: { prompt: 'Run.' }, next: 'done' },
       done: { name: 'Done', kind: 'done' },
-      blocked: { name: 'Blocked', kind: 'blocked' },
     },
   };
 
@@ -1165,7 +1158,7 @@ test('prompt renderer: workflow resource refs cannot escape repository root', ()
   const escapedSchema = path.relative(workflowDir, path.join(outsideDir, 'secret.schema.json'));
   schemaWorkflow.steps.worker_step.output = { schema: escapedSchema };
   assert.throws(
-    () => validateAgainstOutputSchema({ workflow: schemaWorkflow, workflowPath, schemaRef: escapedSchema, output: {}, repositoryRoot: repoDir }),
+    () => loadOutputSchema({ workflow: schemaWorkflow, workflowPath, schemaRef: escapedSchema, repositoryRoot: repoDir }),
     /output schema escapes repository root/,
   );
 
@@ -1315,7 +1308,7 @@ test('prompt renderer: validation feedback appends to prompt arrays', () => {
   const batonPath = writeJson('prompt-array-feedback-baton.json', baton());
   const outputPath = writeJson('prompt-array-feedback-output.json', { outcome: 'invalid' });
 
-  const result = runNode(['skills/orbita/lib/entrypoints/cli/workflow-interpreter.mjs', 'apply', workflowPath, batonPath, outputPath]);
+  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', workflowPath, batonPath, outputPath]);
   const response = expectCliResult('prompt-array-feedback', result, true);
 
   assert.equal(response.steps[0].step.input.prompt.includes('Run worker.\n\nUse strict output.'), true);
@@ -1328,7 +1321,7 @@ test('CLI render: prompt input expressions cannot read aggregate runtime state',
   const workflowPath = writeJson('runtime-reserved-render-workflow.json', workflowDoc);
   const batonPath = writeJson('runtime-reserved-render-baton.json', baton({ cursor: 'approval_step', status: 'running', state: { artifacts: [{ producerStepId: 'worker_step', artifact: { id: 'packet', content_type: 'text/markdown', path: '/runs/worker_step/artifacts/packet.md', summary: 'leaked' } }], results: [] } }));
 
-  const result = runNode(['skills/orbita/lib/entrypoints/cli/workflow-interpreter.mjs', 'render', workflowPath, batonPath]);
+  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]);
   const response = expectCliResult('runtime-reserved-render', result, false);
 
   assert.match(response.stderr, /input step 'artifacts' is not a declared workflow step/);
@@ -1345,7 +1338,7 @@ test('CLI render: fixture returns compiledPrompt and does not mutate baton', () 
   const batonPath = writeJson('fixture-render-baton.json', baton({ state: { artifacts: [], results: [], worker_step: { outcome: 'ready', summary: 'ready' } } }));
   const before = readFileSync(batonPath, 'utf8');
 
-  const result = runNode(['skills/orbita/lib/entrypoints/cli/workflow-interpreter.mjs', 'render', workflowPath, batonPath]);
+  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]);
   const response = expectCliResult('fixture-render', result, true);
 
   assert.equal(readFileSync(batonPath, 'utf8'), before, 'render mutated baton file');
@@ -1376,14 +1369,14 @@ test('CLI render: diagnostics are included only when explicitly requested', () =
 
   const defaultResponse = expectCliResult(
     'render-diagnostics-default',
-    runNode(['skills/orbita/lib/entrypoints/cli/workflow-interpreter.mjs', 'render', workflowPath, batonPath]),
+    runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]),
     true,
   );
   assert.equal(Object.hasOwn(defaultResponse.steps[0].compiledPrompt, 'diagnostics'), false);
 
   const diagnosticsResponse = expectCliResult(
     'render-diagnostics-opt-in',
-    runNode(['skills/orbita/lib/entrypoints/cli/workflow-interpreter.mjs', 'render', '--diagnostics', workflowPath, batonPath]),
+    runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', '--diagnostics', workflowPath, batonPath]),
     true,
   );
   assert.deepEqual(diagnosticsResponse.steps[0].compiledPrompt.diagnostics.map((diagnostic) => diagnostic.code), ['default_prompt_used']);

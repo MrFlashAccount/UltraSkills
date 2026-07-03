@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { assertPersistedRunState } from '../persistence/run-state/persisted-state-schema.mjs';
 import { readPersistedRunState } from '../persistence/run-state/PersistedRunStateReader.mjs';
 import { writeJsonAtomic } from '../persistence/run-state/atomic-file.mjs';
@@ -11,7 +11,7 @@ import { writePersistedRunStateUpdate } from '../persistence/run-state/Persisted
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'persisted-run-state-'));
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 function writeJson(filePath, value) {
   mkdirSync(path.dirname(filePath), { recursive: true });
@@ -46,7 +46,7 @@ function response(nextBaton = baton()) {
 function setupRunDir(name, initialBaton = baton()) {
   const runId = `persisted-state-test-${process.pid}-${name}`;
   const workflowPath = path.join(tempDir, `${name}-workflow.json`);
-  writeJson(workflowPath, { name: name.replace(/_/g, '-'), version: 1, start: 'prepare', done: 'done', blocked: 'blocked', steps: { prepare: { name: 'Prepare', kind: 'worker', output: { template: 'output.md' }, next: 'done' }, done: { name: 'Done', kind: 'done' }, blocked: { name: 'Blocked', kind: 'blocked' } } });
+  writeJson(workflowPath, { name: name.replace(/_/g, '-'), version: 1, start: 'prepare', done: 'done', steps: { prepare: { name: 'Prepare', kind: 'worker', output: { template: 'output.md' }, next: 'done' }, done: { name: 'Done', kind: 'done' } } });
   const paths = resolveRunPaths({ runId, workflowPath });
   rmSync(paths.runDir, { recursive: true, force: true });
   mkdirSync(paths.runnerDir, { recursive: true });
@@ -99,7 +99,7 @@ test('persisted-state writer acquires run-state lock before writing', async () =
       history: { source: 'test', baton: baton({ cursor: 'done', status: 'done' }) },
     }),
     (error) => {
-      assert.match(error.message, /continue is already in progress for runId/);
+      assert.match(error.message, /run-state lock contention timed out for runId/);
       assert.match(error.message, new RegExp(paths.runId));
       assert.equal(error.message.includes(paths.runDir), false);
       assert.equal(error.message.includes(paths.continueLockPath), false);
@@ -126,8 +126,8 @@ test('persisted-state writer recovers existing pending journal before writing a 
   });
 
   await writePersistedRunStateUpdate(paths, {
-    baton: baton({ cursor: 'blocked', status: 'blocked' }),
-    history: { source: 'test-new-commit', baton: baton({ cursor: 'blocked', status: 'blocked' }) },
+    baton: baton({ cursor: 'done', status: 'done' }),
+    history: { source: 'test-new-commit', baton: baton({ cursor: 'done', status: 'done' }) },
   });
 
   const history = readFileSync(paths.historyPath, 'utf8');

@@ -2,18 +2,19 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
-import researchCriticWorkflowDoc from '../../../../workflows/research-critic/workflow.json' with { type: 'json' };
 import { Workflow } from '../entities/Workflow/index.mjs';
-import { loadInstructions as runnerLoadInstructions, next as runnerNext } from '../entrypoints/api/workflowRunner.mjs';
+import { loadInstructions as runnerLoadInstructions, next as runnerNext } from '../entrypoints/workflow-runner-command.mjs';
 import { validateWorkflowFile } from '../entrypoints/api/validateWorkflow.mjs';
 import { workflowSemanticValidationOptions } from '../use-cases/workflow-semantic-validation.mjs';
-import { readAllowedRoles, readOutputSchemas } from '../persistence/workflow-resources/workflow-file-reader.mjs';
+import { read, readAllowedRoles, readOutputSchemas } from '../persistence/workflow-resources/workflow-file-reader.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
+const RESEARCH_CRITIC_WORKFLOW_PATH = path.join(REPO_ROOT, 'workflows/research-critic/workflow.toml');
+const researchCriticWorkflowDoc = read(RESEARCH_CRITIC_WORKFLOW_PATH).toJSON();
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-validation-parity-'));
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 function writeJson(filePath, value) {
   mkdirSync(path.dirname(filePath), { recursive: true });
@@ -26,7 +27,6 @@ function parityWorkflowDoc(schemaRef) {
     version: 1,
     start: 'prepare',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       prepare: {
         name: 'Prepare',
@@ -36,13 +36,12 @@ function parityWorkflowDoc(schemaRef) {
         next: 'done',
       },
       done: { name: 'Done', kind: 'done' },
-      blocked: { name: 'Blocked', kind: 'blocked' },
     },
   };
 }
 
 test('validate-workflow, direct Workflow validation, Workflow.validateOutputSchemas, and workflow-runner share baton $ref semantic-validation parity', async () => {
-  const workflowPath = path.join(REPO_ROOT, 'workflows/research-critic/workflow.json');
+  const workflowPath = RESEARCH_CRITIC_WORKFLOW_PATH;
   const outputSchemas = readOutputSchemas({ workflow: researchCriticWorkflowDoc, workflowPath, repositoryRoot: REPO_ROOT });
   const allowedRoles = readAllowedRoles({ repositoryRoot: REPO_ROOT });
   const validationOptions = workflowSemanticValidationOptions({ outputSchemas, allowedRoles });
@@ -57,7 +56,7 @@ test('validate-workflow, direct Workflow validation, Workflow.validateOutputSche
   });
   assert.equal(schemaValidation.ok, true);
   assert.equal(schemaValidation.warnings.length, 0);
-  assert.equal(schemaValidation.schemasByStep.has('save_research_packet'), true);
+  assert.equal(schemaValidation.schemasByStep.has('save_research_canvas'), true);
   assert.deepEqual(validation, {
     ok: true,
     workflow: 'research-critic',

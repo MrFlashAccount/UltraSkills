@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
-import { continueRun as runnerContinue, loadInstructions as runnerLoadInstructions, next as runnerNext, writeOutput as runnerWriteOutput } from '../entrypoints/api/workflowRunner.mjs';
-import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../entrypoints/api/runner/runner-command-builder.mjs';
+import { afterAll, test } from 'bun:test';
+import { continueRun as runnerContinue, loadInstructions as runnerLoadInstructions, next as runnerNext, writeOutput as runnerWriteOutput } from '../entrypoints/workflow-runner-command.mjs';
+import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../entrypoints/internal/runner/runner-command-builder.mjs';
 import { claimWorkflowRunAtRoot, registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
 import { hashLeaseToken } from '../persistence/run-state/lease-authority.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
@@ -18,7 +18,6 @@ const workflowDoc = {
   version: 1,
   start: 'prepare',
   done: 'done',
-  blocked: 'blocked',
   steps: {
     prepare: {
       name: 'Prepare',
@@ -28,7 +27,6 @@ const workflowDoc = {
       next: 'done',
     },
     done: { name: 'Done', kind: 'done', input: { prompt: 'Finished.' } },
-    blocked: { name: 'Blocked', kind: 'blocked', input: { prompt: 'Blocked.' } },
   },
 };
 
@@ -83,7 +81,7 @@ async function writeCurrentOutput({ runId, workflowPath, leaseToken, summary, no
   });
 }
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('runner fairness: missing-token API next does not create runtime artifacts for an unregistered run', async () => {
   const workflowPath = path.join(tempDir, 'missing-token-next-no-artifacts.json');

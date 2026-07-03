@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { after } from 'node:test';
-import { continueRun, loadInstructions, next as runnerNext, writeOutput } from '../entrypoints/api/workflowRunner.mjs';
+import { afterAll, test } from 'bun:test';
+import { continueRun, loadInstructions, next as runnerNext, writeOutput } from '../entrypoints/workflow-runner-command.mjs';
 import { claimWorkflowRun, registerWorkflowRun } from '../entrypoints/api/workflowRuns.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-binding-'));
 
-after(() => rmSync(tempDir, { recursive: true, force: true }));
+afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
@@ -21,7 +21,6 @@ function workflowDoc(name, prompt = 'Prepare branch.') {
     version: 1,
     start: 'prepare',
     done: 'done',
-    blocked: 'blocked',
     steps: {
       prepare: {
         name: 'Prepare',
@@ -31,7 +30,6 @@ function workflowDoc(name, prompt = 'Prepare branch.') {
         next: 'done',
       },
       done: { name: 'Done', kind: 'done' },
-      blocked: { name: 'Blocked', kind: 'blocked' },
     },
   };
 }

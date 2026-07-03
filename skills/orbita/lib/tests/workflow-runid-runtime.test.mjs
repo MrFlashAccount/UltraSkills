@@ -1,11 +1,11 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { next } from '../entrypoints/api/workflowRunner.mjs';
+import { next } from '../entrypoints/workflow-runner-command.mjs';
 import { assertSafeRunId, resolveRunPaths } from '../persistence/run-state/paths.mjs';
 import { readRunsIndex, runsIndexPathsForRoot, upsertRunIndexEntry } from '../persistence/run-state/run-index.mjs';
 import { assertRunsIndexSchema } from '../persistence/run-state/schema/runs-index-schema.mjs';
@@ -96,37 +96,30 @@ test('installed plugin layout starts a catalog-created run from the skill cwd', 
     cpSync(path.join(root, 'skills/orbita/lib'), path.join(skillRoot, 'lib'), { recursive: true });
     cpSync(path.join(root, 'shared'), path.join(pluginRoot, 'shared'), { recursive: true });
     mkdirSync(workflowsRoot, { recursive: true });
-    writeFileSync(path.join(workflowsRoot, 'workflow.json'), `${JSON.stringify({
-      name: 'dev-harness',
-      description: 'Minimal installed-layout workflow fixture.',
-      version: 1,
-      start: 'prepare',
-      done: 'done',
-      blocked: 'blocked',
-      steps: {
-        prepare: {
-          name: 'Prepare',
-          kind: 'worker',
-          input: {
-            prompt: 'Prepare the installed-layout answer.',
-          },
-          output: {
-            template: 'runid-output.md',
-          },
-          next: 'done',
-        },
-        done: {
-          name: 'Done',
-          kind: 'done',
-          input: { prompt: 'Finished.' },
-        },
-        blocked: {
-          name: 'Blocked',
-          kind: 'blocked',
-          input: { prompt: 'Blocked.' },
-        },
-      },
-    }, null, 2)}\n`);
+    writeFileSync(path.join(workflowsRoot, 'workflow.toml'), `name = "dev-harness"
+description = "Minimal installed-layout workflow fixture."
+version = 1
+start = "prepare"
+done = "done"
+
+[steps.prepare]
+name = "Prepare"
+kind = "worker"
+next = "done"
+
+[steps.prepare.input]
+prompt = "Prepare the installed-layout answer."
+
+[steps.prepare.output]
+template = "runid-output.md"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = "Finished."
+`);
     writeFileSync(path.join(workflowsRoot, 'runid-output.md'), 'Return strict JSON.\n');
 
     const catalog = spawnSync(process.execPath, ['./lib/entrypoints/cli/workflow-catalog.mjs', 'list', '--json'], {
@@ -135,7 +128,7 @@ test('installed plugin layout starts a catalog-created run from the skill cwd', 
     });
     assert.equal(catalog.status, 0, catalog.stderr);
     const workflowPath = JSON.parse(catalog.stdout).workflows.find((workflow) => workflow.name === 'dev-harness')?.path;
-    assert.equal(realpathSync(workflowPath), realpathSync(path.join(pluginRoot, 'workflows/dev-harness/workflow.json')));
+    assert.equal(realpathSync(workflowPath), realpathSync(path.join(pluginRoot, 'workflows/dev-harness/workflow.toml')));
 
     const create = spawnSync(process.execPath, [
       './lib/entrypoints/cli/workflow-runs.mjs',

@@ -13,22 +13,43 @@ Deterministic code owns the workflow loop:
 - return host action requests;
 - apply host outputs already accepted by the validating writer;
 - persist baton state and history;
-- repeat until another host action is needed or the workflow reaches `done` / `blocked`.
+- repeat until another host action is needed or the workflow reaches `done`.
 
 The host adapter is thin. It executes requests with whatever capabilities the environment provides, writes each host action result through the runner's validating writer, and calls the runner again after outputs are accepted. It does not choose transitions.
 
 ## Runner commands
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runner.mjs next --lease-token <token> --run-id <run-id> [--workflow <workflow.json>] [--user-prompt <text> | --user-prompt-file <path>]
-node ./lib/entrypoints/cli/workflow-runner.mjs write-output --lease-token <token> --run-id <run-id> --step-id <id> [--debug-summary-file <path>] [--json <json>] [--workflow <workflow.json>]
-node ./lib/entrypoints/cli/workflow-runner.mjs continue --lease-token <token> --run-id <run-id> [--workflow <workflow.json>]
-node ./lib/entrypoints/cli/workflow-runner.mjs instructions [--follow-up] --run-id <run-id> --step-id <id> --lease-token <token>
-node ./lib/entrypoints/cli/workflow-runner.mjs bind-agent --run-id <run-id> --step-id <id> --agent-id <agent-id> --lease-token <token>
-node ./lib/entrypoints/cli/workflow-runner.mjs record-orchestrator --lease-token <token> --run-id <run-id> [--json <json>] [--workflow <workflow.json>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs next --lease-token <token> --run-id <run-id> [--workflow <workflow-file>] [--user-prompt <text> | --user-prompt-file <path>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs write-output --lease-token <token> --run-id <run-id> --step-id <id> [--debug-summary-file <path>] [--json <json>] [--workflow <workflow-file>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs continue --lease-token <token> --run-id <run-id> [--workflow <workflow-file>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs instructions [--follow-up] --run-id <run-id> --step-id <id> --lease-token <token>
+bun ./lib/entrypoints/cli/workflow-runner.mjs bind-agent --run-id <run-id> --step-id <id> --agent-id <agent-id> --lease-token <token>
+bun ./lib/entrypoints/cli/workflow-runner.mjs record-orchestrator --lease-token <token> --run-id <run-id> [--json <json>] [--workflow <workflow-file>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs list-pointer-transitions --lease-token <token> --run-id <run-id> [--workflow <workflow-file>]
+bun ./lib/entrypoints/cli/workflow-runner.mjs move-pointer --lease-token <token> --run-id <run-id> --transition-id <id> [--acknowledge-retained-state] [--workflow <workflow-file>]
 ```
 
-`next` and `continue` also accept `--only-instructions`; with that flag stdout is exactly the `orchestratorInstruction` text instead of the full JSON host response. `next` creates the run files if needed and returns the current host work. `write-output` validates and accepts one current request output directly into baton/state, then returns only acceptance JSON or validation errors; it does not accept `--only-instructions`, does not drive orchestrator navigation, and must not accept or mutate worker binding metadata. `record-orchestrator` accepts one host/orchestrator debug JSON note for the current non-terminal host action and appends a bounded, redacted, deduplicated history entry without changing baton state. `continue` applies already-accepted outputs from baton/state, persists the new baton, and returns the next host work. `instructions` prints only the compiled instructions for one current requested step, does not accept `--only-instructions`, and fails for unknown or unsafe step ids. `bind-agent` validates the same explicit lease and updates only top-level `baton.workerBindings[stepId]` with the supplied opaque worker id. Current requests and instructions are rendered from the indexed workflow plus `baton.json`; durable runner state is baton plus history plus advisory top-level worker bindings. Every write-capable, bind-capable, or instruction-loading command validates a fresh explicit `--lease-token` before creating run directories, locks, index entries, baton/history, binding metadata, or durable commit files; `runId` is identity only, and durable lease state keeps only token hash, token epoch, and lease expiry.
+`--workflow` accepts either a TOML or JSON workflow file. `next` and `continue` also accept `--only-instructions`; with that flag stdout is exactly the `orchestratorInstruction` text instead of the full JSON host response. `next` creates the run files if needed and returns the current host work. `write-output` validates and accepts one current request output directly into baton/state, then returns only acceptance JSON or validation errors; it does not accept `--only-instructions`, does not drive orchestrator navigation, and must not accept or mutate worker binding metadata. `record-orchestrator` accepts one host/orchestrator debug JSON note for the current non-terminal host action and appends a bounded, redacted, deduplicated history entry without changing baton state. `continue` applies already-accepted outputs from baton/state, persists the new baton, and returns the next host work. `instructions` prints only the compiled instructions for one current requested step, does not accept `--only-instructions`, and fails for unknown or unsafe step ids. `bind-agent` validates the same explicit lease and updates only top-level `baton.workerBindings[stepId]` with the supplied opaque worker id. Current requests and instructions are rendered from the indexed workflow plus `baton.json`; durable runner state is baton plus history plus advisory top-level worker bindings. Every write-capable, bind-capable, or instruction-loading command validates a fresh explicit `--lease-token` before creating run directories, locks, index entries, baton/history, binding metadata, or durable commit files; `runId` is identity only, and durable lease state keeps only token hash, token epoch, and lease expiry.
+
+The API functions `listPointerTransitions` and `movePointer` are exposed through
+the CLI modes `list-pointer-transitions` and `move-pointer`. They are operator
+recovery commands, not normal workflow-loop commands. Both validate a fresh
+explicit `--lease-token`. `listPointerTransitions` is a logical read but remains
+lease-required because it exposes bounded pointer/history and retained-output
+recovery metadata. It returns only current pointer, adjacent observed transition
+options, unsupported reasons, and retained-state warnings; it must not initialize
+missing run state, append history, update the run index, mutate baton/current
+pointer state, or emit raw baton, raw history, private paths, lease data, or
+token-bearing commands. `movePointer` accepts one listed adjacent transition id
+and mutates only baton cursor/status through the existing lease, lock,
+validation, durable writer, history append, and run-index path. It
+must not roll back, prune, rewrite, or clean `baton.state`, accepted outputs,
+artifacts/results, worker bindings, prompt markers, attempts, or existing
+history. Terminal `done`/`blocked` runs and parallel/array cursors are
+unsupported in the first pointer-recovery slice. If the target has retained
+accepted output that a later `continue` may reuse, the command requires explicit
+`--acknowledge-retained-state`.
 
 Commands returned in host responses are rendered with the absolute path to `workflow-runner.mjs` and an explicit absolute `--runs-root`, quoted for shell execution, so a worker or host can run them from any current working directory. The relative examples above are only for humans running the CLI from the skill root.
 
@@ -47,7 +68,7 @@ When host work is needed, the runner returns:
 ```json
 {
   "status": "needs_host_actions",
-  "orchestratorInstruction": "Supersedes all previous workflow-runner stdout.\nExecute every host request in this JSON and wait until all requested actions finish: [{\"id\":\"step_id\",\"stepId\":\"step_id\",\"action\":\"run_worker\",\"preferredAgentId\":null,\"loadInstructionsCommand\":\"node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>\",\"loadFollowupInstructionsCommand\":\"node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --follow-up --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>\",\"bindAgentCommand\":\"node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' bind-agent --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --agent-id <agent-id> --lease-token <lease-token>\"}]\nThen run:\nnode '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' continue --run-id 'run_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token> --only-instructions\nFollow that stdout instruction exactly.",
+  "orchestratorInstruction": "Supersedes all previous workflow-runner stdout.\nExecute every host request in this JSON and wait until all requested actions finish: [{\"id\":\"step_id\",\"stepId\":\"step_id\",\"action\":\"run_worker\",\"preferredAgentId\":null,\"loadInstructionsCommand\":\"bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>\",\"loadFollowupInstructionsCommand\":\"bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --follow-up --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>\",\"bindAgentCommand\":\"bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' bind-agent --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --agent-id <agent-id> --lease-token <lease-token>\"}]\nThen run:\nbun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' continue --run-id 'run_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token> --only-instructions\nFollow that stdout instruction exactly.",
   "baton": {},
   "requests": [
     {
@@ -55,30 +76,35 @@ When host work is needed, the runner returns:
       "stepId": "step_id",
       "action": "run_worker",
       "preferredAgentId": null,
-      "loadInstructionsCommand": "node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>",
-      "loadFollowupInstructionsCommand": "node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --follow-up --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>",
-      "bindAgentCommand": "node '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' bind-agent --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --agent-id <agent-id> --lease-token <lease-token>"
+      "loadInstructionsCommand": "bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>",
+      "loadFollowupInstructionsCommand": "bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' instructions --follow-up --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --lease-token <lease-token>",
+      "bindAgentCommand": "bun '/absolute/path/to/skills/orbita/lib/entrypoints/cli/workflow-runner.mjs' bind-agent --run-id 'run_id' --step-id 'step_id' --runs-root '/home/user/.orbita/workflow-runs/v1' --agent-id <agent-id> --lease-token <lease-token>"
     }
   ]
 }
 ```
 
-`orchestratorInstruction` is a machine-visible directive for the host/orchestrator. Runner stdout is an active directive, not durable history: each new `next` or `continue --only-instructions` stdout supersedes every previous runner stdout. When `status` is `needs_host_actions`, the host must treat the response as non-terminal: finish every request in the inline JSON request array, run the embedded `continue --only-instructions` command, and follow the next directive returned by runner stdout. `run_worker` requests are executed by starting or restoring a worker/subagent with a command string selected from the request: use `loadFollowupInstructionsCommand` only when the host can continue or restore the opaque `preferredAgentId`, otherwise use `loadInstructionsCommand` for a fresh worker. The selected command is embedded in the strict worker bootstrap and watchdog policy from `skills/orbita/SKILL.md`; the full bootstrap text intentionally lives in the skill instead of every runner response. After the host knows the actual selected worker id, it runs `bindAgentCommand` after replacing only the literal `<agent-id>` placeholder with the shell-quoted worker id; this writes only `baton.workerBindings[stepId]` and does not use `write-output`. `wait_for_approval` requests are executed by the orchestrator itself; approval requests must not carry `preferredAgentId`, `bindAgentCommand`, or `loadFollowupInstructionsCommand`. The runner stdout inlines the compiled approval prompt for each current approval request, and the orchestrator uses that prompt as the complete source for the user-facing approval message, including required-read files, prompt input context, prompt input artifact required-read paths when present, workflow step prompt, output contract, and validating writer command. When required-read files or prompt input artifact paths are present, the host must attach those files through the approval mechanism instead of replacing them with summaries, plain paths, or inline full artifact bodies. In Codex/Codex Desktop, attaching means rendering each listed local artifact as a Markdown file link with an absolute target, for example `[research-packet.md](/absolute/path/research-packet.md)`; a plain text path, artifact id, or summary is not an attachment. If attachment/file-link rendering is unavailable, the approval message must state that capability gap and name the affected path/reference. Only `done` and `blocked` are terminal; terminal `--only-instructions` stdout includes minified terminal response JSON with `status` and `baton` so the host has final result or blocker details without falling back to full JSON mode.
+`orchestratorInstruction` is a machine-visible directive for the host/orchestrator. Runner stdout is an active directive, not durable history: each new `next` or `continue --only-instructions` stdout supersedes every previous runner stdout. When `status` is `needs_host_actions`, the host must treat the response as non-terminal: finish every request in the inline JSON request array, run the embedded `continue --only-instructions` command, and follow the next directive returned by runner stdout. `resolve_worker_blocker` requests are executed by the orchestrator itself: resolve the bounded `recoverableBlocker`, write structured resolution JSON through `writeResolutionCommand`, then continue. The next response dispatches the owning worker step with resolved recovery context. `run_worker` requests are executed by starting or restoring a worker/subagent with a command string selected from the request: use `loadFollowupInstructionsCommand` only when the host can continue or restore the opaque `preferredAgentId`, otherwise use `loadInstructionsCommand` for a fresh worker. For resolved recoverable blockers, both command paths render the same bounded resolution context into the loaded worker instructions. The selected command is embedded in the strict worker bootstrap and watchdog policy from `skills/orbita/SKILL.md`; the full bootstrap text intentionally lives in the skill instead of every runner response. After the host knows the actual selected worker id, it runs `bindAgentCommand` after replacing only the literal `<agent-id>` placeholder with the shell-quoted worker id; this writes only `baton.workerBindings[stepId]` and does not use `write-output`. `wait_for_approval` requests are executed by the orchestrator itself; approval requests must not carry `preferredAgentId`, `bindAgentCommand`, or `loadFollowupInstructionsCommand`. The runner stdout inlines the compiled approval prompt for each current approval request, and the orchestrator uses that prompt as the complete source for the user-facing approval message, including required-read files, prompt input context, prompt input artifact required-read paths when present, workflow step prompt, output contract, and validating writer command. When required-read files or prompt input artifact paths are present, the host must attach those files through the approval mechanism instead of replacing them with summaries, plain paths, or inline full artifact bodies. In Codex/Codex Desktop, attaching means rendering each listed local artifact as a Markdown file link with an absolute target, for example `[reasons-canvas-research.md](/absolute/path/reasons-canvas-research.md)`; a plain text path, artifact id, or summary is not an attachment. If attachment/file-link rendering is unavailable, the approval message must state that capability gap and name the affected path/reference. Only `done` is terminal; blocked request outputs are recoverable pauses that become orchestrator resolution requests before worker continuation.
 
 Runner stdout commands include the explicit lease token when the runner was called with one. If a runner-returned command still contains a `<lease-token>` placeholder, hosts must substitute the fresh explicit lease token before executing it; the runner does not read a token from environment variables.
 
-The public host request contract is intentionally narrow: requested action identity and step identity are always public. `run_worker` requests additionally expose only `loadInstructionsCommand`, `loadFollowupInstructionsCommand`, `bindAgentCommand`, and `preferredAgentId`; they must not expose `attemptId`, agent objects, lifecycle state, session registries, transcripts, output paths, or other control-plane metadata. `preferredAgentId` is either an opaque worker id from top-level `baton.workerBindings[stepId]` or `null` when no binding exists. Approval requests may additionally include output-schema metadata when the workflow step declares `output.schema`, but must not include worker reuse fields. `outputSchema` is the raw workflow reference. `resolvedOutputSchema` is the preferred host-adapter contract when present: it contains `{ ref, schema }`, where `ref` is the same raw workflow reference and `schema` is the JSON payload describing the normalized answer expected back from the host. Neither field exposes runner filesystem paths. Instruction storage paths are private runner state. Output paths are not part of the request contract.
+The public host request contract is intentionally narrow: requested action identity and step identity are always public. `resolve_worker_blocker` requests additionally expose only bounded `recoverableBlocker` details and `writeResolutionCommand`; they must not expose worker reuse fields. `run_worker` requests additionally expose only `loadInstructionsCommand`, `loadFollowupInstructionsCommand`, `bindAgentCommand`, `preferredAgentId`, and bounded `recoverableBlocker` details when a resolved recovery is being continued; they must not expose `attemptId`, agent objects, lifecycle state, session registries, transcripts, output paths, or other control-plane metadata. `preferredAgentId` is either an opaque worker id from top-level `baton.workerBindings[stepId]` or `null` when no binding exists. Approval requests may additionally include output-schema metadata when the workflow step declares `output.schema`, but must not include worker reuse fields. `outputSchema` is the raw workflow reference. `resolvedOutputSchema` is the preferred host-adapter contract when present: it contains `{ ref, schema }`, where `ref` is the same raw workflow reference and `schema` is the JSON payload describing the normalized answer expected back from the host. Neither field exposes runner filesystem paths. Instruction storage paths are private runner state. Output paths are not part of the request contract.
 
 Terminal statuses are:
 
 - `done`
-- `blocked`
 
 A CLI failure is an execution error and should be reported by the host adapter instead of forcing a workflow transition.
 
 ## Output capture
 
-The host wrapper writes each request result through `workflow-runner write-output`. The command validates strict JSON against the current request/step output schema and accepts the normalized value directly into baton/state. For `run_worker` requests, the same command also requires the generated `--debug-summary-file` path and reads that side-channel only after the JSON output validates. It is a pure task-output path: it must not accept, store, emit, or mutate worker binding/control-plane metadata. There is no output-path handoff from worker to orchestrator, and `workflow-runner continue` does not accept output paths.
+The host wrapper writes each request result through `workflow-runner write-output`. The command validates strict JSON against the current request/step output schema and accepts the normalized value directly into baton/state. For `resolve_worker_blocker`, the accepted value is a structured `resolution` object and is applied only as recovery metadata; it does not advance the workflow step. For `run_worker` requests, the same command also requires the generated `--debug-summary-file` path and reads that side-channel only after the JSON output validates. It is a pure task-output path: it must not accept, store, emit, or mutate worker binding/control-plane metadata. There is no output-path handoff from worker to orchestrator, and `workflow-runner continue` does not accept output paths.
+
+Retained accepted-output detection for pointer recovery uses the same per-step
+accepted-output surface in `baton.state[stepId]` that `continue` reads. Pointer
+recovery must not invent a separate scanner over arbitrary baton state. If the
+accepted-output lookup is extracted for reuse, it remains runner-owned and must
+preserve current `continue` reuse semantics.
 
 `write-output` owns accepted-output history projection. After schema validation, artifact path validation, and required worker debug-summary side-channel validation succeed, it may append a deterministic entry to the run's managed `history.md` from the accepted output, accepted step metadata, and the bounded side-channel debug summary. This entry is part of the same durable output acceptance path as the baton update; hidden host transcripts, subagent sessions, private prompts, lease tokens, instruction storage paths, and worker/control-plane metadata must never be scraped or written into history.
 
@@ -127,7 +153,7 @@ Missing host capability is represented as blocked output, not as a transition de
 For each requested step, accept output first:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runner.mjs write-output --lease-token "$WORKFLOW_RUN_TOKEN" --run-id "$RUN_ID" --step-id "step_id" --debug-summary-file "$RUN_DIR/step_id/debug-summary.md" --workflow "$WORKFLOW" <<'JSON'
+bun ./lib/entrypoints/cli/workflow-runner.mjs write-output --lease-token "$WORKFLOW_RUN_TOKEN" --run-id "$RUN_ID" --step-id "step_id" --debug-summary-file "$RUN_DIR/step_id/debug-summary.md" --workflow "$WORKFLOW" <<'JSON'
 { "outcome": "ready", "artifacts": [], "results": [] }
 JSON
 ```
@@ -135,7 +161,7 @@ JSON
 After every current request has accepted output, continue without `--output`:
 
 ```bash
-node ./lib/entrypoints/cli/workflow-runner.mjs continue --lease-token "$WORKFLOW_RUN_TOKEN" --run-id "$RUN_ID" --workflow "$WORKFLOW" --only-instructions
+bun ./lib/entrypoints/cli/workflow-runner.mjs continue --lease-token "$WORKFLOW_RUN_TOKEN" --run-id "$RUN_ID" --workflow "$WORKFLOW" --only-instructions
 ```
 
 For parallel branch requests, call `write-output` once per requested `stepId`; `continue` collects the accepted values from baton/state into the existing portable `{ "steps": { ... } }` envelope internally before applying workflow state.
@@ -144,11 +170,20 @@ For parallel branch requests, call `write-output` once per requested `stepId`; `
 
 `history.md` is the single human-facing flight recorder for one run. It is deterministic per run and may contain lifecycle/control-flow events, accepted worker output summaries, required bounded worker debug-summary side-channel content, terminal outcomes, and exact relevant public errors when they are safely attributable. It is not a transcript store and not a private runner-state export.
 
-`continue` owns transition and terminal history. Transition entries are written only while applying already-accepted outputs and advancing baton state, so the visible history stays aligned with durable workflow state. Terminal `done` and `blocked` outcomes must be reconstructable from the transition/terminal history without reading private request or transcript state.
+`continue` owns transition and terminal history. Transition entries are written only while applying already-accepted outputs and advancing baton state, so the visible history stays aligned with durable workflow state. Terminal `done` outcomes must be reconstructable from the transition/terminal history without reading private request or transcript state.
 
 Public runner failure history is allowed only when all attribution checks pass: the command has a safe run directory, the lease context matches the run being operated on, and the target is the managed `history.md` path for that run. The recorded text must be exact relevant public error text after host-safe redaction, bounded after normalization to 2 KiB or 40 lines, whichever limit is hit first, with an explicit truncation marker when shortened. If any context is unsafe or missing, no failure-history write occurs. Durable retry/recovery must not duplicate failure entries, corrupt history, or advance misleading history ahead of baton state.
 
 History entries must preserve the public boundary: no hidden transcripts, session registries, worker lifecycle internals, private prompts, lease tokens, raw instruction storage paths, or other host control-plane metadata. Artifact manifests may be referenced only through accepted output metadata; rich worker debug-summary content may be read only through the exact generated `--debug-summary-file` side-channel and only under the enabled policy above. Orchestrator debug notes must go through `record-orchestrator`; the host must not inspect or mutate `history.md` directly.
+
+Pointer recovery history is append-only and bounded. A successful `movePointer`
+entry records the transition id, direction, before/after cursor/status edge, and
+retained-output step ids or `none`. State preservation is enforced by the
+pointer-only mutation boundary and validation, not by copying full state into the
+history entry. The entry must not copy full accepted outputs, raw baton/history,
+private paths, lease tokens, or token hashes. Existing history content is never
+rewritten by pointer
+recovery.
 
 ## OpenClaw mapping example
 
@@ -176,7 +211,7 @@ OpenClaw is one possible host adapter:
 - If no exact worker-side validating writer protocol is provided, the wrapper treats that as a blocked host capability instead of capturing a fallback output file.
 - The wrapper calls `workflow-runner.mjs continue` without `--output` after every current request has been accepted by `write-output`.
 - If OpenClaw cannot provide the requested capability, the wrapper writes a blocked JSON output through `write-output` when possible.
-- The adapter repeats until the runner returns a terminal status.
+- The adapter repeats until the runner returns terminal `done`.
 
 This mapping is not part of the portable workflow contract. Other hosts can execute the same requests differently as long as they accept compatible JSON through `write-output` before `continue`. If a host action produces markdown or a report, the wrapper should wrap it in the step's expected JSON output or store it as a referenced artifact; it should not pass arbitrary markdown as runner output unless the step schema/runtime explicitly expects that.
 
@@ -187,4 +222,6 @@ This mapping is not part of the portable workflow contract. Other hosts can exec
 - `workflow-runner.mjs continue` uses an internal per-run lock guard so only one host continue operation mutates a single run at a time; lock paths are private runner state.
 - The CLI shape is small on purpose and can be renamed after review.
 
-`./lib/entrypoints/cli/start-run.mjs` is legacy initialization/inspection only. It requires the same lease token carrier and never exposes private baton/history paths. It does not accept `--user-prompt` or `--user-prompt-file`; use `workflow-runner next` for startup prompt capture and instruction rendering.
+Run initialization and instruction rendering are owned by `workflow-runner next`.
+No legacy initialization or inspection CLI is part of the supported runtime
+surface.
