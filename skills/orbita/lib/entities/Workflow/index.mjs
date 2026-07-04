@@ -8,6 +8,7 @@ import { extractPromptInterpolations } from '../../runtime/prompt-interpolation.
 import { assertRoleDirectoryName } from '../../runtime/role-ref.mjs';
 import { RESERVED_STATE_KEYS, DANGEROUS_OBJECT_KEYS, isDangerousObjectKey, isReservedStateKey } from '../../runtime/state-keys.mjs';
 import { statusForStep } from '../../runtime/step-status.mjs';
+import { assertLoopPolicies } from '../../runtime/loop-policies.mjs';
 import { assertTransitionDescriptorTargets, normalizeTransitionNext } from '../../runtime/transition-next.mjs';
 import { compileWorkflowOutputSchema } from './schema-ref-validation.mjs';
 
@@ -575,6 +576,59 @@ function assertTransitionSemantics(workflow, schemasByStep, { requireSchemaCover
   }
 }
 
+function edgeRows(stepId, targetSets) {
+  const rows = [];
+  for (const targets of targetSets) {
+    const fanout = targets.length > 1;
+    for (const target of targets) rows.push({ from: stepId, to: target, fanout });
+  }
+  return rows;
+}
+
+function collectExpandedRouteGraphEdges(workflow, schemasByStep, { requireSchemaCoverage = true, requireExpressionRequiredPaths = true, allowUnreachableCases = false } = {}) {
+  const edges = [];
+  for (const [stepId, step] of Object.entries(workflow.steps)) {
+    if (!Object.hasOwn(step, 'next')) continue;
+    const descriptor = normalizeTransitionNext(step.next);
+
+    if (descriptor.kind === 'static-target') {
+      edges.push({ from: stepId, to: descriptor.target, fanout: false });
+      continue;
+    }
+    if (descriptor.kind === 'static-parallel') {
+      edges.push(...edgeRows(stepId, [descriptor.targets]));
+      continue;
+    }
+    if (descriptor.kind === 'dynamic-target') {
+      const aggregate = assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expression: descriptor.expression, field: 'next', requireSchemaCoverage, requireExpressionRequiredPaths });
+      edges.push(...edgeRows(stepId, targetSetsForDynamicTarget(aggregate)));
+      continue;
+    }
+    if (descriptor.kind === 'match-cases') {
+      const possibleCaseKeys = assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descriptor, field: 'next', requireSchemaCoverage, requireExpressionRequiredPaths, allowUnreachableCases });
+      edges.push(...edgeRows(stepId, targetSetsForMatchCases(possibleCaseKeys, descriptor.cases)));
+      continue;
+    }
+
+    const itemTargetSets = [];
+    for (const [index, item] of descriptor.items.entries()) {
+      if (item.kind === 'static-target') {
+        itemTargetSets.push([[item.target]]);
+      } else if (item.kind === 'dynamic-target') {
+        const aggregate = assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expression: item.expression, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths });
+        itemTargetSets.push(targetSetsForDynamicTarget(aggregate));
+      } else if (item.kind === 'match-cases') {
+        const possibleCaseKeys = assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descriptor: item, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths, allowUnreachableCases });
+        itemTargetSets.push(targetSetsForMatchCases(possibleCaseKeys, item.cases));
+      }
+    }
+    let combinations = [[]];
+    for (const targetSets of itemTargetSets) combinations = combineTargetSets(combinations, targetSets);
+    edges.push(...edgeRows(stepId, combinations));
+  }
+  return edges;
+}
+
 function assertPromptExpressionSemantics(workflow, schemasByStep, { requireSchemaCoverage = true } = {}) {
   for (const [stepId, step] of Object.entries(workflow.steps)) {
     const prompt = normalizePromptText(step.input?.prompt, { fieldName: `steps.${stepId}.input.prompt` });
@@ -620,6 +674,13 @@ function validateWorkflowDocument(workflow, options = {}) {
     allowUnreachableCases: options.allowUnreachableCases ?? false,
     allowOpenTransitionSchemas: options.allowOpenTransitionSchemas ?? false,
   });
+  if (workflow.loopPolicies !== undefined) {
+    assertLoopPolicies(workflow, collectExpandedRouteGraphEdges(workflow, schemasByStep, {
+      requireSchemaCoverage: options.requireSchemaCoverage ?? true,
+      requireExpressionRequiredPaths: options.requireExpressionRequiredPaths ?? true,
+      allowUnreachableCases: options.allowUnreachableCases ?? false,
+    }));
+  }
   assertPromptExpressionSemantics(workflow, schemasByStep, {
     requireSchemaCoverage: options.requireSchemaCoverage ?? true,
   });

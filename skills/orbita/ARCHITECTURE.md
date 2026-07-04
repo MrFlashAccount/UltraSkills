@@ -369,6 +369,50 @@ commands, raw instruction commands, private prompts, hidden transcripts, raw
 instruction paths, preferred agent ids, bind-agent commands, and unnecessary
 host control-plane metadata in browser-visible DTOs.
 
+### Workflow Loop Policies
+
+Workflow loop limits are an opt-in workflow-document contract. A workflow may
+declare `loopPolicies` to bound valid semantic cycles such as review -> fix ->
+review or approval -> revision -> approval. Workflows without `loopPolicies`
+must validate and run with unchanged behavior.
+
+The intended shape is static-graph first:
+
+- the workflow document owns policy definitions;
+- validation expands a finite route graph from literal `next`, `match/cases`,
+  approval/user routes, and schema-enumerable dynamic `next` expressions;
+- validation detects cyclic regions with SCC/self-loop analysis;
+- each policy must select exactly one unambiguous detected region;
+- runtime counts selected valid internal route events, not full human-described
+  cycle rounds;
+- `maxIterations` exhausts when the next selected internal event would exceed
+  the limit, and runtime routes to the configured `onLimit` target instead of
+  the original cycle target;
+- baton stores only loop progress counters in a loop-specific namespace, never
+  workflow policy definitions.
+
+Loop policies are separate from output.schema retry. Invalid worker or approval
+output that is retried by output.schema validation must not increment loop
+policy progress. The retry key shape `<stepId>:output.schema` remains reserved
+for output.schema attempts; loop policy progress must use a distinct namespace.
+
+Rejected primary models:
+
+- per-transition `cycleId` labels;
+- arbitrary named step scopes that create cycles manually;
+- runtime history, repeated cursor, backward-jump, or graph traversal heuristics;
+- prompt-only loop limits.
+
+Consecutive pass/success early exit is not part of the first loopPolicies
+architecture slice. Do not document or implement it as available behavior unless
+a later approved architecture contract adds reset, precedence, and success
+target semantics.
+
+Parallel/fanout support is conservative for the first slice. A policy that
+depends on ambiguous branch-local, cross-branch, non-convergent, or
+non-enumerable fanout routing must fail validation instead of being guessed at
+runtime.
+
 ## Dependency Rules
 
 Allowed:
@@ -381,6 +425,14 @@ Allowed:
 - `runtime helpers -> entities`
 - `runtime helpers -> file contracts`
 - `persistence -> DTOs/records/file contracts`
+- Workflow loop policy validation may depend on workflow contracts, output
+  schema target enumerability, route graph expansion, and SCC/self-loop
+  detection; it must not depend on baton history or host adapter state.
+- Runtime loop policy enforcement may depend on compiled validation metadata,
+  the selected valid route event, and baton progress counters; it must not own
+  workflow policy definitions.
+- Baton schema may define loop progress storage, but workflow schema remains
+  the policy source of truth.
 
 Forbidden:
 

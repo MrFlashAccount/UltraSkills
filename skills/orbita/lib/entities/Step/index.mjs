@@ -4,6 +4,7 @@
  */
 import { readPath } from './expressions/index.mjs';
 import { invariant } from '../../errors.mjs';
+import { applyLoopPolicyTransition } from '../../runtime/loop-policies.mjs';
 import { applyOutputToBatonState } from '../../runtime/baton-state.mjs';
 import { selectState } from '../../runtime/state-selection.mjs';
 import { statusForStep } from '../../runtime/step-status.mjs';
@@ -216,12 +217,18 @@ export class Step {
 
   applyOutput({ baton, output, workflow, attempts, storeStepOutput = ['worker', 'approval'].includes(this.data.kind) } = {}) {
     const wf = workflowData(workflow);
-    const transition = this.resolveConcreteTargets(baton, wf, output);
+    const resolvedTransition = this.resolveConcreteTargets(baton, wf, output);
+    const { transition, loopProgress } = applyLoopPolicyTransition({
+      workflow: wf,
+      baton,
+      stepId: this.id,
+      transition: resolvedTransition,
+    });
     const batonData = cloneBoundaryData(baton);
     const outputStepId = storeStepOutput ? this.id : undefined;
     const withOutput = {
       ...batonData,
-      state: applyOutputToBatonState(batonData, output, attempts ?? transition.attempts, outputStepId),
+      state: applyOutputToBatonState(batonData, output, attempts ?? transition.attempts, outputStepId, { loopProgress }),
     };
 
     if (transition.targetStepIds) {

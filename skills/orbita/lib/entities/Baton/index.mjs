@@ -3,7 +3,7 @@
  */
 import { WorkflowRuntimeError } from '../../errors.mjs';
 import { assertCentralArtifactMetadata } from './artifact-contract.mjs';
-import { applyOutputToBatonState } from '../../runtime/baton-state.mjs';
+import { LOOP_PROGRESS_STATE_KEY, applyOutputToBatonState } from '../../runtime/baton-state.mjs';
 import { normalizeCursor } from '../../runtime/cursor.mjs';
 import { statusForStep } from '../../runtime/step-status.mjs';
 
@@ -41,6 +41,19 @@ function validateAggregateArtifacts(state) {
   }
 }
 
+function validateLoopProgress(state) {
+  const progress = state[LOOP_PROGRESS_STATE_KEY];
+  if (progress === undefined) return;
+  if (!progress || typeof progress !== 'object' || Array.isArray(progress)) {
+    throw new WorkflowRuntimeError(`baton semantic validation failed: state.${LOOP_PROGRESS_STATE_KEY} must be an object of counters`);
+  }
+  for (const [policyId, value] of Object.entries(progress)) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new WorkflowRuntimeError(`baton semantic validation failed: state.${LOOP_PROGRESS_STATE_KEY}.${policyId} must be a non-negative integer counter`);
+    }
+  }
+}
+
 export class Baton {
   constructor(batonData) {
     this.data = cloneBoundaryData(batonData);
@@ -57,6 +70,7 @@ export class Baton {
       throw new WorkflowRuntimeError('baton semantic validation failed: baton requires cursor, status, and object state');
     }
     validateAggregateArtifacts(this.data.state);
+    validateLoopProgress(this.data.state);
     const cursorStepIds = normalizeCursor(this.data.cursor);
     if (cursorStepIds.length > 1 && this.data.status !== 'running') {
       throw new WorkflowRuntimeError(`baton status '${this.data.status}' is inconsistent with parallel cursor; expected 'running'`);
