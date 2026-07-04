@@ -242,6 +242,21 @@ test('loopPolicies count selected internal route events and reroute to onLimit o
   assert.equal(exhausted.baton.cursor, 'blocked');
   assert.equal(exhausted.baton.status, 'done');
   assert.deepEqual(exhausted.baton.state.$loopProgress, { review_fix: 2 });
+
+  const singletonArrayWorkflow = loopWorkflow();
+  singletonArrayWorkflow.steps.review.next = ['fix'];
+  const singletonFirst = runApply('loop-singleton-review-to-fix', loopBaton(), { outcome: 'ready', route: 'fix' }, true, singletonArrayWorkflow);
+  assert.equal(singletonFirst.baton.cursor, 'fix');
+  assert.deepEqual(singletonFirst.baton.state.$loopProgress, { review_fix: 1 });
+
+  const singletonSecond = runApply('loop-singleton-fix-to-review', singletonFirst.baton, { outcome: 'ready' }, true, singletonArrayWorkflow);
+  assert.equal(singletonSecond.baton.cursor, 'review');
+  assert.deepEqual(singletonSecond.baton.state.$loopProgress, { review_fix: 2 });
+
+  const singletonExhausted = runApply('loop-singleton-exhausted', singletonSecond.baton, { outcome: 'ready', route: 'fix' }, true, singletonArrayWorkflow);
+  assert.equal(singletonExhausted.baton.cursor, 'blocked');
+  assert.equal(singletonExhausted.baton.status, 'done');
+  assert.deepEqual(singletonExhausted.baton.state.$loopProgress, { review_fix: 2 });
 });
 
 test('output schema retries do not increment loop policy progress', () => {

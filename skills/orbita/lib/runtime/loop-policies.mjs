@@ -9,7 +9,7 @@ function fail(message) {
 
 function transitionTargetsForDescriptor(descriptor) {
   if (descriptor.kind === NEXT_KIND.STATIC_TARGET) return { targetSets: [[descriptor.target]], fanout: false };
-  if (descriptor.kind === NEXT_KIND.STATIC_PARALLEL) return { targetSets: [descriptor.targets], fanout: true };
+  if (descriptor.kind === NEXT_KIND.STATIC_PARALLEL) return { targetSets: [descriptor.targets], fanout: descriptor.targets.length > 1 };
   if (descriptor.kind === NEXT_KIND.MATCH_CASES) {
     return {
       targetSets: Object.values(descriptor.cases).map((target) => (typeof target === 'string' ? [target] : [...target])),
@@ -94,12 +94,37 @@ function sortedUnique(values) {
   return [...new Set(values)].sort();
 }
 
+function reachesAny(adjacency, start, targets) {
+  const visited = new Set();
+  const queue = [start];
+  while (queue.length > 0) {
+    const stepId = queue.shift();
+    if (visited.has(stepId)) continue;
+    visited.add(stepId);
+    if (targets.has(stepId)) return true;
+    for (const target of adjacency.get(stepId) ?? []) queue.push(target);
+  }
+  return false;
+}
+
+function singleTransitionTarget(transition) {
+  if (transition.targetStepId) return transition.targetStepId;
+  if (transition.targetStepIds?.length === 1) return transition.targetStepIds[0];
+  return undefined;
+}
+
+function retargetSingleTransition(transition, targetStepId) {
+  const { targetStepIds, ...rest } = transition;
+  return { ...rest, targetStepId };
+}
+
 export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow)) {
   const policies = workflow.loopPolicies;
   if (policies === undefined) return;
   if (!policies || typeof policies !== 'object' || Array.isArray(policies)) fail('loopPolicies must be an object keyed by policy id');
 
   const regions = cyclicRegions(workflow, edges);
+  const adjacency = adjacencyFromEdges(workflow, edges);
   const claimedSteps = new Map();
   for (const [policyId, policy] of Object.entries(policies)) {
     if (isDangerousObjectKey(policyId)) fail(`loopPolicy id '${policyId}' is unsafe as a JavaScript object key`);
@@ -117,6 +142,10 @@ export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow
     if (matches.length !== 1) {
       fail(`loopPolicy '${policyId}' steps must exactly match one unambiguous SCC or self-loop region`);
     }
+    const region = new Set(matches[0]);
+    if (reachesAny(adjacency, policy.onLimit, region)) {
+      fail(`loopPolicy '${policyId}' onLimit target '${policy.onLimit}' routes back into the exhausted loop region`);
+    }
 
     for (const edge of edges) {
       if (steps.includes(edge.from) && edge.fanout) fail(`loopPolicy '${policyId}' does not support fanout transition from step '${edge.from}'`);
@@ -126,9 +155,10 @@ export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow
 
 export function applyLoopPolicyTransition({ workflow, baton, stepId, transition }) {
   const policies = workflow.loopPolicies;
-  if (!policies || transition.targetStepIds) return { transition };
+  const targetStepId = singleTransitionTarget(transition);
+  if (!policies || !targetStepId) return { transition };
 
-  const policyEntry = Object.entries(policies).find(([, policy]) => policy.steps.includes(stepId) && policy.steps.includes(transition.targetStepId));
+  const policyEntry = Object.entries(policies).find(([, policy]) => policy.steps.includes(stepId) && policy.steps.includes(targetStepId));
   if (!policyEntry) return { transition };
 
   const [policyId, policy] = policyEntry;
@@ -138,7 +168,7 @@ export function applyLoopPolicyTransition({ workflow, baton, stepId, transition 
   const loopProgress = { ...currentProgress, [policyId]: Math.min(nextCount, policy.maxIterations) };
 
   if (nextCount > policy.maxIterations) {
-    return { transition: { ...transition, targetStepId: policy.onLimit }, loopProgress };
+    return { transition: retargetSingleTransition(transition, policy.onLimit), loopProgress };
   }
 
   return { transition, loopProgress };

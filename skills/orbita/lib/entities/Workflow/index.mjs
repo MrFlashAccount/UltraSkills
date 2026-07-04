@@ -601,12 +601,12 @@ function collectExpandedRouteGraphEdges(workflow, schemasByStep, { requireSchema
     }
     if (descriptor.kind === 'dynamic-target') {
       const aggregate = assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expression: descriptor.expression, field: 'next', requireSchemaCoverage, requireExpressionRequiredPaths });
-      edges.push(...edgeRows(stepId, targetSetsForDynamicTarget(aggregate)));
+      if (aggregate) edges.push(...edgeRows(stepId, targetSetsForDynamicTarget(aggregate)));
       continue;
     }
     if (descriptor.kind === 'match-cases') {
       const possibleCaseKeys = assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descriptor, field: 'next', requireSchemaCoverage, requireExpressionRequiredPaths, allowUnreachableCases });
-      edges.push(...edgeRows(stepId, targetSetsForMatchCases(possibleCaseKeys, descriptor.cases)));
+      if (possibleCaseKeys) edges.push(...edgeRows(stepId, targetSetsForMatchCases(possibleCaseKeys, descriptor.cases)));
       continue;
     }
 
@@ -616,10 +616,10 @@ function collectExpandedRouteGraphEdges(workflow, schemasByStep, { requireSchema
         itemTargetSets.push([[item.target]]);
       } else if (item.kind === 'dynamic-target') {
         const aggregate = assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expression: item.expression, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths });
-        itemTargetSets.push(targetSetsForDynamicTarget(aggregate));
+        if (aggregate) itemTargetSets.push(targetSetsForDynamicTarget(aggregate));
       } else if (item.kind === 'match-cases') {
         const possibleCaseKeys = assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descriptor: item, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths, allowUnreachableCases });
-        itemTargetSets.push(targetSetsForMatchCases(possibleCaseKeys, item.cases));
+        if (possibleCaseKeys) itemTargetSets.push(targetSetsForMatchCases(possibleCaseKeys, item.cases));
       }
     }
     let combinations = [[]];

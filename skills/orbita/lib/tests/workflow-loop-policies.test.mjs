@@ -107,6 +107,22 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
   });
   assert.deepEqual(validate(valid), { ok: true, workflow: 'loop-policy-validation-fixture', steps: Object.keys(valid.steps).length });
 
+  const schemaLessApprovalRoute = syntheticWorkflow((doc) => {
+    doc.steps.producer.next = 'consumer';
+    doc.steps.consumer.next = 'producer';
+    doc.steps.untyped_approval = {
+      name: 'Untyped Approval',
+      kind: 'approval',
+      input: {},
+      next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'blocked' } },
+    };
+    doc.loopPolicies = {
+      producer_consumer: { steps: ['producer', 'consumer'], maxIterations: 2, onLimit: 'blocked' },
+    };
+    return doc;
+  });
+  assert.deepEqual(validate(schemaLessApprovalRoute), { ok: true, workflow: 'loop-policy-validation-fixture', steps: Object.keys(schemaLessApprovalRoute.steps).length });
+
   assertSemanticFailure(syntheticWorkflow((doc) => {
     doc.steps.producer.next = 'consumer';
     doc.steps.consumer.next = 'producer';
@@ -124,6 +140,22 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
     };
     return doc;
   }), /onLimit target 'producer' stays inside the exhausted loop region/);
+
+  assertSemanticFailure(syntheticWorkflow((doc) => {
+    doc.steps.producer.next = 'consumer';
+    doc.steps.consumer.next = 'producer';
+    doc.steps.fallback = {
+      name: 'Fallback',
+      kind: 'worker',
+      input: {},
+      output: outputContract(),
+      next: 'producer',
+    };
+    doc.loopPolicies = {
+      bad_on_limit_path: { steps: ['producer', 'consumer'], maxIterations: 2, onLimit: 'fallback' },
+    };
+    return doc;
+  }), /onLimit target 'fallback' routes back into the exhausted loop region/);
 
   assertSemanticFailure(syntheticWorkflow((doc) => {
     doc.steps.producer.next = 'consumer';
