@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { publicErrorMessage } from '../public-error.mjs';
-import { next } from '../entrypoints/workflow-runner-command.mjs';
+import { next } from './helpers/orbita-production-api.mjs';
 import { resolveRunPaths, workflowRunsRoot } from '../persistence/run-state/paths.mjs';
 
 const tempRoots = [];

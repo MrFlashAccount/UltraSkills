@@ -7,7 +7,7 @@ import { WorkflowRuntimeError } from '../../errors.mjs';
 import { listAllowedWorkflowRoles, workflowRoleMaterialPath, REQUIRED_WORKFLOW_ROLE_MATERIAL_FILES } from './role-material-catalog.mjs';
 import { assertWorkflowSchema } from '../../file-contracts/workflow-document-schema.mjs';
 import { readWorkflowDocument } from './workflow-document-reader.mjs';
-import { assertBatonSchema, batonSchema } from '../../entities/Baton/schema/baton-schema.mjs';
+import { assertBatonSchema, batonSchema } from '../../file-contracts/baton/baton-schema.mjs';
 
 function readJson(pathname, kind) {
   try {

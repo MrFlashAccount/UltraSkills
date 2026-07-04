@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
-import { renderStepPrompts } from '../use-cases/runtime/parallel/render.mjs';
+import { renderStepPrompts } from '../runtime/parallel/render.mjs';
 import { selectState } from '../runtime/state-selection.mjs';
 import { renderWorkflowPrompt } from '../entities/Template/index.mjs';
-import { validateAgainstOutputSchema } from '../use-cases/runtime/output/output-schema-validation.mjs';
+import { validateAgainstOutputSchema } from '../runtime/output/output-schema-validation.mjs';
 import { loadWorkflowResources } from '../persistence/workflow-resources/runtime-reader.mjs';
 import { loadOutputSchema } from '../persistence/workflow-resources/output-schema-loader.mjs';
 

@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
-import { continueRun, loadInstructions, next as runnerNext, writeOutput } from '../entrypoints/workflow-runner-command.mjs';
-import { claimWorkflowRun, registerWorkflowRun } from '../entrypoints/api/workflowRuns.mjs';
+import { continueRun, loadInstructions, next as runnerNext, writeOutput } from './helpers/orbita-production-api.mjs';
+import { claimWorkflowRun, registerWorkflowRun } from './helpers/orbita-production-api.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-binding-'));

@@ -1,6 +1,6 @@
 import fsPath from 'node:path';
 import { WorkflowRuntimeError } from '../../errors.mjs';
-import { batonSchema } from './schema/baton-schema.mjs';
+import { batonSchema } from '../../file-contracts/baton/baton-schema.mjs';
 
 const artifactSchema = batonSchema.$defs.artifact;
 const ARTIFACT_FIELDS = Object.freeze(Object.keys(artifactSchema.properties));

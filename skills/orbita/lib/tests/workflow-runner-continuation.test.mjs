@@ -4,9 +4,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, sym
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
-import { next as runnerNext } from '../entrypoints/workflow-runner-command.mjs';
+import { next as runnerNext } from './helpers/orbita-production-api.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
-import { publicFailureHistoryDetails } from '../entrypoints/internal/runner/history-projection.mjs';
+import { publicFailureHistoryDetails } from '../runner/history-projection.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-check-'));
 writeFileSync(path.join(tempDir, 'output.md'), '## Output contract\nReturn markdown.\n');

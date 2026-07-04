@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { renderDashboardShell } from '../ui/render.mjs';
 import { DashboardEventPublisher } from './dashboard-event-publisher.mjs';
 import { RunsRootObserverReader } from './runs-root-observer-reader.mjs';
-import { publicErrorMessage } from '../../entrypoints/cli/public-error.mjs';
+import { publicErrorMessage } from '../../public-error.mjs';
 
 const STATIC_TYPES = {
   '.html': 'text/html; charset=utf-8',

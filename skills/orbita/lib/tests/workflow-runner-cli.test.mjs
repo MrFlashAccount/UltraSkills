@@ -6,7 +6,7 @@ import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { claimWorkflowRunForTest } from './helpers/workflow-runner-api-client.mjs';
-import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../entrypoints/internal/runner/runner-command-builder.mjs';
+import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../runner/runner-command-builder.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');

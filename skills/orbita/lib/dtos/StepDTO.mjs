@@ -4,7 +4,7 @@
  * @property {Record<string, unknown>} [step] Wrapped workflow step document.
  * @property {string} [kind] Step kind when carrying an already materialized step document.
  */
-import { cloneFrozen } from './_dto-utils.mjs';
+import { cloneFrozen } from '../dto-normalization.mjs';
 
 /** Boundary DTO for a workflow step crossing into Step entity ownership. */
 export class StepDTO {

@@ -1,5 +1,5 @@
 /** ApplyWorkflowOutput use-case facade. */
-import { applyWorkflowOutput } from './internal/workflow-output/apply.mjs';
+import { applyWorkflowOutput } from '../runtime/workflow-output/apply.mjs';
 
 export { applyWorkflowOutput };
 

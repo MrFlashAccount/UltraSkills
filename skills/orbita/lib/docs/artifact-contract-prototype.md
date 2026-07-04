@@ -6,7 +6,7 @@ It does not implement a full Artifact Store, promotion model, aliases, revisions
 
 ## Central artifact schema shape
 
-The shared baton schema owns artifact metadata under `./lib/entities/Baton/schema/baton.json#/$defs/artifact`:
+The shared baton schema owns artifact metadata under `./lib/file-contracts/baton/baton.json#/$defs/artifact`:
 
 ```json
 {

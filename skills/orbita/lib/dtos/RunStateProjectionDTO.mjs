@@ -3,7 +3,7 @@
  * @property {Record<string, unknown>} baton Runtime baton projection from validated persistence.
  * @property {Array<Record<string, unknown>>} [requests] Pending instruction/request projection records.
  */
-import { cloneFrozen } from './_dto-utils.mjs';
+import { cloneFrozen } from '../dto-normalization.mjs';
 
 /**
  * Boundary DTO for runtime run-state projection only.

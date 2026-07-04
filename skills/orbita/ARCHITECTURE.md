@@ -198,23 +198,31 @@ schema dumping ground.
 
 ### Boundary Checks
 
-Owner: `skills/orbita/scripts/check-workflow-runtime-boundaries.mjs`
+Owner: `.dependency-cruiser.cjs`
 
-Boundary checks enforce resolved architecture rules. They should fail recurrence
-of forbidden imports and retired surfaces, while avoiding hard failures for
+`.dependency-cruiser.cjs` is the executable source of truth for Orbita source
+dependency direction. This document explains the intent and ownership model;
+when a dependency rule is concrete enough to enforce, it belongs in
+`.dependency-cruiser.cjs` and CI must run it through
+`bun run depcruise:check`.
+
+Boundary checks enforce resolved dependency-direction architecture rules. They
+should fail recurrence of forbidden imports while avoiding hard failures for
 questions that are still unresolved by the architecture contract.
 
 Checks should cover:
 
 - entrypoints importing runtime internals
 - CLI entrypoints importing API entrypoints
+- lower layers importing entrypoints
 - top-level use cases importing other top-level use cases
+- entity families importing other entity families, including nested files
+- use-case families importing other use-case families, including nested files
+- DTO files importing other DTO files
 - top-level use cases importing filesystem/path/persistence
 - runtime helpers importing filesystem/path/persistence
 - persistence importing use cases
 - persistence importing entity-owned Baton schema after migration
-- retired legacy surfaces exposed as supported commands, exports, docs, or
-  allow-list entries
 - concrete matrix runtime/helper imports that violate the matrix dependency
   rules below, once those source surfaces exist
 

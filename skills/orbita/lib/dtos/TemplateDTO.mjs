@@ -4,7 +4,7 @@
  * @property {string} [content] Inline template content.
  * @property {string} [workflowPath] Workflow path used for relative template resolution.
  */
-import { cloneFrozen } from './_dto-utils.mjs';
+import { cloneFrozen } from '../dto-normalization.mjs';
 
 /** Boundary DTO for template render inputs loaded by persistence. */
 export class TemplateDTO {

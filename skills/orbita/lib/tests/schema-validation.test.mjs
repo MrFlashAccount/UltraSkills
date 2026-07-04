@@ -3,7 +3,7 @@ import { test } from 'bun:test';
 import { validateJsonSchema } from '../../../../shared/scripts/schema-validation/schema-validation.mjs';
 import reviewJoinOutputSchema from '../../../../workflows/dev-harness/schemas/review-join-output.json' with { type: 'json' };
 import reviewerSelectionOutputSchema from '../../../../workflows/dev-harness/schemas/reviewer-selection-output.json' with { type: 'json' };
-import { assertBatonSchema, batonSchema } from '../entities/Baton/schema/baton-schema.mjs';
+import { assertBatonSchema, batonSchema } from '../file-contracts/baton/baton-schema.mjs';
 import { assertWorkflowSchema, workflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import runnerHostResponseSchema from '../persistence/run-state/schema/runner-host-response.json' with { type: 'json' };
 

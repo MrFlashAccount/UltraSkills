@@ -18,8 +18,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Validate workflows and generated artifacts
         run: |
-          bun run workflow-layout:check
-          bun run workflow-runtime-boundaries:check
+          bun run depcruise:check
           bun run role-evidence:check
           bun run workflow:validate
           bun run agents:check

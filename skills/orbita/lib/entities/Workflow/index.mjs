@@ -11,8 +11,8 @@ import { RESERVED_STATE_KEYS, DANGEROUS_OBJECT_KEYS, isDangerousObjectKey, isRes
 import { statusForStep } from '../../runtime/step-status.mjs';
 import { assertLoopPolicies } from '../../runtime/loop-policies.mjs';
 import { assertTransitionDescriptorTargets, normalizeTransitionNext } from '../../runtime/transition-next.mjs';
-import { assertWorkflowShardingPolicies, isShardedStep } from '../Baton/sharding.mjs';
-import { isMatrixStep, normalizeMatrixSource } from '../Baton/matrix.mjs';
+import { assertWorkflowShardingPolicies, isShardedStep } from '../../runtime/sharding.mjs';
+import { isMatrixStep, normalizeMatrixSource } from '../../runtime/matrix.mjs';
 import { compileWorkflowOutputSchema } from './schema-ref-validation.mjs';
 
 function cloneBoundaryData(dto) {

@@ -7,7 +7,7 @@ import {
   next,
   recordOrchestrator,
   writeOutput,
-} from '../../entrypoints/workflow-runner-command.mjs';
+} from './orbita-production-api.mjs';
 import { claimWorkflowRunAtRoot, registerWorkflowRunAtRoot } from '../../persistence/run-state/workflow-runs.mjs';
 import { publicErrorMessage } from '../../public-error.mjs';
 

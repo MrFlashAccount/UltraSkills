@@ -3,7 +3,7 @@ import { test } from 'bun:test';
 import { WorkflowRuntimeError } from '../../../errors.mjs';
 import { applyOutputToBatonState } from '../../../runtime/baton-state.mjs';
 import { Baton } from '../index.mjs';
-import { assertBatonSchema } from '../schema/baton-schema.mjs';
+import { assertBatonSchema } from '../../../file-contracts/baton/baton-schema.mjs';
 
 const workflow = {
   name: 'baton-fixture',

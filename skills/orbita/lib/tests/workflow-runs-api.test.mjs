@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { afterAll, beforeEach, test } from 'bun:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { listWorkflowRuns, summarizeWorkflowRuns } from '../entrypoints/api/workflowRuns.mjs';
+import { listWorkflowRuns, summarizeWorkflowRuns } from './helpers/orbita-production-api.mjs';
 import { publicErrorMessage } from '../public-error.mjs';
 import { claimWorkflowRunAtRoot, heartbeatWorkflowRunAtRoot, listWorkflowRunsAtRoot, registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
 import { buildTokenLease, formatLeaseTokenEntropy } from '../persistence/run-state/lease-authority.mjs';
@@ -147,7 +147,7 @@ test('workflow runs default root migrates legacy skill-local runs when target is
     delete env.WORKFLOW_RUNS_ROOT;
     const result = spawnSync(process.execPath, [
       '--eval',
-      "import { listWorkflowRuns } from './skills/orbita/lib/entrypoints/api/workflowRuns.mjs'; console.log(JSON.stringify(await listWorkflowRuns()));",
+      "import { listWorkflowRuns } from './skills/orbita/lib/entrypoints/workflow-runs-api.mjs'; console.log(JSON.stringify(await listWorkflowRuns()));",
     ], { cwd: root, encoding: 'utf8', env });
 
     assert.equal(result.status, 0, result.stderr);
@@ -178,7 +178,7 @@ test('workflow runs default root blocks silent legacy migration when target is n
     delete env.WORKFLOW_RUNS_ROOT;
     const result = spawnSync(process.execPath, [
       '--eval',
-      "import { listWorkflowRuns } from './skills/orbita/lib/entrypoints/api/workflowRuns.mjs'; await listWorkflowRuns();",
+      "import { listWorkflowRuns } from './skills/orbita/lib/entrypoints/workflow-runs-api.mjs'; await listWorkflowRuns();",
     ], { cwd: root, encoding: 'utf8', env });
 
     assert.equal(result.status, 1);
