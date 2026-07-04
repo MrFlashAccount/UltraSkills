@@ -317,7 +317,7 @@ test('runner: --only-instructions prints only orchestrator instruction text', as
   singleWorkflow.steps.prepare.next = 'done';
   writeJson(workflowPath, singleWorkflow);
 
-  const result = await runRunner(['next', '--run-id', runId, '--workflow', workflowPath, '--only-instructions']);
+  const result = runRunnerCli(['next', '--run-id', runId, '--workflow', workflowPath, '--only-instructions']);
   assert.equal(result.status, 0, result.stderr);
   assert.throws(() => JSON.parse(result.stdout));
   assert.match(result.stdout, /Execute every host request in this JSON/);
@@ -800,7 +800,7 @@ test('runner: write-output accepts valid stdin JSON into baton state and continu
   writeJson(workflowPath, workflow);
 
   await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next before write-output');
-  const written = await runRunner(['write-output', '--run-id', runId, '--step-id', 'prepare'], { input: JSON.stringify(workerOutput('prepared')), debugSummary: true });
+  const written = runRunnerCli(['write-output', '--run-id', runId, '--step-id', 'prepare'], { input: JSON.stringify(workerOutput('prepared')), debugSummary: true });
   assert.equal(written.status, 0, written.stderr);
   const writtenResponse = JSON.parse(written.stdout);
   assert.equal(writtenResponse.ok, true);
@@ -840,7 +840,7 @@ test('runner: continue --only-instructions prints terminal instruction text', as
   await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next before continue only instructions');
   const written = await runRunner(['write-output', '--run-id', runId, '--step-id', 'prepare'], { input: JSON.stringify(workerOutput('prepared')), debugSummary: true });
   assert.equal(written.status, 0, written.stderr);
-  const continued = await runRunner(['continue', '--run-id', runId, '--workflow', workflowPath, '--only-instructions']);
+  const continued = runRunnerCli(['continue', '--run-id', runId, '--workflow', workflowPath, '--only-instructions']);
   assert.equal(continued.status, 0, continued.stderr);
   assert.throws(() => JSON.parse(continued.stdout));
   assert.match(continued.stdout, /^Supersedes all previous workflow-runner stdout\./);
