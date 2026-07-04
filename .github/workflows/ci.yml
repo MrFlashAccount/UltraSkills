@@ -40,5 +40,15 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Orbita tests shard ${{ matrix.shard }}/4
         run: make -C skills/orbita test TEST_BUN="AGENT=1 bun test --timeout=30000 --pass-with-no-tests --shard=${{ matrix.shard }}/4"
-      - name: Workflow E2E fixture tests shard ${{ matrix.shard }}/4
-        run: make -C skills/orbita test-workflow-e2e TEST_BUN="AGENT=1 bun test --timeout=30000 --pass-with-no-tests --shard=${{ matrix.shard }}/4"
+
+  workflow-e2e:
+    name: Workflow E2E fixture tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Workflow E2E fixture tests
+        run: make -C skills/orbita test-workflow-e2e
