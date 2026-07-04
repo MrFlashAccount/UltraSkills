@@ -12,6 +12,26 @@ function createAjv() {
   return ajv;
 }
 
+const schemaObjectIds = new WeakMap();
+const validatorCache = new WeakMap();
+let nextSchemaObjectId = 1;
+
+function schemaObjectKey(schema) {
+  if (!schema || typeof schema !== 'object') return String(schema);
+  if (typeof schema.$id === 'string' && schema.$id.length > 0) return `id:${schema.$id}`;
+  let id = schemaObjectIds.get(schema);
+  if (!id) {
+    id = nextSchemaObjectId;
+    nextSchemaObjectId += 1;
+    schemaObjectIds.set(schema, id);
+  }
+  return `object:${id}`;
+}
+
+function validatorCacheKey(schemas = []) {
+  return schemas.map(schemaObjectKey).join('\u001f');
+}
+
 export class SchemaValidationError extends Error {
   constructor(message) {
     super(message);
@@ -26,17 +46,30 @@ export function formatSchemaErrors(errors = []) {
 }
 
 export function validateJsonSchema(schema, value, options = {}) {
-  const ajv = createAjv();
-  const loadedSchemaIds = new Set();
+  const schemas = options.schemas ?? [];
+  const cacheKey = validatorCacheKey(schemas);
+  const canCacheSchema = schema && typeof schema === 'object';
+  let validatorsForSchema = canCacheSchema ? validatorCache.get(schema) : undefined;
+  let validate = validatorsForSchema?.get(cacheKey);
 
-  for (const referencedSchema of options.schemas ?? []) {
-    const schemaId = referencedSchema?.$id;
-    if (schemaId && loadedSchemaIds.has(schemaId)) continue;
-    ajv.addSchema(referencedSchema);
-    if (schemaId) loadedSchemaIds.add(schemaId);
+  if (!validate) {
+    const ajv = createAjv();
+    const loadedSchemaIds = new Set();
+
+    for (const referencedSchema of schemas) {
+      const schemaId = referencedSchema?.$id;
+      if (schemaId && loadedSchemaIds.has(schemaId)) continue;
+      ajv.addSchema(referencedSchema);
+      if (schemaId) loadedSchemaIds.add(schemaId);
+    }
+
+    validate = schema?.$id ? (ajv.getSchema(schema.$id) ?? ajv.compile(schema)) : ajv.compile(schema);
+    if (canCacheSchema) {
+      validatorsForSchema ??= new Map();
+      validatorsForSchema.set(cacheKey, validate);
+      validatorCache.set(schema, validatorsForSchema);
+    }
   }
-
-  const validate = schema?.$id ? (ajv.getSchema(schema.$id) ?? ajv.compile(schema)) : ajv.compile(schema);
   const ok = validate(value);
   return {
     ok,

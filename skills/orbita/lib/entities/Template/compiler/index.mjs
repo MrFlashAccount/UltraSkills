@@ -95,6 +95,7 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
     validatingWriterCommand: resources?.validatingWriterCommand,
     artifactOutputDir: resources?.artifactOutputDir,
     debugSummaryPath: resources?.debugSummaryPath,
+    compactFollowUp: followUp === true,
   });
   const workflowInstructionBlock = workflowInstruction({ workflow });
   const finalReminder = finalOutputReminder(outputContract);
