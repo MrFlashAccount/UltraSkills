@@ -2,6 +2,7 @@
   "name": "workflow-authoring",
   "version": 1,
   "description": "Create or materially update workflow-runner workflows, including workflow.json, output schemas, catalog description, validation coverage, smoke evidence, analyzer findings, human-reviewed improvement approval, and before/after rerun comparison. Use when the user asks to create, design, add, or significantly change a workflow, or when an Orbita task has no suitable existing workflow and the user wants a reusable workflow built. Do not use when the user only wants to run an existing workflow, list workflows, perform ordinary direct implementation, make a small runner engine fix, or add a runner-level analyzer subsystem.",
+  "instruction": "Before designing, implementing, analyzing, or reviewing workflow-runner workflows, read and apply `workflows/workflow-authoring/LEARNINGS.md`. Treat those learnings as workflow-authoring constraints unless the current approved task explicitly supersedes them.",
   "start": "workflow_design_draft",
   "done": "done",
   "steps": {
