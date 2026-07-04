@@ -2,6 +2,7 @@
 
 ## Agent execution rules
 - When an execution/implementation agent starts tests, lint, validation, typecheck, build checks, or similar long-running verification, it must wait at least 5 minutes before polling/reporting that the command is still running. Do not do short 30s/60s "still running" polling loops. If the command exits or produces an actionable failure sooner, handle that result immediately.
+- Avoid heavy subprocess-based tests when the same behavior can be exercised by importing the module/API directly. Use `spawn`/`spawnSync` for CLI coverage only when process boundaries, argument parsing, shell command portability, stdin/stdout/stderr, exit codes, environment/cwd behavior, or another CLI-only contract is the actual subject under test.
 
 ## Repo rules
 - This repo is self-contained.
