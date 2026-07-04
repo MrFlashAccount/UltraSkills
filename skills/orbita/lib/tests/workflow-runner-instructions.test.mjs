@@ -505,7 +505,13 @@ test('runner API propagates custom runsRoot through next, instructions, and cont
   const instructions = await runnerLoadInstructions({ runId, stepId: 'prepare', runsRoot, leaseToken });
   assert.match(instructions, /Prepare branch\./);
   const followUpInstructions = await runnerLoadInstructions({ runId, stepId: 'prepare', followUp: true, runsRoot, leaseToken });
-  assert.equal(followUpInstructions, instructions);
+  assert.notEqual(followUpInstructions, instructions);
+  assert.match(followUpInstructions, /This follow-up omits the full template and schema/);
+  assert.match(followUpInstructions, /Output template: output\.md/);
+  assert.doesNotMatch(followUpInstructions, /Return markdown\./);
+  assert.match(followUpInstructions, /Prepare branch\./);
+  assert.equal(followUpInstructions.includes(`--runs-root '${runsRoot}'`), true);
+  assert.equal(followUpInstructions.includes(`--lease-token '${leaseToken}'`), true);
 
   const bound = await runnerBindAgent({ runId, stepId: 'prepare', agentId: 'custom-root-worker', runsRoot, leaseToken });
   assert.deepEqual(bound, { ok: true, runId, stepId: 'prepare', bound: true });

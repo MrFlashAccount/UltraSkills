@@ -57,8 +57,39 @@ function debugSummaryInstruction({ debugSummaryPath }) {
   ].join('\n');
 }
 
+function compactFollowUpOutputContract({ outputTemplate, templatePath, outputSchema, schemaPath, options }) {
+  const parts = [
+    'Continue using the same output contract that was previously loaded for this workflow step.',
+    'This follow-up omits the full template and schema; load fresh instructions instead if the previous contract is unavailable.',
+  ];
+  if (outputTemplate && templatePath) parts.push(`Output template: ${templatePath}`);
+  if (outputSchema && schemaPath) parts.push(`Output schema: ${schemaPath}`);
+  const artifactDirInstruction = artifactOutputDirectoryInstruction(options.artifactOutputDir);
+  if (artifactDirInstruction) parts.push(artifactDirInstruction);
+  const debugSummary = debugSummaryInstruction({ debugSummaryPath: options.debugSummaryPath });
+  if (debugSummary) parts.push(debugSummary);
+  const trimmedCommand = typeof options.validatingWriterCommand === 'string' ? options.validatingWriterCommand.trim() : '';
+  if (!trimmedCommand) {
+    parts.push(validatingWriterProtocol(trimmedCommand));
+    return section('Output contract', parts.filter(Boolean).join('\n\n'));
+  }
+  parts.push([
+    'Write the request output by calling this validating writer command. The command validates against the same output contract as the fresh instructions; only replace the JSON body/stdin content:',
+    '',
+    '```bash',
+    trimmedCommand,
+    '```',
+    '',
+    'If it fails with validation errors, fix the JSON and run the same command again. Do not create a separate JSON output file.',
+  ].join('\n'));
+  return section('Output contract', parts.filter(Boolean).join('\n\n'));
+}
+
 export function outputContractSection(outputTemplate, templatePath, outputSchema, schemaPath, outputSchemaValue, options = {}) {
   if (!outputTemplate && !outputSchema) return '';
+  if (options.compactFollowUp === true) {
+    return compactFollowUpOutputContract({ outputTemplate, templatePath, outputSchema, schemaPath, options });
+  }
   const parts = [];
   if (outputTemplate) {
     const templateComment = templatePath ? `\n\n<!-- output template: ${templatePath} -->` : '';

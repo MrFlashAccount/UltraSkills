@@ -15,34 +15,13 @@
       "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when this says blocked or needs revision."
     },
     "reviewer_handoff": {
+      "$ref": "#/$defs/reviewerHandoff",
+      "description": "Producer may emit a legacy aggregate reviewer handoff for human summary only. Downstream reviewer prompts should prefer reviewer_handoffs.<review_step_id>.",
+      "x-usage": "Use this only as coarse summary context. Prefer reviewer_handoffs for reviewer-specific prompts to avoid repeating unrelated evidence."
+    },
+    "reviewer_handoffs": {
       "type": "object",
-      "required": [
-        "summary",
-        "selected_implementation_steps",
-        "selected_review_steps",
-        "evidence"
-      ],
       "properties": {
-        "summary": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Producer must summarize the relevant decision or handoff in concise human-readable form without adding new scope.",
-          "x-usage": "Use this as concise human-readable context only. Do not route, approve, or expand scope from this text."
-        },
-        "selected_implementation_steps": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {
-            "enum": [
-              "backend_implementation",
-              "frontend_implementation",
-              "architecture_artifact_update"
-            ]
-          },
-          "description": "Producer must list the implementation branches represented in the joined handoff.",
-          "x-usage": "Use this to verify which implementation branches are represented. Do not assume missing branches are complete."
-        },
         "selected_review_steps": {
           "type": "array",
           "minItems": 1,
@@ -58,22 +37,179 @@
               "qa_review"
             ]
           },
-          "description": "Producer must copy selected review branch ids from the approved planning contract without choosing new reviewers.",
-          "x-usage": "Use exactly this copied list for the next fan-out. Do not add agents here unless a newer approved plan changes the list."
+          "description": "Producer must exactly copy planning_draft.selected_review_steps so schema validation can require a matching reviewer-specific handoff for each selected reviewer.",
+          "x-usage": "Use this as the dispatch coverage list. Every listed review step must have a sibling reviewer_handoffs.<review_step_id> entry."
         },
-        "evidence": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "Producer should list concrete evidence references supporting this handoff, verdict, finding, or blocker.",
-          "x-usage": "Use these references to inspect or challenge the claim. Do not assume unreferenced surfaces were checked."
+        "architect_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "backend_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "frontend_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "frontend_taste_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "security_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "privacy_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "qa_review": {
+          "$ref": "#/$defs/reviewerHandoff"
         }
       },
-      "additionalProperties": true,
-      "description": "Producer must aggregate completed implementation branch outputs into a reviewer-ready handoff with evidence and planned review selection.",
-      "x-usage": "Treat this as the joined implementation evidence bundle. Do not treat it as approval that the implementation is correct."
+      "additionalProperties": false,
+      "required": [
+        "selected_review_steps"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "selected_review_steps": {
+                "type": "array",
+                "contains": {
+                  "const": "architect_review"
+                }
+              }
+            },
+            "required": [
+              "selected_review_steps"
+            ]
+          },
+          "then": {
+            "required": [
+              "architect_review"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "selected_review_steps": {
+                "type": "array",
+                "contains": {
+                  "const": "backend_review"
+                }
+              }
+            },
+            "required": [
+              "selected_review_steps"
+            ]
+          },
+          "then": {
+            "required": [
+              "backend_review"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "selected_review_steps": {
+                "type": "array",
+                "contains": {
+                  "const": "frontend_review"
+                }
+              }
+            },
+            "required": [
+              "selected_review_steps"
+            ]
+          },
+          "then": {
+            "required": [
+              "frontend_review"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "selected_review_steps": {
+                "type": "array",
+                "contains": {
+                  "const": "frontend_taste_review"
+                }
+              }
+            },
+            "required": [
+              "selected_review_steps"
+            ]
+          },
+          "then": {
+            "required": [
+              "frontend_taste_review"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "selected_review_steps": {
+                "type": "array",
+                "contains": {
+                  "const": "security_review"
+                }
+              }
+            },
+            "required": [
+              "selected_review_steps"
+            ]
+          },
+          "then": {
+            "required": [
+              "security_review"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "selected_review_steps": {
+                "type": "array",
+                "contains": {
+                  "const": "privacy_review"
+                }
+              }
+            },
+            "required": [
+              "selected_review_steps"
+            ]
+          },
+          "then": {
+            "required": [
+              "privacy_review"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "selected_review_steps": {
+                "type": "array",
+                "contains": {
+                  "const": "qa_review"
+                }
+              }
+            },
+            "required": [
+              "selected_review_steps"
+            ]
+          },
+          "then": {
+            "required": [
+              "qa_review"
+            ]
+          }
+        }
+      ],
+      "description": "Producer must emit compact reviewer-specific handoffs keyed by selected review step id.",
+      "x-usage": "Route each reviewer only the matching handoff. Do not send every reviewer the aggregate implementation bundle by default."
     },
     "artifacts": {
       "type": "array",
@@ -154,7 +290,7 @@
       },
       "then": {
         "required": [
-          "reviewer_handoff"
+          "reviewer_handoffs"
         ]
       }
     },
@@ -175,5 +311,67 @@
         ]
       }
     }
-  ]
+  ],
+  "$defs": {
+    "reviewerHandoff": {
+      "type": "object",
+      "required": [
+        "summary",
+        "selected_implementation_steps",
+        "evidence"
+      ],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Producer must summarize the relevant decision or handoff in concise human-readable form without adding new scope.",
+          "x-usage": "Use this as concise human-readable context only. Do not route, approve, or expand scope from this text."
+        },
+        "selected_implementation_steps": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "backend_implementation",
+              "frontend_implementation",
+              "architecture_artifact_update"
+            ]
+          },
+          "description": "Producer must list the implementation branches represented in this reviewer-specific handoff.",
+          "x-usage": "Use this to verify which implementation branches are relevant to this reviewer. Do not assume missing branches are complete."
+        },
+        "review_focus": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Producer should list the exact reviewer-specific surfaces, risks, or contracts this reviewer must inspect.",
+          "x-usage": "Use this to scope the reviewer prompt. Do not expand beyond this focus unless the approved plan requires it."
+        },
+        "changed_files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Producer may list files or zones relevant to this reviewer.",
+          "x-usage": "Use this as inspection guidance only; verify against implementation evidence before concluding."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Producer should list concrete evidence references supporting this reviewer-specific handoff.",
+          "x-usage": "Use these references to inspect or challenge the claim. Do not assume unreferenced surfaces were checked."
+        }
+      },
+      "additionalProperties": true,
+      "description": "Producer must aggregate only the implementation evidence relevant to one reviewer step.",
+      "x-usage": "Treat this as a reviewer-specific evidence bundle, not as approval that the implementation is correct."
+    }
+  }
 }

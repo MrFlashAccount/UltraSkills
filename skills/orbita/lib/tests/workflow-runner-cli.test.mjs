@@ -130,12 +130,6 @@ function workerOutput(summary) {
   return { outcome: 'ready', results: [{ type: 'check', summary }] };
 }
 
-function requestsFromOrchestratorInstruction(instruction) {
-  const match = instruction.match(/^Execute every host request in this JSON and wait until all requested actions finish: (.+)$/m);
-  assert.ok(match, instruction);
-  return JSON.parse(match[1]);
-}
-
 function terminalResponseFromOrchestratorInstruction(instruction) {
   const match = instruction.match(/\nStop now\. Do not call another runner command\. Terminal response JSON: (.+)\nReport /);
   assert.ok(match, instruction);
@@ -173,10 +167,11 @@ test('runner CLI: next --only-instructions prints only orchestrator instruction 
   const result = await runRunnerCli(['next', '--run-id', runId, '--workflow', workflowPath, '--only-instructions']);
   assert.equal(result.status, 0, result.stderr);
   assert.throws(() => JSON.parse(result.stdout));
-  assert.match(result.stdout, /Execute every host request in this JSON/);
-  const instructionRequests = requestsFromOrchestratorInstruction(result.stdout);
-  assert.deepEqual(instructionRequests.map((request) => [request.action, request.stepId]), [['run_worker', 'prepare']]);
-  assert.match(result.stdout, /workflow-runner\.mjs' instructions --run-id/);
+  assert.match(result.stdout, /Execute every current host request below/);
+  assert.match(result.stdout, /Current host requests:\n- run_worker: prepare/);
+  assert.match(result.stdout, /load fresh instructions: .*workflow-runner\.mjs' instructions --run-id/);
+  assert.match(result.stdout, /load follow-up instructions when restoring the preferred worker: .*instructions --follow-up --run-id/);
+  assert.match(result.stdout, /bind actual worker id after dispatch: .*bind-agent --run-id/);
   assert.match(result.stdout, /workflow-runner\.mjs' continue --run-id/);
   assert.match(result.stdout, /--only-instructions/);
 });

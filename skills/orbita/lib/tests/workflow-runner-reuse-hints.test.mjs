@@ -237,12 +237,6 @@ async function runCase(label, workflow = workflowDoc, options = {}) {
   return { runId, runDir: paths.runDir, workflowPath, runsRoot: options.runsRoot, leaseToken: claim.leaseToken, now: testNow };
 }
 
-function requestsFromOrchestratorInstruction(instruction) {
-  const match = instruction.match(/^Execute every host request in this JSON and wait until all requested actions finish: (.+)$/m);
-  assert.ok(match, instruction);
-  return JSON.parse(match[1]);
-}
-
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('runner reuse hints: run_worker request exposes only approved reuse fields', async () => {
@@ -254,7 +248,8 @@ test('runner reuse hints: run_worker request exposes only approved reuse fields'
   const runsRoot = resolveRunPaths({ runId }).runsRoot;
 
   assert.equal(response.status, 'needs_host_actions');
-  assert.deepEqual(requestsFromOrchestratorInstruction(response.orchestratorInstruction), response.requests);
+  assert.match(response.orchestratorInstruction, /Current host requests:\n- run_worker: prepare/);
+  assert.match(response.orchestratorInstruction, /Use the JSON response requests field as the machine-readable source when available/);
   assert.deepEqual(Object.keys(response.requests[0]).sort(), [
     'action',
     'bindAgentCommand',
@@ -278,7 +273,11 @@ test('runner reuse hints: follow-up instructions preserve validating output cont
   const fresh = await loadInstructions({ runId, workflowPath, stepId: 'prepare', leaseToken, now });
   const followUp = await loadInstructions({ runId, workflowPath, stepId: 'prepare', followUp: true, leaseToken, now });
 
-  assert.equal(followUp, fresh);
+  assert.ok(followUp.length < fresh.length, 'follow-up instructions should be more compact than fresh instructions');
+  assert.match(followUp, /This follow-up omits the full template and schema/);
+  assert.match(followUp, /Output schema: .*\.schema\.json/);
+  assert.doesNotMatch(followUp, /"required": \[/);
+  assert.doesNotMatch(followUp, /Return markdown\./);
   assert.match(followUp, /workflow-runner\.mjs' write-output --run-id/);
   assert.match(followUp, /--step-id 'prepare'/);
   assert.match(followUp, /--lease-token '[^']+'/);

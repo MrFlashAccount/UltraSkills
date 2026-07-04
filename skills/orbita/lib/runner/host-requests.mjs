@@ -23,9 +23,53 @@ export function responseStatusForInterpreterResponse(interpreterResponse) {
   return "needs_host_actions";
 }
 
+function requestInstructionBlock(request) {
+  const lines = [`- ${request.action}: ${request.id}`];
+  if (request.ownerStepId) lines.push(`  owner step: ${request.ownerStepId}`);
+
+  if (request.action === "run_worker") {
+    if (request.preferredAgentId) lines.push(`  preferred worker id: ${request.preferredAgentId}`);
+    lines.push(`  load fresh instructions: ${request.loadInstructionsCommand}`);
+    if (request.loadFollowupInstructionsCommand) {
+      lines.push(`  load follow-up instructions when restoring the preferred worker: ${request.loadFollowupInstructionsCommand}`);
+    }
+    if (request.bindAgentCommand) lines.push(`  bind actual worker id after dispatch: ${request.bindAgentCommand}`);
+    if (request.recoverableBlocker) lines.push(`  recoverable blocker: ${JSON.stringify(request.recoverableBlocker)}`);
+    if (request.shard) lines.push(`  shard: ${JSON.stringify(request.shard)}`);
+    if (request.matrix) lines.push(`  matrix: ${JSON.stringify(request.matrix)}`);
+    return lines.join("\n");
+  }
+
+  if (request.action === "wait_for_approval") {
+    if (request.outputSchema) lines.push(`  output schema: ${request.outputSchema}`);
+    lines.push("  use the inline approval request below as the complete approval prompt");
+    return lines.join("\n");
+  }
+
+  if (request.action === RESOLVE_WORKER_BLOCKER_ACTION) {
+    lines.push(`  recoverable blocker: ${JSON.stringify(request.recoverableBlocker)}`);
+    lines.push(`  write resolution: ${request.writeResolutionCommand}`);
+    return lines.join("\n");
+  }
+
+  lines.push(`  request: ${JSON.stringify(request)}`);
+  return lines.join("\n");
+}
+
+function hostRequestInstructionList(requests = []) {
+  if (requests.length === 0) return "Current host requests: none.";
+  return [
+    "Execute every current host request below and wait until all requested actions finish.",
+    "Use the JSON response requests field as the machine-readable source when available; this stdout keeps a compact executable copy for --only-instructions mode.",
+    "",
+    "Current host requests:",
+    requests.map(requestInstructionBlock).join("\n"),
+  ].join("\n");
+}
+
 const TERMINAL_ORCHESTRATOR_INSTRUCTIONS_BY_STATUS = Object.freeze({
   needs_host_actions: (ctx) => [
-    `Execute every host request in this JSON and wait until all requested actions finish: ${JSON.stringify(ctx.requests)}`,
+    hostRequestInstructionList(ctx.requests),
     ctx.inlineInstructions,
     "Before continue, record a concise orchestrator debug summary with this validating runner command. Replace only the JSON body. Include what host actions you completed, why, commands/tools used, validation/evidence, and any remaining risks or blockers. Do not include private prompts, hidden reasoning, tokens, or raw transcripts.",
     ctx.orchestratorDebugCommand,

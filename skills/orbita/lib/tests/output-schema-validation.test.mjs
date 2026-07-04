@@ -506,7 +506,7 @@ test('output.schema: structured step output is available by step id in downstrea
 
   assert.doesNotMatch(renderResponse.steps[0].compiledPrompt.prompt, /## Prompt input context/);
   assert.match(renderResponse.steps[0].compiledPrompt.prompt, /Use prior worker payload:/);
-  assert.match(renderResponse.steps[0].compiledPrompt.prompt, /"ok": true/);
+  assert.match(renderResponse.steps[0].compiledPrompt.prompt, /"ok":true/);
   assert.doesNotMatch(renderResponse.steps[0].compiledPrompt.prompt, /Field notes for prompt input step outputs/);
   assert.doesNotMatch(renderResponse.steps[0].compiledPrompt.prompt, /\[object Object\]/);
 });
@@ -554,7 +554,7 @@ test('output.schema: inline prompt input structured output omits automatic schem
     '## Workflow step prompt',
     'Use prompt input payload:',
     '```json',
-    '"ok": true',
+    '"ok":true',
   ]);
   assert.doesNotMatch(renderResponse.prompt, /## Prompt input context/);
   assert.doesNotMatch(renderResponse.prompt, /Field notes for prompt input step outputs/);

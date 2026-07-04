@@ -95,7 +95,7 @@ Follow stdout text exactly.
 After each `--only-instructions` runner command, follow stdout exactly. `instructions` prints loaded instruction text and never accepts `--only-instructions`.
 
 - `done`: stop and report the completed result from terminal stdout JSON, extracting workflow-specific result from included baton/projection, not a presumed `result` field.
-- `needs_host_actions`: complete every current inline JSON request through Host actions, wait until each requested action has accepted output, then run the exact embedded `continue` command.
+- `needs_host_actions`: complete every current host request listed in stdout. Full JSON runner responses carry machine-readable request objects in `requests`; `--only-instructions` stdout carries a compact executable request list. Wait until each requested action has accepted output, then run the exact embedded `continue` command.
 
 Call `workflow-runner continue` only from the latest stdout command. Do not call `next` as a substitute, and never report cursor, next instruction, pending request, accepted output, or `needs_host_actions` as final completion.
 
