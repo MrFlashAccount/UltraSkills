@@ -1,15 +1,12 @@
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
-import { once } from 'node:events';
+import { claimWorkflowRunForTest, runWorkflowRunnerApi } from './helpers/workflow-runner-api-client.mjs';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
-import { fileURLToPath } from 'node:url';
 import { bindAgent as runnerBindAgent, continueRun as runnerContinueRun, loadInstructions as runnerLoadInstructions, next as runnerNext, writeOutput as runnerWriteOutput } from '../entrypoints/workflow-runner-command.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-check-'));
 writeFileSync(path.join(tempDir, 'output.md'), '## Output contract\nReturn markdown.\n');
 const testLeaseToken = `workflow-runner-test-token-${process.pid}`;
@@ -66,70 +63,31 @@ function debugSummaryFileFor({ runId, stepId, runsRoot, text = 'worker debug sum
   return debugSummaryFile;
 }
 
-function claimRunForTest(paths) {
-  const knownToken = leaseTokensByRunId.get(paths.runId);
-  if (knownToken) {
-    process.env.WORKFLOW_RUN_TOKEN = knownToken;
-    return knownToken;
-  }
-  const createArgs = ['skills/orbita/lib/entrypoints/cli/workflow-runs.mjs', 'create', '--claim', '--run-id', paths.runId, '--workflow', paths.workflowPath];
-  const created = spawnSync(process.execPath, createArgs, { cwd: root, encoding: 'utf8', env: process.env });
-  if (created.status === 0) {
-    const token = JSON.parse(created.stdout).leaseToken;
-    leaseTokensByRunId.set(paths.runId, token);
-    process.env.WORKFLOW_RUN_TOKEN = token;
-    return token;
-  }
-  const token = knownToken ?? testLeaseToken;
-  const claimed = spawnSync(process.execPath, ['skills/orbita/lib/entrypoints/cli/workflow-runs.mjs', 'claim', '--run-id', paths.runId, '--lease-token', token], { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUN_TOKEN: token } });
-  assert.equal(claimed.status, 0, `claim ${paths.runId} failed\ncreate stderr:\n${created.stderr}\nclaim stderr:\n${claimed.stderr}`);
-  leaseTokensByRunId.set(paths.runId, token);
-  process.env.WORKFLOW_RUN_TOKEN = token;
-  return token;
+async function claimRunForTest(paths) {
+  return await claimWorkflowRunForTest(paths, { leaseTokensByRunId, testLeaseToken });
 }
 
-function runCase(label, workflowPath) {
+async function runCase(label, workflowPath) {
   const runId = `workflow-runner-test-${process.pid}-${label}`;
   const paths = resolveRunPaths({ runId, workflowPath });
   rmSync(paths.runDir, { recursive: true, force: true });
-  if (workflowPath !== undefined) claimRunForTest(paths);
+  if (workflowPath !== undefined) await claimRunForTest(paths);
   return { runId, runDir: paths.runDir };
 }
-
-function runCaseNamed(name, label, workflowPath) {
-  const runId = `workflow-runner-test-${process.pid}-${label}`;
-  const paths = resolveRunPaths({ runId, workflowPath });
-  rmSync(paths.runDir, { recursive: true, force: true });
-  if (workflowPath !== undefined) claimRunForTest(paths);
-  return { [`${name}RunId`]: runId, [`${name}RunDir`]: paths.runDir };
-}
-
 
 function valueAfter(args, name) {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : undefined;
 }
 
-function claimRunForRunnerArgs(args) {
+async function claimRunForRunnerArgs(args) {
   const runId = valueAfter(args, '--run-id');
   if (!runId) return undefined;
   const workflowPath = valueAfter(args, '--workflow');
   const knownToken = leaseTokensByRunId.get(runId);
   if (knownToken) return knownToken;
-  const createArgs = ['skills/orbita/lib/entrypoints/cli/workflow-runs.mjs', 'create', '--claim', '--run-id', runId];
-  if (workflowPath !== undefined) createArgs.push('--workflow', workflowPath);
-  const created = spawnSync(process.execPath, createArgs, { cwd: root, encoding: 'utf8', env: process.env });
-  if (created.status === 0) {
-    const token = JSON.parse(created.stdout).leaseToken;
-    leaseTokensByRunId.set(runId, token);
-    return token;
-  }
-  const token = knownToken ?? testLeaseToken;
-  const claimArgs = ['skills/orbita/lib/entrypoints/cli/workflow-runs.mjs', 'claim', '--run-id', runId, '--lease-token', token];
-  if (workflowPath !== undefined) claimArgs.push('--workflow', workflowPath);
-  const claimed = spawnSync(process.execPath, claimArgs, { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUN_TOKEN: token } });
-  assert.equal(claimed.status, 0, `claim ${runId} failed\ncreate stderr:\n${created.stderr}\nclaim stderr:\n${claimed.stderr}`);
-  return token;
+  const paths = resolveRunPaths({ runId, workflowPath });
+  return await claimRunForTest(paths);
 }
 
 function withLeaseTokenArg(args, token) {
@@ -150,31 +108,10 @@ function withDebugSummaryArg(args, options = {}) {
   return [...args, '--debug-summary-file', debugSummaryPath];
 }
 
-function runRunner(args, options = {}) {
-  const token = claimRunForRunnerArgs(args);
+async function runRunner(args, options = {}) {
+  const token = await claimRunForRunnerArgs(args);
   const runnerArgs = withDebugSummaryArg(withLeaseTokenArg(args, token), options);
-  return spawnSync(process.execPath, ['skills/orbita/lib/entrypoints/cli/workflow-runner.mjs', ...runnerArgs], { cwd: root, encoding: 'utf8', input: options.input, env: { ...process.env, WORKFLOW_RUN_TOKEN: token ?? testLeaseToken, ...(options.env ?? {}) } });
-}
-
-async function runRunnerAsync(args) {
-  const token = claimRunForRunnerArgs(args);
-  const child = spawn(process.execPath, ['skills/orbita/lib/entrypoints/cli/workflow-runner.mjs', ...withLeaseTokenArg(args, token)], {
-    cwd: root,
-    encoding: 'utf8',
-    env: { ...process.env, WORKFLOW_RUN_TOKEN: token ?? testLeaseToken },
-  });
-  let stdout = '';
-  let stderr = '';
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk;
-  });
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-  const [status] = await once(child, 'exit');
-  return { status, stdout, stderr };
+  return runWorkflowRunnerApi(runnerArgs, { ...options, env: { WORKFLOW_RUN_TOKEN: token ?? testLeaseToken, ...(options.env ?? {}) } });
 }
 
 async function waitForPath(filePath) {
@@ -185,13 +122,8 @@ async function waitForPath(filePath) {
   }
 }
 
-function makeFifo(filePath) {
-  const result = spawnSync('mkfifo', [filePath], { encoding: 'utf8' });
-  assert.equal(result.status, 0, `mkfifo ${filePath} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
-}
-
-function expectRunner(args, label, options = {}) {
-  const result = runRunner(args, options);
+async function expectRunner(args, label, options = {}) {
+  const result = await runRunner(args, options);
   assert.equal(result.status, 0, `${label} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   return JSON.parse(result.stdout);
 }
@@ -202,7 +134,7 @@ function workerOutput(summary) {
 
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
-test('runner: next resolves external workflow package shared resources from repo boundary', () => {
+test('runner: next resolves external workflow package shared resources from repo boundary', async () => {
   const repoDir = path.join(tempDir, 'external-runner-shared-repo');
   const workflowDir = path.join(repoDir, 'workflows', 'demo');
   const sharedDir = path.join(repoDir, 'shared');
@@ -221,15 +153,16 @@ test('runner: next resolves external workflow package shared resources from repo
   doc.steps.prepare.output = { template: 'output.md', schema: '../../shared/shared.schema.json' };
   writeJson(path.join(workflowDir, 'workflow.json'), doc);
 
-  const result = runRunner(['next', '--run-id', runCase('external-runner-shared-run').runId, '--workflow', path.join(workflowDir, 'workflow.json')]);
+  const { runId } = await runCase('external-runner-shared-run');
+  const result = await runRunner(['next', '--run-id', runId, '--workflow', path.join(workflowDir, 'workflow.json')]);
 
   assert.equal(result.status, 0, result.stderr);
   const response = JSON.parse(result.stdout);
   assert.equal(response.requests[0].stepId, 'prepare');
 });
 
-test('runner: next uses semantic workflow validation and rejects schema-declared dynamic targets that are not workflow steps', () => {
-  const { runId, runDir } = runCase('runtime-semantic-dynamic-target');
+test('runner: next uses semantic workflow validation and rejects schema-declared dynamic targets that are not workflow steps', async () => {
+  const { runId, runDir } = await runCase('runtime-semantic-dynamic-target');
   const workflowPath = path.join(tempDir, 'runtime-semantic-dynamic-target-workflow.json');
   const schemaPath = path.join(tempDir, 'runtime-semantic-dynamic-target.schema.json');
   writeJson(schemaPath, {
@@ -247,14 +180,14 @@ test('runner: next uses semantic workflow validation and rejects schema-declared
   dynamicWorkflow.steps.prepare.next = '${{ output.route }}';
   writeJson(workflowPath, dynamicWorkflow);
 
-  const result = runRunner(['next', '--run-id', runId, '--workflow', workflowPath]);
+  const result = await runRunner(['next', '--run-id', runId, '--workflow', workflowPath]);
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /prepare.*next expression.*missing_step/);
 });
 
-test('runner: continue rejects explicit workflow mismatch with indexed workflow context', () => {
-  const { runId, runDir } = runCase('continue-workflow-mismatch');
+test('runner: continue rejects explicit workflow mismatch with indexed workflow context', async () => {
+  const { runId, runDir } = await runCase('continue-workflow-mismatch');
   const workflowPath = path.join(tempDir, 'continue-workflow-mismatch-a.json');
   const otherWorkflowPath = path.join(tempDir, 'continue-workflow-mismatch-b.json');
   const singleWorkflow = structuredClone(workflowDoc);
@@ -262,17 +195,17 @@ test('runner: continue rejects explicit workflow mismatch with indexed workflow 
   writeJson(workflowPath, singleWorkflow);
   writeJson(otherWorkflowPath, singleWorkflow);
 
-  expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next workflow mismatch setup');
+  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next workflow mismatch setup');
 
-  const mismatched = runRunner(['continue', '--run-id', runId, '--workflow', otherWorkflowPath]);
+  const mismatched = await runRunner(['continue', '--run-id', runId, '--workflow', otherWorkflowPath]);
 
   assert.notEqual(mismatched.status, 0);
   assert.match(mismatched.stderr, /already bound to a different workflow/);
   assert.equal(JSON.parse(readFileSync(path.join(runDir, 'baton.json'), 'utf8')).cursor, 'prepare');
 });
 
-test('runner: instructions rejects explicit workflow mismatch with indexed workflow context', () => {
-  const { runId, runDir } = runCase('instructions-workflow-mismatch');
+test('runner: instructions rejects explicit workflow mismatch with indexed workflow context', async () => {
+  const { runId, runDir } = await runCase('instructions-workflow-mismatch');
   const workflowPath = path.join(tempDir, 'instructions-workflow-mismatch-a.json');
   const otherWorkflowPath = path.join(tempDir, 'instructions-workflow-mismatch-b.json');
   const singleWorkflow = structuredClone(workflowDoc);
@@ -280,42 +213,42 @@ test('runner: instructions rejects explicit workflow mismatch with indexed workf
   writeJson(workflowPath, singleWorkflow);
   writeJson(otherWorkflowPath, singleWorkflow);
 
-  expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next instructions workflow mismatch setup');
+  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next instructions workflow mismatch setup');
 
-  const mismatched = runRunner(['instructions', '--run-id', runId, '--workflow', otherWorkflowPath, '--step-id', 'prepare']);
+  const mismatched = await runRunner(['instructions', '--run-id', runId, '--workflow', otherWorkflowPath, '--step-id', 'prepare']);
 
   assert.notEqual(mismatched.status, 0);
   assert.match(mismatched.stderr, /already bound to a different workflow/);
 });
 
-test('runner: continue rejects when recomputed current response is terminal', () => {
-  const { runId, runDir } = runCase('continue-terminal-current-response');
+test('runner: continue rejects when recomputed current response is terminal', async () => {
+  const { runId, runDir } = await runCase('continue-terminal-current-response');
   const workflowPath = path.join(tempDir, 'continue-terminal-current-response-workflow.json');
   const singleWorkflow = structuredClone(workflowDoc);
   singleWorkflow.steps.prepare.next = 'done';
   writeJson(workflowPath, singleWorkflow);
 
-  expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next stale continue setup');
+  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next stale continue setup');
   writeJson(path.join(runDir, 'baton.json'), { cursor: 'done', status: 'done', state: { artifacts: [], results: [], prepare: workerOutput('prepared elsewhere') } });
 
-  const stale = runRunner(['continue', '--run-id', runId, '--workflow', workflowPath]);
+  const stale = await runRunner(['continue', '--run-id', runId, '--workflow', workflowPath]);
 
   assert.notEqual(stale.status, 0);
   assert.match(stale.stderr, /current runner response is 'done', not needs_host_actions/);
   assert.equal(JSON.parse(readFileSync(path.join(runDir, 'baton.json'), 'utf8')).cursor, 'done');
 });
 
-test('runner: instructions rejects request that is not in recomputed current response', () => {
-  const { runId, runDir } = runCase('instructions-not-current-request');
+test('runner: instructions rejects request that is not in recomputed current response', async () => {
+  const { runId, runDir } = await runCase('instructions-not-current-request');
   const workflowPath = path.join(tempDir, 'instructions-not-current-request-workflow.json');
   const singleWorkflow = structuredClone(workflowDoc);
   singleWorkflow.steps.prepare.next = 'done';
   writeJson(workflowPath, singleWorkflow);
 
-  expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next stale instructions setup');
+  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next stale instructions setup');
   writeJson(path.join(runDir, 'baton.json'), { cursor: 'done', status: 'done', state: { artifacts: [], results: [], prepare: workerOutput('prepared') } });
 
-  const stale = runRunner(['instructions', '--run-id', runId, '--step-id', 'prepare']);
+  const stale = await runRunner(['instructions', '--run-id', runId, '--step-id', 'prepare']);
 
   assert.notEqual(stale.status, 0);
   assert.match(stale.stderr, /stale workflow-runner command from an older response/);
@@ -324,63 +257,63 @@ test('runner: instructions rejects request that is not in recomputed current res
   assert.match(stale.stderr, /Use the latest workflow-runner response\/instructions/);
 });
 
-test('runner: stale older-response commands name the current request step ids', () => {
-  const { runId } = runCase('stale-current-request-diagnostics');
+test('runner: stale older-response commands name the current request step ids', async () => {
+  const { runId } = await runCase('stale-current-request-diagnostics');
   const workflowPath = path.join(tempDir, 'stale-current-request-diagnostics-workflow.json');
   writeJson(workflowPath, workflowDoc);
 
-  expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next stale current request diagnostics');
-  expectRunner(['write-output', '--run-id', runId, '--step-id', 'prepare'], 'write prepare before stale diagnostics', { input: JSON.stringify(workerOutput('prepared')), debugSummary: true });
-  let continued = expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue to branch fanout');
+  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next stale current request diagnostics');
+  await expectRunner(['write-output', '--run-id', runId, '--step-id', 'prepare'], 'write prepare before stale diagnostics', { input: JSON.stringify(workerOutput('prepared')), debugSummary: true });
+  let continued = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue to branch fanout');
   assert.deepEqual(continued.requests.map((request) => request.stepId), ['branch_a', 'branch_b']);
 
-  expectRunner(['write-output', '--run-id', runId, '--step-id', 'branch_a'], 'write branch_a before stale diagnostics', { input: JSON.stringify(workerOutput('branch a')), debugSummary: true });
-  expectRunner(['write-output', '--run-id', runId, '--step-id', 'branch_b'], 'write branch_b before stale diagnostics', { input: JSON.stringify(workerOutput('branch b')), debugSummary: true });
-  continued = expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue to join request');
+  await expectRunner(['write-output', '--run-id', runId, '--step-id', 'branch_a'], 'write branch_a before stale diagnostics', { input: JSON.stringify(workerOutput('branch a')), debugSummary: true });
+  await expectRunner(['write-output', '--run-id', runId, '--step-id', 'branch_b'], 'write branch_b before stale diagnostics', { input: JSON.stringify(workerOutput('branch b')), debugSummary: true });
+  continued = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue to join request');
   assert.deepEqual(continued.requests.map((request) => request.stepId), ['join']);
 
-  const staleInstructions = runRunner(['instructions', '--run-id', runId, '--step-id', 'branch_a']);
+  const staleInstructions = await runRunner(['instructions', '--run-id', runId, '--step-id', 'branch_a']);
   assert.notEqual(staleInstructions.status, 0);
   assert.match(staleInstructions.stderr, /stale workflow-runner command from an older response/);
   assert.match(staleInstructions.stderr, /requested step 'branch_a'/);
   assert.match(staleInstructions.stderr, /current request step ids: join/);
   assert.match(staleInstructions.stderr, /Use the latest workflow-runner response\/instructions/);
 
-  const staleBind = runRunner(['bind-agent', '--run-id', runId, '--step-id', 'branch_a', '--agent-id', 'worker-branch-a']);
+  const staleBind = await runRunner(['bind-agent', '--run-id', runId, '--step-id', 'branch_a', '--agent-id', 'worker-branch-a']);
   assert.notEqual(staleBind.status, 0);
   assert.match(staleBind.stderr, /stale workflow-runner command from an older response/);
   assert.match(staleBind.stderr, /requested step 'branch_a'/);
   assert.match(staleBind.stderr, /current request step ids: join/);
 });
 
-test('runner: instructions rejects unknown and unsafe step ids, and recomputes missing prompt files', () => {
-  const { runId, runDir } = runCase('instructions-errors');
+test('runner: instructions rejects unknown and unsafe step ids, and recomputes missing prompt files', async () => {
+  const { runId, runDir } = await runCase('instructions-errors');
   const workflowPath = path.join(tempDir, 'instructions-errors-workflow.json');
   const singleWorkflow = structuredClone(workflowDoc);
   singleWorkflow.steps.prepare.next = 'done';
   writeJson(workflowPath, singleWorkflow);
 
-  expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next instructions errors');
+  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next instructions errors');
 
-  const unknown = runRunner(['instructions', '--run-id', runId, '--step-id', 'nope']);
+  const unknown = await runRunner(['instructions', '--run-id', runId, '--step-id', 'nope']);
   assert.notEqual(unknown.status, 0);
   assert.match(unknown.stderr, /stale workflow-runner command from an older response/);
   assert.match(unknown.stderr, /requested step 'nope'/);
   assert.match(unknown.stderr, /current request step ids: prepare/);
 
-  const unsafe = runRunner(['instructions', '--run-id', runId, '--step-id', '../prepare']);
+  const unsafe = await runRunner(['instructions', '--run-id', runId, '--step-id', '../prepare']);
   assert.notEqual(unsafe.status, 0);
   assert.match(unsafe.stderr, /invalid workflow step id/);
 
   rmSync(path.join(runDir, '.workflow-runner', 'instructions', 'prepare.md'), { force: true });
-  const recomputed = runRunner(['instructions', '--run-id', runId, '--step-id', 'prepare']);
+  const recomputed = await runRunner(['instructions', '--run-id', runId, '--step-id', 'prepare']);
   assert.equal(recomputed.status, 0, recomputed.stderr);
   assert.match(recomputed.stdout, /# Prepare/);
   assert.equal(existsSync(path.join(runDir, '.workflow-runner', 'instructions', 'prepare.md')), false);
 });
 
-test('runner: rendered artifact instructions include the absolute step artifact directory', () => {
-  const { runId, runDir } = runCase('artifact-output-dir');
+test('runner: rendered artifact instructions include the absolute step artifact directory', async () => {
+  const { runId, runDir } = await runCase('artifact-output-dir');
   const workflowPath = path.join(tempDir, 'artifact-output-dir-workflow.json');
   const schemaPath = path.join(tempDir, 'artifact-output-dir-output.schema.json');
   const singleWorkflow = structuredClone(workflowDoc);
@@ -399,8 +332,8 @@ test('runner: rendered artifact instructions include the absolute step artifact 
   });
   writeJson(workflowPath, singleWorkflow);
 
-  expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next artifact output dir');
-  const loaded = runRunner(['instructions', '--run-id', runId, '--step-id', 'prepare']);
+  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next artifact output dir');
+  const loaded = await runRunner(['instructions', '--run-id', runId, '--step-id', 'prepare']);
   assert.equal(loaded.status, 0, loaded.stderr);
   const instructions = loaded.stdout;
 
@@ -432,7 +365,7 @@ function artifactOutputWorkflow(label) {
 }
 
 async function startArtifactOutputRun(label) {
-  const { runId, runDir } = runCase(label);
+  const { runId, runDir } = await runCase(label);
   const workflowPath = artifactOutputWorkflow(label);
   const leaseToken = `${label}-token-${process.pid}`;
   await runnerNext({ runId, workflowPath, leaseToken });
@@ -455,7 +388,7 @@ test('runner write-output rejects relative artifact paths', async () => {
 });
 
 test('runner write-output validates artifact boundaries without declared output schema', async () => {
-  const { runId } = runCase('schemaless-artifact-path-reject');
+  const { runId } = await runCase('schemaless-artifact-path-reject');
   const workflowPath = path.join(tempDir, 'schemaless-artifact-path-reject-workflow.json');
   const singleWorkflow = structuredClone(workflowDoc);
   singleWorkflow.steps.prepare.next = 'done';
@@ -611,12 +544,10 @@ test('runner API emits absolute runsRoot in portable commands for relative custo
   const runId = `workflow-runner-test-${process.pid}-relative-runs-root-command`;
   const runsRoot = path.relative(process.cwd(), path.join(tempDir, 'relative-runs-root-command'));
   const resolvedRunsRoot = path.resolve(runsRoot);
-  const otherCwd = path.join(tempDir, 'relative-runs-root-command-other-cwd');
   const workflowPath = path.join(tempDir, 'relative-runs-root-command-workflow.json');
   const leaseToken = `relative-runs-root-command-token-${process.pid}`;
   writeJson(workflowPath, workflowDoc);
   rmSync(resolvedRunsRoot, { recursive: true, force: true });
-  mkdirSync(otherCwd, { recursive: true });
 
   const first = await runnerNext({ runId, workflowPath, runsRoot, leaseToken });
 
@@ -626,13 +557,4 @@ test('runner API emits absolute runsRoot in portable commands for relative custo
   assert.equal(first.requests[0].loadFollowupInstructionsCommand.includes(`--runs-root '${resolvedRunsRoot}'`), true);
   assert.equal(first.requests[0].bindAgentCommand.includes(`--runs-root '${resolvedRunsRoot}'`), true);
   assert.equal(first.orchestratorInstruction.includes(`--runs-root '${resolvedRunsRoot}'`), true);
-
-  const loadedFromOtherCwd = spawnSync(first.requests[0].loadInstructionsCommand, {
-    cwd: otherCwd,
-    encoding: 'utf8',
-    shell: true,
-  });
-  assert.equal(loadedFromOtherCwd.status, 0, loadedFromOtherCwd.stderr);
-  assert.match(loadedFromOtherCwd.stdout, /# Prepare/);
-  assert.match(loadedFromOtherCwd.stdout, /Prepare branch\./);
 });

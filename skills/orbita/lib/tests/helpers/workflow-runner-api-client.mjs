@@ -8,6 +8,7 @@ import {
   recordOrchestrator,
   writeOutput,
 } from '../../entrypoints/workflow-runner-command.mjs';
+import { claimWorkflowRunAtRoot, registerWorkflowRunAtRoot } from '../../persistence/run-state/workflow-runs.mjs';
 import { publicErrorMessage } from '../../public-error.mjs';
 
 function valueAfter(args, name) {
@@ -36,6 +37,23 @@ function leaseArgs(args, env) {
   };
 }
 
+async function withTemporaryEnv(env, callback) {
+  const previous = new Map();
+  for (const [key, value] of Object.entries(env ?? {})) {
+    previous.set(key, Object.hasOwn(process.env, key) ? process.env[key] : undefined);
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = String(value);
+  }
+  try {
+    return await callback();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
 export async function runWorkflowRunnerApi(args, options = {}) {
   const [mode] = args;
   const env = { ...process.env, ...(options.env ?? {}) };
@@ -46,6 +64,7 @@ export async function runWorkflowRunnerApi(args, options = {}) {
     ...leaseArgs(args, env),
   };
 
+  return await withTemporaryEnv(options.env, async () => {
   try {
     if (mode === 'instructions') {
       const instructions = await loadInstructions({
@@ -112,5 +131,47 @@ export async function runWorkflowRunnerApi(args, options = {}) {
       stdout: '',
       stderr: `workflow-runner: ${publicErrorMessage(error?.message ?? error)}\n`,
     };
+  }
+  });
+}
+
+export async function claimWorkflowRunForTest(paths, { leaseTokensByRunId, testLeaseToken } = {}) {
+  const knownToken = leaseTokensByRunId?.get(paths.runId);
+  if (knownToken) {
+    process.env.WORKFLOW_RUN_TOKEN = knownToken;
+    return knownToken;
+  }
+
+  try {
+    const created = await registerWorkflowRunAtRoot({
+      runId: paths.runId,
+      workflowPath: paths.workflowPath,
+      runsRoot: paths.runsRoot,
+      claim: true,
+    });
+    leaseTokensByRunId?.set(paths.runId, created.leaseToken);
+    process.env.WORKFLOW_RUN_TOKEN = created.leaseToken;
+    return created.leaseToken;
+  } catch {
+    const token = testLeaseToken;
+    let claimed = await claimWorkflowRunAtRoot({
+      runId: paths.runId,
+      workflowPath: paths.workflowPath,
+      runsRoot: paths.runsRoot,
+      leaseToken: token,
+    });
+    if (!claimed.ok && claimed.reason === 'occupied') {
+      claimed = await claimWorkflowRunAtRoot({
+        runId: paths.runId,
+        workflowPath: paths.workflowPath,
+        runsRoot: paths.runsRoot,
+        takeover: true,
+      });
+    }
+    if (!claimed.ok) throw new Error(`claim ${paths.runId} failed: ${claimed.reason ?? 'unknown'}`);
+    const claimedToken = claimed.leaseToken ?? token;
+    leaseTokensByRunId?.set(paths.runId, claimedToken);
+    process.env.WORKFLOW_RUN_TOKEN = claimedToken;
+    return claimedToken;
   }
 }

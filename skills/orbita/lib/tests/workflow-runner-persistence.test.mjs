@@ -1,16 +1,12 @@
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
-import { runWorkflowRunnerApi } from './helpers/workflow-runner-api-client.mjs';
-import { once } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { claimWorkflowRunForTest, runWorkflowRunnerApi } from './helpers/workflow-runner-api-client.mjs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
-import { fileURLToPath } from 'node:url';
 import { next as runnerNext } from '../entrypoints/workflow-runner-command.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-check-'));
 writeFileSync(path.join(tempDir, 'output.md'), '## Output contract\nReturn markdown.\n');
 writeFileSync(path.join(tempDir, 'output.schema.json'), `${JSON.stringify({
@@ -74,70 +70,31 @@ function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function claimRunForTest(paths) {
-  const knownToken = leaseTokensByRunId.get(paths.runId);
-  if (knownToken) {
-    process.env.WORKFLOW_RUN_TOKEN = knownToken;
-    return knownToken;
-  }
-  const createArgs = ['skills/orbita/lib/entrypoints/cli/workflow-runs.mjs', 'create', '--claim', '--run-id', paths.runId, '--workflow', paths.workflowPath];
-  const created = spawnSync(process.execPath, createArgs, { cwd: root, encoding: 'utf8', env: process.env });
-  if (created.status === 0) {
-    const token = JSON.parse(created.stdout).leaseToken;
-    leaseTokensByRunId.set(paths.runId, token);
-    process.env.WORKFLOW_RUN_TOKEN = token;
-    return token;
-  }
-  const token = knownToken ?? testLeaseToken;
-  const claimed = spawnSync(process.execPath, ['skills/orbita/lib/entrypoints/cli/workflow-runs.mjs', 'claim', '--run-id', paths.runId, '--lease-token', token], { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUN_TOKEN: token } });
-  assert.equal(claimed.status, 0, `claim ${paths.runId} failed\ncreate stderr:\n${created.stderr}\nclaim stderr:\n${claimed.stderr}`);
-  leaseTokensByRunId.set(paths.runId, token);
-  process.env.WORKFLOW_RUN_TOKEN = token;
-  return token;
+async function claimRunForTest(paths) {
+  return await claimWorkflowRunForTest(paths, { leaseTokensByRunId, testLeaseToken });
 }
 
-function runCase(label, workflowPath) {
+async function runCase(label, workflowPath) {
   const runId = `workflow-runner-test-${process.pid}-${label}`;
   const paths = resolveRunPaths({ runId, workflowPath });
   rmSync(paths.runDir, { recursive: true, force: true });
-  if (workflowPath !== undefined) claimRunForTest(paths);
+  if (workflowPath !== undefined) await claimRunForTest(paths);
   return { runId, runDir: paths.runDir };
 }
-
-function runCaseNamed(name, label, workflowPath) {
-  const runId = `workflow-runner-test-${process.pid}-${label}`;
-  const paths = resolveRunPaths({ runId, workflowPath });
-  rmSync(paths.runDir, { recursive: true, force: true });
-  if (workflowPath !== undefined) claimRunForTest(paths);
-  return { [`${name}RunId`]: runId, [`${name}RunDir`]: paths.runDir };
-}
-
 
 function valueAfter(args, name) {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : undefined;
 }
 
-function claimRunForRunnerArgs(args) {
+async function claimRunForRunnerArgs(args) {
   const runId = valueAfter(args, '--run-id');
   if (!runId) return undefined;
   const workflowPath = valueAfter(args, '--workflow');
   const knownToken = leaseTokensByRunId.get(runId);
   if (knownToken) return knownToken;
-  const createArgs = ['skills/orbita/lib/entrypoints/cli/workflow-runs.mjs', 'create', '--claim', '--run-id', runId];
-  if (workflowPath !== undefined) createArgs.push('--workflow', workflowPath);
-  const created = spawnSync(process.execPath, createArgs, { cwd: root, encoding: 'utf8', env: process.env });
-  if (created.status === 0) {
-    const token = JSON.parse(created.stdout).leaseToken;
-    leaseTokensByRunId.set(runId, token);
-    return token;
-  }
-  const token = knownToken ?? testLeaseToken;
-  const claimArgs = ['skills/orbita/lib/entrypoints/cli/workflow-runs.mjs', 'claim', '--run-id', runId, '--lease-token', token];
-  if (workflowPath !== undefined) claimArgs.push('--workflow', workflowPath);
-  const claimed = spawnSync(process.execPath, claimArgs, { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUN_TOKEN: token } });
-  assert.equal(claimed.status, 0, `claim ${runId} failed\ncreate stderr:\n${created.stderr}\nclaim stderr:\n${claimed.stderr}`);
-  return token;
+  const paths = resolveRunPaths({ runId, workflowPath });
+  return await claimRunForTest(paths);
 }
 
 function withLeaseTokenArg(args, token) {
@@ -159,30 +116,9 @@ function withDebugSummaryArg(args, options = {}) {
 }
 
 async function runRunner(args, options = {}) {
-  const token = claimRunForRunnerArgs(args);
+  const token = await claimRunForRunnerArgs(args);
   const runnerArgs = withDebugSummaryArg(withLeaseTokenArg(args, token), options);
   return runWorkflowRunnerApi(runnerArgs, { ...options, env: { WORKFLOW_RUN_TOKEN: token ?? testLeaseToken, ...(options.env ?? {}) } });
-}
-
-async function runRunnerAsync(args) {
-  const token = claimRunForRunnerArgs(args);
-  const child = spawn(process.execPath, ['skills/orbita/lib/entrypoints/cli/workflow-runner.mjs', ...withLeaseTokenArg(args, token)], {
-    cwd: root,
-    encoding: 'utf8',
-    env: { ...process.env, WORKFLOW_RUN_TOKEN: token ?? testLeaseToken },
-  });
-  let stdout = '';
-  let stderr = '';
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk;
-  });
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-  const [status] = await once(child, 'exit');
-  return { status, stdout, stderr };
 }
 
 async function waitForPath(filePath) {
@@ -191,11 +127,6 @@ async function waitForPath(filePath) {
     if (Date.now() - startedAt > 2000) throw new Error(`timed out waiting for ${filePath}`);
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-}
-
-function makeFifo(filePath) {
-  const result = spawnSync('mkfifo', [filePath], { encoding: 'utf8' });
-  assert.equal(result.status, 0, `mkfifo ${filePath} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
 }
 
 async function expectRunner(args, label) {
@@ -248,7 +179,7 @@ function workerOutput(summary) {
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('runner: persisted user prompt injection marker survives workflow drift on resume', async () => {
-  const { runId, runDir } = runCase('user-prompt-workflow-drift');
+  const { runId, runDir } = await runCase('user-prompt-workflow-drift');
   const workflowPath = path.join(tempDir, 'user-prompt-workflow-drift.json');
   const driftWorkflow = structuredClone(workflowDoc);
   driftWorkflow.steps.prepare.next = 'branch_a';
@@ -276,7 +207,7 @@ test('runner: persisted user prompt injection marker survives workflow drift on 
 });
 
 test('runner: continue applies single output and returns terminal done', async () => {
-  const { runId, runDir } = runCase('single-continue');
+  const { runId, runDir } = await runCase('single-continue');
   const workflowPath = path.join(tempDir, 'single-continue-workflow.json');
   const singleWorkflow = structuredClone(workflowDoc);
   singleWorkflow.steps.prepare.next = 'done';
@@ -294,7 +225,7 @@ test('runner: continue applies single output and returns terminal done', async (
 });
 
 test('runner: continue reuses saved custom workflow when --workflow is omitted', async () => {
-  const { runId, runDir } = runCase('custom-workflow-continue');
+  const { runId, runDir } = await runCase('custom-workflow-continue');
   const workflowPath = path.join(tempDir, 'custom-workflow-continue.json');
   const singleWorkflow = structuredClone(workflowDoc);
   singleWorkflow.name = 'custom-workflow-continue';
@@ -313,7 +244,7 @@ test('runner: continue reuses saved custom workflow when --workflow is omitted',
 });
 
 test('runner: wait_for_approval request accepts request-specific host output JSON', async () => {
-  const { runId, runDir } = runCase('approval-generic-output');
+  const { runId, runDir } = await runCase('approval-generic-output');
   const workflowPath = path.join(tempDir, 'approval-generic-output-workflow.json');
   const approvalWorkflow = structuredClone(workflowDoc);
   approvalWorkflow.start = 'choose_path';
@@ -345,7 +276,7 @@ test('runner: wait_for_approval request accepts request-specific host output JSO
 });
 
 test('runner: single approval request applies output by current stepId', async () => {
-  const { runId, runDir } = runCase('approval-step-id-output');
+  const { runId, runDir } = await runCase('approval-step-id-output');
   const workflowPath = path.join(tempDir, 'approval-step-id-output-workflow.json');
   const approvalWorkflow = structuredClone(workflowDoc);
   approvalWorkflow.start = 'choose_path';
@@ -377,7 +308,7 @@ test('runner: single approval request applies output by current stepId', async (
 });
 
 test('runner: approval request exposes optional output schema reference', async () => {
-  const { runId, runDir } = runCase('approval-output-schema-request');
+  const { runId, runDir } = await runCase('approval-output-schema-request');
   const workflowPath = path.join(tempDir, 'approval-output-schema-request-workflow.json');
   const schemaPath = path.join(tempDir, 'approval-output-schema-request.schema.json');
   writeJson(schemaPath, {
@@ -412,7 +343,7 @@ test('runner: approval request exposes optional output schema reference', async 
 });
 
 test('runner: typed approval retry preserves validation feedback in instructions', async () => {
-  const { runId, runDir } = runCase('approval-output-schema-retry');
+  const { runId, runDir } = await runCase('approval-output-schema-retry');
   const workflowPath = path.join(tempDir, 'approval-output-schema-retry-workflow.json');
   const schemaPath = path.join(tempDir, 'approval-output-schema-retry.schema.json');
   writeJson(schemaPath, {
@@ -458,7 +389,7 @@ test('runner: typed approval retry preserves validation feedback in instructions
 });
 
 test('runner: typed approval static parallel next preserves approval output in state', async () => {
-  const { runId, runDir } = runCase('approval-output-schema-static-parallel');
+  const { runId, runDir } = await runCase('approval-output-schema-static-parallel');
   const workflowPath = path.join(tempDir, 'approval-output-schema-static-parallel-workflow.json');
   const schemaPath = path.join(tempDir, 'approval-output-schema-static-parallel.schema.json');
   writeJson(schemaPath, {
@@ -507,7 +438,7 @@ test('runner: typed approval static parallel next preserves approval output in s
 });
 
 test('runner: generic approval static parallel next preserves approval output in state', async () => {
-  const { runId, runDir } = runCase('approval-generic-static-parallel');
+  const { runId, runDir } = await runCase('approval-generic-static-parallel');
   const workflowPath = path.join(tempDir, 'approval-generic-static-parallel-workflow.json');
   const approvalWorkflow = structuredClone(workflowDoc);
   approvalWorkflow.start = 'choose_path';
@@ -545,7 +476,7 @@ test('runner: generic approval static parallel next preserves approval output in
 });
 
 test('runner: selected startup prompt target survives static parallel workflow order drift before output', async () => {
-  const { runId, runDir } = runCase('user-prompt-static-parallel-target-drift');
+  const { runId, runDir } = await runCase('user-prompt-static-parallel-target-drift');
   const workflowPath = path.join(tempDir, 'user-prompt-static-parallel-target-drift.json');
   const approvalWorkflow = structuredClone(workflowDoc);
   approvalWorkflow.start = 'choose_path';
@@ -593,7 +524,7 @@ test('runner: selected startup prompt target survives static parallel workflow o
 });
 
 test('runner: startup prompt static fanout selects renderable worker instead of downstream control-branch worker', async () => {
-  const { runId, runDir } = runCase('user-prompt-static-fanout-control-branch');
+  const { runId, runDir } = await runCase('user-prompt-static-fanout-control-branch');
   const workflowPath = path.join(tempDir, 'user-prompt-static-fanout-control-branch.json');
   const fanoutWorkflow = structuredClone(workflowDoc);
   fanoutWorkflow.start = 'choose_path';
@@ -642,7 +573,7 @@ test('runner: startup prompt static fanout selects renderable worker instead of 
 });
 
 test('runner: startup prompt target removal before first output fails loudly instead of dropping prompt', async () => {
-  const { runId, runDir } = runCase('user-prompt-static-parallel-target-removed');
+  const { runId, runDir } = await runCase('user-prompt-static-parallel-target-removed');
   const workflowPath = path.join(tempDir, 'user-prompt-static-parallel-target-removed.json');
   const approvalWorkflow = structuredClone(workflowDoc);
   approvalWorkflow.start = 'choose_path';
@@ -679,7 +610,7 @@ test('runner: startup prompt target removal before first output fails loudly ins
 });
 
 test('runner: untyped approval static parallel applies branch outputs and persists prompt marker once', async () => {
-  const { runId, runDir } = runCase('approval-untyped-static-parallel-branch-output');
+  const { runId, runDir } = await runCase('approval-untyped-static-parallel-branch-output');
   const workflowPath = path.join(tempDir, 'approval-untyped-static-parallel-branch-output.json');
   const approvalWorkflow = structuredClone(workflowDoc);
   approvalWorkflow.start = 'choose_path';
@@ -725,7 +656,7 @@ test('runner: untyped approval static parallel applies branch outputs and persis
 });
 
 test('runner: continue fans out parallel branch requests with separate step ids and load commands', async () => {
-  const { runId, runDir } = runCase('parallel');
+  const { runId, runDir } = await runCase('parallel');
   const workflowPath = path.join(tempDir, 'parallel-workflow.json');
   writeJson(workflowPath, workflowDoc);
 
@@ -747,7 +678,7 @@ test('runner: continue fans out parallel branch requests with separate step ids 
 });
 
 test('runner: continue accepts mixed run_worker and user-input outputs in one batch', async () => {
-  const { runId, runDir } = runCase('parallel-mixed-host-actions');
+  const { runId, runDir } = await runCase('parallel-mixed-host-actions');
   const workflowPath = path.join(tempDir, 'parallel-mixed-host-actions.json');
   const mixedWorkflow = structuredClone(workflowDoc);
   mixedWorkflow.steps.prepare.next = ['branch_a', 'choose_path'];
@@ -787,7 +718,7 @@ test('runner: continue accepts mixed run_worker and user-input outputs in one ba
 });
 
 test('runner: continue collects parallel outputs and advances to join request', async () => {
-  const { runId, runDir } = runCase('parallel-join');
+  const { runId, runDir } = await runCase('parallel-join');
   const workflowPath = path.join(tempDir, 'parallel-join-workflow.json');
   writeJson(workflowPath, workflowDoc);
 
