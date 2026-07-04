@@ -126,6 +126,11 @@ function workerOutput(summary) {
   return { outcome: 'ready', results: [{ type: 'check', summary }] };
 }
 
+function persistedCurrentRequestStepIds(runDir) {
+  const currentRequests = JSON.parse(readFileSync(path.join(runDir, '.workflow-runner', 'current-requests.json'), 'utf8'));
+  return (currentRequests.requests ?? currentRequests).map((request) => request.stepId ?? request.id).sort();
+}
+
 async function currentRequests(runId, workflowPath) {
   const response = await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'derive current requests');
   return response.requests ?? [];
@@ -855,12 +860,16 @@ test('runner: write-output separates parallel request outputs by step id before 
   writeJson(workflowPath, workflow);
 
   await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next before prepare writer');
+  assert.deepEqual(persistedCurrentRequestStepIds(runDir), ['prepare']);
   assert.equal((await runRunner(['write-output', '--run-id', runId, '--step-id', 'prepare'], { input: JSON.stringify(workerOutput('prepared')), debugSummary: true })).status, 0);
+  assert.deepEqual(persistedCurrentRequestStepIds(runDir), ['prepare']);
   const fanout = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue to parallel branches');
   assert.deepEqual(fanout.requests.map((request) => request.stepId).sort(), ['branch_a', 'branch_b']);
+  assert.deepEqual(persistedCurrentRequestStepIds(runDir), ['branch_a', 'branch_b']);
 
   assert.equal((await runRunner(['write-output', '--run-id', runId, '--step-id', 'branch_a'], { input: JSON.stringify(workerOutput('A')), debugSummary: true })).status, 0);
   assert.equal((await runRunner(['write-output', '--run-id', runId, '--step-id', 'branch_b'], { input: JSON.stringify(workerOutput('B')), debugSummary: true })).status, 0);
+  assert.deepEqual(persistedCurrentRequestStepIds(runDir), ['branch_a', 'branch_b']);
   const batonAfterWrites = JSON.parse(readFileSync(path.join(runDir, 'baton.json'), 'utf8'));
   assert.equal(batonAfterWrites.state.branch_a.results[0].summary, 'A');
   assert.equal(batonAfterWrites.state.branch_b.results[0].summary, 'B');
@@ -868,6 +877,7 @@ test('runner: write-output separates parallel request outputs by step id before 
   const joined = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue from accepted parallel outputs');
   assert.equal(joined.status, 'needs_host_actions');
   assert.equal(joined.baton.cursor, 'join');
+  assert.deepEqual(persistedCurrentRequestStepIds(runDir), ['join']);
   assert.equal(joined.baton.state.branch_a.results[0].summary, 'A');
   assert.equal(joined.baton.state.branch_b.results[0].summary, 'B');
 });

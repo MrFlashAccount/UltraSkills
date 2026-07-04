@@ -21,6 +21,18 @@ function assertCommitSchema(commit) {
   assertObject(commit.sideEffects, 'persisted run-state commit sideEffects');
 }
 
+function assertCurrentRequestsSchema(currentRequests, name = 'persisted run state currentRequests') {
+  if (currentRequests === undefined) return;
+  if (!Array.isArray(currentRequests)) throw new Error(`${name} must be an array`);
+  for (const [index, request] of currentRequests.entries()) {
+    assertObject(request, `${name}[${index}]`);
+    assertString(request.id, `${name}[${index}].id`);
+    assertString(request.action, `${name}[${index}].action`);
+    if ('stepId' in request && typeof request.stepId !== 'string') throw new Error(`${name}[${index}].stepId must be a string`);
+    if ('ownerStepId' in request && typeof request.ownerStepId !== 'string') throw new Error(`${name}[${index}].ownerStepId must be a string`);
+  }
+}
+
 export function assertPersistedRunState(state, name = 'persisted run state') {
   assertObject(state, name);
   if (state.version !== PERSISTED_RUN_STATE_VERSION) throw new Error(`${name} has unsupported version`);
@@ -41,6 +53,13 @@ export function assertPersistedRunState(state, name = 'persisted run state') {
     if ('content' in instruction && typeof instruction.content !== 'string') throw new Error(`${name} instructions[${index}].content must be a string`);
     if (instruction.required === true && !('content' in instruction)) throw new Error(`${name} instructions[${index}].content must be present for committed instruction`);
   }
+  assertCurrentRequestsSchema(state.currentRequests, `${name} currentRequests`);
+  if ('currentRequestsWorkflowSignature' in state && typeof state.currentRequestsWorkflowSignature !== 'string') {
+    throw new Error(`${name} currentRequestsWorkflowSignature must be a string`);
+  }
+  if ('currentRequestsBatonSignature' in state && typeof state.currentRequestsBatonSignature !== 'string') {
+    throw new Error(`${name} currentRequestsBatonSignature must be a string`);
+  }
   assertCommitSchema(state.commit);
   return state;
 }
@@ -50,6 +69,7 @@ export function commitMetadata(commit) {
   const sideEffects = {
     baton: Object.hasOwn(commit, 'baton'),
     history: typeof commit.historyText === 'string',
+    currentRequests: Object.hasOwn(commit, 'currentRequests'),
   };
   return {
     version: 1,

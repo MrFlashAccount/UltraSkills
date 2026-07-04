@@ -1,7 +1,7 @@
 import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { access, open, readFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { access, open, readFile, rm, stat } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { assertPersistedRunState } from './persisted-state-schema.mjs';
 import { readPersistedRunState } from './PersistedRunStateReader.mjs';
 import { assertManagedRunStateFile, writeJsonAtomic, writeTextAtomic } from './atomic-file.mjs';
@@ -14,6 +14,15 @@ async function readJson(path, name) {
   catch (error) { throw new Error(`cannot read ${name} from ${path}: ${error.message}`); }
   try { return JSON.parse(content); }
   catch (error) { throw new Error(`cannot parse ${name} from ${path}: ${error.message}`); }
+}
+
+async function fileSignature(pathname) {
+  const stats = await stat(pathname);
+  return `${resolve(pathname)}:${stats.mtimeMs}:${stats.size}`;
+}
+
+function contentSignature(value) {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
 function historyEntry({ source, baton, requests, steps, output, decision, details }) {
@@ -52,12 +61,14 @@ async function snapshotDurableTargets(paths) {
   return {
     history: await readTextIfExists(paths.historyPath),
     baton: await readTextIfExists(paths.batonPath),
+    currentRequests: await readTextIfExists(paths.currentRequestsPath),
   };
 }
 
 async function restoreDurableTargets(paths, snapshot) {
   await restoreTextSnapshot(paths.historyPath, snapshot.history);
   await restoreTextSnapshot(paths.batonPath, snapshot.baton);
+  await restoreTextSnapshot(paths.currentRequestsPath, snapshot.currentRequests);
 }
 
 export async function recoverDurableCommit(paths) {
@@ -73,6 +84,14 @@ export async function recoverDurableCommit(paths) {
     maybeFailDurableCommitAfter('history');
     if (Object.hasOwn(commit, 'baton')) await writeJsonAtomic(paths.batonPath, commit.baton);
     maybeFailDurableCommitAfter('baton');
+    if (Object.hasOwn(commit, 'currentRequests')) {
+      await writeJsonAtomic(paths.currentRequestsPath, {
+        workflowSignature: commit.currentRequestsWorkflowSignature,
+        batonSignature: commit.currentRequestsBatonSignature,
+        requests: commit.currentRequests,
+      });
+    }
+    maybeFailDurableCommitAfter('currentRequests');
     await rm(paths.durableCommitPath, { force: true });
     assertPersistedRunState(await readPersistedRunState(paths), 'persisted run state after recovery');
     return true;
@@ -82,31 +101,55 @@ export async function recoverDurableCommit(paths) {
   }
 }
 
-function nextPersistedRunState(current, { baton, historyText, writeBaton = true }, commit) {
-  return {
+function nextPersistedRunState(current, { baton, historyText, currentRequests, currentRequestsWorkflowSignature, currentRequestsBatonSignature, writeBaton = true }, commit) {
+  const state = {
     ...current,
     baton: writeBaton ? baton : current.baton,
     instructions: [],
     history: { mode: 'embedded-text', path: current.history.path, text: historyText },
-    commit: { version: 1, id: commit.id, createdAt: commit.createdAt, status: 'pending', sideEffects: { baton: writeBaton, history: true } },
+    currentRequests: currentRequests ?? current.currentRequests,
+    commit: { version: 1, id: commit.id, createdAt: commit.createdAt, status: 'pending', sideEffects: { baton: writeBaton, history: true, currentRequests: currentRequests !== undefined } },
   };
+  const workflowSignature = currentRequestsWorkflowSignature ?? current.currentRequestsWorkflowSignature;
+  if (workflowSignature !== undefined) state.currentRequestsWorkflowSignature = workflowSignature;
+  const batonSignature = currentRequestsBatonSignature ?? current.currentRequestsBatonSignature;
+  if (batonSignature !== undefined) state.currentRequestsBatonSignature = batonSignature;
+  return state;
 }
 
-export async function commitDurableRunState(paths, { baton, history, writeBaton = true }) {
+export async function commitDurableRunState(paths, { baton, history, currentRequests, writeBaton = true }) {
   await recoverDurableCommit(paths);
   const current = await readPersistedRunState(paths);
   const historyBefore = current.history.mode === 'embedded-text' ? current.history.text : (await readTextIfExists(paths.historyPath)).content;
   const historyText = `${historyBefore ?? ''}${historyEntry(history)}`;
+  const currentRequestsWorkflowSignature = currentRequests !== undefined
+    ? await fileSignature(paths.workflowPath)
+    : undefined;
+  const currentRequestsBatonSignature = currentRequests !== undefined
+    ? contentSignature(writeBaton ? baton : current.baton)
+    : undefined;
   const commit = {
     version: 1,
     id: `${Date.now()}-${process.pid}`,
     createdAt: new Date().toISOString(),
     status: 'pending',
     historyText,
-    sideEffects: { baton: writeBaton, history: true },
+    sideEffects: { baton: writeBaton, history: true, currentRequests: currentRequests !== undefined },
   };
   if (writeBaton) commit.baton = baton;
-  assertPersistedRunState(nextPersistedRunState(current, { baton, historyText, writeBaton }, commit), 'next persisted run state');
+  if (currentRequests !== undefined) {
+    commit.currentRequests = currentRequests;
+    commit.currentRequestsWorkflowSignature = currentRequestsWorkflowSignature;
+    commit.currentRequestsBatonSignature = currentRequestsBatonSignature;
+  }
+  assertPersistedRunState(nextPersistedRunState(current, {
+    baton,
+    historyText,
+    currentRequests,
+    currentRequestsWorkflowSignature,
+    currentRequestsBatonSignature,
+    writeBaton,
+  }, commit), 'next persisted run state');
   await writeJsonAtomic(paths.durableCommitPath, commit);
   maybeFailDurableCommitAfter('pending');
   await recoverDurableCommit(paths);
