@@ -74,6 +74,20 @@ test('Baton applies output by merging artifacts, appending results, storing atte
 });
 
 
+test('Baton schema and semantic validation accept loop counters only', () => {
+  const valid = baton({ state: { artifacts: [], results: [], $loopProgress: { review_fix: 2 } } });
+  assert.doesNotThrow(() => assertBatonSchema(valid));
+  assert.deepEqual(new Baton(valid).validateAgainst(workflow), { ok: true });
+
+  const invalidPolicyPayload = baton({ state: { artifacts: [], results: [], $loopProgress: { review_fix: { maxIterations: 2 } } } });
+  assert.throws(() => assertBatonSchema(invalidPolicyPayload), /baton/);
+  assert.throws(
+    () => new Baton(invalidPolicyPayload).validateAgainst(workflow),
+    /state\.\$loopProgress\.review_fix must be a non-negative integer counter/,
+  );
+});
+
+
 test('Baton aggregate artifact merge keys by producer step id and artifact id', () => {
   const entity = new Baton(baton({
     state: {

@@ -17,6 +17,35 @@ Deterministic code owns the workflow loop:
 
 The host adapter is thin. It executes requests with whatever capabilities the environment provides, writes each host action result through the runner's validating writer, and calls the runner again after outputs are accepted. It does not choose transitions.
 
+## Semantic loop limits
+
+Workflow loop limits are interpreter-owned. When a workflow declares validated
+`loopPolicies`, the runner enforces them after output.schema validation has
+succeeded and after the selected route target has been resolved, but before the
+cursor is advanced.
+
+`maxIterations` counts selected valid internal route events inside the validated
+SCC/self-loop region. It does not count malformed output.schema retry attempts
+and does not count full human-described cycle rounds. When the next selected
+internal route event would exceed the limit, the runner persists loop progress
+and routes to the configured `onLimit` target instead of the original cycle
+target.
+
+Baton stores loop progress counters only. It must not store workflow policy
+definitions such as selected steps, limits, or targets. Loop progress uses a
+loop-specific namespace distinct from output.schema retry attempt keys such as
+`<stepId>:output.schema`.
+
+The host adapter does not enforce loop limits, choose `onLimit`, reset counters,
+or infer cycles from history. It only observes the runner's next public
+directive after accepted output is applied. Runtime history, repeated cursors,
+backward jumps, per-transition `cycleId`, manual scopes, and prompt-only limits
+are not supported loop policy mechanisms.
+
+Consecutive pass/success early exit is not part of the current public runtime
+contract. Hosts and workflow authors must not rely on success streak or
+`onSuccess` behavior unless a later workflow contract explicitly adds it.
+
 ## Runner commands
 
 ```bash

@@ -6,13 +6,14 @@ Read this before any review pass.
 
 - Review is mandatory after every implementation pass.
 - Documentation review is mandatory for non-trivial code slices.
-- Default to one independent reviewer; use `code-review-orchestrator` for non-trivial, risky, multi-zone, or `sensitive-surface` work.
+- Default to one independent reviewer; use two only when two independent material risk classes are touched, and use three for structural/runtime plus verification-heavy work. More than three reviewers requires an explicit escalation reason. Use `code-review-orchestrator` for non-trivial, risky, multi-zone, or `sensitive-surface` work.
 - If the slice is `sensitive-surface`, run `privacy/data-safety` review and include scanner output from the global `scripts/check_sensitive_surface.py` helper in the review brief.
 - Keep `security` separate from `privacy/data-safety`: `security` owns exploitability/auth/trust-boundary regressions; `privacy/data-safety` owns local-path leakage, committed personal docs, prompt/example leakage, retained user data, and consent/retention mistakes.
 - A worker may not review a slice it authored.
 - Keep reviewer selection separate from implementer roles; do not treat review specialties as implementer labels.
 - Start every reviewer/attacker pass from a hostile prior: assume the change, proposal, draft, or packet is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
 - Choose reviewers from the canonical reviewer role set by task context.
+- Select only reviewers that must actually run. Do not select a reviewer only to confirm absence of a surface; record that reviewer as skipped/considered with the evidence-backed reason instead.
 - Backend slices that touch request-path, persistence, or async runtime behavior must include `backend` review.
 - Add `performance` review when the touched backend path is user-visible, hot, or can block on sync storage/network/process work.
 - Add `qa/reliability` review when retries, timeouts, duplicate-delivery, rollback, or degraded-mode behavior materially changes.
@@ -28,6 +29,7 @@ Read this before any review pass.
 - For non-trivial work, run up to 3 review/fix passes; stop early when review is clean.
 - For non-trivial work, the loop is explicit: `IMPLEMENT -> VALIDATE -> REVIEW -> FIX -> RE-VALIDATE -> RE-REVIEW`.
 - After an in-scope fix pass, re-run validation before re-review, and prefer a fresh independent reviewer for re-review by default.
+- Re-review only failed reviewers and reviewers whose selected surfaces were materially changed by the fix; do not rerun clean reviewers by default.
 - Re-review after fixes must re-run the contract/docs drift check for any contract surface touched by the fix.
 - If blockers remain after the max passes, stop as blocked and surface unresolved findings.
 - `Sensitive-surface` work is not clean until the scanner is clean or explicitly dispositioned, and the relevant reviewer states either a concrete risk or that the approved slice is clean within scope.

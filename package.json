@@ -4,8 +4,8 @@
   "type": "module",
   "packageManager": "bun@1.3.14",
   "scripts": {
-    "test": "make -C skills/orbita test",
-    "test:workflow-e2e": "make -C skills/orbita test-workflow-e2e",
+    "test": "AGENT=1 make -C skills/orbita test",
+    "test:workflow-e2e": "AGENT=1 make -C skills/orbita test-workflow-e2e",
     "workflow:validate": "bun skills/orbita/lib/entrypoints/cli/validate-workflow.mjs workflows",
     "validate": "bun run workflow-layout:check && bun run workflow-runtime-boundaries:check && bun run role-evidence:check && bun run test && bun run workflow:validate && bun run agents:check && bun run schema-validation:check-vendor-ajv",
     "prepare": "git config core.hooksPath .githooks || true",

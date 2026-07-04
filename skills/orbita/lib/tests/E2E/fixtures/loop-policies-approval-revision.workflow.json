@@ -1,0 +1,115 @@
+{
+  "name": "fixture-loop-policies-approval-revision",
+  "version": 1,
+  "start": "plan",
+  "done": "done",
+  "blocked": "blocked",
+  "loopPolicies": {
+    "approval_revision": {
+      "steps": [
+        "plan",
+        "approval_gate"
+      ],
+      "maxIterations": 2,
+      "onLimit": "blocked"
+    },
+    "implementation_revision": {
+      "steps": [
+        "implement",
+        "review"
+      ],
+      "maxIterations": 2,
+      "onLimit": "blocked"
+    }
+  },
+  "steps": {
+    "plan": {
+      "name": "Plan",
+      "kind": "worker",
+      "input": {
+        "prompt": "Plan the work."
+      },
+      "output": {
+        "template": "output.md",
+        "schema": "schemas/routing-ready.schema.json"
+      },
+      "next": "approval_gate"
+    },
+    "approval_gate": {
+      "name": "Approval Gate",
+      "kind": "approval",
+      "input": {
+        "prompt": [
+          "Approve the plan.",
+          "",
+          "Plan result:",
+          "${{ input.plan.results }}"
+        ]
+      },
+      "next": {
+        "match": "${{ output.approval }}",
+        "cases": {
+          "approved": "implement",
+          "rejected": "plan"
+        }
+      },
+      "output": {
+        "schema": "schemas/approval.schema.json"
+      }
+    },
+    "implement": {
+      "name": "Implement",
+      "kind": "worker",
+      "input": {
+        "prompt": [
+          "Implement the approved plan.",
+          "",
+          "Review feedback to address:",
+          "${{ input.review.results | default: \"No review feedback yet.\" }}"
+        ]
+      },
+      "output": {
+        "template": "output.md",
+        "schema": "schemas/routing-ready.schema.json"
+      },
+      "next": "review"
+    },
+    "review": {
+      "name": "Review",
+      "kind": "worker",
+      "input": {
+        "prompt": [
+          "Review implementation.",
+          "",
+          "Implementation result:",
+          "${{ input.implement.results }}"
+        ]
+      },
+      "output": {
+        "template": "output.md",
+        "schema": "schemas/routing-review.schema.json"
+      },
+      "next": {
+        "match": "${{ output.outcome }}",
+        "cases": {
+          "ready": "done",
+          "retry": "implement"
+        }
+      }
+    },
+    "done": {
+      "name": "Done",
+      "kind": "done",
+      "input": {
+        "prompt": "Finished."
+      }
+    },
+    "blocked": {
+      "name": "Blocked",
+      "kind": "done",
+      "input": {
+        "prompt": "Loop limit reached."
+      }
+    }
+  }
+}

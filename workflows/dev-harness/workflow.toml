@@ -10,7 +10,8 @@ kind = "worker"
 
 [steps.research_draft.input]
 role = "researcher"
-prompt = '''Read the task context, gather local/project evidence, identify constraints, risks, open questions, and architecture-sensitive pressure.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Read the task context, gather local/project evidence, identify constraints, risks, open questions, and architecture-sensitive pressure.
 Create exactly one first-class human-facing research artifact named `reasons-canvas-research`. Do not create any separate legacy research artifact or structured legacy output.
 Fill only the research-owned depth in `reasons-canvas-research`: evidence-backed Requirements, observed domain Entities, and research-level constraints, candidate options, risks, norms, safeguards, and open tensions. Do not finalize architecture, file-level operations, or implementation work; mark those as questions or constraints for later phases. Emit artifact metadata for `reasons-canvas-research` in artifacts[].
 Do not create arbitrary temp/export files for handoff; the artifact metadata/path accepted into baton is the source of truth.
@@ -42,7 +43,8 @@ kind = "worker"
 
 [steps.research_attack.input]
 role = "researcher"
-prompt = '''Start from a hostile prior: assume the change, proposal, draft, or Canvas is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Start from a hostile prior: assume the change, proposal, draft, or Canvas is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
 Read artifact `reasons-canvas-research` from `research_draft` and attack it for missing evidence, unsafe assumptions, scope drift, sensitive surfaces, unclear approval questions, and fake architecture/implementation certainty. Treat a missing `reasons-canvas-research` artifact as a blocking research failure.
 Return approved, needs_revision, or blocked.
 If blocked, set blocker.source_step_id = research_attack.
@@ -66,7 +68,8 @@ name = "Approve research"
 kind = "approval"
 
 [steps.approve_research.input]
-prompt = '''Present artifact `reasons-canvas-research` from `research_draft` and research_attack.verdict to the user for human approval.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Present artifact `reasons-canvas-research` from `research_draft` and research_attack.verdict to the user for human approval.
 If the user asks for a packet/proposal file, retrieve/export the existing artifact referenced by baton/output artifacts; do not ask a worker to recreate it in a temp path.
 Continue only after explicit approval.
 Return approval approved to continue to architecture_draft, rejected to revise research_draft, or blocked with a blocker.
@@ -92,7 +95,8 @@ agent = "architect"
 
 [steps.architecture_draft.input]
 role = "architect"
-prompt = '''Read the approved/current `reasons-canvas-research` artifact from `research_draft` as the research source of truth and strictly follow it.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Read the approved/current `reasons-canvas-research` artifact from `research_draft` as the research source of truth and strictly follow it.
 Produce the minimal architecture decision or structural contract required by the approved research in architecture_contract.
 When `reasons-canvas-research` exists, derive one new immutable human-facing workflow artifact named `reasons-canvas-architecture`. Copy forward research-owned Requirements and observed domain Entities as frozen input unless new evidence proves a conflict; record any correction in the new architecture artifact instead of editing the research artifact. Own the architecture-depth sections: structural Entities, Approach, Structure, Operations at planning depth, Norms, Safeguards, and remaining open tensions.
 Do not create arbitrary temp/export files for handoff; the artifact metadata/path accepted into baton is the source of truth.
@@ -126,7 +130,8 @@ kind = "worker"
 
 [steps.architecture_attack.input]
 role = "architect"
-prompt = '''Start from a hostile prior: assume the change, proposal, draft, or packet is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Start from a hostile prior: assume the change, proposal, draft, or packet is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
 Attack architecture_draft.architecture_contract and the `reasons-canvas-architecture` artifact when present for ownership seams, dependency direction, contract surfaces, frozen research carry-forward, architecture-owned decisions, operations clarity, and compatibility risk.
 Return approved, needs_revision, or blocked.
 If blocked, set blocker.source_step_id = architecture_attack.
@@ -151,7 +156,8 @@ name = "Approve architecture"
 kind = "approval"
 
 [steps.approve_architecture.input]
-prompt = '''Show architecture_draft.architecture_contract, the `reasons-canvas-architecture` artifact when present, and architecture_attack.verdict to the user.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Show architecture_draft.architecture_contract, the `reasons-canvas-architecture` artifact when present, and architecture_attack.verdict to the user.
 If the user asks for an architecture file, retrieve/export the existing artifact referenced by baton/output artifacts, limited to `reasons-canvas-architecture` when present; otherwise use architecture_draft.architecture_contract. Do not ask a worker to recreate it in a temp path.
 Continue only after explicit approval when the slice is non-trivial or architecture-sensitive.
 Return approval approved to continue to planning_draft, rejected to revise architecture_draft, or blocked with a blocker.
@@ -177,11 +183,13 @@ kind = "worker"
 
 [steps.planning_draft.input]
 role = "architect"
-prompt = '''Produce the implementation plan contract for approval from the approved architecture_contract and `reasons-canvas-architecture` when present. Treat `reasons-canvas-architecture` as an immutable source contract when present: do not edit it, complete missing Canvas sections, or read earlier research artifacts separately. Convert the approved architecture contract/artifact into workstreams, owners, verification, rollback, and reviewer selection.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Produce the implementation plan contract for approval from the approved architecture_contract and `reasons-canvas-architecture` when present. Treat `reasons-canvas-architecture` as an immutable source contract when present: do not edit it, complete missing Canvas sections, or read earlier research artifacts separately. Convert the approved architecture contract/artifact into workstreams, owners, verification, rollback, and reviewer selection.
 The step id remains planning_draft for compatibility, but once approve_plan approves this output, downstream steps must treat it as the final approved plan contract. selected_implementation_steps must contain only unique canonical implementation step ids needed for the plan: backend_implementation, frontend_implementation, architecture_artifact_update. implementation_route must be the normalized route for exactly that unique selected set: backend, frontend, architecture, backend_frontend, backend_architecture, frontend_architecture, or all.
 Collapse overlapping same-role work into one canonical task; do not create duplicate backend/frontend/architecture workers.
 If duplicate same-role work cannot be safely collapsed, return blocked with blocker.source_step_id = planning_draft. selected_review_steps must explicitly contain the unique reviewers that must run after implementation; implementation_join must not invent or recompute reviewers.
 Keep review_plan.reviewers aligned with selected_review_steps.
+Reviewer fan-out budget: default to one independent reviewer, use two when two independent material risk classes are touched, use three for structural/runtime plus verification-heavy work, and select more than three only with review_escalation explaining the independent risk classes. selected_review_steps means "run these reviewers"; do not include optional, informational, or absence-confirmation reviewers. Record considered-but-skipped reviewers in skipped_review_steps with an evidence-backed reason instead.
 Return ready_for_attack or blocked with blocker.source_step_id = planning_draft.
 When revising after planning_attack feedback or approve_plan rejection, read feedback from input.planning_attack and input.approve_plan and address it explicitly while preserving the approved architecture constraints.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
@@ -211,16 +219,19 @@ kind = "worker"
 
 [steps.planning_attack.input]
 role = "critic"
-prompt = '''Challenge the plan contract in planning_draft.implementation_plan plus selected_implementation_steps, implementation_route, selected_review_steps, and review_plan for faithful conversion from approved architecture artifacts and immutable `reasons-canvas-architecture` when present into workstreams, unique canonical task selection, route/selection consistency, explicit final reviewer selection, no duplicate same-role workers, entity coverage, one-owner-per-file-zone, project baseline, architecture artifact manifest, verification/rollback surfaces, sensitive surfaces, request-path/contract touchpoints, and max-detail leaks.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Challenge the plan contract in planning_draft.implementation_plan plus selected_implementation_steps, implementation_route, selected_review_steps, review_plan, skipped_review_steps, and review_escalation for faithful conversion from approved architecture artifacts and immutable `reasons-canvas-architecture` when present into workstreams, unique canonical task selection, route/selection consistency, explicit final reviewer selection, no duplicate same-role workers, entity coverage, one-owner-per-file-zone, project baseline, architecture artifact manifest, verification/rollback surfaces, sensitive surfaces, request-path/contract touchpoints, and max-detail leaks.
 Return approved, needs_revision, or blocked.
-If selected tasks contain duplicate/overlapping same-role work that cannot collapse to one canonical step, or if reviewers are missing/recomputed outside planning, return blocked with blocker.source_step_id = planning_attack.
+If selected tasks contain duplicate/overlapping same-role work that cannot collapse to one canonical step, if selected_review_steps includes reviewers only to confirm absence of a surface, if optional reviewers are selected instead of recorded in skipped_review_steps, if selected_review_steps has more than three entries without strong review_escalation, or if reviewers are missing/recomputed outside planning, return blocked with blocker.source_step_id = planning_attack.
 
 Input context:
 - Implementation plan under review: ${{ input.planning_draft.implementation_plan }}
 - Selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
 - Implementation route: ${{ input.planning_draft.implementation_route }}
 - Selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Review plan: ${{ input.planning_draft.review_plan }}'''
+- Review plan: ${{ input.planning_draft.review_plan }}
+- Skipped review steps: ${{ input.planning_draft.skipped_review_steps | default: "No skipped reviewers recorded." }}
+- Review escalation: ${{ input.planning_draft.review_escalation | default: "No review escalation recorded." }}'''
 
 [steps.planning_attack.output]
 template = "../../shared/templates/review-verdict-template.md"
@@ -238,11 +249,12 @@ name = "Approve implementation plan"
 kind = "approval"
 
 [steps.approve_plan.input]
-prompt = '''Show one cleaned execution plan contract to the user and stop until explicit implementation approval.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Show one cleaned execution plan contract to the user and stop until explicit implementation approval.
 If the user asks for a plan/proposal file, retrieve/export the existing artifact referenced by baton/output artifacts; do not ask a worker to recreate it in a temp path.
 Return approval approved only for explicit approval, rejected for requested plan changes, or blocked with a blocker.
 After approval, planning_draft is the final approved plan contract.
-Do not encode selected implementation roles or reviewers in approval; selected work and reviewers are planning_draft.selected_implementation_steps, planning_draft.implementation_route, and planning_draft.selected_review_steps.
+Do not encode selected implementation roles or reviewers in approval; selected work and reviewers are planning_draft.selected_implementation_steps, planning_draft.implementation_route, and planning_draft.selected_review_steps. skipped_review_steps are planning evidence only and must not be dispatched.
 
 Input context:
 - Implementation plan for approval: ${{ input.planning_draft.implementation_plan }}
@@ -250,6 +262,7 @@ Input context:
 - Implementation route: ${{ input.planning_draft.implementation_route }}
 - Selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Review plan: ${{ input.planning_draft.review_plan }}
+- Skipped review steps: ${{ input.planning_draft.skipped_review_steps | default: "No skipped reviewers recorded." }}
 - Planning attack verdict: ${{ input.planning_attack.verdict }}'''
 
 [steps.approve_plan.output]
@@ -267,7 +280,8 @@ name = "Implementation dispatch"
 kind = "worker"
 
 [steps.implementation_dispatch.input]
-prompt = '''Validate that the approved plan contract planning_draft.implementation_route exactly matches the unique canonical planning_draft.selected_implementation_steps and that no duplicate same-role implementation worker is requested.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Validate that the approved plan contract planning_draft.implementation_route exactly matches the unique canonical planning_draft.selected_implementation_steps and that no duplicate same-role implementation worker is requested.
 If valid, return outcome equal to planning_draft.implementation_route.
 If invalid or impossible to collapse safely, return outcome blocked with blocker.source_step_id = implementation_dispatch.
 
@@ -412,7 +426,8 @@ name = "Implementation join"
 kind = "worker"
 
 [steps.implementation_join.input]
-prompt = '''Join exactly the implementation outputs named by the approved plan contract planning_draft.selected_implementation_steps from input.<step_id> fields.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Join exactly the implementation outputs named by the approved plan contract planning_draft.selected_implementation_steps from input.<step_id> fields.
 Confirm each selected branch completed, verification evidence exists, and no branch widened scope.
 Do not choose, invent, or recompute reviewers; reviewers are fixed by planning_draft.selected_review_steps.
 If complete, return outcome ready_for_review with reviewer_handoff.selected_review_steps copied from planning_draft.selected_review_steps.
@@ -439,17 +454,28 @@ ready_for_review = "review_dispatch"
 [steps.review_dispatch]
 name = "Review dispatch"
 kind = "worker"
-next = "${{ input.planning_draft.selected_review_steps }}"
+next = "${{ output.verdict.selected_review_steps }}"
 
 [steps.review_dispatch.input]
-prompt = '''Dispatch reviewers from the final approved plan contract.
-Do not infer reviewers from implementation_join output.
-Return outcome ready_for_review and copy planning_draft.selected_review_steps into verdict.selected_review_steps; next is resolved from input.planning_draft.selected_review_steps.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Dispatch reviewers for the current review pass.
+On the first review pass, copy planning_draft.selected_review_steps into verdict.selected_review_steps.
+On a re-review pass after review_join.needs_changes, select only review_join.verdict.failed_review_steps plus reviewers whose selected surfaces were materially changed by the latest implementation rerun evidence. Do not rerun reviewers that previously passed when their selected surfaces were not changed by the fix. Do not dispatch skipped_review_steps unless a newer approved plan or the current rework evidence makes their surface materially affected.
+Return outcome ready_for_review with verdict.selected_review_steps as the exact fan-out target; next is resolved from output.verdict.selected_review_steps.
 
 Input context:
 - Approved implementation plan: ${{ input.planning_draft.implementation_plan }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Implementation reviewer handoff: ${{ input.implementation_join.reviewer_handoff }}'''
+- Skipped review steps: ${{ input.planning_draft.skipped_review_steps | default: "No skipped reviewers recorded." }}
+- Review plan: ${{ input.planning_draft.review_plan }}
+- Implementation reviewer handoff: ${{ input.implementation_join.reviewer_handoff }}
+- Previous review join verdict: ${{ input.review_join.verdict | default: "No prior review_join verdict." }}
+- Backend implementation evidence: ${{ input.backend_implementation.implementation_handoff | default: "backend_implementation was not selected or has not produced output." }}
+- Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
+- Frontend implementation evidence: ${{ input.frontend_implementation.implementation_handoff | default: "frontend_implementation was not selected or has not produced output." }}
+- Frontend changed files: ${{ input.frontend_implementation.changed_files | default: "frontend_implementation changed files are not available in input context." }}
+- Architecture artifact update evidence: ${{ input.architecture_artifact_update.implementation_handoff | default: "architecture_artifact_update was not selected or has not produced output." }}
+- Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.review_dispatch.output]
 template = "../../shared/templates/review-verdict-template.md"
@@ -463,7 +489,8 @@ next = "review_join"
 
 [steps.architect_review.input]
 role = "architect"
-prompt = '''Review implementation against approved architecture decision, ownership seams, dependency direction, compatibility surfaces, and artifact obligations.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Review implementation against approved architecture decision, ownership seams, dependency direction, compatibility surfaces, and artifact obligations.
 Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = architect_review.
 Read architecture_draft, architecture_attack, and approve_architecture when present; fail on drift between the approved architecture contract and implementation/review evidence.
 
@@ -493,7 +520,8 @@ next = "review_join"
 
 [steps.backend_review.input]
 role = "backend"
-prompt = '''Review backend correctness, contracts, data flow, validation, failure handling, permissions, rollout safety, observability, and tests for the slice selected by the approved plan contract.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Review backend correctness, contracts, data flow, validation, failure handling, permissions, rollout safety, observability, and tests for the slice selected by the approved plan contract.
 Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = backend_review.
 
 Input context:
@@ -519,7 +547,8 @@ next = "review_join"
 
 [steps.frontend_review.input]
 role = "frontend"
-prompt = '''Review frontend correctness, data flow, state handling, accessibility-relevant behavior, and tests for the slice selected by the approved plan contract.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Review frontend correctness, data flow, state handling, accessibility-relevant behavior, and tests for the slice selected by the approved plan contract.
 Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = frontend_review.
 
 Input context:
@@ -545,7 +574,8 @@ next = "review_join"
 
 [steps.frontend_taste_review.input]
 role = "frontend-taste"
-prompt = '''Review visual/product taste, copy fit, interaction polish, and user-facing coherence for frontend-relevant changes.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Review visual/product taste, copy fit, interaction polish, and user-facing coherence for frontend-relevant changes.
 Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = frontend_taste_review.
 
 Input context:
@@ -571,7 +601,8 @@ next = "review_join"
 
 [steps.security_review.input]
 role = "security"
-prompt = '''Review trust boundaries, injection surfaces, secret handling, permission assumptions, and unsafe automation paths for the slice selected by the approved plan contract.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Review trust boundaries, injection surfaces, secret handling, permission assumptions, and unsafe automation paths for the slice selected by the approved plan contract.
 Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = security_review.
 
 Input context:
@@ -597,7 +628,8 @@ next = "review_join"
 
 [steps.privacy_review.input]
 role = "privacy-data-safety"
-prompt = '''Review data minimization, sensitive content exposure, durable memory/logging risk, and user-context handling for the slice selected by the approved plan contract.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Review data minimization, sensitive content exposure, durable memory/logging risk, and user-context handling for the slice selected by the approved plan contract.
 Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = privacy_review.
 
 Input context:
@@ -623,7 +655,8 @@ next = "review_join"
 
 [steps.qa_review.input]
 role = "qa-reliability"
-prompt = '''Review verification depth, regression risk, edge cases, deterministic runtime behavior, and handoff quality for the slice selected by the approved plan contract.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Review verification depth, regression risk, edge cases, deterministic runtime behavior, and handoff quality for the slice selected by the approved plan contract.
 Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = qa_review.
 
 Input context:
@@ -648,7 +681,8 @@ kind = "worker"
 next = "${{ output.next }}"
 
 [steps.review_join.input]
-prompt = '''Aggregate exactly the review outputs named by the approved plan contract planning_draft.selected_review_steps from input.<step_id> fields.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Aggregate exactly the review outputs named by review_dispatch.verdict.selected_review_steps from input.<step_id> fields.
 This is a join/decision step, not a critique pass.
 If every selected reviewer passed, return outcome passed and next done.
 If changes are needed, return outcome needs_changes and next equal to the relevant implementation step ids from reviewer required_implementation_steps, not every implementation branch.
@@ -658,6 +692,7 @@ Input context:
 - Approved implementation plan: ${{ input.planning_draft.implementation_plan }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Implementation reviewer handoff: ${{ input.implementation_join.reviewer_handoff }}
+- Review dispatch selection: ${{ input.review_dispatch.verdict }}
 - Architect review verdict: ${{ input.architect_review.verdict | default: "architect_review was not selected or has not produced output." }}
 - Backend review verdict: ${{ input.backend_review.verdict | default: "backend_review was not selected or has not produced output." }}
 - Frontend review verdict: ${{ input.frontend_review.verdict | default: "frontend_review was not selected or has not produced output." }}
@@ -675,7 +710,8 @@ name = "Done"
 kind = "done"
 
 [steps.done.input]
-prompt = '''Workflow completed.
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Workflow completed.
 Project review_join.verdict as the final result; do not summarize artifacts/results globals.
 
 Input context:

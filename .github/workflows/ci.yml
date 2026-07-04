@@ -7,7 +7,8 @@ on:
       - main
 
 jobs:
-  validate:
+  static-checks:
+    name: Static checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,7 +16,29 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
-      - name: Validate existing tests and workflows
-        run: bun run validate
-      - name: Workflow E2E fixture tests
-        run: bun run test:workflow-e2e
+      - name: Validate workflows and generated artifacts
+        run: |
+          bun run workflow-layout:check
+          bun run workflow-runtime-boundaries:check
+          bun run role-evidence:check
+          bun run workflow:validate
+          bun run agents:check
+          bun run schema-validation:check-vendor-ajv
+
+  tests:
+    name: Tests shard ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Orbita tests shard ${{ matrix.shard }}/4
+        run: make -C skills/orbita test TEST_BUN="AGENT=1 bun test --timeout=30000 --pass-with-no-tests --shard=${{ matrix.shard }}/4"
+      - name: Workflow E2E fixture tests shard ${{ matrix.shard }}/4
+        run: make -C skills/orbita test-workflow-e2e TEST_BUN="AGENT=1 bun test --timeout=30000 --pass-with-no-tests --shard=${{ matrix.shard }}/4"

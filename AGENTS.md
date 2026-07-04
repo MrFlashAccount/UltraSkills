@@ -1,5 +1,8 @@
 # AGENTS.md
 
+## Agent execution rules
+- When an execution/implementation agent starts tests, lint, validation, typecheck, build checks, or similar long-running verification, it must wait at least 5 minutes before polling/reporting that the command is still running. Do not do short 30s/60s "still running" polling loops. If the command exits or produces an actionable failure sooner, handle that result immediately.
+
 ## Repo rules
 - This repo is self-contained.
 - Do not rely on critical external skill dependencies.

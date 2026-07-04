@@ -58,6 +58,14 @@
             "type": "integer",
             "minimum": 0
           }
+        },
+        "$loopProgress": {
+          "description": "Interpreter-owned loop policy progress counters keyed by workflow loop policy id. Stores counters only, never policy definitions.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       },
       "patternProperties": {

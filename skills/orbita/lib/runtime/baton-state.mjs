@@ -1,6 +1,8 @@
 import { WorkflowRuntimeError } from '../errors.mjs';
 import { cloneCentralArtifactMetadata } from '../entities/Baton/artifact-contract.mjs';
 
+export const LOOP_PROGRESS_STATE_KEY = '$loopProgress';
+
 function cloneBoundaryData(dto) {
   return typeof dto?.toJSON === 'function' ? dto.toJSON() : structuredClone(dto);
 }
@@ -78,7 +80,7 @@ function aggregateArray(output, fieldName) {
   return value;
 }
 
-export function applyOutputToBatonState(baton, output, attempts, stepId) {
+export function applyOutputToBatonState(baton, output, attempts, stepId, { loopProgress } = {}) {
   const batonData = cloneBoundaryData(baton);
   const state = {
     ...batonData.state,
@@ -91,5 +93,6 @@ export function applyOutputToBatonState(baton, output, attempts, stepId) {
   }
 
   if (attempts) state.attempts = attempts;
+  if (loopProgress) state[LOOP_PROGRESS_STATE_KEY] = loopProgress;
   return state;
 }

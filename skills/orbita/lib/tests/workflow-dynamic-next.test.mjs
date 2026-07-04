@@ -59,6 +59,13 @@ const outputSchemas = {
       route: { enum: ['review'] },
     },
   }),
+  'loop-route-output-schema.json': schemaDoc({
+    required: ['outcome', 'route'],
+    properties: {
+      outcome: { const: 'ready' },
+      route: { enum: ['fix', 'done'] },
+    },
+  }),
 };
 
 for (const [fileName, schema] of Object.entries(outputSchemas)) {
@@ -144,6 +151,41 @@ function runInspect(label, batonDoc, expectSuccess = true, workflowDoc = workflo
 
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
+function loopWorkflow(overrides = {}) {
+  return {
+    name: 'loop-policy-spec',
+    version: 1,
+    start: 'review',
+    done: 'done',
+    blocked: 'blocked',
+    loopPolicies: {
+      review_fix: { steps: ['review', 'fix'], maxIterations: 2, onLimit: 'blocked' },
+    },
+    steps: {
+      review: {
+        name: 'Review',
+        kind: 'worker',
+        input: {},
+        output: outputContract('loop-route-output-schema.json'),
+        next: { match: '${{ output.route }}', cases: { fix: 'fix', done: 'done' } },
+      },
+      fix: { name: 'Fix', kind: 'worker', input: {}, output: outputContract(), next: 'review' },
+      done: { name: 'Done', kind: 'done', input: { prompt: 'Done.' } },
+      blocked: { name: 'Blocked', kind: 'done', input: { prompt: 'Blocked.' } },
+    },
+    ...overrides,
+  };
+}
+
+function loopBaton(overrides = {}) {
+  return {
+    cursor: 'review',
+    status: 'running',
+    state: { artifacts: [], results: [] },
+    ...overrides,
+  };
+}
+
 test('dynamic output string routes to the selected existing step', () => {
   const response = runApply('output-string', baton(), { outcome: 'ready', next: 'review_a' });
   assert.equal(response.baton.cursor, 'review_a');
@@ -185,6 +227,47 @@ test('dynamic output array prepares and executes parallel steps like static arra
   );
   assert.equal(joined.baton.cursor, 'join');
   assert.deepEqual(joined.baton.state.results.map((result) => result.summary), ['a', 'b']);
+});
+
+test('loopPolicies count selected internal route events and reroute to onLimit on exhaustion', () => {
+  const first = runApply('loop-review-to-fix', loopBaton(), { outcome: 'ready', route: 'fix' }, true, loopWorkflow());
+  assert.equal(first.baton.cursor, 'fix');
+  assert.deepEqual(first.baton.state.$loopProgress, { review_fix: 1 });
+
+  const second = runApply('loop-fix-to-review', first.baton, { outcome: 'ready' }, true, loopWorkflow());
+  assert.equal(second.baton.cursor, 'review');
+  assert.deepEqual(second.baton.state.$loopProgress, { review_fix: 2 });
+
+  const exhausted = runApply('loop-exhausted', second.baton, { outcome: 'ready', route: 'fix' }, true, loopWorkflow());
+  assert.equal(exhausted.baton.cursor, 'blocked');
+  assert.equal(exhausted.baton.status, 'done');
+  assert.deepEqual(exhausted.baton.state.$loopProgress, { review_fix: 2 });
+
+  const singletonArrayWorkflow = loopWorkflow();
+  singletonArrayWorkflow.steps.review.next = ['fix'];
+  const singletonFirst = runApply('loop-singleton-review-to-fix', loopBaton(), { outcome: 'ready', route: 'fix' }, true, singletonArrayWorkflow);
+  assert.equal(singletonFirst.baton.cursor, 'fix');
+  assert.deepEqual(singletonFirst.baton.state.$loopProgress, { review_fix: 1 });
+
+  const singletonSecond = runApply('loop-singleton-fix-to-review', singletonFirst.baton, { outcome: 'ready' }, true, singletonArrayWorkflow);
+  assert.equal(singletonSecond.baton.cursor, 'review');
+  assert.deepEqual(singletonSecond.baton.state.$loopProgress, { review_fix: 2 });
+
+  const singletonExhausted = runApply('loop-singleton-exhausted', singletonSecond.baton, { outcome: 'ready', route: 'fix' }, true, singletonArrayWorkflow);
+  assert.equal(singletonExhausted.baton.cursor, 'blocked');
+  assert.equal(singletonExhausted.baton.status, 'done');
+  assert.deepEqual(singletonExhausted.baton.state.$loopProgress, { review_fix: 2 });
+});
+
+test('output schema retries do not increment loop policy progress', () => {
+  const retry = runApply('loop-retry-no-progress', loopBaton(), { outcome: 'ready' }, true, loopWorkflow());
+  assert.equal(retry.baton.cursor, 'review');
+  assert.deepEqual(retry.baton.state.attempts, { 'review:output.schema': 1 });
+  assert.equal(retry.baton.state.$loopProgress, undefined);
+
+  const valid = runApply('loop-valid-after-retry', retry.baton, { outcome: 'ready', route: 'fix' }, true, loopWorkflow());
+  assert.equal(valid.baton.cursor, 'fix');
+  assert.deepEqual(valid.baton.state.$loopProgress, { review_fix: 1 });
 });
 
 test('dynamic input state path routes correctly', () => {

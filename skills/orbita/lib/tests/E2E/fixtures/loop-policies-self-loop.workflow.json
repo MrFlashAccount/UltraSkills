@@ -1,0 +1,50 @@
+{
+  "name": "fixture-loop-policies-self-loop",
+  "version": 1,
+  "start": "self_check",
+  "done": "done",
+  "blocked": "blocked",
+  "loopPolicies": {
+    "self_check": {
+      "steps": [
+        "self_check"
+      ],
+      "maxIterations": 2,
+      "onLimit": "blocked"
+    }
+  },
+  "steps": {
+    "self_check": {
+      "name": "Self Check",
+      "kind": "worker",
+      "input": {
+        "prompt": "Retry until ready or loop limit."
+      },
+      "output": {
+        "template": "output.md",
+        "schema": "schemas/routing-review.schema.json"
+      },
+      "next": {
+        "match": "${{ output.outcome }}",
+        "cases": {
+          "ready": "done",
+          "retry": "self_check"
+        }
+      }
+    },
+    "done": {
+      "name": "Done",
+      "kind": "done",
+      "input": {
+        "prompt": "Finished."
+      }
+    },
+    "blocked": {
+      "name": "Blocked",
+      "kind": "done",
+      "input": {
+        "prompt": "Loop limit reached."
+      }
+    }
+  }
+}

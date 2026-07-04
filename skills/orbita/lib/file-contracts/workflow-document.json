@@ -240,6 +240,34 @@
       },
       "additionalProperties": false
     },
+    "loopPolicy": {
+      "type": "object",
+      "required": [
+        "steps",
+        "maxIterations",
+        "onLimit"
+      ],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "maxIterations": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "onLimit": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
     "workflow": {
       "type": "object",
       "required": [
@@ -279,6 +307,14 @@
           "minProperties": 1,
           "additionalProperties": {
             "$ref": "#/$defs/step"
+          }
+        },
+        "loopPolicies": {
+          "description": "Optional loop policies keyed by policy id. Each policy must cover exactly one semantic validation-proven SCC or self-loop region. Runtime counts selected internal route events and routes to onLimit when maxIterations would be exceeded.",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/loopPolicy"
           }
         }
       },
