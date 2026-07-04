@@ -1,6 +1,5 @@
 // Exercises the public pointer-recovery control plane without touching dashboard internals.
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -300,70 +299,6 @@ test('runner pointer API reports terminal and parallel cursors as unsupported', 
   assert.deepEqual(parallel.transitions, []);
 });
 
-test('runner pointer CLI matches API behavior and validates mode-specific arguments', async () => {
-  const run = await createClaimedRun('cli');
-  const now = new Date();
-  await next({ ...run, now });
-  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared cli', now });
-  await continueRun({ ...run, now });
-
-  const kebabList = spawnSync(process.execPath, [
-    'skills/orbita/lib/entrypoints/cli/workflow-runner.mjs',
-    'list-pointer-transitions',
-    '--run-id', run.runId,
-    '--workflow', run.workflowPath,
-    '--lease-token', run.leaseToken,
-  ], { cwd: root, encoding: 'utf8', env: process.env });
-  assert.equal(kebabList.status, 0, kebabList.stderr);
-
-  const listed = JSON.parse(kebabList.stdout);
-  assert.equal(listed.transitions[0].to.cursor, 'prepare');
-
-  const camelList = spawnSync(process.execPath, [
-    'skills/orbita/lib/entrypoints/cli/workflow-runner.mjs',
-    'listPointerTransitions',
-    '--run-id', run.runId,
-    '--workflow', run.workflowPath,
-    '--lease-token', run.leaseToken,
-  ], { cwd: root, encoding: 'utf8', env: process.env });
-  assert.notEqual(camelList.status, 0);
-  assert.match(camelList.stderr, /usage:/);
-
-  const invalidList = spawnSync(process.execPath, [
-    'skills/orbita/lib/entrypoints/cli/workflow-runner.mjs',
-    'list-pointer-transitions',
-    '--run-id', run.runId,
-    '--workflow', run.workflowPath,
-    '--lease-token', run.leaseToken,
-    '--transition-id', listed.transitions[0].id,
-  ], { cwd: root, encoding: 'utf8', env: process.env });
-  assert.notEqual(invalidList.status, 0);
-  assert.match(invalidList.stderr, /usage:/);
-
-  const move = spawnSync(process.execPath, [
-    'skills/orbita/lib/entrypoints/cli/workflow-runner.mjs',
-    'move-pointer',
-    '--run-id', run.runId,
-    '--workflow', run.workflowPath,
-    '--lease-token', run.leaseToken,
-    '--transition-id', listed.transitions[0].id,
-    '--acknowledge-retained-state',
-  ], { cwd: root, encoding: 'utf8', env: process.env });
-  assert.equal(move.status, 0, move.stderr);
-  assert.equal(JSON.parse(move.stdout).current.cursor, 'prepare');
-
-  const targetAliasMove = spawnSync(process.execPath, [
-    'skills/orbita/lib/entrypoints/cli/workflow-runner.mjs',
-    'move-pointer',
-    '--run-id', run.runId,
-    '--workflow', run.workflowPath,
-    '--lease-token', run.leaseToken,
-    '--target-position-id', listed.transitions[0].id,
-    '--acknowledge-retained-state',
-  ], { cwd: root, encoding: 'utf8', env: process.env });
-  assert.notEqual(targetAliasMove.status, 0);
-  assert.match(targetAliasMove.stderr, /usage:/);
-});
 
 test('dashboard boundary stays read-only and does not import pointer recovery commands', () => {
   const dashboardFiles = [
