@@ -3,56 +3,24 @@ import {
   heartbeatWorkflowRunAtRoot,
   listWorkflowRunsAtRoot,
   registerWorkflowRunAtRoot,
-  summarizeWorkflowRuns,
+  summarizeWorkflowRuns as summarizeWorkflowRunsAtRoot,
 } from '../persistence/run-state/workflow-runs.mjs';
 import { publicErrorMessage } from '../public-error.mjs';
+import { createWorkflowRuns } from '../use-cases/WorkflowRuns.mjs';
 
-export { summarizeWorkflowRuns };
+const workflowRuns = createWorkflowRuns({
+  claimWorkflowRunAtRoot,
+  heartbeatWorkflowRunAtRoot,
+  listWorkflowRunsAtRoot,
+  registerWorkflowRunAtRoot,
+  summarizeWorkflowRuns: summarizeWorkflowRunsAtRoot,
+  publicErrorMessage,
+});
 
-function publicApiError(error, options = {}) {
-  const rawMessage = String(error?.message ?? error);
-  const message = /workflow runs index/.test(rawMessage)
-    ? publicErrorMessage(rawMessage, options).replace(/\s+from\s+.*$/, '')
-    : publicErrorMessage(rawMessage, options);
-  const redacted = new Error(message);
-  if (error?.code) redacted.code = error.code;
-  return redacted;
-}
-
-async function publicApiCall(callback, options = {}) {
-  try { return await callback(); }
-  catch (error) { throw publicApiError(error, options); }
-}
-
-export async function listWorkflowRuns({ runsRoot, now = new Date() } = {}) {
-  return publicApiCall(() => listWorkflowRunsAtRoot({ runsRoot, now }), { runsRoot });
-}
-
-export async function registerWorkflowRun({ runId, title, summary, workflowPath, workflowIdentity, status = 'running', taskKey, taskFingerprint, runsRoot, claim = false, owner, harness, sessionId, workerId, leaseMs, now = new Date() } = {}) {
-  return publicApiCall(() => registerWorkflowRunAtRoot({
-    runId,
-    title,
-    summary,
-    workflowPath,
-    workflowIdentity,
-    status,
-    taskKey,
-    taskFingerprint,
-    runsRoot,
-    claim,
-    owner,
-    harness,
-    sessionId,
-    workerId,
-    leaseMs,
-    now,
-  }), { runsRoot });
-}
-
-export async function claimWorkflowRun({ runId, workflowPath, runsRoot, owner, harness, sessionId, workerId, leaseMs, leaseToken, takeover = false, now = new Date() } = {}) {
-  return publicApiCall(() => claimWorkflowRunAtRoot({ runId, workflowPath, runsRoot, owner, harness, sessionId, workerId, leaseMs, leaseToken, takeover, now }), { runsRoot });
-}
-
-export async function heartbeatWorkflowRun(options = {}) {
-  return publicApiCall(() => heartbeatWorkflowRunAtRoot(options), { runsRoot: options.runsRoot });
-}
+export const {
+  claimWorkflowRun,
+  heartbeatWorkflowRun,
+  listWorkflowRuns,
+  registerWorkflowRun,
+  summarizeWorkflowRuns,
+} = workflowRuns;

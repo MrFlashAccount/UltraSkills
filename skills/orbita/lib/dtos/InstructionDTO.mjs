@@ -4,7 +4,7 @@
  * @property {string} content Loaded instruction content.
  * @property {string} [stepId] Optional requested workflow step id.
  */
-import { cloneFrozen } from './_dto-utils.mjs';
+import { cloneFrozen } from '../dto-normalization.mjs';
 
 /** Boundary DTO for instruction file content. */
 export class InstructionDTO {

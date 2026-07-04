@@ -5,9 +5,9 @@ import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { Workflow } from '../entities/Workflow/index.mjs';
-import { loadInstructions as runnerLoadInstructions, next as runnerNext } from '../entrypoints/workflow-runner-command.mjs';
-import { validateWorkflowFile } from '../entrypoints/api/validateWorkflow.mjs';
-import { workflowSemanticValidationOptions } from '../use-cases/workflow-semantic-validation.mjs';
+import { loadInstructions as runnerLoadInstructions, next as runnerNext } from './helpers/orbita-production-api.mjs';
+import { validateWorkflowFile } from './helpers/orbita-production-api.mjs';
+import { workflowSemanticValidationOptions } from '../runtime/workflow-semantic-validation.mjs';
 import { read, readAllowedRoles, readOutputSchemas } from '../persistence/workflow-resources/workflow-file-reader.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -126,7 +126,7 @@ test('validate-workflow and workflow-runner reject unresolved external refs with
 test('workflow validation boundaries keep baton schema composition and Step entity materialization outside Workflow owner', () => {
   const adapterPaths = [
     'skills/orbita/lib/use-cases/ValidateWorkflow.mjs',
-    'skills/orbita/lib/use-cases/runtime/guards/workflow.mjs',
+    'skills/orbita/lib/runtime/guards/workflow.mjs',
     'skills/orbita/lib/use-cases/LoadInstructions.mjs',
   ];
   const workflowOwnerPaths = readdirSync(path.join(REPO_ROOT, 'skills/orbita/lib/entities/Workflow'))
@@ -135,12 +135,12 @@ test('workflow validation boundaries keep baton schema composition and Step enti
 
   for (const relativePath of adapterPaths) {
     const source = readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
-    assert.doesNotMatch(source, /baton-schema\.mjs/);
+    assert.doesNotMatch(source, /file-contracts\/baton\/baton-schema\.mjs/);
   }
 
   for (const relativePath of workflowOwnerPaths) {
     const source = readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
-    assert.doesNotMatch(source, /Baton\/schema\/baton-schema\.mjs/);
+    assert.doesNotMatch(source, /file-contracts\/baton\/baton-schema\.mjs/);
   }
 
   const workflowIndex = readFileSync(path.join(REPO_ROOT, 'skills/orbita/lib/entities/Workflow/index.mjs'), 'utf8');

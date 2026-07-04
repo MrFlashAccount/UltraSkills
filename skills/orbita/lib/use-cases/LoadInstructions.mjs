@@ -6,7 +6,7 @@ import { WorkflowResultDTO } from '../dtos/WorkflowResultDTO.mjs';
 import { Baton } from '../entities/Baton/index.mjs';
 import { Step } from '../entities/Step/index.mjs';
 import { Workflow } from '../entities/Workflow/index.mjs';
-import { workflowSemanticValidationOptions } from './workflow-semantic-validation.mjs';
+import { workflowSemanticValidationOptions } from '../runtime/workflow-semantic-validation.mjs';
 
 function materialize(value) {
   return typeof value?.toJSON === 'function' ? value.toJSON() : value;

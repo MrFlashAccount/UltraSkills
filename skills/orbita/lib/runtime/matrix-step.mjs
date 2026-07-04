@@ -2,8 +2,8 @@ import { invariant } from '../errors.mjs';
 import { Step } from '../entities/Step/index.mjs';
 import { statusForStep } from './step-status.mjs';
 import { applyOutputToBatonState } from './baton-state.mjs';
-import { responseFor, responseForCursor } from '../use-cases/runtime/output/response.mjs';
-import { assertOutputSchemaIfDeclared } from '../use-cases/runtime/output/worker-output.mjs';
+import { responseFor, responseForCursor } from './output/response.mjs';
+import { assertOutputSchemaIfDeclared } from './output/worker-output.mjs';
 import {
   MATRIX_STATE_KEY,
   assertNoUnexpectedMatrixOutputs,
@@ -12,7 +12,7 @@ import {
   matrixOutputForRequest,
   matrixPlanForBaton,
   stepForMatrixUnit,
-} from '../entities/Baton/matrix.mjs';
+} from './matrix.mjs';
 
 function clone(value) {
   return structuredClone(value);

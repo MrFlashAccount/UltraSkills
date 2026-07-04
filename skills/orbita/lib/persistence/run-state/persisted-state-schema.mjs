@@ -1,4 +1,4 @@
-import { assertBatonSchema } from '../../entities/Baton/schema/baton-schema.mjs';
+import { assertBatonSchema } from '../../file-contracts/baton/baton-schema.mjs';
 
 export const PERSISTED_RUN_STATE_VERSION = 1;
 export const PERSISTED_RUN_STATE_TOPOLOGY = 'split-files-v1';

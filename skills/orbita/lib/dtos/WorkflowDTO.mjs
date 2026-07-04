@@ -5,7 +5,7 @@
  * @property {string} done Done terminal step id.
  * @property {Record<string, Record<string, unknown>>} steps Workflow step map keyed by step id.
  */
-import { cloneFrozen } from './_dto-utils.mjs';
+import { cloneFrozen } from '../dto-normalization.mjs';
 
 /** Boundary DTO for workflow file/API input. */
 export class WorkflowDTO {

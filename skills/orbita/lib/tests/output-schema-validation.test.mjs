@@ -7,7 +7,7 @@ import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { renderWorkflowPrompt } from '../entities/Template/index.mjs';
 import { SchemaValidationError } from '../../../../shared/scripts/schema-validation/schema-validation.mjs';
-import { validateAgainstOutputSchema as validateLoadedOutputSchema } from '../use-cases/runtime/output/output-schema-validation.mjs';
+import { validateAgainstOutputSchema as validateLoadedOutputSchema } from '../runtime/output/output-schema-validation.mjs';
 import { loadWorkflowResources } from '../persistence/workflow-resources/runtime-reader.mjs';
 import { artifactPathBoundaryErrors } from '../persistence/workflow-resources/artifact-path-boundaries.mjs';
 

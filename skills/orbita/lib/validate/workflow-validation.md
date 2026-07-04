@@ -3,9 +3,9 @@
 Validation ownership is split by runtime owner:
 
 - Workflow documents: `./lib/file-contracts/workflow-document-schema.mjs` and `./lib/file-contracts/workflow-document.json`.
-- Baton documents: `./lib/entities/Baton/schema/baton-schema.mjs` and `./lib/entities/Baton/schema/baton.json`.
+- Baton documents: `./lib/file-contracts/baton/baton-schema.mjs` and `./lib/file-contracts/baton/baton.json`.
 - Generic JSON Schema mechanics: workspace package `schema-validation` under `shared/scripts/schema-validation/**`.
-- Runtime output contracts: `./lib/use-cases/runtime/output/schema/**` and `./lib/use-cases/runtime/output/output-schema-validation.mjs`.
+- Runtime output contracts: `./lib/runtime/output/schema/**` and `./lib/runtime/output/output-schema-validation.mjs`.
 - Runtime host response contracts: `./lib/persistence/run-state/schema/**`.
 - CLI argument contract: `./lib/entrypoints/cli/schema/**`.
 

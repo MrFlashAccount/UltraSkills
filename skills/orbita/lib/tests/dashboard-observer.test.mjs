@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
-import { listDashboardRuns, getDashboardRun, startDashboardServer } from '../entrypoints/api/dashboard.mjs';
+import { listDashboardRuns, getDashboardRun, startDashboardServer } from '../dashboard/api.mjs';
 import { DashboardEventPublisher } from '../dashboard/server/dashboard-event-publisher.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');

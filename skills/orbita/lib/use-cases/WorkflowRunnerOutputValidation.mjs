@@ -1,6 +1,6 @@
 /** Workflow-runner output validation policy over IO-free runtime helpers. */
-import { validateAgainstOutputSchema } from './runtime/output/output-schema-validation.mjs';
-import { workerOutputSchema } from './runtime/output/worker-output-schema.mjs';
+import { validateAgainstOutputSchema } from '../runtime/output/output-schema-validation.mjs';
+import { workerOutputSchema } from '../runtime/output/worker-output-schema.mjs';
 
 export function validateRunnerAcceptedOutput({
   requestStepId,

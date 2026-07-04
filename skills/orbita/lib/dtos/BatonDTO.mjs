@@ -4,7 +4,7 @@
  * @property {string} status Runtime status derived from the cursor step.
  * @property {Record<string, unknown>} state Persisted workflow state.
  */
-import { cloneFrozen } from './_dto-utils.mjs';
+import { cloneFrozen } from '../dto-normalization.mjs';
 
 /** Boundary DTO for persisted runtime baton state. */
 export class BatonDTO {

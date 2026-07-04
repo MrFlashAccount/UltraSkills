@@ -2,8 +2,8 @@ import { invariant } from '../errors.mjs';
 import { applyOutputToBatonState } from './baton-state.mjs';
 import { statusForStep } from './step-status.mjs';
 import { Step } from '../entities/Step/index.mjs';
-import { responseFor, responseForCursor } from '../use-cases/runtime/output/response.mjs';
-import { assertOutputSchemaIfDeclared } from '../use-cases/runtime/output/worker-output.mjs';
+import { responseFor, responseForCursor } from './output/response.mjs';
+import { assertOutputSchemaIfDeclared } from './output/worker-output.mjs';
 import {
   SHARDING_STATE_KEY,
   acceptedShardOutputRecord,
@@ -17,7 +17,7 @@ import {
   pendingRetryShardObligation,
   shardPlanForBaton,
   stepForShard,
-} from '../entities/Baton/sharding.mjs';
+} from './sharding.mjs';
 
 function clone(value) {
   return structuredClone(value);

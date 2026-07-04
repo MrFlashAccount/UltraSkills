@@ -12,7 +12,7 @@ import {
   movePointer,
   next,
   writeOutput,
-} from '../entrypoints/workflow-runner-command.mjs';
+} from './helpers/orbita-production-api.mjs';
 import { registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 

@@ -1,7 +1,7 @@
 /**
  * @typedef {Record<string, unknown>} OutputDTOData
  */
-import { cloneFrozen } from './_dto-utils.mjs';
+import { cloneFrozen } from '../dto-normalization.mjs';
 
 /** Boundary DTO for host/worker output crossing into runtime use-cases. */
 export class OutputDTO {

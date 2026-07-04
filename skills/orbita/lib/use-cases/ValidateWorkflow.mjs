@@ -3,7 +3,7 @@ import { Workflow } from '../entities/Workflow/index.mjs';
 import { WorkflowResultDTO } from '../dtos/WorkflowResultDTO.mjs';
 import { WorkflowRuntimeError } from '../errors.mjs';
 import { assertWorkflowSchema } from '../file-contracts/workflow-document-schema.mjs';
-import { workflowSemanticValidationOptions } from './workflow-semantic-validation.mjs';
+import { workflowSemanticValidationOptions } from '../runtime/workflow-semantic-validation.mjs';
 
 export function validateWorkflow({ workflowDTO, outputSchemas = new Map(), allowedRoles, externalSchemas } = {}) {
   const workflowDoc = typeof workflowDTO?.toJSON === 'function' ? workflowDTO.toJSON() : workflowDTO;
