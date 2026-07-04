@@ -193,11 +193,32 @@ test('runner host response schema enforces action-conditional reuse hint fields'
       },
     ],
   };
+  const validMatrixRunWorker = {
+    ...validRunWorker,
+    requests: [
+      {
+        ...validRunWorker.requests[0],
+        id: 'review_matrix__matrix__api',
+        stepId: 'review_matrix__matrix__api',
+        ownerStepId: 'review_matrix',
+        matrix: {
+          owner_step_id: 'review_matrix',
+          unit_id: 'api',
+          request_id: 'review_matrix__matrix__api',
+          required: true,
+          attempts: 0,
+          max_attempts: 1,
+          context: { path: 'src/api' },
+        },
+      },
+    ],
+  };
 
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validRunWorker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validRecoverableRunWorker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validApproval, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validResolveWorkerBlocker, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, validMatrixRunWorker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validRunWorker,
     requests: [{ ...validRunWorker.requests[0], preferredAgentId: undefined }],

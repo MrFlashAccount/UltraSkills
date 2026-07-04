@@ -3,6 +3,8 @@ import { invariant } from '../../../errors.mjs';
 import { appendPromptText } from '../../../runtime/prompt-text.mjs';
 import { assertResponseSchema } from './response-schema.mjs';
 import { normalizeCursor } from '../../../runtime/cursor.mjs';
+import { batonWithShardPlan, isShardedStep, shardPlanForBaton, shardedStepEntries } from '../../../entities/Baton/sharding.mjs';
+import { batonWithMatrixPlan, isMatrixStep, matrixPlanForBaton, matrixStepEntries, planWithCurrentMatrixRequests } from '../../../entities/Baton/matrix.mjs';
 
 export function hasAppliedOutputForStep(baton, stepId) {
   return Boolean(baton.state && Object.hasOwn(baton.state, stepId));
@@ -17,14 +19,23 @@ export function responseFor(baton, stepId, step, workflow, { parallelTargets = f
 
 export function responseForCursor(baton, workflow) {
   const stepIds = normalizeCursor(baton.cursor);
-  const response = {
-    baton,
-    steps: stepIds.map((stepId) => {
-      const step = workflow.steps?.[stepId];
-      invariant(step, `baton cursor not found in workflow: ${stepId}`);
-      return buildStepEntry(stepId, step);
-    }),
-  };
+  let responseBaton = baton;
+  const steps = stepIds.flatMap((stepId) => {
+    const step = workflow.steps?.[stepId];
+    invariant(step, `baton cursor not found in workflow: ${stepId}`);
+    if (isShardedStep(step)) {
+      const plan = shardPlanForBaton({ baton: responseBaton, ownerStepId: stepId, ownerStep: step });
+      responseBaton = batonWithShardPlan(responseBaton, stepId, plan);
+      return shardedStepEntries(stepId, step, responseBaton);
+    }
+    if (isMatrixStep(step)) {
+      const plan = planWithCurrentMatrixRequests(matrixPlanForBaton({ baton: responseBaton, ownerStepId: stepId, ownerStep: step }));
+      responseBaton = batonWithMatrixPlan(responseBaton, stepId, plan);
+      return matrixStepEntries(stepId, step, responseBaton);
+    }
+    return buildStepEntry(stepId, step);
+  });
+  const response = { baton: responseBaton, steps };
   assertResponseSchema(response);
   return response;
 }

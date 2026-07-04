@@ -200,12 +200,13 @@ export class Step {
 
     const requestStepId = request.stepId ?? request.id;
     invariant(typeof requestStepId === 'string' && requestStepId.length > 0, staleCurrentRequestMessage(stepId, requests));
-    invariant(workflowDoc.steps?.[requestStepId], staleCurrentRequestMessage(stepId, requests));
+    const workflowStepId = request.ownerStepId ?? requestStepId;
+    invariant(workflowDoc.steps?.[workflowStepId], staleCurrentRequestMessage(stepId, requests));
 
-    if (requestStepId === this.id) return { ok: true, stepId: requestStepId };
+    if (workflowStepId === this.id) return { ok: true, stepId: requestStepId };
     if (batonData?.state && Object.hasOwn(batonData.state, this.id) && Object.hasOwn(this.data, 'next')) {
       const resolved = this.resolveConcreteTargets(batonData, workflowDoc, batonData.state[this.id]);
-      if (resolved.targetStepIds?.includes(requestStepId)) return { ok: true, stepId: requestStepId };
+      if (resolved.targetStepIds?.includes(workflowStepId)) return { ok: true, stepId: requestStepId };
     }
 
     throw new Error(staleCurrentRequestMessage(stepId, requests));

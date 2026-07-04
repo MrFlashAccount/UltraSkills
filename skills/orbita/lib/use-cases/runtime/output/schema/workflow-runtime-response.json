@@ -19,9 +19,43 @@
       "required": ["id", "action", "step"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
+        "ownerStepId": { "type": "string", "minLength": 1 },
         "action": { "enum": ["run_worker", "wait_for_approval", "stop_done"] },
         "step": { "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/workflow#/$defs/step" },
+        "shard": { "$ref": "#/$defs/shardWork" },
+        "matrix": { "$ref": "#/$defs/matrixWork" },
         "compiledPrompt": { "$ref": "#/$defs/compiledPrompt" }
+      },
+      "additionalProperties": false
+    },
+    "matrixWork": {
+      "type": "object",
+      "required": ["owner_step_id", "unit_id", "request_id", "required", "attempts", "max_attempts", "context"],
+      "properties": {
+        "owner_step_id": { "type": "string", "minLength": 1 },
+        "unit_id": { "type": "string", "minLength": 1 },
+        "request_id": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "attempts": { "type": "integer", "minimum": 0 },
+        "max_attempts": { "type": "integer", "minimum": 1 },
+        "context": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "shardWork": {
+      "type": "object",
+      "required": ["obligation_id", "shard_id", "reviewer_role", "required", "privacy_route", "max_attempts", "source_evidence"],
+      "properties": {
+        "obligation_id": { "type": "string", "minLength": 1 },
+        "shard_id": { "type": "string", "minLength": 1 },
+        "reviewer_role": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "privacy_route": { "const": "safe_context" },
+        "max_attempts": { "type": "integer", "minimum": 1 },
+        "source_evidence": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
       },
       "additionalProperties": false
     },

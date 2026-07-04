@@ -147,11 +147,11 @@ function parseOutputRef(ref) {
   return { stepId: ref.slice(0, separator), filePath: ref.slice(separator + 1) };
 }
 
-async function writeOutputFile({ runId, runDir, workflowPath, stepId, filePath, label = 'write output' }) {
-  const requests = await currentRequests(runId, workflowPath);
+async function writeOutputFile({ runId, runDir, workflowPath, stepId, filePath, label = 'write output', currentRequest }) {
+  const requests = currentRequest ? [currentRequest] : await currentRequests(runId, workflowPath);
   const pendingIds = requests.map((request) => request.stepId ?? request.id);
   const targetStepId = stepId ?? pendingIds[0];
-  const request = requests.find((item) => (item.stepId ?? item.id) === targetStepId);
+  const request = currentRequest ?? requests.find((item) => (item.stepId ?? item.id) === targetStepId);
   const result = await runRunner(['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', targetStepId], { input: readFileSync(filePath, 'utf8'), debugSummary: request?.action === 'run_worker' });
   assert.equal(result.status, 0, `${label} failed
 stdout:
@@ -163,12 +163,14 @@ ${result.stderr}`);
 
 async function continueWithOutputs({ runId, runDir, workflowPath, refs, label = 'continue' }) {
   const normalized = Array.isArray(refs) ? refs : [refs];
-  const pendingIds = await currentRequestIds(runId, workflowPath);
+  const requests = await currentRequests(runId, workflowPath);
+  const pendingIds = requests.map((request) => request.stepId ?? request.id);
   for (const ref of normalized) {
     const { stepId, filePath } = parseOutputRef(ref);
     const targetStepId = stepId ?? (pendingIds.length === 1 ? pendingIds[0] : undefined);
     assert.ok(targetStepId, `output for ${label} must name a step when multiple requests are pending`);
-    await writeOutputFile({ runId, runDir, workflowPath, stepId: targetStepId, filePath, label: `${label} write ${targetStepId}` });
+    const currentRequest = requests.find((request) => (request.stepId ?? request.id) === targetStepId);
+    await writeOutputFile({ runId, runDir, workflowPath, stepId: targetStepId, filePath, label: `${label} write ${targetStepId}`, currentRequest });
   }
   return await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], label);
 }
@@ -657,6 +659,72 @@ function schemaCoveredWorkflow(overrides = {}) {
   return workflow;
 }
 
+function matrixRunnerWorkflow() {
+  const schemaPath = path.join(tempDir, `matrix-output-${process.pid}-${Math.random().toString(16).slice(2)}.schema.json`);
+  writeJson(schemaPath, {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome'],
+    properties: {
+      outcome: { enum: ['ready', 'blocked'] },
+      results: { type: 'array' },
+      artifacts: { type: 'array' },
+      summary: { type: 'string' },
+    },
+    additionalProperties: true,
+  });
+  return {
+    name: 'matrix-runner-check',
+    version: 1,
+    start: 'fanout',
+    done: 'done',
+    steps: {
+      fanout: {
+        name: 'Fan out',
+        kind: 'matrix',
+        source: {
+          items: [
+            { id: 'unit_a', context: { title: 'A' } },
+            { id: 'unit_b', context: { title: 'B' } },
+            { id: 'unit_c', context: { title: 'C' } },
+          ],
+        },
+        max_parallel: 2,
+        worker: {
+          input: { prompt: 'Handle one matrix unit.' },
+          output: { template: 'output.md', schema: path.basename(schemaPath) },
+        },
+        next: 'done',
+      },
+      done: { name: 'Done', kind: 'done' },
+    },
+  };
+}
+
+test('runner: write-output accepts valid stdin JSON into baton state and continue advances without --output', async () => {
+  const { runId, runDir } = await runCase('write-output-stdin-valid');
+  const workflowPath = path.join(tempDir, 'write-output-stdin-valid-workflow.json');
+  const workflow = schemaCoveredWorkflow({ prepare: { next: 'done' } });
+  writeJson(workflowPath, workflow);
+
+  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next before write-output');
+  const written = await runRunner(['write-output', '--run-id', runId, '--step-id', 'prepare'], { input: JSON.stringify(workerOutput('prepared')), debugSummary: true });
+  assert.equal(written.status, 0, written.stderr);
+  const writtenResponse = JSON.parse(written.stdout);
+  assert.equal(writtenResponse.ok, true);
+  assert.equal(writtenResponse.runId, runId);
+  assert.equal(writtenResponse.stepId, 'prepare');
+  assert.equal(writtenResponse.accepted, true);
+  assert.equal(Object.hasOwn(writtenResponse, 'orchestratorInstruction'), false);
+  const batonAfterWrite = JSON.parse(readFileSync(path.join(runDir, 'baton.json'), 'utf8'));
+  assert.equal(batonAfterWrite.cursor, 'prepare');
+  assert.equal(batonAfterWrite.state.prepare.outcome, 'ready');
+
+  const continued = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue from accepted output');
+  assert.equal(continued.status, 'done');
+  assert.equal(continued.baton.state.prepare.outcome, 'ready');
+});
+
 test('runner: write-output rejects valid worker output without required debug summary side-channel', async () => {
   const { runId, runDir } = await runCase('write-output-missing-debug-summary');
   const workflowPath = path.join(tempDir, 'write-output-missing-debug-summary-workflow.json');
@@ -710,6 +778,77 @@ test('runner: worker instructions include prefilled validating write-output comm
   assert.match(instructions.stdout, /before calling the validating writer command/);
   assert.match(instructions.stdout, /operational rationale/);
   assert.match(instructions.stdout, /Do not write history\.md directly/);
+});
+
+test('runner: matrix synthetic requests load instructions, accept unit outputs, and join through owner cursor', async () => {
+  const { runId, runDir } = await runCase('matrix-synthetic-requests');
+  const workflowPath = path.join(tempDir, 'matrix-synthetic-requests-workflow.json');
+  writeJson(workflowPath, matrixRunnerWorkflow());
+
+  const first = await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next matrix synthetic requests');
+  assert.equal(first.status, 'needs_host_actions');
+  assert.equal(first.baton.cursor, 'fanout');
+  assert.deepEqual(first.requests.map((request) => request.stepId), ['fanout__matrix__unit_a', 'fanout__matrix__unit_b']);
+  assert.deepEqual(first.requests.map((request) => request.ownerStepId), ['fanout', 'fanout']);
+  assert.deepEqual(first.requests.map((request) => request.matrix.unit_id), ['unit_a', 'unit_b']);
+  assert.equal(first.baton.state.matrix.fanout.current_requests.length, 2);
+
+  const staleOwnerInstructions = await runRunner(['instructions', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'fanout']);
+  assert.notEqual(staleOwnerInstructions.status, 0);
+  assert.match(staleOwnerInstructions.stderr, /current request step ids: fanout__matrix__unit_a, fanout__matrix__unit_b/);
+
+  const unitInstructions = await runRunner(['instructions', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'fanout__matrix__unit_a']);
+  assert.equal(unitInstructions.status, 0, unitInstructions.stderr);
+  assert.match(unitInstructions.stdout, /Matrix owner step: fanout/);
+  assert.match(unitInstructions.stdout, /Matrix unit id: unit_a/);
+  assert.match(unitInstructions.stdout, /--step-id 'fanout__matrix__unit_a'/);
+  assert.match(unitInstructions.stdout, /--debug-summary-file '[^']+\/fanout__matrix__unit_a\/debug-summary\.md'/);
+
+  const staleOwnerWrite = await runRunner(['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'fanout'], { input: JSON.stringify(workerOutput('owner')), debugSummary: true });
+  assert.notEqual(staleOwnerWrite.status, 0);
+  assert.match(staleOwnerWrite.stderr, /current request step ids: fanout__matrix__unit_a, fanout__matrix__unit_b/);
+
+  assert.equal((await runRunner(['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'fanout__matrix__unit_a'], { input: JSON.stringify(workerOutput('A')), debugSummary: true })).status, 0);
+  assert.equal((await runRunner(['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'fanout__matrix__unit_b'], { input: JSON.stringify(workerOutput('B')), debugSummary: true })).status, 0);
+  const batonAfterWrites = JSON.parse(readFileSync(path.join(runDir, 'baton.json'), 'utf8'));
+  assert.equal(batonAfterWrites.cursor, 'fanout');
+  assert.equal(batonAfterWrites.state.fanout__matrix__unit_a.results[0].summary, 'A');
+  assert.equal(batonAfterWrites.state.fanout__matrix__unit_b.results[0].summary, 'B');
+
+  const second = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue matrix to remaining unit');
+  assert.equal(second.baton.cursor, 'fanout');
+  assert.deepEqual(second.requests.map((request) => request.stepId), ['fanout__matrix__unit_c']);
+  assert.equal(second.baton.state.matrix.fanout.units.filter((unit) => unit.status === 'accepted').length, 2);
+  assert.equal(Object.hasOwn(second.baton.state, 'fanout__matrix__unit_a'), false);
+  assert.equal(Object.hasOwn(second.baton.state.matrix.fanout.accepted_outputs.unit_a, 'output'), false);
+  assert.deepEqual(second.baton.state.matrix.fanout.accepted_outputs.unit_a.output_ref, { step_id: 'fanout__matrix__unit_a' });
+
+  const staleOldUnitWrite = await runRunner(['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'fanout__matrix__unit_a'], { input: JSON.stringify(workerOutput('old A')), debugSummary: true });
+  assert.notEqual(staleOldUnitWrite.status, 0);
+  assert.match(staleOldUnitWrite.stderr, /current request step ids: fanout__matrix__unit_c/);
+
+  const unitCArtifactPath = path.join(runDir, 'fanout__matrix__unit_c', 'artifacts', 'unit-c.md');
+  assert.equal((await runRunner(['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'fanout__matrix__unit_c'], {
+    input: JSON.stringify({
+      ...workerOutput('C'),
+      artifacts: [{
+        id: 'unit-c',
+        content_type: 'text/markdown',
+        path: unitCArtifactPath,
+        summary: 'Unit C artifact.',
+      }],
+    }),
+    debugSummary: true,
+  })).status, 0);
+  const joined = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue matrix join');
+  assert.equal(joined.status, 'done');
+  assert.equal(joined.baton.cursor, 'done');
+  assert.equal(joined.baton.state.matrix.fanout.status, 'joined');
+  assert.equal(joined.baton.state.fanout.matrix_join_proof.coverage_complete, true);
+  assert.deepEqual(joined.baton.state.fanout.matrix_join_proof.accepted_unit_ids, ['unit_a', 'unit_b', 'unit_c']);
+  assert.equal(joined.baton.state.artifacts.some((entry) => entry.producerStepId === 'fanout__matrix__unit_c' && entry.artifact.id === 'unit-c'), true);
+  assert.deepEqual(joined.baton.state.matrix.fanout.accepted_outputs.unit_c.artifact_ids, ['unit-c']);
+  assert.equal(Object.hasOwn(joined.baton.state, 'fanout__matrix__unit_c'), false);
 });
 
 test('runner: write-output separates parallel request outputs by step id before continue without --output', async () => {

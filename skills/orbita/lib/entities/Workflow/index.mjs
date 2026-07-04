@@ -3,6 +3,7 @@
  * It accepts boundary DTO data and never reads files or parses CLI arguments.
  */
 import { WorkflowRuntimeError } from '../../errors.mjs';
+import { parsePathExpression } from '../../runtime/expression.mjs';
 import { normalizePromptText } from '../../runtime/prompt-text.mjs';
 import { extractPromptInterpolations } from '../../runtime/prompt-interpolation.mjs';
 import { assertRoleDirectoryName } from '../../runtime/role-ref.mjs';
@@ -10,6 +11,8 @@ import { RESERVED_STATE_KEYS, DANGEROUS_OBJECT_KEYS, isDangerousObjectKey, isRes
 import { statusForStep } from '../../runtime/step-status.mjs';
 import { assertLoopPolicies } from '../../runtime/loop-policies.mjs';
 import { assertTransitionDescriptorTargets, normalizeTransitionNext } from '../../runtime/transition-next.mjs';
+import { assertWorkflowShardingPolicies, isShardedStep } from '../Baton/sharding.mjs';
+import { isMatrixStep, normalizeMatrixSource } from '../Baton/matrix.mjs';
 import { compileWorkflowOutputSchema } from './schema-ref-validation.mjs';
 
 function cloneBoundaryData(dto) {
@@ -83,6 +86,21 @@ function assertWorkflowStepRoles(workflow, allowedRoleNames) {
     if (roleCatalog.loaded && !allowedRoles.has(role)) {
       const expected = [...allowedRoles].join(', ');
       fail(`step '${stepId}' input.role '${role}' is not an allowed role${expected ? `; expected one of: ${expected}` : ''}`);
+    }
+  }
+  for (const [stepId, step] of Object.entries(workflow.steps)) {
+    if (!isMatrixStep(step)) continue;
+    const role = step.worker?.input?.role;
+    if (!role) continue;
+    try {
+      assertRoleDirectoryName(role);
+    } catch (error) {
+      if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' matrix.worker ${error.message.replace(/^workflow role validation failed: /, '')}`);
+      throw error;
+    }
+    if (roleCatalog.loaded && !allowedRoles.has(role)) {
+      const expected = [...allowedRoles].join(', ');
+      fail(`step '${stepId}' matrix.worker input.role '${role}' is not an allowed role${expected ? `; expected one of: ${expected}` : ''}`);
     }
   }
 }
@@ -195,7 +213,25 @@ function normalizeStepOutputSchemas({ workflow, outputSchemas = new Map(), warni
       continue;
     }
     const normalizedSchema = validateOutputSchemaDocument(schema, schemaRef, workflow, undefined, warnings, { stepId, step, requireWorkerOutcomeContract, externalSchemas });
+    if (isShardedStep(step)) assertShardedOutputContract({ stepId, schema: normalizedSchema });
     schemasByStep.set(stepId, normalizedSchema);
+  }
+  for (const [stepId, step] of Object.entries(workflow.steps)) {
+    if (!isMatrixStep(step)) continue;
+    const schemaRef = step.worker?.output?.schema;
+    if (!schemaRef) continue;
+    const schema = outputSchemaForStep(outputSchemas, stepId, schemaRef);
+    const loadedSchema = schema ?? outputSchemaForStep(outputSchemas, `${stepId}.worker`, schemaRef);
+    if (!loadedSchema) {
+      if (requireSchemaPresence) fail(`step '${stepId}' matrix.worker output.schema '${schemaRef}' was not provided to Workflow.validate()`);
+      continue;
+    }
+    validateOutputSchemaDocument(loadedSchema, schemaRef, workflow, undefined, warnings, {
+      stepId,
+      step: { kind: 'worker' },
+      requireWorkerOutcomeContract,
+      externalSchemas,
+    });
   }
   return schemasByStep;
 }
@@ -272,6 +308,18 @@ function assertWorkerOutputContract({ stepId, schema }) {
   const outcomeSchemas = schemaForPath(schema, ['outcome']);
   if (outcomeSchemas.length === 0 || outcomeSchemas.some((outcomeSchema) => schemaAllowsNonString(outcomeSchema))) {
     fail(`step '${stepId}' output.schema field 'outcome' must allow only strings`);
+  }
+}
+
+function assertShardedOutputContract({ stepId, schema }) {
+  for (const field of ['shard_id', 'reviewer_role']) {
+    if (!schemaRequiresPath(schema, [field])) {
+      fail(`step '${stepId}' sharding requires output.schema to require string field '${field}'`);
+    }
+    const fieldSchemas = schemaForPath(schema, [field]);
+    if (fieldSchemas.length === 0 || fieldSchemas.some((fieldSchema) => schemaAllowsNonString(fieldSchema))) {
+      fail(`step '${stepId}' sharding output.schema field '${field}' must allow only strings`);
+    }
   }
 }
 
@@ -462,6 +510,7 @@ function assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expr
 
   try {
     assertTransitionDescriptorTargets(workflow, stepId, { kind: 'static-parallel', targets: [...aggregate.itemValues] });
+    assertNoSyntheticControlParallelTargets(workflow, stepId, [...aggregate.itemValues], field);
   } catch (error) {
     if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' ${field} expression ${expression.source} array target schema is not a valid parallel fan-out: ${error.message}`);
     throw error;
@@ -531,9 +580,40 @@ function assertParallelItemCombinations({ workflow, stepId, itemTargetSets }) {
   for (const targets of combinations) {
     try {
       assertTransitionDescriptorTargets(workflow, stepId, { kind: 'static-parallel', targets });
+      assertNoSyntheticControlParallelTargets(workflow, stepId, targets, 'next');
     } catch (error) {
       if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' next combined parallel targets are invalid: ${error.message}`);
       throw error;
+    }
+  }
+}
+
+function assertNoSyntheticControlParallelTargets(workflow, stepId, targets, field) {
+  for (const target of targets) {
+    const targetStep = workflow.steps?.[target];
+    if (isMatrixStep(targetStep)) fail(`step '${stepId}' ${field} cannot fan out to matrix step '${target}' in matrix v1`);
+    if (isShardedStep(targetStep)) fail(`step '${stepId}' ${field} cannot fan out to sharded step '${target}' in sharding v1`);
+  }
+}
+
+function assertDescriptorHasNoSyntheticControlParallelTargets(workflow, stepId, descriptor, field = 'next') {
+  if (descriptor.kind === 'static-parallel') {
+    assertNoSyntheticControlParallelTargets(workflow, stepId, descriptor.targets, field);
+    return;
+  }
+  if (descriptor.kind === 'match-cases') {
+    for (const [key, target] of Object.entries(descriptor.cases)) {
+      if (Array.isArray(target)) assertNoSyntheticControlParallelTargets(workflow, stepId, target, `${field}.cases.${key}`);
+    }
+    return;
+  }
+  if (descriptor.kind !== 'parallel-items') return;
+  for (const [index, item] of descriptor.items.entries()) {
+    const itemField = fieldPath(field, index);
+    if (item.kind === 'static-target') {
+      assertNoSyntheticControlParallelTargets(workflow, stepId, [item.target], itemField);
+    } else if (item.kind === 'match-cases') {
+      assertDescriptorHasNoSyntheticControlParallelTargets(workflow, stepId, item, itemField);
     }
   }
 }
@@ -545,9 +625,14 @@ function assertTransitionSemantics(workflow, schemasByStep, { requireSchemaCover
     try {
       descriptor = normalizeTransitionNext(step.next);
       assertTransitionDescriptorTargets(workflow, stepId, descriptor);
+      assertDescriptorHasNoSyntheticControlParallelTargets(workflow, stepId, descriptor);
     } catch (error) {
       if (error instanceof WorkflowRuntimeError) fail(error.message);
       throw error;
+    }
+
+    if (isMatrixStep(step) && descriptor.kind !== 'static-target') {
+      fail(`step '${stepId}' matrix next must be a static step id in matrix v1`);
     }
 
     if (descriptor.kind === 'dynamic-target') {
@@ -565,7 +650,10 @@ function assertTransitionSemantics(workflow, schemasByStep, { requireSchemaCover
           itemTargetSets.push([[item.target]]);
         } else if (item.kind === 'dynamic-target') {
           const aggregate = assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expression: item.expression, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths, allowOpenTransitionSchemas });
-          if (aggregate) itemTargetSets.push(targetSetsForDynamicTarget(aggregate));
+          if (aggregate) {
+            assertNoSyntheticControlParallelTargets(workflow, stepId, [...aggregate.itemValues], fieldPath('next', index));
+            itemTargetSets.push(targetSetsForDynamicTarget(aggregate));
+          }
         } else if (item.kind === 'match-cases') {
           const possibleCaseKeys = assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descriptor: item, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths, allowUnreachableCases, allowOpenTransitionSchemas });
           if (possibleCaseKeys) itemTargetSets.push(targetSetsForMatchCases(possibleCaseKeys, item.cases));
@@ -629,6 +717,46 @@ function collectExpandedRouteGraphEdges(workflow, schemasByStep, { requireSchema
   return edges;
 }
 
+function assertWorkflowMatrixPolicies(workflow, schemasByStep) {
+  for (const [stepId, step] of Object.entries(workflow.steps)) {
+    if (!isMatrixStep(step)) continue;
+    const source = normalizeMatrixSource(step.source, { stepId });
+    if (source.kind === 'static') {
+      const seen = new Set();
+      for (const item of source.items) {
+        if (seen.has(item.id)) fail(`step '${stepId}' declares duplicate matrix unit id '${item.id}'`);
+        seen.add(item.id);
+      }
+    }
+    if (source.kind === 'dynamic') {
+      let expression;
+      try {
+        expression = parsePathExpression(source.from);
+      } catch (error) {
+        if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' matrix.source.from ${error.message}`);
+        throw error;
+      }
+      if (expression.root !== 'input') fail(`step '${stepId}' matrix.source.from must use input.* selector`);
+      const resolved = assertExpressionSchemaAvailable({
+        workflow,
+        schemasByStep,
+        stepId,
+        step,
+        expression,
+        field: 'matrix.source.from',
+        requireSchemaCoverage: true,
+      });
+      assertSchemaRequiresExpressionPath({
+        stepId,
+        expression,
+        field: 'matrix.source.from',
+        rootSchema: resolved.rootSchema,
+        pathSegments: resolved.requiredPath,
+      });
+    }
+  }
+}
+
 function assertPromptExpressionSemantics(workflow, schemasByStep, { requireSchemaCoverage = true } = {}) {
   for (const [stepId, step] of Object.entries(workflow.steps)) {
     const prompt = normalizePromptText(step.input?.prompt, { fieldName: `steps.${stepId}.input.prompt` });
@@ -651,6 +779,28 @@ function assertPromptExpressionSemantics(workflow, schemasByStep, { requireSchem
         requireSchemaCoverage,
       });
     }
+
+    if (isMatrixStep(step)) {
+      const matrixPrompt = normalizePromptText(step.worker?.input?.prompt, { fieldName: `steps.${stepId}.worker.input.prompt` });
+      let matrixInterpolations;
+      try {
+        matrixInterpolations = extractPromptInterpolations(matrixPrompt);
+      } catch (error) {
+        if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' matrix.worker.input.prompt ${error.message}`);
+        throw error;
+      }
+      for (const interpolation of matrixInterpolations) {
+        assertExpressionSchemaAvailable({
+          workflow,
+          schemasByStep,
+          stepId,
+          step,
+          expression: interpolation.expression,
+          field: 'matrix.worker.input.prompt',
+          requireSchemaCoverage,
+        });
+      }
+    }
   }
 }
 
@@ -659,6 +809,7 @@ function validateWorkflowDocument(workflow, options = {}) {
   assertWorkflowStepIds(workflow);
   assertWorkflowRootTargets(workflow);
   assertWorkflowStepRoles(workflow, options.allowedRoles);
+  assertWorkflowShardingPolicies(workflow, { allowedRoles: normalizeAllowedRoleCatalog(options.allowedRoles) });
   const warnings = [];
   const schemasByStep = normalizeStepOutputSchemas({
     workflow,
@@ -668,6 +819,7 @@ function validateWorkflowDocument(workflow, options = {}) {
     requireWorkerOutcomeContract: options.requireWorkerOutcomeContract ?? true,
     externalSchemas: options.externalSchemas ?? [],
   });
+  assertWorkflowMatrixPolicies(workflow, schemasByStep);
   assertTransitionSemantics(workflow, schemasByStep, {
     requireSchemaCoverage: options.requireSchemaCoverage ?? true,
     requireExpressionRequiredPaths: options.requireExpressionRequiredPaths ?? true,

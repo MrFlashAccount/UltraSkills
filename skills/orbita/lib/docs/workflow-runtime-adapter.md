@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft shape for architecture review.
+Draft host-adapter shape plus approved native sharding contract for implementation drift review.
 
 ## Boundary
 
@@ -89,6 +89,63 @@ When starting a new run, `next` may receive the raw startup user prompt with `--
 At run initialization, the runner deterministically selects and persists `baton.user_prompt_target` from the static startup topology. A target is stable only when all possible startup paths that can be chosen before the first worker guarantee the same worker target; static fanout may pin one rendered worker branch, but ambiguous dynamic transitions, divergent `match/cases`, and terminal/no-worker `match/cases` branches fail loudly instead of accepting a prompt that might be unused.
 
 The runner/interpreter injects the startup prompt only into the render context for the persisted `baton.user_prompt_target` until that selected worker's output is applied. Rendering validates that the saved target is still defined, is still a worker, and is present whenever the current response renders workers or reaches a terminal step; otherwise the runner fails rather than silently dropping `baton.user_prompt`. It persists `baton.user_prompt_injected: true` only when applying that selected worker output, so a crash or repeated `next` before completion keeps the prompt in that same worker's instructions, while resume or workflow-shape drift after completion cannot reinject it into a later worker. The template compiler only renders a `## User prompt` section for worker steps when that render-time value is passed; it does not decide eligibility itself. `workflow.start` may be a control step; approval/user-gate answers are separate host interactions, not startup `user_prompt`, and later workers do not receive this section unless the workflow explicitly carries derived context through normal state/output paths.
+
+## Native workflow sharding
+
+Native sharding is an opt-in workflow-runner capability for large review runs. The approved model is owner-step sharding: the workflow declares one review-capable owner step, and the runner stores arbitrary shard count as baton/state-compatible records under that owner step. Shards are not dynamic workflow step ids, hidden subagent branches, private host sessions, or code-review v1 objects.
+
+Approved source manifest for this contract:
+
+- `ARCH-CONTRACT`: final structural contract from `architecture_draft.architecture_contract`, authoritative for entities, boundaries, invariants, non-goals, and artifact decision.
+- `REASONS`: immutable `reasons-canvas-architecture` artifact from the approved source manifest, authoritative for workstream conversion and drift review context.
+- `ARCH-ATTACK`: architecture attack verdict, authoritative for approval evidence: no findings; confirms `update_existing` document decision and the command-only lease/token exception.
+- `RUNTIME-DOC`: this file, `skills/orbita/lib/docs/workflow-runtime-adapter.md`, is the durable runtime contract and final drift-check target.
+
+Runner-owned shard records:
+
+- `ShardPlan`: plan id, owner step id, status, and source evidence for a sharded review step.
+- `ShardDescriptor`: stable shard id, safe path/subsystem/sensitivity metadata, and source evidence scoped to the owner step.
+- `CoverageObligation`: obligation id, shard id, reviewer role, required/optional flag, privacy route, known-debt policy, and retry budget.
+- `ShardOutputRecord`: accepted output bound to one obligation id, exact shard id, reviewer role, verdict, artifacts, and findings.
+- `ShardJoinProof`: plan id, coverage status, covered/missing/blocked obligation ids, and the reason pass routing is allowed or blocked.
+
+These records belong to the runner domain/runtime and baton schema. Persistence may serialize them, but host adapters and workers do not own their lifecycle. Workflow validation owns the author-facing sharding policy shape and rejects malformed policies before runtime dispatch. Runner use-cases own plan validation, dispatch eligibility, output acceptance, retry/block accounting, and join proof computation.
+
+The public shard host request remains a `run_worker` request for one shard-role obligation. It may expose only safe fields needed by the host:
+
+- owner step id;
+- shard id;
+- reviewer role;
+- required flag;
+- bounded safe shard context and source evidence;
+- existing validating instruction/write-output command strings.
+
+It must not expose hidden transcripts, private prompts outside rendered worker instructions, instruction storage paths, session registries, agent lifecycle internals, output paths, worker control-plane metadata, or standalone lease/token fields. Lease/token material is a command-only compatibility exception: protocol-required token material may appear inside existing runner-generated command strings, and nowhere else in shard DTO fields, shard records, artifact metadata, human-facing shard metadata, or join proof.
+
+Coverage and join invariants:
+
+- A required obligation is covered only after `write-output` accepts a schema-valid shard output for the exact obligation id, shard id, and reviewer role, or after the runner records an explicit blocker for that obligation.
+- A passing join is illegal while any required obligation is missing, failed, blocked, role-mismatched, retry-exhausted, unsafe, or unvalidated.
+- Optional obligations may add evidence, but cannot compensate for missing required coverage.
+- Worker prose, artifacts, hidden transcripts, private sessions, or host claims are not join proof by themselves.
+- Duplicate shard ids, duplicate obligation ids, unknown roles, missing required obligations, impossible privacy routes, unsafe public request fields, and malformed shard outputs block before pass routing.
+
+Retry and blocked policy is runner-owned. Retry budgets are recorded on obligations, retry exhaustion becomes an explicit blocked obligation, and unsliceable, unsafe, ambiguous, or privacy-incompatible shard plans become blocked workflow outputs instead of best-effort joins. Known-debt policy travels with each obligation but does not waive a finding unless the accepted shard output includes evidence that the current slice neither worsens nor depends on that debt.
+
+Compatibility rules:
+
+- Workflows without a sharding policy keep current sequential, approval, fixed parallel fanout/join, output validation, persistence, host request, and instruction-rendering behavior.
+- Existing fixed parallel fanout/join remains separate from native sharding; sharding adds owner-step coverage records, not a replacement for current array cursor behavior.
+- Code-review v1 integration is explicitly out of scope for this slice. The code-review orchestrator may later consume native runner sharding, but this runtime contract must not depend on that integration.
+
+Implementation and final drift review must compare this contract against:
+
+- workflow document schema and semantic validation for opt-in sharding policy;
+- baton schema and shard record helpers for plan, descriptor, obligation, output, retry/privacy, and join proof;
+- runtime transition/use-case behavior for plan validation, dispatch, accepted output matching, retry/block accounting, and join routing;
+- public host request DTO rendering and negative tests for private fields and standalone token fields;
+- compatibility tests for non-sharded sequential, approval, fixed parallel fanout/join, output validation, persistence, and existing host request behavior;
+- focused sharding tests for complete coverage pass, missing required output block, role mismatch block, duplicate shard id rejection, retry exhaustion block, unsafe privacy route block, optional obligation behavior, and public DTO privacy/token negative cases.
 
 ## Host request response
 

@@ -242,6 +242,14 @@ function stepIdForRequest(request) {
   return request.stepId ?? request.id;
 }
 
+function workflowStepIdForRequest(request) {
+  return request.ownerStepId ?? stepIdForRequest(request);
+}
+
+function isSyntheticOwnerRequest(request) {
+  return typeof request.ownerStepId === 'string' && request.ownerStepId.length > 0;
+}
+
 function acceptedOutputForRequest(baton, request) {
   for (const alias of requestAliases(request)) {
     if (Object.hasOwn(baton?.state ?? {}, alias)) return structuredClone(baton.state[alias]);
@@ -302,7 +310,8 @@ function outputForAcceptedState(currentBaton, requests, { isPreparedParallelCont
 function recoverableWorkerBlockersForAcceptedState({ workflow, requests, valuesByRequestId, runsRoot }) {
   const blockers = {};
   for (const request of requests) {
-    const stepId = stepIdForRequest(request);
+    if (isSyntheticOwnerRequest(request)) continue;
+    const stepId = workflowStepIdForRequest(request);
     const step = workflow.steps?.[stepId];
     const output = valuesByRequestId.get(request.id);
     if (isRecoverableWorkerBlockerOutput({ workflow, stepId, step, output })) {
@@ -629,7 +638,9 @@ function staleWorkflowCommandError(stepId, response) {
 function validateAcceptedOutputForRequest({ workflow, resources, request, output, runsRoot }) {
   if (request.action === 'resolve_worker_blocker') return validateRecoveryResolutionOutput(output, { runsRoot });
   const requestStepId = stepIdForRequest(request);
-  const step = workflow.steps?.[requestStepId];
+  const workflowStepId = workflowStepIdForRequest(request);
+  const workflowStep = workflow.steps?.[workflowStepId];
+  const step = request.matrix ? { kind: 'worker', output: workflowStep?.worker?.output } : workflowStep;
   const artifactOutputDir = typeof resources?.artifactOutputDirForStep === 'function' ? resources.artifactOutputDirForStep(requestStepId) : undefined;
   return validateRunnerAcceptedOutput({
     requestStepId,
@@ -661,9 +672,11 @@ function validateRecoveryResolutionOutput(output, { runsRoot } = {}) {
 }
 
 function durableAcceptedOutput({ workflow, request, step, output, runsRoot }) {
-  const stepId = stepIdForRequest(request);
-  if (isRecoverableWorkerBlockerOutput({ workflow, stepId, step, output })) {
-    const blocker = publicRecoverableBlockerDetails(output.blocker, { stepId, runsRoot });
+  const stepId = workflowStepIdForRequest(request);
+  const recoverableStep = request.matrix ? { kind: 'worker' } : step;
+  const blockerStepId = request.matrix ? stepIdForRequest(request) : stepId;
+  if (isRecoverableWorkerBlockerOutput({ workflow, stepId: blockerStepId, step: recoverableStep, output })) {
+    const blocker = publicRecoverableBlockerDetails(output.blocker, { stepId: blockerStepId, runsRoot });
     if (step?.kind === 'approval') return { approval: 'blocked', blocker };
     return { outcome: 'blocked', blocker };
   }
@@ -732,7 +745,9 @@ async function writeOutputInternal({ runId, workflowPath, stepId, json, debugSum
     if (!request) throw staleWorkflowCommandError(stepId, response);
     const validationResources = resourcesWithValidatingWriter(runtime.resources, paths, { leaseToken });
     const acceptedStepId = stepIdForRequest(request);
-    const step = runtime.workflow.steps?.[acceptedStepId];
+    const workflowStepId = workflowStepIdForRequest(request);
+    const step = runtime.workflow.steps?.[workflowStepId];
+    const effectiveRequestStep = request.matrix ? { kind: 'worker', output: step?.worker?.output } : step;
     const accepted = validateAcceptedOutputForRequest({
       workflow: runtime.workflow,
       resources: validationResources,
@@ -748,7 +763,7 @@ async function writeOutputInternal({ runId, workflowPath, stepId, json, debugSum
       runsRoot: paths.runsRoot,
     });
     const expectedDebugSummaryPath = request.action === 'run_worker'
-      ? validationResources.debugSummaryPathForStep?.(acceptedStepId, step)
+      ? validationResources.debugSummaryPathForStep?.(acceptedStepId, effectiveRequestStep)
       : undefined;
     if (request.action === 'run_worker') {
       const actual = typeof debugSummaryFile === 'string' ? resolve(debugSummaryFile) : '';
@@ -832,7 +847,8 @@ async function bindAgentInternal({ runId, workflowPath, stepId, agentId, leaseTo
     if (!request) throw staleWorkflowCommandError(stepId, response);
     if (request.action !== 'run_worker') throw new Error(`workflow step '${stepId}' is not a run_worker request`);
     const acceptedStepId = stepIdForRequest(request);
-    const bindingKey = workerBindingKeyForStep(acceptedStepId, runtime.workflow.steps?.[acceptedStepId]);
+    const workflowStepId = workflowStepIdForRequest(request);
+    const bindingKey = request.ownerStepId ? acceptedStepId : workerBindingKeyForStep(workflowStepId, runtime.workflow.steps?.[workflowStepId]);
     const baton = batonWithWorkerBinding(current.baton, bindingKey, agentId);
     await writePersistedRunStateUpdate(paths, {
       baton,
