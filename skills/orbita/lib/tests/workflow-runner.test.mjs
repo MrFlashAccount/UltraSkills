@@ -464,7 +464,7 @@ test('runner: API next rejects empty user prompt before persisting baton', async
   writeJson(workflowPath, workflowDoc);
 
   const { runId: emptyRunId, runDir: emptyRunDir } = await runCase('api-empty-user-prompt-next');
-  const emptyLeaseToken = claimRunForTest(resolveRunPaths({ runId: emptyRunId, workflowPath }));
+  const emptyLeaseToken = await claimRunForTest(resolveRunPaths({ runId: emptyRunId, workflowPath }));
   await assert.rejects(
     runnerNext({ runId: emptyRunId, workflowPath, userPrompt: '', leaseToken: emptyLeaseToken }),
     /--user-prompt must not be empty or whitespace-only/,
@@ -472,7 +472,7 @@ test('runner: API next rejects empty user prompt before persisting baton', async
   assert.equal(existsSync(path.join(emptyRunDir, 'baton.json')), false);
 
   const { runId: whitespaceRunId, runDir: whitespaceRunDir } = await runCase('api-whitespace-user-prompt-next');
-  const whitespaceLeaseToken = claimRunForTest(resolveRunPaths({ runId: whitespaceRunId, workflowPath }));
+  const whitespaceLeaseToken = await claimRunForTest(resolveRunPaths({ runId: whitespaceRunId, workflowPath }));
   await assert.rejects(
     runnerNext({ runId: whitespaceRunId, workflowPath, userPrompt: '  \n\t', leaseToken: whitespaceLeaseToken }),
     /--user-prompt must not be empty or whitespace-only/,
