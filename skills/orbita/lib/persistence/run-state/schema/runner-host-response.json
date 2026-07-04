@@ -21,6 +21,7 @@
           "action": { "enum": ["run_worker", "wait_for_approval", "resolve_worker_blocker"] },
           "loadInstructionsCommand": { "type": "string", "minLength": 1 },
           "shard": { "$ref": "#/$defs/shardWorkRequest" },
+          "matrix": { "$ref": "#/$defs/matrixWorkRequest" },
           "preferredAgentId": {
             "description": "Advisory opaque worker id previously bound for this step, or null when no binding exists.",
             "type": ["string", "null"],
@@ -117,6 +118,20 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "matrixWorkRequest": {
+      "type": "object",
+      "required": ["owner_step_id", "unit_id", "request_id", "required", "attempts", "max_attempts", "context"],
+      "properties": {
+        "owner_step_id": { "type": "string", "minLength": 1 },
+        "unit_id": { "type": "string", "minLength": 1 },
+        "request_id": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "attempts": { "type": "integer", "minimum": 0 },
+        "max_attempts": { "type": "integer", "minimum": 1 },
+        "context": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
     "shardWorkRequest": {
       "type": "object",
       "required": [
