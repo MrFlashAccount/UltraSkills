@@ -634,7 +634,8 @@ function validateAcceptedOutputForRequest({ workflow, resources, request, output
   if (request.action === 'resolve_worker_blocker') return validateRecoveryResolutionOutput(output, { runsRoot });
   const requestStepId = stepIdForRequest(request);
   const workflowStepId = workflowStepIdForRequest(request);
-  const step = workflow.steps?.[workflowStepId];
+  const workflowStep = workflow.steps?.[workflowStepId];
+  const step = request.matrix ? { kind: 'worker', output: workflowStep?.worker?.output } : workflowStep;
   const artifactOutputDir = typeof resources?.artifactOutputDirForStep === 'function' ? resources.artifactOutputDirForStep(requestStepId) : undefined;
   return validateRunnerAcceptedOutput({
     requestStepId,
@@ -667,8 +668,10 @@ function validateRecoveryResolutionOutput(output, { runsRoot } = {}) {
 
 function durableAcceptedOutput({ workflow, request, step, output, runsRoot }) {
   const stepId = workflowStepIdForRequest(request);
-  if (isRecoverableWorkerBlockerOutput({ workflow, stepId, step, output })) {
-    const blocker = publicRecoverableBlockerDetails(output.blocker, { stepId, runsRoot });
+  const recoverableStep = request.matrix ? { kind: 'worker' } : step;
+  const blockerStepId = request.matrix ? stepIdForRequest(request) : stepId;
+  if (isRecoverableWorkerBlockerOutput({ workflow, stepId: blockerStepId, step: recoverableStep, output })) {
+    const blocker = publicRecoverableBlockerDetails(output.blocker, { stepId: blockerStepId, runsRoot });
     if (step?.kind === 'approval') return { approval: 'blocked', blocker };
     return { outcome: 'blocked', blocker };
   }
@@ -739,6 +742,7 @@ async function writeOutputInternal({ runId, workflowPath, stepId, json, debugSum
     const acceptedStepId = stepIdForRequest(request);
     const workflowStepId = workflowStepIdForRequest(request);
     const step = runtime.workflow.steps?.[workflowStepId];
+    const effectiveRequestStep = request.matrix ? { kind: 'worker', output: step?.worker?.output } : step;
     const accepted = validateAcceptedOutputForRequest({
       workflow: runtime.workflow,
       resources: validationResources,
@@ -754,7 +758,7 @@ async function writeOutputInternal({ runId, workflowPath, stepId, json, debugSum
       runsRoot: paths.runsRoot,
     });
     const expectedDebugSummaryPath = request.action === 'run_worker'
-      ? validationResources.debugSummaryPathForStep?.(acceptedStepId, step)
+      ? validationResources.debugSummaryPathForStep?.(acceptedStepId, effectiveRequestStep)
       : undefined;
     if (request.action === 'run_worker') {
       const actual = typeof debugSummaryFile === 'string' ? resolve(debugSummaryFile) : '';

@@ -166,6 +166,7 @@ export function buildHostRequests(
         ),
       };
       if (step.shard) request.shard = structuredClone(step.shard);
+      if (step.matrix) request.matrix = structuredClone(step.matrix);
       if (step.action === "run_worker") {
         request.preferredAgentId = preferredAgentIdForStep(
           interpreterResponse.baton,

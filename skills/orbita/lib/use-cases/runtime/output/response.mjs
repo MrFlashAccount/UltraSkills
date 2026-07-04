@@ -4,6 +4,7 @@ import { appendPromptText } from '../../../runtime/prompt-text.mjs';
 import { assertResponseSchema } from './response-schema.mjs';
 import { normalizeCursor } from '../../../runtime/cursor.mjs';
 import { batonWithShardPlan, isShardedStep, shardPlanForBaton, shardedStepEntries } from '../../../entities/Baton/sharding.mjs';
+import { batonWithMatrixPlan, isMatrixStep, matrixPlanForBaton, matrixStepEntries, planWithCurrentMatrixRequests } from '../../../entities/Baton/matrix.mjs';
 
 export function hasAppliedOutputForStep(baton, stepId) {
   return Boolean(baton.state && Object.hasOwn(baton.state, stepId));
@@ -26,6 +27,11 @@ export function responseForCursor(baton, workflow) {
       const plan = shardPlanForBaton({ baton: responseBaton, ownerStepId: stepId, ownerStep: step });
       responseBaton = batonWithShardPlan(responseBaton, stepId, plan);
       return shardedStepEntries(stepId, step, responseBaton);
+    }
+    if (isMatrixStep(step)) {
+      const plan = planWithCurrentMatrixRequests(matrixPlanForBaton({ baton: responseBaton, ownerStepId: stepId, ownerStep: step }));
+      responseBaton = batonWithMatrixPlan(responseBaton, stepId, plan);
+      return matrixStepEntries(stepId, step, responseBaton);
     }
     return buildStepEntry(stepId, step);
   });
