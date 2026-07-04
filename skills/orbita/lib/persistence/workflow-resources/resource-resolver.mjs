@@ -1,7 +1,12 @@
 import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { WorkflowRuntimeError } from '../../errors.mjs';
 import { isInside } from '../filesystem/path-safety.mjs';
+
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+export const repositoryRoot = path.resolve(moduleDir, '../../../../..');
+export const builtInWorkflowsRoot = path.join(repositoryRoot, 'workflows');
 
 export function workflowResourceBase({ workflowPath }) {
   return path.dirname(path.resolve(workflowPath));
@@ -10,8 +15,12 @@ export function workflowResourceBase({ workflowPath }) {
 export function defaultRepositoryRootForWorkflow(workflowPath) {
   const workflowDir = workflowResourceBase({ workflowPath });
   const parentDir = path.dirname(workflowDir);
-  if (path.basename(workflowDir) === 'workflows') return parentDir;
-  if (path.basename(parentDir) === 'workflows') return path.dirname(parentDir);
+  const resolvedWorkflowDir = path.resolve(workflowDir);
+  const resolvedParentDir = path.resolve(parentDir);
+  if (resolvedWorkflowDir === builtInWorkflowsRoot) return repositoryRoot;
+  if (resolvedParentDir === builtInWorkflowsRoot) return repositoryRoot;
+  if (path.basename(resolvedWorkflowDir) === 'workflows') return resolvedParentDir;
+  if (path.basename(resolvedParentDir) === 'workflows') return path.dirname(resolvedParentDir);
   return workflowDir;
 }
 

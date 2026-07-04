@@ -277,6 +277,26 @@ test('workflow-runs create accepts catalog absolute workflow path from a differe
   assert.deepEqual(response.workflow, { identity: 'dev-harness' });
 });
 
+test('workflow-runs create validates direct absolute workflow before index writes', () => {
+  const helperPath = path.join(root, 'skills/orbita/lib/entrypoints/cli/workflow-runs.mjs');
+  const invalidWorkflowPath = path.join(tempDir, 'invalid-startup-workflow.json');
+  const validationRunsRoot = path.join(tempDir, 'startup-validation-create-runs');
+  writeFileSync(invalidWorkflowPath, '{not-json');
+
+  const result = spawnSync(process.execPath, [
+    helperPath,
+    'create',
+    '--run-id',
+    `${runPrefix}invalid-startup`,
+    '--workflow',
+    invalidWorkflowPath,
+  ], { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUNS_ROOT: validationRunsRoot } });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /workflow startup validation failed/);
+  assert.equal(existsSync(path.join(validationRunsRoot, 'runs.json')), false);
+});
+
 test('workflow runs API generates a safe run id when omitted', async () => {
   const response = await registerWorkflowRunAtRoot({ runsRoot, title: 'Generated run' });
 

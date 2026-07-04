@@ -30,6 +30,13 @@ module.exports = {
       to: { path: '^skills/orbita/lib/persistence/' },
     },
     {
+      name: 'orbita-top-level-use-cases-not-to-catalog-reader',
+      severity: 'error',
+      comment: 'Top-level use cases must receive catalog facts through entrypoint adapters, not read catalogs directly.',
+      from: { path: '^skills/orbita/lib/use-cases/[A-Z][^/]*[.]mjs$' },
+      to: { path: '^skills/orbita/lib/workflow-catalog-reader[.]mjs$' },
+    },
+    {
       name: 'orbita-runtime-helpers-not-to-persistence',
       severity: 'error',
       comment: 'Runtime helpers must stay deterministic and persistence-free.',
@@ -42,6 +49,24 @@ module.exports = {
       comment: 'Persistence is a detail layer and must not import application use cases.',
       from: { path: '^skills/orbita/lib/persistence/' },
       to: { path: '^skills/orbita/lib/use-cases/' },
+    },
+    {
+      name: 'orbita-run-state-not-to-startup-validation',
+      severity: 'error',
+      comment: 'Run-state persistence must not own workflow startup validation.',
+      from: { path: '^skills/orbita/lib/persistence/run-state/' },
+      to: { path: '^skills/orbita/lib/workflow-startup-validation[.]mjs$' },
+    },
+    {
+      name: 'orbita-runner-runtime-not-to-catalog-config',
+      severity: 'error',
+      comment: 'Runner runtime must use persisted workflow paths and must not rediscover workflow catalogs/config.',
+      from: {
+        path: '^(?:skills/orbita/lib/use-cases/runtime/|skills/orbita/lib/entrypoints/workflow-runner-command[.]mjs$)',
+      },
+      to: {
+        path: '^(?:skills/orbita/lib/workflow-catalog-reader[.]mjs$|skills/orbita/lib/persistence/config/)',
+      },
     },
     {
       name: 'orbita-top-level-use-cases-not-to-node-io',

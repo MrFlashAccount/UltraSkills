@@ -55,6 +55,55 @@ Retired surfaces:
 Retired surfaces must not remain in supported command paths, exports, docs, or
 boundary-check allow lists.
 
+## Custom Workflow Catalog
+
+Custom workflow support is a runtime catalog feature for existing workflow
+documents, not a plugin marketplace, visual editor, or autonomous workflow
+rewriter. Built-in workflows remain the first-party root. User-provided
+workflows are discovered from an Orbita TOML config at `~/.orbita/orbita.toml`
+or `ORBITA_CONFIG`.
+
+The supported config shape is:
+
+```toml
+[workflow_catalog]
+
+[[workflow_catalog.roots]]
+source_id = "team"
+path = "~/orbita-workflows"
+```
+
+Many configured roots are allowed. They stack after the built-in root in config
+order. `source_id` values are stable catalog identities and must not use reserved
+ids such as `built-in` or `override`.
+
+Catalog identity is source/path-qualified:
+
+- `workflowRef = <sourceId>:<relativeWorkflowPath>`
+- workflow `name` is display and fuzzy-routing metadata
+- duplicate names are ambiguous unless an exact `workflowRef` is provided
+
+`workflow-catalog --workflows-root <dir>` remains an isolated compatibility
+override. It does not merge with built-ins or configured roots and uses the
+reserved `override` source id.
+
+Startup validation is non-bypassable for newly initialized runs. `workflow-runs
+create` validates the selected workflow before writing a run-index entry, and
+`workflow-runner next` validates before creating a missing lease/index/baton.
+Runtime continuation must use the persisted absolute workflow path and must not
+rediscover catalog/config roots.
+
+Workflow resource loading is source-aware and bounded to the workflow package
+root unless the workflow is built-in and explicitly allowed to use repository
+role/template/shared material. Custom workflow names must not widen resource
+access by basename.
+
+Workflow-authoring/autotrain is an upstream producer only. Authored packages
+become runtime-visible only after human-reviewed promotion into a configured
+root or an explicit `--workflows-root` override. Runtime list/resolve/run code
+must not import authoring/autotrain internals, scan staging locations, or promote
+generated workflows implicitly.
+
 ## Layer Ownership
 
 ### Entrypoints
@@ -220,9 +269,12 @@ Checks should cover:
 - use-case families importing other use-case families, including nested files
 - DTO files importing other DTO files
 - top-level use cases importing filesystem/path/persistence
+- top-level use cases importing catalog readers
 - runtime helpers importing filesystem/path/persistence
 - persistence importing use cases
 - persistence importing entity-owned Baton schema after migration
+- run-state persistence importing startup validation
+- runner runtime importing catalog/config discovery
 - concrete matrix runtime/helper imports that violate the matrix dependency
   rules below, once those source surfaces exist
 
@@ -575,7 +627,10 @@ Forbidden:
 - `lib/runtime -> node:fs`
 - `lib/runtime -> node:path`
 - `lib/runtime -> persistence`
+- top-level use cases -> catalog readers
+- runner runtime -> catalog/config discovery
 - `persistence -> use-cases`
+- run-state persistence -> startup validation
 - `persistence -> entities/Baton/schema/**` after schema ownership migration
 - matrix runtime/entity helpers -> `node:fs`
 - matrix runtime/entity helpers -> `node:path`
@@ -632,6 +687,8 @@ Backend review must verify:
 - output validation, artifact metadata handling, run-state persistence, leases,
   history, and current migration semantics did not change accidentally
 - imports obey the dependency rules above
+- custom workflow roots validate before run creation, retain source-qualified
+  catalog identity, and do not widen resource access by duplicate workflow name
 - matrix source expansion initializes durable state once per owner/source
   fingerprint, restart rerenders eligible units from `state.matrix`, unit output
   updates only the matching durable record, and join proof gates normal `next`
