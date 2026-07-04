@@ -5,6 +5,9 @@ export function createWorkflowRuns({
   registerWorkflowRunAtRoot,
   summarizeWorkflowRuns,
   publicErrorMessage,
+  defaultWorkflowPath,
+  resolveAbsoluteWorkflowPath,
+  validateWorkflowStartup,
 }) {
   function publicApiError(error, options = {}) {
     const rawMessage = String(error?.message ?? error);
@@ -26,11 +29,13 @@ export function createWorkflowRuns({
   }
 
   async function registerWorkflowRun({ runId, title, summary, workflowPath, workflowIdentity, status = 'running', taskKey, taskFingerprint, runsRoot, claim = false, owner, harness, sessionId, workerId, leaseMs, now = new Date() } = {}) {
+    const startupWorkflowPath = resolveAbsoluteWorkflowPath(workflowPath) ?? defaultWorkflowPath;
+    validateWorkflowStartup({ workflowPath: startupWorkflowPath });
     return publicApiCall(() => registerWorkflowRunAtRoot({
       runId,
       title,
       summary,
-      workflowPath,
+      workflowPath: startupWorkflowPath,
       workflowIdentity,
       status,
       taskKey,

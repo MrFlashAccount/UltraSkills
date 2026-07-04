@@ -21,16 +21,30 @@ import { readText } from '../../persistence/run-state/atomic-file.mjs';
 import { assertFreshTokenAuthority, assertMatchingTokenAuthority, buildTokenLease, renewTokenLease } from '../../persistence/run-state/lease-authority.mjs';
 import { appendHistoryOnce, recoverDurableCommit } from '../../persistence/run-state/durable-commit.mjs';
 import { readPersistedRunState } from '../../persistence/run-state/PersistedRunStateReader.mjs';
-import { ensureRunFiles, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../../persistence/run-state/paths.mjs';
+import { defaultWorkflowPath, ensureRunFiles, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../../persistence/run-state/paths.mjs';
 import { createRunIndexEntry, readRunsIndex, runsIndexPathsForRoot, upsertRunIndexEntry } from '../../persistence/run-state/run-index.mjs';
 import { withRunStateLock } from '../../persistence/run-state/lock.mjs';
 import { claimWorkflowRunAtRoot, heartbeatWorkflowRunAtRoot, listWorkflowRunsAtRoot, registerWorkflowRunAtRoot, summarizeWorkflowRuns as summarizeWorkflowRunsAtRoot } from '../../persistence/run-state/workflow-runs.mjs';
 import { publicErrorMessage } from '../../public-error.mjs';
-import { assertAbsoluteWorkflowPath } from '../../workflow-path-boundary.mjs';
+import { assertAbsoluteWorkflowPath, resolveAbsoluteWorkflowPath } from '../../workflow-path-boundary.mjs';
 import { isRecoverableWorkerBlockerOutput, publicRecoverableBlockerDetails, publicRecoveryResolutionDetails } from '../../runtime/recoverable-worker-blocker.mjs';
 import { applyOutputToBatonState } from '../../runtime/baton-state.mjs';
 import { read, readAllowedRoles, readOutputSchemas } from '../../persistence/workflow-resources/workflow-file-reader.mjs';
 import { defaultRepositoryRootForWorkflow } from '../../persistence/workflow-resources/resource-resolver.mjs';
+import { createWorkflowStartupValidator } from '../../workflow-startup-validation.mjs';
+
+export const validateWorkflowFile = createValidateWorkflowFile({
+  readWorkflow: read,
+  readOutputSchemas,
+  readAllowedRoles,
+  defaultRepositoryRootForWorkflow,
+  validateWorkflow,
+});
+
+const validateWorkflowStartup = createWorkflowStartupValidator({
+  validateWorkflowFile,
+  publicErrorMessage,
+});
 
 const workflowRunnerCommand = createWorkflowRunnerCommand({
   readFile,
@@ -76,6 +90,7 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   withRunStateLock,
   publicErrorMessage,
   assertAbsoluteWorkflowPath,
+  validateWorkflowStartup,
   isRecoverableWorkerBlockerOutput,
   publicRecoverableBlockerDetails,
   publicRecoveryResolutionDetails,
@@ -89,14 +104,9 @@ const workflowRuns = createWorkflowRuns({
   registerWorkflowRunAtRoot,
   summarizeWorkflowRuns: summarizeWorkflowRunsAtRoot,
   publicErrorMessage,
-});
-
-export const validateWorkflowFile = createValidateWorkflowFile({
-  readWorkflow: read,
-  readOutputSchemas,
-  readAllowedRoles,
-  defaultRepositoryRootForWorkflow,
-  validateWorkflow,
+  defaultWorkflowPath,
+  resolveAbsoluteWorkflowPath,
+  validateWorkflowStartup,
 });
 
 export const {

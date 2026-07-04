@@ -1,9 +1,7 @@
 #!/usr/bin/env bun
-import { existsSync, readdirSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
-import { readWorkflowDocument } from '../../persistence/workflow-resources/workflow-document-reader.mjs';
-import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { readWorkflowCatalog } from '../../workflow-catalog-reader.mjs';
+import { resolveWorkflowCatalogEntry } from '../../use-cases/WorkflowCatalogPolicy.mjs';
 
 function fail(message) {
   console.error(`workflow-catalog: ${message}`);
@@ -11,12 +9,7 @@ function fail(message) {
 }
 
 function usage() {
-  return 'usage: bun skills/orbita/lib/entrypoints/cli/workflow-catalog.mjs list [--human|--json] [--workflows-root <dir>] | resolve <query> [--human|--json] [--workflows-root <dir>]';
-}
-
-function repoRoot() {
-  const scriptDir = dirname(fileURLToPath(import.meta.url));
-  return join(scriptDir, '../../../../..');
+  return 'usage: bun skills/orbita/lib/entrypoints/cli/workflow-catalog.mjs list [--human|--json] [--workflows-root <dir>] [--config <file>] | resolve <query> [--human|--json] [--workflows-root <dir>] [--config <file>]';
 }
 
 function parseCliArgs(argv) {
@@ -29,6 +22,7 @@ function parseCliArgs(argv) {
         human: { type: 'boolean', default: false },
         json: { type: 'boolean', default: false },
         'workflows-root': { type: 'string' },
+        config: { type: 'string' },
       },
       strict: true,
       allowPositionals: mode === 'resolve',
@@ -42,114 +36,30 @@ function parseCliArgs(argv) {
   }
 }
 
-const WORKFLOW_FILENAMES = Object.freeze(['workflow.toml', 'workflow.json']);
-
-function workflowPathForDirectory(workflowsRoot, workflowName) {
-  const matches = WORKFLOW_FILENAMES
-    .map((filename) => join(workflowsRoot, workflowName, filename))
-    .filter((pathname) => existsSync(pathname));
-  if (matches.length > 1) fail(`multiple workflow definitions found for ${workflowName}: ${matches.map((pathname) => relative(repoRoot(), pathname)).join(', ')}`);
-  return matches[0];
-}
-
-function readWorkflowCatalog({ workflowsRoot = join(repoRoot(), 'workflows') } = {}) {
-  workflowsRoot = resolve(workflowsRoot);
-  if (!existsSync(workflowsRoot)) fail(`workflows directory not found: ${workflowsRoot}`);
-
-  const root = repoRoot();
-  const workflows = [];
-  for (const entry of readdirSync(workflowsRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const workflowPath = workflowPathForDirectory(workflowsRoot, entry.name);
-    if (!workflowPath) continue;
-
-    let workflow;
-    try {
-      workflow = readWorkflowDocument(workflowPath, 'workflow');
-    } catch (error) {
-      fail(`failed to read ${relative(root, workflowPath)}: ${error.message}`);
-    }
-
-    const name = typeof workflow.name === 'string' ? workflow.name.trim() : '';
-    const description = typeof workflow.description === 'string' ? workflow.description.trim() : '';
-    if (!name) fail(`workflow is missing top-level name: ${relative(root, workflowPath)}`);
-    if (!description) fail(`workflow is missing top-level description: ${relative(root, workflowPath)}`);
-
-    workflows.push({
-      name,
-      description,
-      path: resolve(workflowPath),
-    });
-  }
-
-  return workflows.sort((a, b) => a.name.localeCompare(b.name));
-}
-
 function formatHuman(workflows) {
   if (workflows.length === 0) return 'No workflows found.';
-  return workflows.map((workflow) => `${workflow.name} - ${workflow.description}\n  absolute workflow path for --workflow: ${workflow.path}`).join('\n');
-}
-
-function normalize(value) {
-  return String(value)
-    .toLowerCase()
-    .replace(/\.(?:json|toml)$/u, '')
-    .replace(/[^a-z0-9]+/gu, '-')
-    .replace(/^-|-$/gu, '');
-}
-
-function includesAllTokens(haystack, needle) {
-  const tokens = normalize(needle).split('-').filter(Boolean);
-  if (tokens.length === 0) return false;
-  return tokens.every((token) => haystack.includes(token));
-}
-
-function scoreWorkflow(workflow, query) {
-  const normalizedQuery = normalize(query);
-  if (!normalizedQuery) return 0;
-
-  const normalizedName = normalize(workflow.name);
-  const normalizedDescription = normalize(workflow.description);
-
-  if (normalizedQuery === normalizedName) return 100;
-  if (normalizedName.includes(normalizedQuery) || normalizedQuery.includes(normalizedName)) return 80;
-  if (includesAllTokens(normalizedName, normalizedQuery)) return 60;
-  if (normalizedDescription.includes(normalizedQuery)) return 30;
-  if (includesAllTokens(normalizedDescription, normalizedQuery)) return 20;
-  return 0;
-}
-
-function resolveWorkflow(workflows, query) {
-  const scored = workflows
-    .map((workflow) => ({ ...workflow, score: scoreWorkflow(workflow, query) }))
-    .filter((workflow) => workflow.score > 0)
-    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
-
-  if (scored.length === 0) return { status: 'none', query, candidates: [] };
-
-  const topScore = scored[0].score;
-  const candidates = scored.filter((workflow) => workflow.score === topScore).map(({ score: _score, ...workflow }) => workflow);
-  return {
-    status: candidates.length === 1 ? 'single' : 'multiple',
-    query,
-    candidates,
-  };
+  return workflows.map((workflow) => `${workflow.name} [${workflow.workflowRef}] - ${workflow.description}\n  absolute workflow path for --workflow: ${workflow.path}`).join('\n');
 }
 
 function formatResolveHuman(result) {
   if (result.status === 'none') return `No workflow matched: ${result.query}`;
   if (result.status === 'single') {
     const workflow = result.candidates[0];
-    return `Matched workflow: ${workflow.name}\n  description: ${workflow.description}\n  absolute workflow path for --workflow: ${workflow.path}`;
+    return `Matched workflow: ${workflow.name}\n  ref: ${workflow.workflowRef}\n  description: ${workflow.description}\n  absolute workflow path for --workflow: ${workflow.path}`;
   }
-  return `Multiple workflows matched: ${result.query}\n${result.candidates.map((workflow) => `- ${workflow.name}: ${workflow.description}`).join('\n')}`;
+  return `Multiple workflows matched: ${result.query}\n${result.candidates.map((workflow) => `- ${workflow.name} [${workflow.workflowRef}]: ${workflow.description}`).join('\n')}`;
 }
 
 const { mode, values, positionals } = parseCliArgs(process.argv.slice(2));
-const workflows = readWorkflowCatalog({ workflowsRoot: values['workflows-root'] });
+let workflows;
+try {
+  workflows = readWorkflowCatalog({ workflowsRoot: values['workflows-root'], configPath: values.config });
+} catch (error) {
+  fail(error.message);
+}
 
 if (mode === 'resolve') {
-  const result = resolveWorkflow(workflows, positionals[0]);
+  const result = resolveWorkflowCatalogEntry(workflows, positionals[0]);
   if (values.json) console.log(JSON.stringify(result, null, 2));
   else console.log(formatResolveHuman(result));
 } else if (values.json) {

@@ -23,8 +23,15 @@ import { createRunIndexEntry, readRunsIndex, runsIndexPathsForRoot, upsertRunInd
 import { withRunStateLock } from '../persistence/run-state/lock.mjs';
 import { publicErrorMessage } from '../public-error.mjs';
 import { assertAbsoluteWorkflowPath } from '../workflow-path-boundary.mjs';
+import { createWorkflowStartupValidator } from '../workflow-startup-validation.mjs';
+import { validateWorkflowFile } from './validate-workflow-file.mjs';
 import { isRecoverableWorkerBlockerOutput, publicRecoverableBlockerDetails, publicRecoveryResolutionDetails } from '../runtime/recoverable-worker-blocker.mjs';
 import { applyOutputToBatonState } from '../runtime/baton-state.mjs';
+
+const validateWorkflowStartup = createWorkflowStartupValidator({
+  validateWorkflowFile,
+  publicErrorMessage,
+});
 
 const workflowRunnerCommand = createWorkflowRunnerCommand({
   readFile,
@@ -70,6 +77,7 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   withRunStateLock,
   publicErrorMessage,
   assertAbsoluteWorkflowPath,
+  validateWorkflowStartup,
   isRecoverableWorkerBlockerOutput,
   publicRecoverableBlockerDetails,
   publicRecoveryResolutionDetails,

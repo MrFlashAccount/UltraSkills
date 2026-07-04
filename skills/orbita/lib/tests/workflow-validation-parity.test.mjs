@@ -123,6 +123,36 @@ test('validate-workflow and workflow-runner reject unresolved external refs with
   );
 });
 
+test('repo-shaped workflow roots named workflows keep repository boundary compatibility', async () => {
+  const packageRoot = path.join(tempDir, 'custom-root-basename-case', 'workflows', 'custom-flow');
+  const workflowPath = path.join(packageRoot, 'workflow.json');
+  const siblingSchema = path.join(tempDir, 'custom-root-basename-case', 'workflows', 'shared.schema.json');
+  mkdirSync(packageRoot, { recursive: true });
+  writeFileSync(path.join(packageRoot, 'output.md'), 'Return strict JSON.\n');
+  writeJson(siblingSchema, {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome'],
+    properties: { outcome: { enum: ['ok'] } },
+    additionalProperties: false,
+  });
+  writeJson(workflowPath, parityWorkflowDoc('../shared.schema.json'));
+
+  assert.deepEqual(validateWorkflowFile(workflowPath), {
+    ok: true,
+    workflow: 'workflow-validation-parity-fixture',
+    steps: 2,
+  });
+
+  const runId = `workflow-validation-parity-${process.pid}-basename-root`;
+  const runsRoot = path.join(tempDir, 'basename-root-runs');
+  const leaseToken = `workflow-validation-parity-basename-root-token-${process.pid}`;
+
+  const response = await runnerNext({ runId, workflowPath, runsRoot, leaseToken });
+  assert.equal(response.status, 'needs_host_actions');
+  assert.equal(response.requests[0].stepId, 'prepare');
+});
+
 test('workflow validation boundaries keep baton schema composition and Step entity materialization outside Workflow owner', () => {
   const adapterPaths = [
     'skills/orbita/lib/use-cases/ValidateWorkflow.mjs',

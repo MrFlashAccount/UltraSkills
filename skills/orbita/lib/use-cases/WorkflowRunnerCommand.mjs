@@ -42,6 +42,7 @@ export function createWorkflowRunnerCommand({
   withRunStateLock,
   publicErrorMessage,
   assertAbsoluteWorkflowPath,
+  validateWorkflowStartup,
   isRecoverableWorkerBlockerOutput,
   publicRecoverableBlockerDetails,
   publicRecoveryResolutionDetails,
@@ -223,10 +224,11 @@ export function createWorkflowRunnerCommand({
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowUnclaimed: true });
     return withRunStateLock(lockPaths, async () => {
       const paths = await resolveIndexedRunPaths({ runId, workflowPath, runsRoot });
+      const hasExistingBaton = await pathExists(paths.batonPath);
+      if (!hasExistingBaton) validateWorkflowStartup({ workflowPath: paths.workflowPath });
       const createdIndexEntry = await initializeMissingRunLease(paths, { leaseToken, now });
       try {
         await assertWorkerLeaseAuthority(paths, { leaseToken, now });
-        const hasExistingBaton = await pathExists(paths.batonPath);
         if (!hasExistingBaton && userPromptFile !== undefined && String(userPromptFile).trim().length === 0) {
           throw new Error('--user-prompt-file path must not be empty or whitespace-only');
         }
