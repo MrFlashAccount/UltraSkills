@@ -725,6 +725,99 @@ test('dev harness planning draft always requires selected review steps', () => {
   assert.match(result.errors, /selected_review_steps/);
 });
 
+test('dev harness planning draft distinguishes selected and skipped reviewers', () => {
+  const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');
+  const schemaContext = {
+    workflow: workflowDoc,
+    workflowPath,
+    schemaRef: workflowDoc.steps.planning_draft.output.schema,
+    repositoryRoot: REPO_ROOT,
+  };
+  const valid = {
+    outcome: 'ready_for_attack',
+    implementation_plan: {
+      goal: 'Implement a backend contract change.',
+      workstreams: [{ id: 'A', owner: 'backend' }],
+      definition_of_done: ['Backend contract updated.'],
+      verification: ['Backend implementation reports focused validation.'],
+      rollback: 'Revert the backend contract slice.',
+    },
+    selected_implementation_steps: ['backend_implementation'],
+    implementation_route: 'backend',
+    selected_review_steps: ['backend_review'],
+    skipped_review_steps: [
+      { step_id: 'frontend_review', reason: 'No frontend/client surfaces are touched.' },
+    ],
+    review_plan: {
+      reviewers: [
+        {
+          step_id: 'backend_review',
+          reason: 'Backend contract behavior changed.',
+          surfaces: ['backend contract files'],
+          required: true,
+        },
+      ],
+    },
+  };
+
+  assert.equal(validateAgainstOutputSchema({ ...schemaContext, output: valid }).ok, true);
+  assert.equal(validateAgainstOutputSchema({
+    ...schemaContext,
+    output: {
+      ...valid,
+      selected_review_steps: ['backend_review', 'frontend_review'],
+      review_plan: {
+        reviewers: [
+          ...valid.review_plan.reviewers,
+          {
+            step_id: 'frontend_review',
+            reason: 'Confirm absence of frontend changes.',
+            surfaces: ['changed file list'],
+            required: false,
+          },
+        ],
+      },
+    },
+  }).ok, false);
+  assert.equal(validateAgainstOutputSchema({
+    ...schemaContext,
+    output: {
+      ...valid,
+      selected_review_steps: ['architect_review', 'backend_review', 'security_review', 'qa_review'],
+      review_plan: {
+        reviewers: [
+          {
+            step_id: 'architect_review',
+            reason: 'Architecture contract changed.',
+            surfaces: ['architecture contract'],
+            required: true,
+          },
+          ...valid.review_plan.reviewers,
+          {
+            step_id: 'security_review',
+            reason: 'Trust boundary changed.',
+            surfaces: ['auth boundary'],
+            required: true,
+          },
+          {
+            step_id: 'qa_review',
+            reason: 'Retry behavior changed.',
+            surfaces: ['reliability tests'],
+            required: true,
+          },
+        ],
+      },
+    },
+  }).ok, false);
+});
+
+test('dev harness review dispatch owns current review fan-out', () => {
+  assert.equal(workflowDoc.steps.review_dispatch.next, '${{ output.verdict.selected_review_steps }}');
+  assert.match(promptText(workflowDoc.steps.review_dispatch), /On the first review pass/);
+  assert.match(promptText(workflowDoc.steps.review_dispatch), /On a re-review pass after review_join\.needs_changes/);
+  assert.match(promptText(workflowDoc.steps.review_join), /review_dispatch\.verdict\.selected_review_steps/);
+});
+
 
 test('dev harness review join schema keeps outcome and next route consistent', () => {
   const workflowPath = path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml');

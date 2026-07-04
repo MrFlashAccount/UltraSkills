@@ -81,6 +81,7 @@ Implementation entities are planner-level handoff objects. They are not Research
 ## Workflow
 
 1. Read existing task context and relevant knowledge base.
+   - Non-implementation phases are read-only against the codebase and must not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands. They may inspect files/diffs/artifacts and define or review required verification evidence.
 2. If a human-approved `reasons-canvas-research` artifact does not exist yet, route or perform the `research` stage first.
    - default reusable path: `research-critic`
    - do not let execution planning absorb broad discovery/proposal work
@@ -154,6 +155,7 @@ Before approval, execution plans must not include:
 - Do not create parallel architecture ceremony: use [references/roles/architect-planning.md](references/roles/architect-planning.md) for the existing planning-time architecture gate, or `create-architecture` for a full architecture package.
 - Execution planning owns implementation entities; Architect owns structural entities; Researcher owns domain vocabulary and known facts/evidence.
 - One agent per file zone.
+- Research, architecture, planning, dispatch, join, review, approval, and final reporting phases are read-only with respect to verification: they must not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent commands. Only implementation-phase workers may run those commands.
 - Code implementer owners must use only `backend` or `frontend` as the role label. Architecture artifact implementation may use `architect` only for approved architecture artifacts such as `ARCHITECTURE.md`, meaningful source-zone `CONTEXT.md`, and ADR/migration docs; this is distinct from architect review and must not own backend/frontend code.
 - Do not let two agents edit the same file zone.
 - For new project, new repo, new plugin, and architecture-sensitive work, include `project_baseline` and an architecture artifact manifest in the execution contract before implementation handoff.

@@ -100,8 +100,80 @@
           "qa_review"
         ]
       },
-      "description": "Producer must select the concrete review branch step ids required by this plan.",
-      "x-usage": "Use this approved list as the exact fan-out target for these step ids. Do not add agents unless the plan is revised and approved."
+      "description": "Producer must select only concrete review branch step ids that must actually run for this plan.",
+      "x-usage": "Use this approved list as the exact initial fan-out target. Do not include optional, informational, or absence-confirmation reviewers here; record them in skipped_review_steps instead."
+    },
+    "skipped_review_steps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": [
+          "step_id",
+          "reason"
+        ],
+        "properties": {
+          "step_id": {
+            "enum": [
+              "architect_review",
+              "backend_review",
+              "frontend_review",
+              "frontend_taste_review",
+              "security_review",
+              "privacy_review",
+              "qa_review"
+            ],
+            "description": "Producer must name the reviewer step that was considered but not selected for fan-out.",
+            "x-usage": "Use this only as skipped-planning evidence. Do not dispatch this step unless a later dispatch explicitly selects it."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Producer must state the evidence-backed reason this reviewer should not run for this slice.",
+            "x-usage": "Use this to audit reviewer pruning. Do not treat the reason text as permission to run the reviewer."
+          },
+          "surfaces": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Producer may list surfaces checked only to justify not selecting this reviewer.",
+            "x-usage": "Use these as checked-but-not-routed surfaces. They do not expand review scope by themselves."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Producer may record reviewers considered but intentionally not selected for runtime fan-out.",
+      "x-usage": "Use this only as non-routing planning evidence. Do not run these reviewer steps unless a later approved plan or review_dispatch re-review selection explicitly selects them."
+    },
+    "review_escalation": {
+      "type": "object",
+      "required": [
+        "reason",
+        "risk_classes"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Producer must explain why more than three reviewers must run.",
+          "x-usage": "Treat weak or generic rationale as a planning error; expanded fan-out needs specific material risk."
+        },
+        "risk_classes": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Producer must list the independent material risk classes requiring expanded review fan-out.",
+          "x-usage": "Use this to verify that each extra reviewer maps to a distinct material risk class."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Producer must populate this only when selected_review_steps contains more than three reviewers.",
+      "x-usage": "Treat missing or weak escalation as a planning contract error; do not expand review fan-out merely because reviewer roles exist."
     },
     "review_plan": {
       "type": "object",
@@ -151,9 +223,9 @@
                 "x-usage": "Use these as the exact focus surfaces for the assigned work. Do not assume unlisted surfaces are covered."
               },
               "required": {
-                "type": "boolean",
+                "const": true,
                 "description": "Producer must mark whether this reviewer is mandatory for completion.",
-                "x-usage": "Treat true as mandatory for completion and false as optional coverage. Do not let this override the selected step list."
+                "x-usage": "Selected reviewers are mandatory by definition. Optional reviewers must be represented in skipped_review_steps, not review_plan.reviewers or selected_review_steps."
               }
             },
             "additionalProperties": false
@@ -172,6 +244,7 @@
                   "step_id"
                 ]
               },
+              "minContains": 0,
               "maxContains": 1
             },
             {
@@ -186,6 +259,7 @@
                   "step_id"
                 ]
               },
+              "minContains": 0,
               "maxContains": 1
             },
             {
@@ -200,6 +274,7 @@
                   "step_id"
                 ]
               },
+              "minContains": 0,
               "maxContains": 1
             },
             {
@@ -214,6 +289,7 @@
                   "step_id"
                 ]
               },
+              "minContains": 0,
               "maxContains": 1
             },
             {
@@ -228,6 +304,7 @@
                   "step_id"
                 ]
               },
+              "minContains": 0,
               "maxContains": 1
             },
             {
@@ -242,6 +319,7 @@
                   "step_id"
                 ]
               },
+              "minContains": 0,
               "maxContains": 1
             },
             {
@@ -256,15 +334,16 @@
                   "step_id"
                 ]
               },
+              "minContains": 0,
               "maxContains": 1
             }
           ],
-          "description": "Producer must include one reviewer entry per selected review step, with reason, inspected surfaces, and whether it is mandatory.",
-          "x-usage": "Match entries against selected_review_steps and use them for coverage. Do not run unlisted agents unless the plan is revised or blocked escalation requires it."
+          "description": "Producer must include one mandatory reviewer entry per selected review step, with reason and inspected surfaces.",
+          "x-usage": "Match entries against selected_review_steps and use them for coverage. Do not run unlisted or skipped agents unless the plan is revised or blocked escalation requires it."
         }
       },
       "additionalProperties": false,
-      "description": "Producer must draft the review contract describing selected reviewers, reasons, surfaces, and required status.",
+      "description": "Producer must draft the review contract describing selected mandatory reviewers, reasons, and surfaces.",
       "x-usage": "Treat this as the proposed review contract until plan approval. After approval, use it as the scope for selected review steps."
     },
     "artifacts": {
@@ -364,6 +443,24 @@
           "implementation_route",
           "selected_review_steps",
           "review_plan"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "selected_review_steps": {
+            "type": "array",
+            "minItems": 4
+          }
+        },
+        "required": [
+          "selected_review_steps"
+        ]
+      },
+      "then": {
+        "required": [
+          "review_escalation"
         ]
       }
     },

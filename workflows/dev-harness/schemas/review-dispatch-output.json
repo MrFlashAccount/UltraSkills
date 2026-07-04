@@ -3,7 +3,8 @@
   "description": "Producer output contract for dispatching selected DevHarness review branches.",
   "type": "object",
   "required": [
-    "outcome"
+    "outcome",
+    "verdict"
   ],
   "properties": {
     "outcome": {
@@ -70,24 +71,5 @@
   },
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/review-dispatch-output",
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "ready_for_review"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "verdict"
-        ]
-      }
-    }
-  ]
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/review-dispatch-output"
 }
