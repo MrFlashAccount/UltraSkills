@@ -147,11 +147,11 @@ function parseOutputRef(ref) {
   return { stepId: ref.slice(0, separator), filePath: ref.slice(separator + 1) };
 }
 
-async function writeOutputFile({ runId, runDir, workflowPath, stepId, filePath, label = 'write output' }) {
-  const requests = await currentRequests(runId, workflowPath);
+async function writeOutputFile({ runId, runDir, workflowPath, stepId, filePath, label = 'write output', currentRequest }) {
+  const requests = currentRequest ? [currentRequest] : await currentRequests(runId, workflowPath);
   const pendingIds = requests.map((request) => request.stepId ?? request.id);
   const targetStepId = stepId ?? pendingIds[0];
-  const request = requests.find((item) => (item.stepId ?? item.id) === targetStepId);
+  const request = currentRequest ?? requests.find((item) => (item.stepId ?? item.id) === targetStepId);
   const result = await runRunner(['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', targetStepId], { input: readFileSync(filePath, 'utf8'), debugSummary: request?.action === 'run_worker' });
   assert.equal(result.status, 0, `${label} failed
 stdout:
@@ -163,12 +163,14 @@ ${result.stderr}`);
 
 async function continueWithOutputs({ runId, runDir, workflowPath, refs, label = 'continue' }) {
   const normalized = Array.isArray(refs) ? refs : [refs];
-  const pendingIds = await currentRequestIds(runId, workflowPath);
+  const requests = await currentRequests(runId, workflowPath);
+  const pendingIds = requests.map((request) => request.stepId ?? request.id);
   for (const ref of normalized) {
     const { stepId, filePath } = parseOutputRef(ref);
     const targetStepId = stepId ?? (pendingIds.length === 1 ? pendingIds[0] : undefined);
     assert.ok(targetStepId, `output for ${label} must name a step when multiple requests are pending`);
-    await writeOutputFile({ runId, runDir, workflowPath, stepId: targetStepId, filePath, label: `${label} write ${targetStepId}` });
+    const currentRequest = requests.find((request) => (request.stepId ?? request.id) === targetStepId);
+    await writeOutputFile({ runId, runDir, workflowPath, stepId: targetStepId, filePath, label: `${label} write ${targetStepId}`, currentRequest });
   }
   return await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], label);
 }

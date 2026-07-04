@@ -378,6 +378,42 @@ test('sharding: workflow validation rejects duplicate ids, unsafe ids, unknown r
   unsafeId.steps.review_owner.sharding.obligations[0].shard_id = 'bad/name';
   assert.match(runInspect('sharded-unsafe-id', unsafeId, false).stderr, /workflow failed schema validation|shard_id/);
 
+  const dottedId = shardedWorkflow();
+  dottedId.steps.review_owner.sharding.obligations[0].shard_id = 'api.v1';
+  assert.match(runInspect('sharded-dotted-id', dottedId, false).stderr, /workflow failed schema validation|shard_id/);
+
+  const parallelSharded = shardedWorkflow({
+    start: 'prepare',
+    steps: {
+      prepare: {
+        name: 'Prepare',
+        kind: 'worker',
+        input: { prompt: 'Prepare parallel reviews.' },
+        output: outputContract(),
+        next: ['review_owner', 'other_review'],
+      },
+      review_owner: {
+        ...shardedWorkflow().steps.review_owner,
+        next: 'join',
+      },
+      other_review: {
+        name: 'Other review',
+        kind: 'worker',
+        input: { prompt: 'Other review.' },
+        output: outputContract(),
+        next: 'join',
+      },
+      join: {
+        name: 'Join',
+        kind: 'worker',
+        input: { prompt: 'Join reviews.' },
+        output: outputContract(),
+        next: 'done',
+      },
+    },
+  });
+  assert.match(runInspect('sharded-parallel-target', parallelSharded, false).stderr, /cannot fan out to sharded step 'review_owner'/);
+
   const unknownRole = shardedWorkflow();
   unknownRole.steps.review_owner.sharding.obligations[0].reviewer_role = 'missing-role';
   assert.match(runInspect('sharded-unknown-role', unknownRole, false).stderr, /reviewer_role 'missing-role' is not an allowed role/);

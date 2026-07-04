@@ -510,6 +510,7 @@ function assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expr
 
   try {
     assertTransitionDescriptorTargets(workflow, stepId, { kind: 'static-parallel', targets: [...aggregate.itemValues] });
+    assertNoSyntheticControlParallelTargets(workflow, stepId, [...aggregate.itemValues], field);
   } catch (error) {
     if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' ${field} expression ${expression.source} array target schema is not a valid parallel fan-out: ${error.message}`);
     throw error;
@@ -579,9 +580,40 @@ function assertParallelItemCombinations({ workflow, stepId, itemTargetSets }) {
   for (const targets of combinations) {
     try {
       assertTransitionDescriptorTargets(workflow, stepId, { kind: 'static-parallel', targets });
+      assertNoSyntheticControlParallelTargets(workflow, stepId, targets, 'next');
     } catch (error) {
       if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' next combined parallel targets are invalid: ${error.message}`);
       throw error;
+    }
+  }
+}
+
+function assertNoSyntheticControlParallelTargets(workflow, stepId, targets, field) {
+  for (const target of targets) {
+    const targetStep = workflow.steps?.[target];
+    if (isMatrixStep(targetStep)) fail(`step '${stepId}' ${field} cannot fan out to matrix step '${target}' in matrix v1`);
+    if (isShardedStep(targetStep)) fail(`step '${stepId}' ${field} cannot fan out to sharded step '${target}' in sharding v1`);
+  }
+}
+
+function assertDescriptorHasNoSyntheticControlParallelTargets(workflow, stepId, descriptor, field = 'next') {
+  if (descriptor.kind === 'static-parallel') {
+    assertNoSyntheticControlParallelTargets(workflow, stepId, descriptor.targets, field);
+    return;
+  }
+  if (descriptor.kind === 'match-cases') {
+    for (const [key, target] of Object.entries(descriptor.cases)) {
+      if (Array.isArray(target)) assertNoSyntheticControlParallelTargets(workflow, stepId, target, `${field}.cases.${key}`);
+    }
+    return;
+  }
+  if (descriptor.kind !== 'parallel-items') return;
+  for (const [index, item] of descriptor.items.entries()) {
+    const itemField = fieldPath(field, index);
+    if (item.kind === 'static-target') {
+      assertNoSyntheticControlParallelTargets(workflow, stepId, [item.target], itemField);
+    } else if (item.kind === 'match-cases') {
+      assertDescriptorHasNoSyntheticControlParallelTargets(workflow, stepId, item, itemField);
     }
   }
 }
@@ -593,6 +625,7 @@ function assertTransitionSemantics(workflow, schemasByStep, { requireSchemaCover
     try {
       descriptor = normalizeTransitionNext(step.next);
       assertTransitionDescriptorTargets(workflow, stepId, descriptor);
+      assertDescriptorHasNoSyntheticControlParallelTargets(workflow, stepId, descriptor);
     } catch (error) {
       if (error instanceof WorkflowRuntimeError) fail(error.message);
       throw error;
@@ -617,7 +650,10 @@ function assertTransitionSemantics(workflow, schemasByStep, { requireSchemaCover
           itemTargetSets.push([[item.target]]);
         } else if (item.kind === 'dynamic-target') {
           const aggregate = assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expression: item.expression, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths, allowOpenTransitionSchemas });
-          if (aggregate) itemTargetSets.push(targetSetsForDynamicTarget(aggregate));
+          if (aggregate) {
+            assertNoSyntheticControlParallelTargets(workflow, stepId, [...aggregate.itemValues], fieldPath('next', index));
+            itemTargetSets.push(targetSetsForDynamicTarget(aggregate));
+          }
         } else if (item.kind === 'match-cases') {
           const possibleCaseKeys = assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descriptor: item, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths, allowUnreachableCases, allowOpenTransitionSchemas });
           if (possibleCaseKeys) itemTargetSets.push(targetSetsForMatchCases(possibleCaseKeys, item.cases));

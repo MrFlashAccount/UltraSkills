@@ -109,6 +109,14 @@ test('matrix validation accepts static matrix and rejects unsafe or duplicate un
 
   assert.throws(
     () => validateWorkflow({
+      workflowDTO: matrixWorkflow({ fanout: { source: { items: [{ id: 'api.v1' }] } } }),
+      outputSchemas: resources.outputSchemas,
+    }),
+    /must match pattern/,
+  );
+
+  assert.throws(
+    () => validateWorkflow({
       workflowDTO: matrixWorkflow({ fanout: { source: { items: [{ id: 'same' }, { id: 'same' }] } } }),
       outputSchemas: resources.outputSchemas,
     }),
@@ -155,6 +163,37 @@ test('matrix semantic validation rejects unsupported v1 authoring shapes', () =>
       outputSchemas: resources.outputSchemas,
     }),
     /must NOT have additional properties/,
+  );
+
+  assert.throws(
+    () => validateWorkflow({
+      workflowDTO: matrixWorkflow({
+        root: { start: 'prepare' },
+        fanout: { next: 'join' },
+        steps: {
+          prepare: {
+            name: 'Prepare',
+            kind: 'worker',
+            output: { template: 'output.md', schema: 'unit-output.schema.json' },
+            next: ['fanout', 'other_review'],
+          },
+          other_review: {
+            name: 'Other review',
+            kind: 'worker',
+            output: { template: 'output.md', schema: 'unit-output.schema.json' },
+            next: 'join',
+          },
+          join: {
+            name: 'Join',
+            kind: 'worker',
+            output: { template: 'output.md', schema: 'unit-output.schema.json' },
+            next: 'done',
+          },
+        },
+      }),
+      outputSchemas: resources.outputSchemas,
+    }),
+    /cannot fan out to matrix step 'fanout'/,
   );
 });
 

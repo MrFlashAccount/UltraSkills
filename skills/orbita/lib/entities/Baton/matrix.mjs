@@ -4,7 +4,7 @@ import { evaluatePathExpression } from '../Step/expressions/index.mjs';
 
 export const MATRIX_STATE_KEY = 'matrix';
 export const MATRIX_REQUEST_SEPARATOR = '__matrix__';
-export const MATRIX_UNIT_ID = /^[A-Za-z0-9_.-]+$/;
+export const MATRIX_UNIT_ID = /^[A-Za-z0-9_-]+$/;
 
 function clone(value) {
   return structuredClone(value);

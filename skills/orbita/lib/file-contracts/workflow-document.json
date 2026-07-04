@@ -131,7 +131,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_.-]+$"
+          "pattern": "^[A-Za-z0-9_-]+$"
         },
         "context": {
           "type": "object",
@@ -365,7 +365,7 @@
       "properties": {
         "shard_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_.-]+$"
+          "pattern": "^[A-Za-z0-9_-]+$"
         },
         "reviewer_role": {
           "type": "string",

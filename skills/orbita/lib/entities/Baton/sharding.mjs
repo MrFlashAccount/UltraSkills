@@ -3,7 +3,7 @@ import { appendPromptText } from '../../runtime/prompt-text.mjs';
 
 export const SHARDING_STATE_KEY = 'shards';
 export const SHARD_REQUEST_SEPARATOR = '__shard__';
-export const SHARD_ID = /^[A-Za-z0-9_.-]+$/;
+export const SHARD_ID = /^[A-Za-z0-9_-]+$/;
 
 function fail(message) {
   throw new WorkflowRuntimeError(`workflow sharding validation failed: ${message}`);

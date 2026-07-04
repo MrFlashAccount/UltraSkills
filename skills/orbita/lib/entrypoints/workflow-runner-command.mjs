@@ -246,6 +246,10 @@ function workflowStepIdForRequest(request) {
   return request.ownerStepId ?? stepIdForRequest(request);
 }
 
+function isSyntheticOwnerRequest(request) {
+  return typeof request.ownerStepId === 'string' && request.ownerStepId.length > 0;
+}
+
 function acceptedOutputForRequest(baton, request) {
   for (const alias of requestAliases(request)) {
     if (Object.hasOwn(baton?.state ?? {}, alias)) return structuredClone(baton.state[alias]);
@@ -306,6 +310,7 @@ function outputForAcceptedState(currentBaton, requests, { isPreparedParallelCont
 function recoverableWorkerBlockersForAcceptedState({ workflow, requests, valuesByRequestId, runsRoot }) {
   const blockers = {};
   for (const request of requests) {
+    if (isSyntheticOwnerRequest(request)) continue;
     const stepId = workflowStepIdForRequest(request);
     const step = workflow.steps?.[stepId];
     const output = valuesByRequestId.get(request.id);
