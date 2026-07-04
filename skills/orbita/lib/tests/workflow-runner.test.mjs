@@ -57,12 +57,6 @@ function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function requestsFromOrchestratorInstruction(instruction) {
-  const match = instruction.match(/^Execute every host request in this JSON and wait until all requested actions finish: (.+)$/m);
-  assert.ok(match, instruction);
-  return JSON.parse(match[1]);
-}
-
 async function claimRunForTest(paths) {
   return await claimWorkflowRunForTest(paths, { leaseTokensByRunId, testLeaseToken });
 }
@@ -190,10 +184,13 @@ test('runner: next returns a single host action request with load command only',
 
   assert.equal(response.status, 'needs_host_actions');
   assert.match(response.orchestratorInstruction, /^Supersedes all previous workflow-runner stdout\./);
-  assert.match(response.orchestratorInstruction, /Execute every host request in this JSON/);
+  assert.match(response.orchestratorInstruction, /Execute every current host request below/);
+  assert.match(response.orchestratorInstruction, /Use the JSON response requests field as the machine-readable source when available/);
+  assert.match(response.orchestratorInstruction, /Current host requests:\n- run_worker: prepare/);
   assert.doesNotMatch(response.orchestratorInstruction, /run_worker request, enforce this host watchdog/);
-  assert.deepEqual(requestsFromOrchestratorInstruction(response.orchestratorInstruction), response.requests);
-  assert.match(response.orchestratorInstruction, new RegExp(`workflow-runner\\.mjs' instructions --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));
+  assert.match(response.orchestratorInstruction, new RegExp(`load fresh instructions: .*workflow-runner\\.mjs' instructions --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));
+  assert.match(response.orchestratorInstruction, new RegExp(`load follow-up instructions when restoring the preferred worker: .*workflow-runner\\.mjs' instructions --follow-up --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));
+  assert.match(response.orchestratorInstruction, new RegExp(`bind actual worker id after dispatch: .*workflow-runner\\.mjs' bind-agent --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --agent-id <agent-id> --lease-token '${leaseToken}'`));
   assert.match(response.orchestratorInstruction, /Before continue, record a concise orchestrator debug summary/);
   assert.match(response.orchestratorInstruction, new RegExp(`workflow-runner\\.mjs' record-orchestrator --run-id '${runId}' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));
   assert.equal(response.orchestratorDebugCommand.includes(`record-orchestrator --run-id '${runId}' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`), true);
@@ -1006,4 +1003,4 @@ test('runner: repeated parallel fanout uses cursor branches and latest overwritt
   assert.match(joinInstructions.stdout, /frontend v2/);
   assert.doesNotMatch(joinInstructions.stdout, /backend v1/);
   assert.doesNotMatch(joinInstructions.stdout, /frontend v1/);
-});
+}, 500);

@@ -313,7 +313,7 @@ test('prompt renderer: interpolates prompt input expressions in workflow step pr
     '## Workflow step prompt',
     'Previous summary: drafted',
     'Critic findings:',
-    '```json\n[\n  "tighten scope"\n]',
+    '```json\n["tighten scope"]',
   ]);
 });
 
@@ -351,8 +351,49 @@ test('prompt renderer: joins prompt arrays before interpolation', () => {
     '## Workflow step prompt',
     'Previous summary: drafted',
     'Critic findings:',
-    '```json\n[\n  "tighten scope"\n]',
+    '```json\n["tighten scope"]',
   ]);
+});
+
+test('prompt renderer: interpolated object JSON is compact and bounded', () => {
+  const step = {
+    name: 'Worker step',
+    kind: 'worker',
+    input: { prompt: 'Payload:\n${{ input.source.payload }}' },
+    output: { template: 'output.md' },
+    next: 'done',
+  };
+
+  const compact = renderFixture({
+    label: 'render-compact-json-interpolation',
+    stepId: 'worker_step',
+    step,
+    batonDoc: baton({
+      state: {
+        artifacts: [],
+        results: [],
+        source: { payload: { alpha: ['one', 'two'], nested: { ok: true } } },
+      },
+    }),
+  });
+
+  assert.match(compact.prompt, /```json\n\{"alpha":\["one","two"\],"nested":\{"ok":true\}\}\n```/);
+
+  assert.throws(
+    () => renderFixture({
+      label: 'render-interpolation-json-too-large',
+      stepId: 'worker_step',
+      step,
+      batonDoc: baton({
+        state: {
+          artifacts: [],
+          results: [],
+          source: { payload: { text: 'x'.repeat(13000) } },
+        },
+      }),
+    }),
+    /interpolated JSON value exceeds 12000 characters.*project a smaller prompt input field/,
+  );
 });
 
 test('prompt renderer: uses prompt interpolation default for missing prompt input paths', () => {

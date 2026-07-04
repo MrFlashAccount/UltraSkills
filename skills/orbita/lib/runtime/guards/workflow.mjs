@@ -1,14 +1,16 @@
-import { Workflow } from '../../entities/Workflow/index.mjs';
-import { Baton } from '../../entities/Baton/index.mjs';
+import { validateWorkflowDocument } from '../../entities/Workflow/index.mjs';
+import { validateBatonDataAgainstWorkflow } from '../../entities/Baton/index.mjs';
 import { workflowSemanticValidationOptions } from '../workflow-semantic-validation.mjs';
+import { isCompiledWorkflowForRuntime } from '../compiled-workflow.mjs';
 
 export function assertLoadedWorkflowAndBaton(workflowDoc, batonDoc, options = {}) {
-  const workflow = new Workflow(workflowDoc);
-  workflow.validate(workflowSemanticValidationOptions(options));
-  const baton = new Baton(batonDoc);
-  baton.validateAgainst(workflow);
-  const batonData = baton.toJSON();
+  const workflow = typeof workflowDoc?.toJSON === 'function' ? workflowDoc.toJSON() : workflowDoc;
+  if (!isCompiledWorkflowForRuntime(workflow, options)) {
+    validateWorkflowDocument(workflow, workflowSemanticValidationOptions(options));
+  }
+  const batonData = typeof batonDoc?.toJSON === 'function' ? batonDoc.toJSON() : structuredClone(batonDoc);
+  validateBatonDataAgainstWorkflow(batonData, workflow);
   const cursorStepId = Array.isArray(batonData.cursor) ? batonData.cursor[0] : batonData.cursor;
-  const { id: _cursorStepId, ...cursorStep } = workflow.getStep(cursorStepId);
-  return { workflow: workflow.toJSON(), baton: batonData, cursorStep };
+  const cursorStep = structuredClone(workflow.steps[cursorStepId]);
+  return { workflow, baton: batonData, cursorStep };
 }

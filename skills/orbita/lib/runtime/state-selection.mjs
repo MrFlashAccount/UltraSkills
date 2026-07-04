@@ -19,7 +19,7 @@ export function selectState({ batonState = {}, selectors = [], stepId = '' } = {
 
 export function fencedJson(value) {
   return `\`\`\`json
-${JSON.stringify(value, null, 2)}
+${JSON.stringify(value)}
 \`\`\`
 `;
 }

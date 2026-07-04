@@ -197,6 +197,47 @@ test('sharding: public host requests expose owner step and safe obligation field
   }
 });
 
+test('sharding: runtime cache invalidates when output schema file changes', () => {
+  const schemaPath = path.join(tempDir, 'cache-invalidation-output.schema.json');
+  writeFileSync(schemaPath, `${JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome', 'shard_id', 'reviewer_role'],
+    properties: {
+      outcome: { enum: ['ready', 'blocked'] },
+      shard_id: { type: 'string' },
+      reviewer_role: { type: 'string' },
+    },
+    additionalProperties: false,
+  }, null, 2)}\n`);
+  const wfPath = writeJson('cache-invalidation-workflow.json', shardedWorkflow({
+    steps: {
+      review_owner: {
+        ...shardedWorkflow().steps.review_owner,
+        output: { template: 'output.md', schema: path.basename(schemaPath) },
+      },
+    },
+  }));
+  const batonPath = writeJson('cache-invalidation-baton.json', baton());
+
+  assert.doesNotThrow(() => loadWorkflowRuntime({ workflowPath: wfPath, batonPath }));
+
+  writeFileSync(schemaPath, `${JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome'],
+    properties: {
+      outcome: { enum: ['ready', 'blocked'] },
+    },
+    additionalProperties: false,
+  }, null, 2)}\n`);
+
+  assert.throws(
+    () => loadWorkflowRuntime({ workflowPath: wfPath, batonPath }),
+    /sharding requires output\.schema to require string field 'shard_id'/,
+  );
+});
+
 test('sharding: public synthetic request ids can load shard instructions through validation and runner command paths', async () => {
   const wfPath = writeJson('load-instructions-workflow.json', shardedWorkflow());
   const batonPath = writeJson('load-instructions-baton.json', baton());
