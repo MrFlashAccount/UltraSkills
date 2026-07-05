@@ -1,11 +1,9 @@
 import { loadOutputSchema } from "../persistence/workflow-resources/output-schema-loader.mjs";
 import {
   assertSafeStepId,
-  bindAgentCommandForStep,
   continueInstructionCommandForRun,
   loadFollowupInstructionsCommandForStep,
   loadInstructionsCommandForStep,
-  recordOrchestratorCommandForRun,
   writeOutputCommandForStep,
 } from "./runner-command-builder.mjs";
 import { publicRecoverableBlockerDetails } from "../runtime/recoverable-worker-blocker.mjs";
@@ -220,10 +218,6 @@ export function buildHostRequests(
             runsRoot,
             leaseToken,
           });
-        request.bindAgentCommand = bindAgentCommandForStep(runId, step.id, {
-          runsRoot,
-          leaseToken,
-        });
         if (recoverableBlocker) request.recoverableBlocker = recoverableBlocker;
       }
       const resolvedOutputSchema = resolvedOutputSchemaForStep(step, {
@@ -264,20 +258,11 @@ export function toHostResponse(interpreterResponse, options) {
           .map((request) => request.stepId),
         includeOrchestratorDebug: status === "needs_host_actions",
       }),
-      orchestratorDebugCommand: recordOrchestratorCommandForRun(options.runId, {
-        runsRoot: options.runsRoot,
-        leaseToken: options.leaseToken,
-      }),
       baton: interpreterResponse.baton,
     }),
     baton: interpreterResponse.baton,
   };
   if (status === "needs_host_actions")
     response.requests = requests;
-  if (status === "needs_host_actions")
-    response.orchestratorDebugCommand = recordOrchestratorCommandForRun(options.runId, {
-      runsRoot: options.runsRoot,
-      leaseToken: options.leaseToken,
-    });
   return response;
 }

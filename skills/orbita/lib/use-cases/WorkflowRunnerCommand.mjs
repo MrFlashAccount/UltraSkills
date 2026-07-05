@@ -888,7 +888,7 @@ export function createWorkflowRunnerCommand({
     for (const entry of bindingHistoryEntries) {
       await writePersistedRunStateUpdate(paths, {
         baton: entry.baton,
-        history: { source: 'workflow-runner-bind-agent', baton: entry.baton, output: `bound-agent:${entry.acceptedStepId}`, requests: entry.requests },
+        history: { source: 'workflow-runner-continue-bind-agent', baton: entry.baton, output: `bound-agent:${entry.acceptedStepId}`, requests: entry.requests },
       });
     }
     if (debugNote === undefined) return;
@@ -896,8 +896,8 @@ export function createWorkflowRunnerCommand({
     const historyScope = latestNonOrchestratorHistoryScope(currentHistoryText);
     await appendHistoryOnce(
       paths,
-      { source: 'workflow-runner-orchestrator', baton, requests: response.requests ?? [], details },
-      { dedupeKey: `workflow-runner-orchestrator:${historyScope}:${details.join('\n')}` },
+      { source: 'workflow-runner-continue-orchestrator', baton, requests: response.requests ?? [], details },
+      { dedupeKey: `workflow-runner-continue-orchestrator:${historyScope}:${details.join('\n')}` },
     );
   }
 
@@ -908,7 +908,7 @@ export function createWorkflowRunnerCommand({
       const start = starts[index];
       const end = starts[index + 1] ?? historyText.length;
       const entry = historyText.slice(start, end);
-      if (!entry.includes('\n- source: workflow-runner-orchestrator\n')) return entry.trim();
+      if (!entry.includes('\n- source: workflow-runner-continue-orchestrator\n')) return entry.trim();
     }
     return 'orchestrator-only-history';
   }
@@ -983,80 +983,6 @@ export function createWorkflowRunnerCommand({
     return publicApiCall(() => writeOutputInternal(options), { ...options, command: 'write-output' });
   }
 
-  async function recordOrchestratorInternal({ runId, workflowPath, json, leaseToken, now = new Date(), runsRoot } = {}) {
-    const note = parseOutputJson(json);
-    const lockPaths = resolveRunPaths({ runId, runsRoot });
-    await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
-    return withRunStateLock(lockPaths, async () => {
-      const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
-      await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
-      await ensureRunFiles(paths);
-      await recoverDurableCommit(paths);
-      const current = await readPersistedRunState(paths);
-      const response = await currentResponse(paths, current, { leaseToken });
-      if (response.status !== 'needs_host_actions') throw new Error(`current runner response is '${response.status}', not needs_host_actions`);
-      const details = orchestratorDebugHistoryDetails({ note, leaseToken });
-      const historyScope = latestNonOrchestratorHistoryScope(current.history?.text);
-      const recorded = await appendHistoryOnce(
-        paths,
-        { source: 'workflow-runner-orchestrator', baton: current.baton, requests: response.requests ?? [], details },
-        { dedupeKey: `workflow-runner-orchestrator:${historyScope}:${details.join('\n')}` },
-      );
-      const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
-      await upsertRunIndexEntry(paths, { workflowPath: paths.workflowPath, workerLease });
-      return {
-        ok: true,
-        runId: paths.runId,
-        recorded,
-      };
-    });
-  }
-
-  async function recordOrchestrator(options = {}) {
-    return publicApiCall(() => recordOrchestratorInternal(options), { ...options, command: 'record-orchestrator' });
-  }
-
-  async function bindAgentInternal({ runId, workflowPath, stepId, agentId, leaseToken, now = new Date(), runsRoot } = {}) {
-    await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
-    assertSafeStepId(stepId);
-    assertAgentId(agentId);
-    const lockPaths = resolveRunPaths({ runId, runsRoot });
-    await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
-    return withRunStateLock(lockPaths, async () => {
-      const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
-      await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
-      await ensureRunFiles(paths);
-      await recoverDurableCommit(paths);
-      const current = await readPersistedRunState(paths);
-      const { runtime, response } = await currentRuntimeAndResponse(paths, current, { leaseToken });
-      if (response.status !== 'needs_host_actions') throw staleWorkflowCommandError(stepId, response);
-      const request = currentRequestForStep(response, stepId);
-      if (!request) throw staleWorkflowCommandError(stepId, response);
-      if (request.action !== 'run_worker') throw new Error(`workflow step '${stepId}' is not a run_worker request`);
-      const acceptedStepId = stepIdForRequest(request);
-      const workflowStepId = workflowStepIdForRequest(request);
-      const bindingKey = request.ownerStepId ? acceptedStepId : workerBindingKeyForStep(workflowStepId, runtime.workflow.steps?.[workflowStepId]);
-      const baton = batonWithWorkerBinding(current.baton, bindingKey, agentId);
-      await writePersistedRunStateUpdate(paths, {
-        baton,
-        currentRequests: response.requests ?? [],
-        history: { source: 'workflow-runner-bind-agent', baton, output: `bound-agent:${acceptedStepId}`, requests: response.requests ?? [] },
-      });
-      const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
-      await upsertRunIndexEntry(paths, { workflowPath: paths.workflowPath, workerLease });
-      return {
-        ok: true,
-        runId: paths.runId,
-        stepId: acceptedStepId,
-        bound: true,
-      };
-    });
-  }
-
-  async function bindAgent(options = {}) {
-    return publicApiCall(() => bindAgentInternal(options), { ...options, command: 'bind-agent' });
-  }
-
   async function loadInstructionsInternal({ runId, workflowPath, stepId, followUp = false, leaseToken, now = new Date(), runsRoot } = {}) {
     await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
     assertSafeStepId(stepId);
@@ -1088,13 +1014,11 @@ export function createWorkflowRunnerCommand({
   }
 
   return {
-    bindAgent,
     continueRun,
     listPointerTransitions,
     loadInstructions,
     movePointer,
     next,
-    recordOrchestrator,
     writeOutput,
   };
 }

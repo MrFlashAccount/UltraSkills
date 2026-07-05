@@ -86,12 +86,10 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
 });
 
 export const {
-  bindAgent,
   continueRun,
   listPointerTransitions,
   loadInstructions,
   movePointer,
   next,
-  recordOrchestrator,
   writeOutput,
 } = workflowRunnerCommand;

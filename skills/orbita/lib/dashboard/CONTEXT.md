@@ -54,8 +54,8 @@ uses `../../DESIGN.md` as the board/drawer UI input.
 
 Dashboard runtime code must not import, execute, shell out to, expose, or wrap:
 
-- workflow-runner `next`, `continue`, `write-output`, `instructions`, or
-  `bind-agent` command surfaces;
+- workflow-runner `next`, `continue`, `write-output`, or `instructions`
+  command surfaces, including worker binding flags on `continue`;
 - workflow-runner `listPointerTransitions` / `movePointer` API functions or
   `list-pointer-transitions` / `move-pointer` CLI modes;
 - run claiming, lease authority, heartbeat, lock mutation, or persisted-state
@@ -68,7 +68,7 @@ Browser-visible DTOs and UI fixtures must not include:
 - lease tokens, token hashes, token-bearing commands, or raw instruction
   commands;
 - private prompts, hidden transcripts, instruction storage paths, preferred
-  agent ids, bind-agent commands, or worker lifecycle metadata;
+  agent ids, worker binding flags, or worker lifecycle metadata;
 - raw baton, raw history, raw artifact filesystem paths, local runs-root paths,
   or absolute user-machine paths;
 - unallowlisted owner/user/request metadata.
