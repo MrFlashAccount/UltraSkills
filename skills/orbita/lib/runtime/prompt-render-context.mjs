@@ -69,6 +69,10 @@ function promptInputArtifactReadItems(promptInput, resources, artifactSelectors)
     label: `Prompt input artifact '${artifact.id}' from '${stepId}'`,
     path: resolvedArtifactPath({ artifactPath: artifact.path, resources }),
     contentType: artifact.content_type,
+    source: 'prompt-input-artifact',
+    stepId,
+    artifactId: artifact.id,
+    summary: artifact.summary,
   }));
 }
 

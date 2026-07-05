@@ -340,6 +340,16 @@ test('runner: approval request exposes optional output schema reference', async 
   assert.equal(response.requests[0].resolvedOutputSchema.ref, path.basename(schemaPath));
   assert.equal(Object.hasOwn(response.requests[0].resolvedOutputSchema, 'path'), false);
   assert.deepEqual(response.requests[0].resolvedOutputSchema.schema.required, ['choice']);
+  assert.equal(response.requests[0].approvalDelivery.expectedNormalizedOutput.schemaRef, path.basename(schemaPath));
+  assert.deepEqual(response.requests[0].approvalDelivery.expectedNormalizedOutput.schema.required, ['choice']);
+  assert.deepEqual(response.requests[0].approvalDelivery.options, [
+    {
+      label: 'approved',
+      field: 'choice',
+      value: 'approved',
+      normalizedOutput: { choice: 'approved' },
+    },
+  ]);
 });
 
 test('runner: typed approval retry preserves validation feedback in instructions', async () => {

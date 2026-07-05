@@ -129,6 +129,21 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
   if (step.output?.template) metadata.outputTemplate = step.output.template;
   if (step.output?.schema) metadata.outputSchema = step.output.schema;
   if (roleMetadataPaths.length > 0) metadata.roleMaterial = roleMetadataPaths;
+  const renderedRequiredReads = requiredReadsForRender(requiredReads, { followUp });
+  if (renderedRequiredReads.length > 0) {
+    metadata.requiredReads = renderedRequiredReads.map((item) => {
+      const read = {
+        label: item.label,
+        path: item.path,
+      };
+      if (item.contentType) read.contentType = item.contentType;
+      if (item.source) read.source = item.source;
+      if (item.stepId) read.stepId = item.stepId;
+      if (item.artifactId) read.artifactId = item.artifactId;
+      if (item.summary) read.summary = item.summary;
+      return read;
+    });
+  }
 
   const compiledPrompt = { prompt };
   if (Object.keys(metadata).length > 0) compiledPrompt.metadata = metadata;

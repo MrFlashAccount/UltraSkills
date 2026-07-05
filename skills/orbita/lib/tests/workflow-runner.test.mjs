@@ -283,7 +283,36 @@ test('runner: approval host instruction lists prompt input artifact content as r
 
   assert.equal(response.status, 'needs_host_actions');
   assert.equal(response.requests[0].action, 'wait_for_approval');
-  assert.deepEqual(Object.keys(response.requests[0]).sort(), ['action', 'id', 'loadInstructionsCommand', 'outputSchema', 'resolvedOutputSchema', 'stepId'].sort());
+  assert.deepEqual(Object.keys(response.requests[0]).sort(), ['action', 'approvalDelivery', 'id', 'loadInstructionsCommand', 'outputSchema', 'resolvedOutputSchema', 'stepId'].sort());
+  assert.equal(response.requests[0].approvalDelivery.summary, 'Approve research approval request');
+  assert.equal(response.requests[0].approvalDelivery.recommendedAction, 'ask_user_for_approval');
+  assert.equal(response.requests[0].approvalDelivery.expectedNormalizedOutput.format, 'strict_json');
+  assert.equal(response.requests[0].approvalDelivery.expectedNormalizedOutput.schemaRef, path.basename(schemaPath));
+  assert.deepEqual(response.requests[0].approvalDelivery.options.map((option) => option.normalizedOutput), [
+    { approval: 'approved' },
+    { approval: 'rejected' },
+    { approval: 'blocked' },
+  ]);
+  assert.deepEqual(response.requests[0].approvalDelivery.attachments, [
+    {
+      id: 'reasons-canvas-research',
+      label: "Prompt input artifact 'reasons-canvas-research' from 'prepare'",
+      path: artifactPath,
+      contentType: 'text/markdown',
+      source: 'prompt-input-artifact',
+      stepId: 'prepare',
+      summary: 'summary only is insufficient',
+    },
+  ]);
+  assert.match(response.requests[0].approvalDelivery.message, /# Approve research/);
+  assert.match(response.requests[0].approvalDelivery.message, /Prompt input artifact 'reasons-canvas-research' from 'prepare'/);
+  assert.doesNotMatch(response.requests[0].approvalDelivery.message, new RegExp(leaseToken));
+  assert.doesNotMatch(response.requests[0].approvalDelivery.message, /Full Canvas body for approval\./);
+  assert.doesNotMatch(JSON.stringify(response.requests[0].approvalDelivery), new RegExp(leaseToken));
+  const runPaths = resolveRunPaths({ runId, workflowPath });
+  const persistedHistory = readFileSync(runPaths.historyPath, 'utf8');
+  assert.doesNotMatch(persistedHistory, /approvalDelivery/);
+  assert.doesNotMatch(persistedHistory, /Full Canvas body for approval\./);
   assert.match(response.orchestratorInstruction, /Approval request: approve/);
   assert.match(response.orchestratorInstruction, /The orchestrator must execute this approval instruction itself\./);
   assert.match(response.orchestratorInstruction, /Use the following compiled approval prompt as the complete source/);

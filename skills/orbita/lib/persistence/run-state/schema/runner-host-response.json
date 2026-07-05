@@ -55,7 +55,8 @@
             },
             "required": ["ref", "schema"],
             "additionalProperties": false
-          }
+          },
+          "approvalDelivery": { "$ref": "#/$defs/approvalDelivery" }
         },
         "additionalProperties": false,
         "allOf": [
@@ -70,7 +71,10 @@
                 "preferredAgentId",
                 "bindAgentCommand",
                 "loadFollowupInstructionsCommand"
-              ]
+              ],
+              "not": {
+                "required": ["approvalDelivery"]
+              }
             }
           },
           {
@@ -79,6 +83,7 @@
               "required": ["action"]
             },
             "then": {
+              "required": ["approvalDelivery"],
               "not": {
                 "anyOf": [
                   { "required": ["preferredAgentId"] },
@@ -104,7 +109,8 @@
                   { "required": ["preferredAgentId"] },
                   { "required": ["bindAgentCommand"] },
                   { "required": ["loadFollowupInstructionsCommand"] },
-                  { "required": ["loadInstructionsCommand"] }
+                  { "required": ["loadInstructionsCommand"] },
+                  { "required": ["approvalDelivery"] }
                 ]
               }
             }
@@ -118,6 +124,79 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "approvalDelivery": {
+      "type": "object",
+      "required": [
+        "message",
+        "summary",
+        "attachments",
+        "options",
+        "recommendedAction",
+        "expectedNormalizedOutput"
+      ],
+      "properties": {
+        "message": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "label", "path"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "label": { "type": "string", "minLength": 1 },
+              "path": { "type": "string", "minLength": 1 },
+              "contentType": { "type": "string", "minLength": 1 },
+              "source": { "type": "string", "minLength": 1 },
+              "stepId": { "type": "string", "minLength": 1 },
+              "summary": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "field", "value", "normalizedOutput"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1 },
+              "field": { "type": "string", "minLength": 1 },
+              "value": {
+                "anyOf": [
+                  { "type": "string" },
+                  { "type": "number" },
+                  { "type": "boolean" }
+                ]
+              },
+              "normalizedOutput": { "type": "object" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "recommendedAction": { "type": "string", "minLength": 1 },
+        "expectedNormalizedOutput": {
+          "type": "object",
+          "required": ["format"],
+          "properties": {
+            "format": { "const": "strict_json" },
+            "schemaRef": { "type": "string", "minLength": 1 },
+            "schema": { "type": "object" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "not": {
+        "anyOf": [
+          { "required": ["leaseToken"] },
+          { "required": ["token"] },
+          { "required": ["tokenHash"] },
+          { "required": ["transcript"] },
+          { "required": ["privatePrompt"] }
+        ]
+      }
+    },
     "matrixWorkRequest": {
       "type": "object",
       "required": ["owner_step_id", "unit_id", "request_id", "required", "attempts", "max_attempts", "context"],

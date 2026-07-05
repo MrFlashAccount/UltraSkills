@@ -176,6 +176,58 @@ test('runner CLI: next --only-instructions prints only orchestrator instruction 
   assert.match(result.stdout, /--only-instructions/);
 });
 
+test('runner CLI: next JSON includes approvalDelivery for approval requests', async () => {
+  const workflowPath = path.join(tempDir, 'approval-delivery-json-workflow.json');
+  const schemaPath = path.join(tempDir, 'approval-delivery-json.schema.json');
+  writeJson(schemaPath, {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['approval'],
+    properties: {
+      approval: { enum: ['approved', 'rejected'] },
+    },
+    additionalProperties: false,
+  });
+  const approvalWorkflow = {
+    ...workflowDoc,
+    start: 'approve',
+    steps: {
+      approve: {
+        name: 'Approve CLI delivery',
+        kind: 'approval',
+        input: { prompt: 'Ask for approval from CLI JSON.' },
+        output: { schema: path.basename(schemaPath) },
+        next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'done' } },
+      },
+      done: workflowDoc.steps.done,
+    },
+  };
+  writeJson(workflowPath, approvalWorkflow);
+  const { runId } = await runCase('approval-delivery-json', workflowPath);
+
+  const result = await runRunnerCli(['next', '--run-id', runId, '--workflow', workflowPath]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const response = JSON.parse(result.stdout);
+  const request = response.requests[0];
+  const leaseToken = leaseTokensByRunId.get(runId);
+  assert.equal(request.action, 'wait_for_approval');
+  assert.equal(request.approvalDelivery.summary, 'Approve CLI delivery approval request');
+  assert.equal(request.approvalDelivery.recommendedAction, 'ask_user_for_approval');
+  assert.deepEqual(request.approvalDelivery.options.map((option) => option.normalizedOutput), [
+    { approval: 'approved' },
+    { approval: 'rejected' },
+  ]);
+  assert.equal(request.approvalDelivery.expectedNormalizedOutput.format, 'strict_json');
+  assert.equal(request.approvalDelivery.expectedNormalizedOutput.schemaRef, path.basename(schemaPath));
+  assert.deepEqual(request.approvalDelivery.expectedNormalizedOutput.schema.required, ['approval']);
+  assert.deepEqual(request.approvalDelivery.attachments, []);
+  assert.match(request.approvalDelivery.message, /# Approve CLI delivery/);
+  assert.match(request.approvalDelivery.message, /Ask for approval from CLI JSON\./);
+  assert.doesNotMatch(JSON.stringify(request.approvalDelivery), new RegExp(leaseToken));
+  assert.equal(Object.hasOwn(response.requests[0], 'compiledPrompt'), false);
+});
+
 test('runner CLI: rejects unindexed legacy run state instead of minting authority', async () => {
   const runId = `workflow-runner-cli-test-${process.pid}-legacy-unindexed`;
   const workflowPath = path.join(tempDir, 'legacy-unindexed-workflow.json');

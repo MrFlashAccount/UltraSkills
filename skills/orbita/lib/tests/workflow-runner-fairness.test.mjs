@@ -202,6 +202,22 @@ test('runner fairness: loadInstructions renews matching lease authority on succe
   assert.equal(lease.leaseExpiresAt, '2026-06-01T11:05:00.000Z');
 });
 
+test('runner fairness: loadInstructions allows matching stale saved lease and renews authority', async () => {
+  const workflowPath = path.join(tempDir, 'load-instructions-stale-saved-lease-authority.json');
+  writeJson(workflowPath, workflowDoc);
+  const { runId } = runCase('load-instructions-stale-saved-lease-authority', workflowPath);
+  const paths = resolveRunPaths({ runId, workflowPath });
+  const claim = await registerWorkflowRunAtRoot({ runId, workflowPath, claim: true, owner: 'alice', harness: 'portable', sessionId: 'session-a', leaseMs: 1_000, now: new Date('2026-06-01T10:00:00.000Z') });
+  await runnerNext({ runId, workflowPath, leaseToken: claim.leaseToken, now: new Date('2026-06-01T10:00:00.500Z') });
+
+  const instructions = await runnerLoadInstructions({ runId, workflowPath, stepId: 'prepare', leaseToken: claim.leaseToken, now: new Date('2026-06-01T11:00:02.000Z') });
+
+  assert.match(instructions, /Prepare\./);
+  const lease = snapshotRunState(paths).indexEntry.workerLease;
+  assert.equal(lease.tokenHash, hashLeaseToken(claim.leaseToken));
+  assert.equal(lease.leaseExpiresAt, '2026-06-01T12:00:02.000Z');
+});
+
 test('runner fairness: writeOutput renews matching lease authority on accepted output', async () => {
   const workflowPath = path.join(tempDir, 'write-output-renews-lease-authority.json');
   writeJson(workflowPath, workflowDoc);

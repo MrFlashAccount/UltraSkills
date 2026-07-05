@@ -73,6 +73,23 @@
             "roleMaterial": {
               "type": "array",
               "items": { "type": "string", "minLength": 1 }
+            },
+            "requiredReads": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["label", "path"],
+                "properties": {
+                  "label": { "type": "string", "minLength": 1 },
+                  "path": { "type": "string", "minLength": 1 },
+                  "contentType": { "type": "string", "minLength": 1 },
+                  "source": { "type": "string", "minLength": 1 },
+                  "stepId": { "type": "string", "minLength": 1 },
+                  "artifactId": { "type": "string", "minLength": 1 },
+                  "summary": { "type": "string", "minLength": 1 }
+                },
+                "additionalProperties": false
+              }
             }
           },
           "additionalProperties": false

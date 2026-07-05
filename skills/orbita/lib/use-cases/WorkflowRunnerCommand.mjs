@@ -898,10 +898,10 @@ export function createWorkflowRunnerCommand({
     assertSafeStepId(stepId);
     if (followUp !== true && followUp !== false) throw new Error('followUp must be a boolean');
     const lockPaths = resolveRunPaths({ runId, runsRoot });
-    await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
+    await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
     return withRunStateLock(lockPaths, async () => {
       const paths = await resolveIndexedRunPaths({ runId, workflowPath, runsRoot });
-      await assertWorkerLeaseAuthority(paths, { leaseToken, now });
+      await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
       await recoverDurableCommit(paths);
       const current = await readPersistedRunState(paths);
       const { rendered, response } = await renderCurrentHostResponse(paths, current.baton, { leaseToken, followUp });

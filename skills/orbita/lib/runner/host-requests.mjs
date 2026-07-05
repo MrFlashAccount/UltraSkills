@@ -14,6 +14,8 @@ const TERMINAL_ACTIONS = new Set(["stop_done"]);
 const RESOLVE_WORKER_BLOCKER_ACTION = "resolve_worker_blocker";
 const SUPERSEDES_STDOUT_INSTRUCTION =
   "Supersedes all previous workflow-runner stdout.";
+const LEASE_TOKEN_OPTION = /(--lease-token(?:=|\s+))(?:"[^"]*"|'[^']*'|[^\s'"]+)/g;
+const WORKFLOW_RUN_TOKEN_ENV = /(WORKFLOW_RUN_TOKEN=)(?:"[^"]*"|'[^']*'|[^\s'"]+)/g;
 
 export { assertSafeStepId };
 
@@ -147,6 +149,81 @@ function resolvedOutputSchemaForStep(
   };
 }
 
+function redactApprovalDeliveryText(value, { leaseToken } = {}) {
+  let redacted = String(value ?? "")
+    .replaceAll(LEASE_TOKEN_OPTION, "$1[redacted-lease-token]")
+    .replaceAll(WORKFLOW_RUN_TOKEN_ENV, "$1[redacted-lease-token]");
+  if (typeof leaseToken === "string" && leaseToken.length > 0) {
+    redacted = redacted.replaceAll(leaseToken, "[redacted-lease-token]");
+  }
+  return redacted;
+}
+
+function attachmentIdForRead(read, index) {
+  if (typeof read?.artifactId === "string" && read.artifactId.length > 0) return read.artifactId;
+  if (typeof read?.path === "string" && read.path.length > 0) {
+    const basename = read.path.split(/[\\/]/u).filter(Boolean).at(-1);
+    if (basename) return basename;
+  }
+  return `required-read-${index + 1}`;
+}
+
+function approvalDeliveryAttachments(step) {
+  const requiredReads = step.compiledPrompt?.metadata?.requiredReads;
+  if (!Array.isArray(requiredReads)) return [];
+  return requiredReads
+    .filter((read) => typeof read?.path === "string" && read.path.length > 0)
+    .map((read, index) => {
+      const attachment = {
+        id: attachmentIdForRead(read, index),
+        label: typeof read.label === "string" && read.label.length > 0
+          ? read.label
+          : attachmentIdForRead(read, index),
+        path: read.path,
+      };
+      if (read.contentType) attachment.contentType = read.contentType;
+      if (read.source) attachment.source = read.source;
+      if (read.stepId) attachment.stepId = read.stepId;
+      if (read.summary) attachment.summary = read.summary;
+      return attachment;
+    });
+}
+
+function enumApprovalOptions(schema) {
+  const properties = schema?.properties;
+  if (!properties || typeof properties !== "object" || Array.isArray(properties)) return [];
+  const options = [];
+  for (const [field, definition] of Object.entries(properties)) {
+    if (!Array.isArray(definition?.enum)) continue;
+    for (const value of definition.enum) {
+      if (!["string", "number", "boolean"].includes(typeof value)) continue;
+      options.push({
+        label: String(value),
+        field,
+        value,
+        normalizedOutput: { [field]: value },
+      });
+    }
+  }
+  return options;
+}
+
+function approvalDeliveryForStep(step, request, { leaseToken } = {}) {
+  const message = redactApprovalDeliveryText(step.compiledPrompt?.prompt ?? "", { leaseToken });
+  return {
+    message,
+    summary: `${step.step?.name ?? step.id} approval request`,
+    attachments: approvalDeliveryAttachments(step),
+    options: enumApprovalOptions(request.resolvedOutputSchema?.schema),
+    recommendedAction: "ask_user_for_approval",
+    expectedNormalizedOutput: {
+      format: "strict_json",
+      ...(request.outputSchema ? { schemaRef: request.outputSchema } : {}),
+      ...(request.resolvedOutputSchema?.schema ? { schema: request.resolvedOutputSchema.schema } : {}),
+    },
+  };
+}
+
 export function workerBindingKeyForStep(stepId, stepDoc) {
   const agent = stepDoc?.agent;
   return typeof agent === "string" && agent.length > 0
@@ -236,6 +313,9 @@ export function buildHostRequests(
       if (resolvedOutputSchema) {
         request.outputSchema = resolvedOutputSchema.ref;
         request.resolvedOutputSchema = resolvedOutputSchema;
+      }
+      if (step.action === "wait_for_approval") {
+        request.approvalDelivery = approvalDeliveryForStep(step, request, { leaseToken });
       }
       return request;
     });

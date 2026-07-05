@@ -177,6 +177,40 @@ test('runner host response schema enforces action-conditional reuse hint fields'
         id: 'approval_step',
         stepId: 'approval_step',
         action: 'wait_for_approval',
+        approvalDelivery: {
+          message: 'Ask the user whether to approve.',
+          summary: 'Approval request',
+          attachments: [
+            {
+              id: 'plan',
+              label: 'Prompt input artifact plan',
+              path: '/runs/approval/artifacts/plan.md',
+              contentType: 'text/markdown',
+              source: 'prompt-input-artifact',
+              stepId: 'plan',
+              summary: 'Plan summary',
+            },
+          ],
+          options: [
+            {
+              label: 'approved',
+              field: 'approval',
+              value: 'approved',
+              normalizedOutput: { approval: 'approved' },
+            },
+          ],
+          recommendedAction: 'ask_user_for_approval',
+          expectedNormalizedOutput: {
+            format: 'strict_json',
+            schemaRef: 'approval.schema.json',
+            schema: {
+              type: 'object',
+              required: ['approval'],
+              properties: { approval: { enum: ['approved'] } },
+              additionalProperties: false,
+            },
+          },
+        },
       },
     ],
   };
@@ -230,6 +264,14 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validRunWorker,
     requests: [{ ...validRunWorker.requests[0], loadFollowupInstructionsCommand: undefined }],
+  }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, {
+    ...validApproval,
+    requests: [{ ...validApproval.requests[0], approvalDelivery: undefined }],
+  }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, {
+    ...validRunWorker,
+    requests: [{ ...validRunWorker.requests[0], approvalDelivery: validApproval.requests[0].approvalDelivery }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validApproval,

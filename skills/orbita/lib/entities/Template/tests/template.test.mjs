@@ -142,6 +142,17 @@ test('template compiler renders already-resolved required read paths without res
   assert.match(rendered.prompt, /2\. Prompt input artifact 'reasons-canvas-research' from 'producer' \(text\/markdown\): `\/abs\/run\/producer\/artifacts\/reasons-canvas-research\.md`/);
   assert.doesNotMatch(rendered.prompt, /workflow-runner-test/);
   assert.deepEqual(rendered.metadata.roleMaterial, ['/abs/project/roles/backend/ROLE.md']);
+  assert.deepEqual(rendered.metadata.requiredReads, [
+    {
+      label: "Role material for 'backend'",
+      path: '/abs/project/roles/backend/ROLE.md',
+    },
+    {
+      label: "Prompt input artifact 'reasons-canvas-research' from 'producer'",
+      path: '/abs/run/producer/artifacts/reasons-canvas-research.md',
+      contentType: 'text/markdown',
+    },
+  ]);
 });
 
 test('renderWorkflowPrompt assembles templates, required reads, output contract, workflow prompt, and metadata', () => {
@@ -201,6 +212,26 @@ test('renderWorkflowPrompt assembles templates, required reads, output contract,
     outputTemplate: 'consumer-output.md',
     outputSchema: 'consumer.schema.json',
     roleMaterial: ['/roles/backend/ROLE.md', '/roles/backend/RUBRIC.md'],
+    requiredReads: [
+      {
+        label: "Role material for 'backend'",
+        path: '/roles/backend/ROLE.md',
+        source: 'role-material',
+      },
+      {
+        label: "Role material for 'backend'",
+        path: '/roles/backend/RUBRIC.md',
+        source: 'role-material',
+      },
+      {
+        label: "Prompt input artifact 'reasons-canvas-research' from 'producer'",
+        path: '/tmp/workflow-runner-test/producer/artifacts/reasons-canvas-research.md',
+        contentType: 'text/markdown',
+        source: 'prompt-input-artifact',
+        stepId: 'producer',
+        artifactId: 'reasons-canvas-research',
+      },
+    ],
   });
 });
 
