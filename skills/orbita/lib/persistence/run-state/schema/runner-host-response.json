@@ -4,10 +4,9 @@
   "title": "Workflow Runner Host Response",
   "type": "object",
   "required": ["status", "orchestratorInstruction", "baton"],
-        "properties": {
+  "properties": {
     "status": { "enum": ["needs_host_actions", "done"] },
     "orchestratorInstruction": { "type": "string", "minLength": 1 },
-    "orchestratorDebugCommand": { "type": "string", "minLength": 1 },
     "baton": { "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton" },
     "requests": {
       "type": "array",
@@ -25,11 +24,6 @@
           "preferredAgentId": {
             "description": "Advisory opaque worker id previously bound for this step, or null when no binding exists.",
             "type": ["string", "null"],
-            "minLength": 1
-          },
-          "bindAgentCommand": {
-            "description": "Public runner command for binding the actual selected worker id to this step. Hosts replace only the literal <agent-id> placeholder.",
-            "type": "string",
             "minLength": 1
           },
           "loadFollowupInstructionsCommand": {
@@ -68,7 +62,6 @@
               "required": [
                 "loadInstructionsCommand",
                 "preferredAgentId",
-                "bindAgentCommand",
                 "loadFollowupInstructionsCommand"
               ]
             }
@@ -82,7 +75,6 @@
               "not": {
                 "anyOf": [
                   { "required": ["preferredAgentId"] },
-                  { "required": ["bindAgentCommand"] },
                   { "required": ["loadFollowupInstructionsCommand"] },
                   { "required": ["recoverableBlocker"] }
                 ]
@@ -102,7 +94,6 @@
               "not": {
                 "anyOf": [
                   { "required": ["preferredAgentId"] },
-                  { "required": ["bindAgentCommand"] },
                   { "required": ["loadFollowupInstructionsCommand"] },
                   { "required": ["loadInstructionsCommand"] }
                 ]

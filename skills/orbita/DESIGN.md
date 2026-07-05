@@ -95,7 +95,7 @@ The status chip should answer "what is it waiting on?".
 The step id should be secondary provenance, not the headline.
 
 Do not add drag handles, move affordances, primary action buttons, or controls
-that resemble `next`, `continue`, `write-output`, `bind-agent`, or retry.
+that resemble `next`, `continue`, `write-output`, worker binding, or retry.
 
 ## Detail Drawer
 

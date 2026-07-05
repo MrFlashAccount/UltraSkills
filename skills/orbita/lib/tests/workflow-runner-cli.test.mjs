@@ -171,8 +171,10 @@ test('runner CLI: next --only-instructions prints only orchestrator instruction 
   assert.match(result.stdout, /Current host requests:\n- run_worker: prepare/);
   assert.match(result.stdout, /load fresh instructions: .*workflow-runner\.mjs' instructions --run-id/);
   assert.match(result.stdout, /load follow-up instructions when restoring the preferred worker: .*instructions --follow-up --run-id/);
-  assert.match(result.stdout, /bind actual worker id after dispatch: .*bind-agent --run-id/);
+  assert.match(result.stdout, /pass actual worker id to continue: --bind-agent 'prepare=<agent-id>'/);
   assert.match(result.stdout, /workflow-runner\.mjs' continue --run-id/);
+  assert.match(result.stdout, /--bind-agent 'prepare=<agent-id>'/);
+  assert.match(result.stdout, /--orchestrator-debug-json '<paste orchestrator debug JSON here>'/);
   assert.match(result.stdout, /--only-instructions/);
 });
 
@@ -222,6 +224,35 @@ test('runner CLI: write-output reads stdin JSON', async () => {
   assert.equal(writtenResponse.stepId, 'prepare');
   const batonAfterWrite = JSON.parse(readFileSync(path.join(runDir, 'baton.json'), 'utf8'));
   assert.equal(batonAfterWrite.state.prepare.outcome, 'ready');
+});
+
+test('runner CLI: continue accepts bind-agent and orchestrator debug flags', async () => {
+  const workflowPath = path.join(tempDir, 'continue-side-effects-workflow.json');
+  writeJson(workflowPath, workflowDoc);
+  const { runId, runDir } = await runCase('continue-side-effects', workflowPath);
+
+  const next = await runRunnerCli(['next', '--run-id', runId, '--workflow', workflowPath]);
+  assert.equal(next.status, 0, next.stderr);
+  const written = await runRunnerCli(['write-output', '--run-id', runId, '--step-id', 'prepare'], {
+    input: JSON.stringify(workerOutput('prepared')),
+    debugSummary: true,
+  });
+  assert.equal(written.status, 0, written.stderr);
+
+  const continued = await runRunnerCli([
+    'continue',
+    '--run-id', runId,
+    '--workflow', workflowPath,
+    '--bind-agent', 'prepare=cli-worker-1',
+    '--orchestrator-debug-json', JSON.stringify({ summary: 'cli combined continue', evidence: ['write-output accepted'] }),
+  ]);
+  assert.equal(continued.status, 0, continued.stderr);
+  const response = JSON.parse(continued.stdout);
+  assert.equal(response.status, 'done');
+  assert.deepEqual(response.baton.workerBindings, { prepare: 'cli-worker-1' });
+  const history = readFileSync(path.join(runDir, 'history.md'), 'utf8');
+  assert.match(history, /source: workflow-runner-continue-bind-agent/);
+  assert.match(history, /cli combined continue/);
 });
 
 test('runner CLI: continue --only-instructions prints terminal instruction text', async () => {

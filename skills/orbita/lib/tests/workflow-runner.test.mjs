@@ -190,11 +190,9 @@ test('runner: next returns a single host action request with load command only',
   assert.doesNotMatch(response.orchestratorInstruction, /run_worker request, enforce this host watchdog/);
   assert.match(response.orchestratorInstruction, new RegExp(`load fresh instructions: .*workflow-runner\\.mjs' instructions --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));
   assert.match(response.orchestratorInstruction, new RegExp(`load follow-up instructions when restoring the preferred worker: .*workflow-runner\\.mjs' instructions --follow-up --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));
-  assert.match(response.orchestratorInstruction, new RegExp(`bind actual worker id after dispatch: .*workflow-runner\\.mjs' bind-agent --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --agent-id <agent-id> --lease-token '${leaseToken}'`));
-  assert.match(response.orchestratorInstruction, /Before continue, record a concise orchestrator debug summary/);
-  assert.match(response.orchestratorInstruction, new RegExp(`workflow-runner\\.mjs' record-orchestrator --run-id '${runId}' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));
-  assert.equal(response.orchestratorDebugCommand.includes(`record-orchestrator --run-id '${runId}' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`), true);
-  assert.equal(response.orchestratorInstruction.includes(`Then run:\n${workflowRunnerCommand} continue --run-id '${runId}' --runs-root '${runsRoot}' --lease-token '${leaseToken}' --only-instructions`), true);
+  assert.match(response.orchestratorInstruction, /pass actual worker id to continue: --bind-agent 'prepare=<agent-id>'/);
+  assert.doesNotMatch(response.orchestratorInstruction, /Before continue, record a concise orchestrator debug summary/);
+  assert.equal(response.orchestratorInstruction.includes(`${workflowRunnerCommand} continue --run-id '${runId}' --runs-root '${runsRoot}' --lease-token '${leaseToken}' --bind-agent 'prepare=<agent-id>' --orchestrator-debug-json '<paste orchestrator debug JSON here>' --only-instructions`), true);
   assert.match(response.orchestratorInstruction, /Follow that stdout instruction exactly/);
   assert.doesNotMatch(response.orchestratorInstruction, /write-output/);
   assert.doesNotMatch(response.orchestratorInstruction, /Load instructions with:/);
@@ -209,7 +207,6 @@ test('runner: next returns a single host action request with load command only',
   assert.equal(response.requests[0].loadInstructionsCommand, `${workflowRunnerCommand} instructions --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`);
   assert.equal(response.requests[0].loadInstructionsCommand.startsWith("bun './"), false);
   assert.equal(response.requests[0].loadFollowupInstructionsCommand.startsWith("bun './"), false);
-  assert.equal(response.requests[0].bindAgentCommand.startsWith("bun './"), false);
   assert.equal(response.orchestratorInstruction.includes("bun ./lib/entrypoints/cli/workflow-runner.mjs"), false);
   assert.equal(Object.hasOwn(response.requests[0], 'outputPath'), false);
 
@@ -717,9 +714,25 @@ test('runner: write-output accepts valid stdin JSON into baton state and continu
   assert.equal(batonAfterWrite.cursor, 'prepare');
   assert.equal(batonAfterWrite.state.prepare.outcome, 'ready');
 
-  const continued = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue from accepted output');
+  const debugNote = { summary: 'worker prepared output', evidence: ['write-output accepted'] };
+  const continued = await expectRunner(
+    [
+      'continue',
+      '--run-id', runId,
+      '--workflow', workflowPath,
+      '--bind-agent', 'prepare=worker-continue-1',
+      '--orchestrator-debug-json', JSON.stringify(debugNote),
+    ],
+    'continue from accepted output',
+  );
   assert.equal(continued.status, 'done');
   assert.equal(continued.baton.state.prepare.outcome, 'ready');
+  assert.deepEqual(continued.baton.workerBindings, { prepare: 'worker-continue-1' });
+  const historyAfterContinue = readFileSync(path.join(runDir, 'history.md'), 'utf8');
+  assert.match(historyAfterContinue, /source: workflow-runner-continue-bind-agent/);
+  assert.match(historyAfterContinue, /bound-agent:prepare/);
+  assert.match(historyAfterContinue, /source: workflow-runner-continue-orchestrator/);
+  assert.match(historyAfterContinue, /worker prepared output/);
 });
 
 test('runner: write-output rejects valid worker output without required debug summary side-channel', async () => {
