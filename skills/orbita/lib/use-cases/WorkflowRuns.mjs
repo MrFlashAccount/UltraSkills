@@ -1,5 +1,6 @@
 export function createWorkflowRuns({
   claimWorkflowRunAtRoot,
+  deleteWorkflowRunAtRoot,
   heartbeatWorkflowRunAtRoot,
   listWorkflowRunsAtRoot,
   registerWorkflowRunAtRoot,
@@ -59,8 +60,13 @@ export function createWorkflowRuns({
     return publicApiCall(() => heartbeatWorkflowRunAtRoot(options), { runsRoot: options.runsRoot });
   }
 
+  async function deleteWorkflowRun({ runId, runsRoot } = {}) {
+    return publicApiCall(() => deleteWorkflowRunAtRoot({ runId, runsRoot }), { runsRoot });
+  }
+
   return {
     claimWorkflowRun,
+    deleteWorkflowRun,
     heartbeatWorkflowRun,
     listWorkflowRuns,
     registerWorkflowRun,

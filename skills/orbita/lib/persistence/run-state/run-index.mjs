@@ -167,6 +167,18 @@ export async function updateRunIndexEntry(paths, updater) {
   });
 }
 
+export async function deleteRunIndexEntry(paths) {
+  return withRunsIndexLock(paths, async () => {
+    const index = await readRunsIndex(paths);
+    const existing = index.runs[paths.runId] ?? null;
+    if (!existing) return null;
+    delete index.runs[paths.runId];
+    assertRunsIndex(index);
+    await writeJsonAtomic(paths.runsIndexPath, index);
+    return existing;
+  });
+}
+
 export function runsIndexPathsForRoot(runsRoot) {
   const resolvedRunsRoot = resolve(runsRoot);
   return {

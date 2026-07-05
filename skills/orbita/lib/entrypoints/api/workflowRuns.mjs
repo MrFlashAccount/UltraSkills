@@ -1,5 +1,6 @@
 export {
   claimWorkflowRun,
+  deleteWorkflowRun,
   heartbeatWorkflowRun,
   listWorkflowRuns,
   registerWorkflowRun,

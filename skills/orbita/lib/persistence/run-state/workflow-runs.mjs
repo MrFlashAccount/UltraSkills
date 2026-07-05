@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { assertSafeRunId, defaultWorkflowPath, migrateLegacyWorkflowRunsRootIfNeeded, resolveRunPaths, workflowRunsRoot } from './paths.mjs';
-import { createRunIndexEntry, readRunsIndex, runsIndexPathsForRoot, updateRunIndexEntry } from './run-index.mjs';
+import { assertSafeRunId, defaultWorkflowPath, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths, workflowRunsRoot } from './paths.mjs';
+import { createRunIndexEntry, deleteRunIndexEntry, readRunsIndex, runsIndexPathsForRoot, updateRunIndexEntry } from './run-index.mjs';
 import { assertMatchingTokenAuthority, buildTokenLease, generateLeaseToken, occupancyForLease, renewTokenLease } from './lease-authority.mjs';
 import { withRunStateLock } from './lock.mjs';
 import { resolveAbsoluteWorkflowPath } from '../../workflow-path-boundary.mjs';
@@ -150,4 +151,18 @@ export async function claimWorkflowRunAtRoot({ runId, workflowPath, runsRoot = w
 export async function heartbeatWorkflowRunAtRoot({ leaseToken, ...options } = {}) {
   if (!leaseToken) throw new Error('workflow run token is required');
   return claimWorkflowRunAtRoot({ ...options, leaseToken });
+}
+
+export async function deleteWorkflowRunAtRoot({ runId, runsRoot = workflowRunsRoot } = {}) {
+  await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
+  const safeRunId = assertSafeRunId(runId);
+  const paths = resolveRunPaths({ runId: safeRunId, workflowPath: defaultWorkflowPath, runsRoot });
+  const directoryExisted = await pathExists(paths.runDir);
+  const existing = await deleteRunIndexEntry(paths);
+  await rm(paths.runDir, { recursive: true, force: true });
+  return {
+    ok: true,
+    deleted: Boolean(existing || directoryExisted),
+    runId: safeRunId,
+  };
 }
