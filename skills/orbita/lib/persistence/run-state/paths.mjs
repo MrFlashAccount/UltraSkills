@@ -143,6 +143,7 @@ export function resolveRunPaths({ runId, workflowPath, runsRoot = workflowRunsRo
     instructionsDir: join(resolvedRunDir, '.workflow-runner', 'instructions'),
     continueLockPath: join(resolvedRunDir, '.workflow-runner', 'continue.lock'),
     durableCommitPath: join(resolvedRunDir, '.workflow-runner', 'durable-commit.json'),
+    currentRequestsPath: join(resolvedRunDir, '.workflow-runner', 'current-requests.json'),
   };
 }
 

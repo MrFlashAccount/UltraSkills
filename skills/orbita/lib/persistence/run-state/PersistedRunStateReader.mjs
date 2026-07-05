@@ -33,8 +33,14 @@ export async function readPersistedRunState(paths) {
   const baton = await readJsonIfExists(paths.batonPath, 'baton');
   if (baton === undefined) throw new Error(`cannot read persisted run state: missing baton at ${paths.batonPath}`);
   const historyText = await readTextIfExists(paths.historyPath, 'workflow history');
+  const currentRequestsDoc = paths.currentRequestsPath
+    ? await readJsonIfExists(paths.currentRequestsPath, 'current workflow requests')
+    : undefined;
+  const currentRequests = Array.isArray(currentRequestsDoc) ? currentRequestsDoc : currentRequestsDoc?.requests;
+  const currentRequestsWorkflowSignature = Array.isArray(currentRequestsDoc) ? undefined : currentRequestsDoc?.workflowSignature;
+  const currentRequestsBatonSignature = Array.isArray(currentRequestsDoc) ? undefined : currentRequestsDoc?.batonSignature;
   const pendingCommit = await readJsonIfExists(paths.durableCommitPath, 'pending durable workflow commit');
-  return assertPersistedRunState({
+  const state = {
     version: PERSISTED_RUN_STATE_VERSION,
     storageTopology: PERSISTED_RUN_STATE_TOPOLOGY,
     run: { runDir: paths.runDir, workflowPath: paths.workflowPath, repositoryRoot: paths.repositoryRoot },
@@ -43,6 +49,10 @@ export async function readPersistedRunState(paths) {
     history: historyText === undefined
       ? { mode: 'file-ref', path: paths.historyPath }
       : { mode: 'embedded-text', path: paths.historyPath, text: historyText },
+    currentRequests,
     commit: commitMetadata(pendingCommit),
-  });
+  };
+  if (currentRequestsWorkflowSignature !== undefined) state.currentRequestsWorkflowSignature = currentRequestsWorkflowSignature;
+  if (currentRequestsBatonSignature !== undefined) state.currentRequestsBatonSignature = currentRequestsBatonSignature;
+  return assertPersistedRunState(state);
 }
