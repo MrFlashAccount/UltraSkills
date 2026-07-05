@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { continueRun as runnerContinueRun, loadInstructions as runnerLoadInstructions, next as runnerNext, writeOutput as runnerWriteOutput } from './helpers/orbita-production-api.mjs';
+import { registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
+import { hashLeaseToken } from '../persistence/run-state/lease-authority.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-check-'));
@@ -54,6 +56,19 @@ const workflowDoc = {
 
 function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function readIfExists(filePath) {
+  return existsSync(filePath) ? readFileSync(filePath, 'utf8') : undefined;
+}
+
+function snapshotRunState(paths) {
+  const indexContent = readIfExists(paths.runsIndexPath);
+  return {
+    baton: readIfExists(paths.batonPath),
+    history: readIfExists(paths.historyPath),
+    indexEntry: indexContent === undefined ? undefined : JSON.parse(indexContent).runs[paths.runId],
+  };
 }
 
 function debugSummaryFileFor({ runId, stepId, runsRoot, text = 'worker debug summary\n' }) {
@@ -255,6 +270,73 @@ test('runner: instructions rejects request that is not in recomputed current res
   assert.match(stale.stderr, /requested step 'prepare'/);
   assert.match(stale.stderr, /current request step ids: none/);
   assert.match(stale.stderr, /Use the latest workflow-runner response\/instructions/);
+});
+
+test('runner: instructions allow matching stale saved lease and renew authority', async () => {
+  const workflowPath = path.join(tempDir, 'instructions-stale-saved-lease-workflow.json');
+  const singleWorkflow = structuredClone(workflowDoc);
+  singleWorkflow.steps.prepare.next = 'done';
+  writeJson(workflowPath, singleWorkflow);
+  const { runId } = await runCase('instructions-stale-saved-lease');
+  const paths = resolveRunPaths({ runId, workflowPath });
+  const claim = await registerWorkflowRunAtRoot({
+    runId,
+    workflowPath,
+    claim: true,
+    owner: 'alice',
+    harness: 'portable',
+    sessionId: 'session-a',
+    leaseMs: 1_000,
+    now: new Date('2026-06-01T10:00:00.000Z'),
+  });
+  await runnerNext({ runId, workflowPath, leaseToken: claim.leaseToken, now: new Date('2026-06-01T10:00:00.500Z') });
+
+  const instructions = await runnerLoadInstructions({
+    runId,
+    workflowPath,
+    stepId: 'prepare',
+    leaseToken: claim.leaseToken,
+    now: new Date('2026-06-01T11:00:02.000Z'),
+  });
+
+  assert.match(instructions, /Prepare branch\./);
+  const lease = snapshotRunState(paths).indexEntry.workerLease;
+  assert.equal(lease.tokenHash, hashLeaseToken(claim.leaseToken));
+  assert.equal(lease.leaseExpiresAt, '2026-06-01T12:00:02.000Z');
+});
+
+test('runner: instructions reject wrong stale lease without mutation', async () => {
+  const workflowPath = path.join(tempDir, 'instructions-wrong-stale-lease-workflow.json');
+  const singleWorkflow = structuredClone(workflowDoc);
+  singleWorkflow.steps.prepare.next = 'done';
+  writeJson(workflowPath, singleWorkflow);
+  const { runId } = await runCase('instructions-wrong-stale-lease');
+  const paths = resolveRunPaths({ runId, workflowPath });
+  const claim = await registerWorkflowRunAtRoot({
+    runId,
+    workflowPath,
+    claim: true,
+    owner: 'alice',
+    harness: 'portable',
+    sessionId: 'session-a',
+    leaseMs: 1_000,
+    now: new Date('2026-06-01T10:00:00.000Z'),
+  });
+  await runnerNext({ runId, workflowPath, leaseToken: claim.leaseToken, now: new Date('2026-06-01T10:00:00.500Z') });
+  const before = snapshotRunState(paths);
+
+  await assert.rejects(
+    () => runnerLoadInstructions({
+      runId,
+      workflowPath,
+      stepId: 'prepare',
+      leaseToken: 'wrong-token',
+      now: new Date('2026-06-01T11:00:02.000Z'),
+    }),
+    /workflow run is occupied/,
+  );
+
+  assert.deepEqual(snapshotRunState(paths), before);
 });
 
 test('runner: stale older-response commands name the current request step ids', async () => {

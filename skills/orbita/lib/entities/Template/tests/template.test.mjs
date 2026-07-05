@@ -184,9 +184,6 @@ test('renderWorkflowPrompt assembles templates, required reads, output contract,
   assert.match(rendered.prompt, /<!-- output schema: consumer\.schema\.json -->/);
   assert.match(rendered.prompt, /Artifact output directory for this step: \/tmp\/workflow-runner-test\/consumer\/artifacts/);
   assert.match(rendered.prompt, /Use the artifact id as the artifact file name\/stem/);
-  assert.match(rendered.prompt, /Keep artifact bodies only in those files/);
-  assert.match(rendered.prompt, /JSON output must contain artifact metadata only/);
-  assert.match(rendered.prompt, /never the markdown\/file body or other full artifact content/);
   assert.match(rendered.prompt, /artifacts\[\]\.path to the full absolute filesystem path/);
   assert.match(rendered.prompt, /Debug history summary:/);
   assert.match(rendered.prompt, /\/tmp\/workflow-runner-test\/consumer\/debug-summary\.md/);

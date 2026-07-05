@@ -37,6 +37,15 @@ function historyEntry({ source, baton, requests, steps, output, decision, detail
   return lines.join('\n');
 }
 
+function currentRequestsForPersistence(currentRequests) {
+  if (currentRequests === undefined) return undefined;
+  return currentRequests.map((request) => {
+    const copy = structuredClone(request);
+    delete copy.approvalDelivery;
+    return copy;
+  });
+}
+
 function maybeFailDurableCommitAfter(action) {
   if (process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER === action) throw new Error(`injected durable commit failure after ${action}`);
 }
@@ -120,12 +129,13 @@ function nextPersistedRunState(current, { baton, historyText, currentRequests, c
 export async function commitDurableRunState(paths, { baton, history, currentRequests, writeBaton = true }) {
   await recoverDurableCommit(paths);
   const current = await readPersistedRunState(paths);
+  const persistedCurrentRequests = currentRequestsForPersistence(currentRequests);
   const historyBefore = current.history.mode === 'embedded-text' ? current.history.text : (await readTextIfExists(paths.historyPath)).content;
   const historyText = `${historyBefore ?? ''}${historyEntry(history)}`;
-  const currentRequestsWorkflowSignature = currentRequests !== undefined
+  const currentRequestsWorkflowSignature = persistedCurrentRequests !== undefined
     ? await fileSignature(paths.workflowPath)
     : undefined;
-  const currentRequestsBatonSignature = currentRequests !== undefined
+  const currentRequestsBatonSignature = persistedCurrentRequests !== undefined
     ? contentSignature(writeBaton ? baton : current.baton)
     : undefined;
   const commit = {
@@ -134,18 +144,18 @@ export async function commitDurableRunState(paths, { baton, history, currentRequ
     createdAt: new Date().toISOString(),
     status: 'pending',
     historyText,
-    sideEffects: { baton: writeBaton, history: true, currentRequests: currentRequests !== undefined },
+    sideEffects: { baton: writeBaton, history: true, currentRequests: persistedCurrentRequests !== undefined },
   };
   if (writeBaton) commit.baton = baton;
-  if (currentRequests !== undefined) {
-    commit.currentRequests = currentRequests;
+  if (persistedCurrentRequests !== undefined) {
+    commit.currentRequests = persistedCurrentRequests;
     commit.currentRequestsWorkflowSignature = currentRequestsWorkflowSignature;
     commit.currentRequestsBatonSignature = currentRequestsBatonSignature;
   }
   assertPersistedRunState(nextPersistedRunState(current, {
     baton,
     historyText,
-    currentRequests,
+    currentRequests: persistedCurrentRequests,
     currentRequestsWorkflowSignature,
     currentRequestsBatonSignature,
     writeBaton,

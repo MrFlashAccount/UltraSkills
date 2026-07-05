@@ -468,6 +468,45 @@ export function createWorkflowRunnerCommand({
     return { runtime, response };
   }
 
+  async function responseForPersistedCurrentRequests(paths, current) {
+    if (!Array.isArray(current.currentRequests)) return undefined;
+    if (typeof current.currentRequestsWorkflowSignature !== 'string') return undefined;
+    if (typeof current.currentRequestsBatonSignature !== 'string') return undefined;
+    const currentWorkflowSignature = await workflowFileSignature(paths.workflowPath);
+    if (current.currentRequestsWorkflowSignature !== currentWorkflowSignature) return undefined;
+    if (current.currentRequestsBatonSignature !== contentSignature(current.baton)) return undefined;
+    const requests = structuredClone(current.currentRequests);
+    return {
+      status: requests.length > 0 ? 'needs_host_actions' : 'done',
+      requests,
+    };
+  }
+
+  async function currentResponse(paths, current, { leaseToken } = {}) {
+    const persistedResponse = await responseForPersistedCurrentRequests(paths, current);
+    if (persistedResponse) return persistedResponse;
+    const { response } = await renderCurrentHostResponse(paths, current.baton, { leaseToken });
+    return response;
+  }
+
+  async function currentRuntimeAndResponse(paths, current, { leaseToken } = {}) {
+    const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
+    const persistedResponse = await responseForPersistedCurrentRequests(paths, current);
+    if (persistedResponse) return { runtime, response: persistedResponse };
+    const rendered = runNext({
+      workflowDoc: runtime.workflow,
+      batonDoc: runtime.baton,
+      resources: resourcesWithValidatingWriter(runtime.resources, paths, { leaseToken }),
+    });
+    const response = await runnerResponseForRendered(paths, rendered, {
+      initialized: false,
+      resumed: true,
+      leaseToken,
+      includeInlineInstructions: false,
+    });
+    return { runtime, response };
+  }
+
   async function outputForCurrentState(paths) {
     await recoverDurableCommit(paths);
     const current = await readPersistedRunState(paths);

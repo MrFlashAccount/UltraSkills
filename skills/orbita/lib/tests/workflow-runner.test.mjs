@@ -312,7 +312,10 @@ test('runner: approval host instruction lists prompt input artifact content as r
   assert.doesNotMatch(response.requests[0].approvalDelivery.message, /Full Canvas body for approval\./);
   assert.doesNotMatch(JSON.stringify(response.requests[0].approvalDelivery), new RegExp(leaseToken));
   const runPaths = resolveRunPaths({ runId, workflowPath });
+  const persistedCurrentRequests = readFileSync(runPaths.currentRequestsPath, 'utf8');
   const persistedHistory = readFileSync(runPaths.historyPath, 'utf8');
+  assert.doesNotMatch(persistedCurrentRequests, /approvalDelivery/);
+  assert.doesNotMatch(persistedCurrentRequests, /Full Canvas body for approval\./);
   assert.doesNotMatch(persistedHistory, /approvalDelivery/);
   assert.doesNotMatch(persistedHistory, /Full Canvas body for approval\./);
   assert.match(response.orchestratorInstruction, /Approval request: approve/);
