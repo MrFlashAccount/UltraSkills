@@ -17,15 +17,13 @@ The canonical workflow-runner command surface is:
 - `instructions`
 - `write-output`
 - `continue`
-- `bind-agent`
-- `record-orchestrator`
 - API `listPointerTransitions` / CLI `list-pointer-transitions`
 - API `movePointer` / CLI `move-pointer`
 
 Validation and persistence behavior that supports these commands belongs to the
-current runtime architecture. `record-orchestrator` is a current bounded
-debug/history command; it does not navigate workflow state or accept worker
-output. Obsolete backward-compatibility surfaces do not.
+current runtime architecture. Orchestrator debug notes and worker binding are
+bounded `continue` side effects; they do not navigate separately and do not
+accept worker output. Obsolete backward-compatibility surfaces do not.
 
 `listPointerTransitions` and `movePointer` are runner API control-plane recovery
 surfaces for repositioning only the current baton pointer along already observed
@@ -490,14 +488,14 @@ classification policy for `Waiting for user`, `Worker running`, `Blocked`,
 `Degraded`, and `Done`. It may expose bounded, redacted history excerpts and
 artifact metadata, but it must not expose raw baton, raw history, compiled
 instructions, private prompts, token-bearing commands, hidden transcripts,
-instruction storage paths, preferred worker agent ids, bind-agent commands, or
+instruction storage paths, preferred worker agent ids, worker binding flags, or
 unnecessary host control-plane metadata.
 
 Dashboard UI is a browser-only inspection context. It consumes safe DTOs from
 the daemon API/event surface and follows `DESIGN.md`. It must not read
 `~/.orbita` directly, infer runner state from filesystem paths, include
 drag/drop movement, or show controls that resemble `next`, `continue`,
-`write-output`, `bind-agent`, retry, repair, or manual lane movement.
+`write-output`, retry, repair, or manual lane movement.
 
 ### Dashboard Relationships
 
@@ -529,7 +527,7 @@ leases, or delay `workflow-runner` control commands.
 Binding rules for dashboard code:
 
 - `lib/dashboard/**` must not import runner mutation/control entrypoints, CLI
-  command builders, lease authority, write-output/continue/next/bind-agent/
+  command builders, lease authority, write-output/continue/next/
   listPointerTransitions/movePointer API handlers, list-pointer-transitions/
   move-pointer CLI modes, or host worker lifecycle code.
 - Browser UI code must depend only on dashboard DTO contracts and browser
@@ -548,7 +546,7 @@ Binding rules for dashboard code:
 Add mechanical boundary checks for these rules when dashboard code is added.
 At minimum, tests/checks must prove absence of lease tokens, token-bearing
 commands, raw instruction commands, private prompts, hidden transcripts, raw
-instruction paths, preferred agent ids, bind-agent commands, and unnecessary
+instruction paths, preferred agent ids, worker binding flags, and unnecessary
 host control-plane metadata in browser-visible DTOs.
 
 ### Workflow Loop Policies
@@ -682,8 +680,8 @@ Architecture review must verify:
 
 Backend review must verify:
 
-- canonical `next`, `instructions`, `write-output`, `continue`, and
-  `bind-agent` behavior remains coherent
+- canonical `next`, `instructions`, `write-output`, and `continue` behavior
+  remains coherent
 - output validation, artifact metadata handling, run-state persistence, leases,
   history, and current migration semantics did not change accidentally
 - imports obey the dependency rules above

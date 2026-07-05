@@ -125,7 +125,6 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   const validRunWorker = {
     status: 'needs_host_actions',
     orchestratorInstruction: 'Execute host requests.',
-    orchestratorDebugCommand: 'bun workflow-runner.mjs record-orchestrator',
     baton: {
       cursor: 'worker_step',
       status: 'running',
@@ -138,7 +137,6 @@ test('runner host response schema enforces action-conditional reuse hint fields'
         action: 'run_worker',
         loadInstructionsCommand: 'bun workflow-runner.mjs instructions',
         preferredAgentId: null,
-        bindAgentCommand: 'bun workflow-runner.mjs bind-agent --agent-id <agent-id>',
         loadFollowupInstructionsCommand: 'bun workflow-runner.mjs instructions --follow-up',
       },
     ],
@@ -225,19 +223,11 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validRunWorker,
-    requests: [{ ...validRunWorker.requests[0], bindAgentCommand: undefined }],
-  }, { schemas: runtimeSchemas }).ok, false);
-  assert.equal(validateJsonSchema(runnerHostResponseSchema, {
-    ...validRunWorker,
     requests: [{ ...validRunWorker.requests[0], loadFollowupInstructionsCommand: undefined }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validApproval,
     requests: [{ ...validApproval.requests[0], preferredAgentId: null }],
-  }, { schemas: runtimeSchemas }).ok, false);
-  assert.equal(validateJsonSchema(runnerHostResponseSchema, {
-    ...validApproval,
-    requests: [{ ...validApproval.requests[0], bindAgentCommand: 'bun workflow-runner.mjs bind-agent' }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validApproval,

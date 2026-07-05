@@ -156,12 +156,6 @@ async function writeOutputFile({ runId, runDir, workflowPath, stepId, filePath, 
   return JSON.parse(result.stdout);
 }
 
-async function recordOrchestratorNote({ runId, workflowPath, note, label = 'record orchestrator note' }) {
-  const result = await runRunner(['record-orchestrator', '--run-id', runId, '--workflow', workflowPath], { input: JSON.stringify(note) });
-  assert.equal(result.status, 0, `${label} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
-  return JSON.parse(result.stdout);
-}
-
 async function continueWithOutputs({ runId, runDir, workflowPath, refs, label = 'continue', options = {} }) {
   const normalized = Array.isArray(refs) ? refs : [refs];
   const pendingIds = await currentRequestIds(runId, workflowPath);
@@ -541,7 +535,7 @@ test('runner: disabled debug history suppresses rich side-channel body but keeps
   assert.doesNotMatch(history, /suppressed worker reasoning/);
 });
 
-test('runner: orchestrator debug note appends bounded host rationale and deduplicates retries', async () => {
+test('runner: continue orchestrator debug note appends bounded host rationale', async () => {
   const { runId, runDir } = await runCase('orchestrator-debug-history');
   const workflowPath = path.join(tempDir, 'orchestrator-debug-history-workflow.json');
   const singleWorkflow = structuredClone(workflowDoc);
@@ -562,7 +556,7 @@ test('runner: orchestrator debug note appends bounded host rationale and dedupli
     reasoning: 'The current runner request was run_worker for prepare, so host delegated only that step before continue.',
     commands: [
       `workflow-runner instructions --lease-token ${leaseToken}`,
-      'workflow-runner bind-agent --agent-id worker-1',
+      "workflow-runner continue --bind-agent 'prepare=worker-1'",
     ],
     validation: 'worker reported accepted write-output',
     risks: 'none known',
@@ -579,29 +573,24 @@ test('runner: orchestrator debug note appends bounded host rationale and dedupli
     label: 'write prepare before orchestrator debug',
   });
 
-  assert.deepEqual(await recordOrchestratorNote({ runId, workflowPath, note }), {
-    ok: true,
-    runId,
-    recorded: true,
-  });
-  assert.deepEqual(await recordOrchestratorNote({ runId, workflowPath, note, label: 'dedupe orchestrator note' }), {
-    ok: true,
-    runId,
-    recorded: false,
-  });
+  const continued = await expectRunner([
+    'continue',
+    '--run-id', runId,
+    '--workflow', workflowPath,
+    '--orchestrator-debug-json', JSON.stringify(note),
+  ], 'continue to next orchestrator debug cycle');
+  assert.equal(continued.status, 'needs_host_actions');
+  assert.deepEqual(continued.requests.map((request) => request.stepId), ['review']);
 
   const history = readFileSync(path.join(runDir, 'history.md'), 'utf8');
-  assert.match(history, /source: workflow-runner-orchestrator/);
+  assert.match(history, /source: workflow-runner-continue-orchestrator/);
   assert.match(history, /orchestrator debug summary:/);
   assert.match(history, /spawned prepare worker and accepted its output/);
-  assert.match(history, /workflow-runner bind-agent --agent-id worker-1/);
+  assert.match(history, /workflow-runner continue --bind-agent 'prepare=worker-1'/);
   assert.doesNotMatch(history, new RegExp(leaseToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.match(history, /\[redacted-lease-token\]/);
   assert.equal((history.match(/orchestrator debug summary:/g) ?? []).length, 1);
 
-  const continued = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue to next orchestrator debug cycle');
-  assert.equal(continued.status, 'needs_host_actions');
-  assert.deepEqual(continued.requests.map((request) => request.stepId), ['review']);
   const reviewOutputPath = path.join(runDir, 'review-orchestrator-debug-output.json');
   writeJson(reviewOutputPath, workerOutput('reviewed'));
   await writeOutputFile({
@@ -612,16 +601,12 @@ test('runner: orchestrator debug note appends bounded host rationale and dedupli
     filePath: reviewOutputPath,
     label: 'write review before repeated orchestrator debug',
   });
-  assert.deepEqual(await recordOrchestratorNote({ runId, workflowPath, note, label: 'record repeated note in next host cycle' }), {
-    ok: true,
-    runId,
-    recorded: true,
-  });
-  assert.deepEqual(await recordOrchestratorNote({ runId, workflowPath, note, label: 'dedupe repeated note in next host cycle' }), {
-    ok: true,
-    runId,
-    recorded: false,
-  });
+  await expectRunner([
+    'continue',
+    '--run-id', runId,
+    '--workflow', workflowPath,
+    '--orchestrator-debug-json', JSON.stringify(note),
+  ], 'record repeated note in next host cycle');
   const nextCycleHistory = readFileSync(path.join(runDir, 'history.md'), 'utf8');
   assert.equal((nextCycleHistory.match(/orchestrator debug summary:/g) ?? []).length, 2);
 });

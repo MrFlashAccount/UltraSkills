@@ -105,14 +105,14 @@ agent = "architect"
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read the approved/current `reasons-canvas-research` artifact from `research_draft` as the research source of truth and strictly follow it.
-Produce the minimal architecture decision or structural contract required by the approved research in architecture_contract.
-Before finalizing architecture_contract or `reasons-canvas-architecture`, explicitly identify the public contract and API surfaces affected by the task: exported APIs, CLI/user-facing commands, schemas, workflow interfaces, integration boundaries, compatibility promises, and observable behavior. If code, docs, or existing contracts answer a question, inspect them instead of asking the user.
+Produce the minimal architecture decision or structural contract required by the approved research in the `reasons-canvas-architecture` artifact and a compact output.summary. Do not embed the architecture artifact body in JSON.
+Before finalizing output.summary or `reasons-canvas-architecture`, explicitly identify the public contract and API surfaces affected by the task: exported APIs, CLI/user-facing commands, schemas, workflow interfaces, integration boundaries, compatibility promises, and observable behavior. If code, docs, or existing contracts answer a question, inspect them instead of asking the user.
 When user-owned choices remain about public contract shape, API compatibility, naming, migration behavior, or accepted breakage, return outcome blocked with blocker.source_step_id = architecture_draft and the smallest focused blocker.needed question for the orchestrator to resolve through the recoverable blocker flow; include your recommended answer in blocker.summary or blocker.needed.
 For any user-answerable architecture blocker, blocker.needed must be the exact user-facing question to ask; the orchestrator must route it to the user as a question, not answer it from inference or convert it into a summary.
 After the orchestrator resolves the recoverable blocker, continue the same architecture step from the resolved public contract/API decision and proceed only when the needed decisions are resolved or evidence shows no such discussion is needed.
 When `reasons-canvas-research` exists, derive one new immutable human-facing workflow artifact named `reasons-canvas-architecture`. Copy forward research-owned Requirements and observed domain Entities as frozen input unless new evidence proves a conflict; record any correction in the new architecture artifact instead of editing the research artifact. Own the architecture-depth sections: structural Entities, Approach, Structure, Operations at planning depth, Norms, Safeguards, and remaining open tensions.
 Do not create arbitrary temp/export files for handoff; the artifact metadata/path accepted into baton is the source of truth.
-If architecture work is not needed, record the explicit no-artifact decision in architecture_contract.
+If architecture work is minimal, record the explicit minimal/no-structural-change decision in `reasons-canvas-architecture` and output.summary.
 Return ready_for_attack or blocked with blocker.source_step_id = architecture_draft.
 When revising after architecture_attack feedback or approve_architecture rejection, read feedback from input.architecture_attack and input.approve_architecture and address it explicitly while preserving frozen research inputs and approved architecture constraints.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
@@ -122,7 +122,7 @@ Input context:
 - Research artifacts, including required `reasons-canvas-research`: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}
 - Research attack verdict: ${{ input.research_attack.verdict }}
 - Human research approval: ${{ input.approve_research }}
-- Previous architecture contract: ${{ input.architecture_draft.architecture_contract | default: "No previous architecture_draft contract in input context." }}
+- Previous architecture artifacts: ${{ input.architecture_draft.artifacts | default: "No previous architecture_draft artifacts in input context." }}
 - Architecture attack feedback to address: ${{ input.architecture_attack.verdict | default: "No prior architecture_attack feedback." }}
 - Human architecture gate feedback to address: ${{ input.approve_architecture | default: "No prior approve_architecture decision or feedback." }}'''
 
@@ -144,12 +144,11 @@ kind = "worker"
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Start from a hostile prior: assume the change, proposal, draft, or packet is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
-Attack architecture_draft.architecture_contract and the `reasons-canvas-architecture` artifact when present for ownership seams, dependency direction, contract surfaces, frozen research carry-forward, architecture-owned decisions, operations clarity, and compatibility risk.
+Attack the required `reasons-canvas-architecture` artifact for ownership seams, dependency direction, contract surfaces, frozen research carry-forward, architecture-owned decisions, operations clarity, and compatibility risk. Treat a missing `reasons-canvas-architecture` artifact as a blocking architecture failure.
 Return approved, needs_revision, or blocked.
 If blocked, set blocker.source_step_id = architecture_attack.
 
 Input context:
-- Architecture contract under review: ${{ input.architecture_draft.architecture_contract }}
 - Architecture artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}'''
 
 [steps.architecture_attack.output]
@@ -169,13 +168,13 @@ kind = "approval"
 
 [steps.approve_architecture.input]
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Show architecture_draft.architecture_contract, the `reasons-canvas-architecture` artifact when present, and architecture_attack.verdict to the user.
-If the user asks for an architecture file, retrieve/export the existing artifact referenced by baton/output artifacts, limited to `reasons-canvas-architecture` when present; otherwise use architecture_draft.architecture_contract. Do not ask a worker to recreate it in a temp path.
+Show architecture_draft.summary, the `reasons-canvas-architecture` artifact, and architecture_attack.verdict to the user.
+If the user asks for an architecture file, retrieve/export the existing artifact referenced by baton/output artifacts, limited to `reasons-canvas-architecture`. Do not ask a worker to recreate it in a temp path.
 Continue only after explicit approval when the slice is non-trivial or architecture-sensitive.
 Return approval approved to continue to planning_draft, rejected to revise architecture_draft, or blocked with a blocker.
 
 Input context:
-- Architecture contract for approval: ${{ input.architecture_draft.architecture_contract }}
+- Architecture summary for approval: ${{ input.architecture_draft.summary }}
 - Architecture attack verdict: ${{ input.architecture_attack.verdict }}
 - Architecture artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}'''
 
@@ -196,7 +195,7 @@ kind = "worker"
 [steps.planning_draft.input]
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Produce the implementation plan contract for approval from the approved architecture_contract and `reasons-canvas-architecture` when present. Treat `reasons-canvas-architecture` as an immutable source contract when present: do not edit it, complete missing Canvas sections, or read earlier research artifacts separately. Convert the approved architecture contract/artifact into workstreams, owners, verification, rollback, and reviewer selection.
+Produce the implementation plan contract for approval from the approved `reasons-canvas-architecture` artifact. Treat `reasons-canvas-architecture` as an immutable source contract: do not edit it, complete missing Canvas sections, or read earlier research artifacts separately. Convert the approved architecture artifact into workstreams, owners, verification, rollback, and reviewer selection.
 The step id remains planning_draft for compatibility, but once approve_plan approves this output, downstream steps must treat it as the final approved plan contract. selected_implementation_steps must contain only unique canonical implementation step ids needed for the plan: backend_implementation, frontend_implementation, architecture_artifact_update. implementation_route must be the normalized route for exactly that unique selected set: backend, frontend, architecture, backend_frontend, backend_architecture, frontend_architecture, or all.
 Collapse overlapping same-role work into one canonical task; do not create duplicate backend/frontend/architecture workers.
 If duplicate same-role work cannot be safely collapsed, return blocked with blocker.source_step_id = planning_draft. selected_review_steps must explicitly contain the unique reviewers that must run after implementation; implementation_join must not invent or recompute reviewers.
@@ -208,7 +207,6 @@ Loop continuity across workflow loop iterations is prompt based: rely only on wo
 If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = planning_draft and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
 Input context:
-- Approved architecture contract: ${{ input.architecture_draft.architecture_contract }}
 - Architecture artifacts, including `reasons-canvas-architecture` when present: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}
 - Architecture attack verdict: ${{ input.architecture_attack.verdict }}
 - Previous implementation plan: ${{ input.planning_draft.implementation_plan | default: "No previous planning_draft implementation plan in input context." }}
@@ -336,6 +334,7 @@ Return blocked only when fixing the failure requires missing external input, per
 If a required source row cannot be satisfied in the assigned backend scope, or if implementation requires a deviation or exposes a contradiction in the approved contract, return blocked with the smallest concrete approval question instead of redesigning silently.
 Treat the approved implementation plan as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the plan, return blocked or request an approved plan revision.
 Return implemented or blocked with blocker.source_step_id = backend_implementation.
+When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
 When rerun from review_join needs_changes, read input.review_join and reviewer outputs, apply only the required changes for this step, and preserve all approved contracts.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
 If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = backend_implementation and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
@@ -345,6 +344,7 @@ Input context:
 - Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Dispatch route outcome: ${{ input.implementation_dispatch.outcome }}
+- Previous backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "No previous backend_implementation artifacts in input context." }}
 - Joined review decision requiring rework: ${{ input.review_join.verdict | default: "No review_join rework decision in input context." }}
 - Architect review feedback: ${{ input.architect_review.verdict | default: "No architect_review feedback in input context." }}
 - Backend review feedback: ${{ input.backend_review.verdict | default: "No backend_review feedback in input context." }}
@@ -375,6 +375,7 @@ Return blocked only when fixing the failure requires missing external input, per
 If a required source row cannot be satisfied in the assigned frontend scope, or if implementation requires a deviation or exposes a contradiction in the approved contract, return blocked with the smallest concrete approval question instead of redesigning silently.
 Treat the approved implementation plan as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the plan, return blocked or request an approved plan revision.
 Return implemented or blocked with blocker.source_step_id = frontend_implementation.
+When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
 When rerun from review_join needs_changes, read input.review_join and reviewer outputs, apply only the required changes for this step, and preserve all approved contracts.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
 If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = frontend_implementation and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
@@ -384,6 +385,7 @@ Input context:
 - Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Dispatch route outcome: ${{ input.implementation_dispatch.outcome }}
+- Previous frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "No previous frontend_implementation artifacts in input context." }}
 - Joined review decision requiring rework: ${{ input.review_join.verdict | default: "No review_join rework decision in input context." }}
 - Architect review feedback: ${{ input.architect_review.verdict | default: "No architect_review feedback in input context." }}
 - Backend review feedback: ${{ input.backend_review.verdict | default: "No backend_review feedback in input context." }}
@@ -411,6 +413,7 @@ Do not redesign.
 Do not edit, complete, or reinterpret REASONS artifacts unless the approved implementation plan explicitly selects an architecture artifact update for that exact artifact; otherwise treat them as immutable inputs.
 Read prior step outputs from input.<step_id> fields only.
 Return implemented or blocked with blocker.source_step_id = architecture_artifact_update.
+When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
 When rerun from review_join needs_changes, read input.review_join and reviewer outputs, apply only the required changes for this step, and preserve all approved contracts.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
 If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = architecture_artifact_update and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
@@ -420,6 +423,7 @@ Input context:
 - Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Dispatch route outcome: ${{ input.implementation_dispatch.outcome }}
+- Previous architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "No previous architecture_artifact_update artifacts in input context." }}
 - Joined review decision requiring rework: ${{ input.review_join.verdict | default: "No review_join rework decision in input context." }}
 - Architect review feedback: ${{ input.architect_review.verdict | default: "No architect_review feedback in input context." }}
 - Backend review feedback: ${{ input.backend_review.verdict | default: "No backend_review feedback in input context." }}
@@ -451,9 +455,9 @@ Input context:
 - Approved implementation plan: ${{ input.planning_draft.implementation_plan }}
 - Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Backend implementation output: ${{ input.backend_implementation.implementation_handoff | default: "backend_implementation was not selected or has not produced output." }}
-- Frontend implementation output: ${{ input.frontend_implementation.implementation_handoff | default: "frontend_implementation was not selected or has not produced output." }}
-- Architecture artifact update output: ${{ input.architecture_artifact_update.implementation_handoff | default: "architecture_artifact_update was not selected or has not produced output." }}'''
+- Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
+- Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
+- Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}'''
 
 [steps.implementation_join.output]
 template = "../../shared/templates/reviewer-handoff-template.md"
@@ -483,11 +487,11 @@ Input context:
 - Skipped review steps: ${{ input.planning_draft.skipped_review_steps | default: "No skipped reviewers recorded." }}
 - Review plan: ${{ input.planning_draft.review_plan }}
 - Previous review join verdict: ${{ input.review_join.verdict | default: "No prior review_join verdict." }}
-- Backend implementation evidence: ${{ input.backend_implementation.implementation_handoff | default: "backend_implementation was not selected or has not produced output." }}
+- Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
-- Frontend implementation evidence: ${{ input.frontend_implementation.implementation_handoff | default: "frontend_implementation was not selected or has not produced output." }}
+- Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
 - Frontend changed files: ${{ input.frontend_implementation.changed_files | default: "frontend_implementation changed files are not available in input context." }}
-- Architecture artifact update evidence: ${{ input.architecture_artifact_update.implementation_handoff | default: "architecture_artifact_update was not selected or has not produced output." }}
+- Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.review_dispatch.output]
@@ -505,21 +509,21 @@ role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review implementation against approved architecture decision, ownership seams, dependency direction, compatibility surfaces, and artifact obligations.
 Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = architect_review.
-Read architecture_draft, architecture_attack, and approve_architecture when present; fail on drift between the approved architecture contract and implementation/review evidence.
+Read architecture_draft, architecture_attack, and approve_architecture when present; fail on drift between the approved architecture artifact and implementation/review evidence.
 
 Input context:
-- Approved architecture contract: ${{ input.architecture_draft.architecture_contract }}
+- Approved architecture artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}
 - Architecture attack verdict: ${{ input.architecture_attack.verdict }}
 - Human architecture approval: ${{ input.approve_architecture }}
 - Approved implementation plan: ${{ input.planning_draft.implementation_plan }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Architect reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.architect_review | default: "No architect-specific reviewer handoff was produced." }}
 - Review dispatch selection: ${{ input.review_dispatch.verdict }}
-- Backend implementation evidence: ${{ input.backend_implementation.implementation_handoff | default: "backend_implementation was not selected or has not produced output." }}
+- Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
-- Frontend implementation evidence: ${{ input.frontend_implementation.implementation_handoff | default: "frontend_implementation was not selected or has not produced output." }}
+- Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
 - Frontend changed files: ${{ input.frontend_implementation.changed_files | default: "frontend_implementation changed files are not available in input context." }}
-- Architecture artifact update evidence: ${{ input.architecture_artifact_update.implementation_handoff | default: "architecture_artifact_update was not selected or has not produced output." }}
+- Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.architect_review.output]
@@ -542,11 +546,11 @@ Input context:
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Backend reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.backend_review | default: "No backend-specific reviewer handoff was produced." }}
 - Review dispatch selection: ${{ input.review_dispatch.verdict }}
-- Backend implementation evidence: ${{ input.backend_implementation.implementation_handoff | default: "backend_implementation was not selected or has not produced output." }}
+- Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
-- Frontend implementation evidence: ${{ input.frontend_implementation.implementation_handoff | default: "frontend_implementation was not selected or has not produced output." }}
+- Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
 - Frontend changed files: ${{ input.frontend_implementation.changed_files | default: "frontend_implementation changed files are not available in input context." }}
-- Architecture artifact update evidence: ${{ input.architecture_artifact_update.implementation_handoff | default: "architecture_artifact_update was not selected or has not produced output." }}
+- Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.backend_review.output]
@@ -569,11 +573,11 @@ Input context:
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Frontend reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.frontend_review | default: "No frontend-specific reviewer handoff was produced." }}
 - Review dispatch selection: ${{ input.review_dispatch.verdict }}
-- Backend implementation evidence: ${{ input.backend_implementation.implementation_handoff | default: "backend_implementation was not selected or has not produced output." }}
+- Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
-- Frontend implementation evidence: ${{ input.frontend_implementation.implementation_handoff | default: "frontend_implementation was not selected or has not produced output." }}
+- Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
 - Frontend changed files: ${{ input.frontend_implementation.changed_files | default: "frontend_implementation changed files are not available in input context." }}
-- Architecture artifact update evidence: ${{ input.architecture_artifact_update.implementation_handoff | default: "architecture_artifact_update was not selected or has not produced output." }}
+- Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.frontend_review.output]
@@ -596,11 +600,11 @@ Input context:
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Frontend taste reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.frontend_taste_review | default: "No frontend-taste-specific reviewer handoff was produced." }}
 - Review dispatch selection: ${{ input.review_dispatch.verdict }}
-- Backend implementation evidence: ${{ input.backend_implementation.implementation_handoff | default: "backend_implementation was not selected or has not produced output." }}
+- Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
-- Frontend implementation evidence: ${{ input.frontend_implementation.implementation_handoff | default: "frontend_implementation was not selected or has not produced output." }}
+- Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
 - Frontend changed files: ${{ input.frontend_implementation.changed_files | default: "frontend_implementation changed files are not available in input context." }}
-- Architecture artifact update evidence: ${{ input.architecture_artifact_update.implementation_handoff | default: "architecture_artifact_update was not selected or has not produced output." }}
+- Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.frontend_taste_review.output]
@@ -623,11 +627,11 @@ Input context:
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Security reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.security_review | default: "No security-specific reviewer handoff was produced." }}
 - Review dispatch selection: ${{ input.review_dispatch.verdict }}
-- Backend implementation evidence: ${{ input.backend_implementation.implementation_handoff | default: "backend_implementation was not selected or has not produced output." }}
+- Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
-- Frontend implementation evidence: ${{ input.frontend_implementation.implementation_handoff | default: "frontend_implementation was not selected or has not produced output." }}
+- Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
 - Frontend changed files: ${{ input.frontend_implementation.changed_files | default: "frontend_implementation changed files are not available in input context." }}
-- Architecture artifact update evidence: ${{ input.architecture_artifact_update.implementation_handoff | default: "architecture_artifact_update was not selected or has not produced output." }}
+- Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.security_review.output]
@@ -650,11 +654,11 @@ Input context:
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Privacy reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.privacy_review | default: "No privacy-specific reviewer handoff was produced." }}
 - Review dispatch selection: ${{ input.review_dispatch.verdict }}
-- Backend implementation evidence: ${{ input.backend_implementation.implementation_handoff | default: "backend_implementation was not selected or has not produced output." }}
+- Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
-- Frontend implementation evidence: ${{ input.frontend_implementation.implementation_handoff | default: "frontend_implementation was not selected or has not produced output." }}
+- Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
 - Frontend changed files: ${{ input.frontend_implementation.changed_files | default: "frontend_implementation changed files are not available in input context." }}
-- Architecture artifact update evidence: ${{ input.architecture_artifact_update.implementation_handoff | default: "architecture_artifact_update was not selected or has not produced output." }}
+- Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.privacy_review.output]
@@ -677,11 +681,11 @@ Input context:
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - QA reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.qa_review | default: "No QA-specific reviewer handoff was produced." }}
 - Review dispatch selection: ${{ input.review_dispatch.verdict }}
-- Backend implementation evidence: ${{ input.backend_implementation.implementation_handoff | default: "backend_implementation was not selected or has not produced output." }}
+- Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
-- Frontend implementation evidence: ${{ input.frontend_implementation.implementation_handoff | default: "frontend_implementation was not selected or has not produced output." }}
+- Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
 - Frontend changed files: ${{ input.frontend_implementation.changed_files | default: "frontend_implementation changed files are not available in input context." }}
-- Architecture artifact update evidence: ${{ input.architecture_artifact_update.implementation_handoff | default: "architecture_artifact_update was not selected or has not produced output." }}
+- Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.qa_review.output]

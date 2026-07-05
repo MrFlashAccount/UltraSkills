@@ -138,7 +138,7 @@ If the instructions cannot be loaded, stop with an error and do not continue.
 ```
 
 - Only the selected request instruction command may be substituted. The final worker prompt must contain no other text.
-- After the actual worker id is known, run `bindAgentCommand` after replacing only literal `<agent-id>` with the shell-quoted actual worker id.
+- After the actual worker id is known, pass it through the latest runner-provided `continue --bind-agent '<step-id>=<agent-id>'` flag; do not run a separate binding command when stdout provides the combined continue command.
 - Treat `preferredAgentId` and `baton.workerBindings[stepId]` as advisory reuse hints only; do not create attempt ids, agent objects, lifecycle/session registries, transcripts, or output state.
 - Workers use the validating `write-output` command from loaded instructions. `write-output` returns acceptance JSON or validation errors only; workers never call `continue`.
 - If a worker needs user input before validated output, ask the focused question and forward the answer into the same worker session. Do not replace that worker or let workers treat themselves as direct user-facing agents.

@@ -379,7 +379,12 @@ export function createWorkflowRunnerCommand({
     return resolutions;
   }
 
-  function outputOrRecoveryForAcceptedState(currentBaton, requests, { isPreparedParallelContinuation, workflow, runsRoot }) {
+  function withContinuationContext(value, context) {
+    return { ...value, ...context };
+  }
+
+  function outputOrRecoveryForAcceptedState(currentBaton, requests, { isPreparedParallelContinuation, workflow, runsRoot, runtime, response, currentHistoryText }) {
+    const context = { runtime, response, currentHistoryText };
     const parsedOutputRefs = parsedOutputRefsForAcceptedState(currentBaton, requests);
     assertNamedOutputRefsMatchRequests(parsedOutputRefs, requests);
     const { valuesByRequestId, missing } = acceptedOutputsForRequests(currentBaton, requests);
@@ -397,7 +402,7 @@ export function createWorkflowRunnerCommand({
       const historyOutput = requests
         .map((request) => `accepted:${stepIdForRequest(request)}`)
         .join(', ');
-      return { recoveryResolutions, historyOutput, currentBaton };
+      return withContinuationContext({ recoveryResolutions, historyOutput, currentBaton }, context);
     }
 
     const recoverableWorkerBlockers = recoverableWorkerBlockersForAcceptedState({
@@ -415,10 +420,13 @@ export function createWorkflowRunnerCommand({
         valuesByRequestId,
         recoverableWorkerBlockers,
       });
-      return { recoverableWorkerBlockers, acceptedOutputs, historyOutput, currentBaton };
+      return withContinuationContext({ recoverableWorkerBlockers, acceptedOutputs, historyOutput, currentBaton }, context);
     }
 
-    return outputForAcceptedState(currentBaton, requests, { isPreparedParallelContinuation });
+    return withContinuationContext(
+      outputForAcceptedState(currentBaton, requests, { isPreparedParallelContinuation }),
+      context,
+    );
   }
 
   async function responseForPersistedCurrentRequests(paths, current) {
@@ -472,6 +480,9 @@ export function createWorkflowRunnerCommand({
       isPreparedParallelContinuation,
       workflow: runtime.workflow,
       runsRoot: paths.runsRoot,
+      runtime,
+      response,
+      currentHistoryText: current.history?.text,
     });
   }
 
@@ -540,11 +551,13 @@ export function createWorkflowRunnerCommand({
     return nextBaton;
   }
 
-  async function continueRunInternal({ runId, workflowPath, output, includeDiagnostics = false, leaseToken, now = new Date(), runsRoot } = {}) {
+  async function continueRunInternal({ runId, workflowPath, output, includeDiagnostics = false, bindAgents, orchestratorDebugJson, orchestratorDebugFile, leaseToken, now = new Date(), runsRoot } = {}) {
     await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
     if (output !== undefined && (!Array.isArray(output) || output.length > 0)) {
       throw new Error('workflow-runner continue no longer accepts --output; run workflow-runner write-output for each current request, then continue without --output');
     }
+    const normalizedBindAgents = normalizeBindAgentSpecs(bindAgents);
+    const debugNote = await orchestratorDebugNote({ orchestratorDebugJson, orchestratorDebugFile });
     const lockPaths = resolveRunPaths({ runId, runsRoot });
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
     return withRunStateLock(lockPaths, async () => {
@@ -552,7 +565,15 @@ export function createWorkflowRunnerCommand({
       await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
       await ensureRunFiles(paths);
       await recoverDurableCommit(paths);
-      const { outputValue, historyOutput, currentBaton, recoverableWorkerBlockers, acceptedOutputs, recoveryResolutions } = await outputForCurrentState(paths);
+      const continuation = await outputForCurrentState(paths);
+      const { outputValue, historyOutput, recoverableWorkerBlockers, acceptedOutputs, recoveryResolutions } = continuation;
+      const preActions = applyWorkerBindingsForContinue({
+        baton: continuation.currentBaton,
+        runtime: continuation.runtime,
+        response: continuation.response,
+        bindAgents: normalizedBindAgents,
+      });
+      const currentBaton = preActions.baton;
       const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: currentBaton });
       if (recoveryResolutions) {
         const recoveryBaton = batonWithRecoveryResolutions(runtime.baton, recoveryResolutions);
@@ -561,6 +582,14 @@ export function createWorkflowRunnerCommand({
         const rendered = runNext({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
         const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true });
         const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
+        await writeContinuePreActionHistory(paths, {
+          bindingHistoryEntries: preActions.entries,
+          debugNote,
+          baton: currentBaton,
+          response: continuation.response,
+          currentHistoryText: continuation.currentHistoryText,
+          leaseToken,
+        });
         await writePersistedRunStateUpdate(paths, {
           baton: response.baton,
           currentRequests: response.requests ?? [],
@@ -582,6 +611,14 @@ export function createWorkflowRunnerCommand({
         const rendered = runNext({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
         const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true });
         const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
+        await writeContinuePreActionHistory(paths, {
+          bindingHistoryEntries: preActions.entries,
+          debugNote,
+          baton: currentBaton,
+          response: continuation.response,
+          currentHistoryText: continuation.currentHistoryText,
+          leaseToken,
+        });
         await writePersistedRunStateUpdate(paths, {
           baton: response.baton,
           currentRequests: response.requests ?? [],
@@ -602,6 +639,14 @@ export function createWorkflowRunnerCommand({
 
       const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true });
       const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
+      await writeContinuePreActionHistory(paths, {
+        bindingHistoryEntries: preActions.entries,
+        debugNote,
+        baton: currentBaton,
+        response: continuation.response,
+        currentHistoryText: continuation.currentHistoryText,
+        leaseToken,
+      });
       await writePersistedRunStateUpdate(paths, {
         baton: applied.baton,
         currentRequests: response.requests ?? [],
@@ -786,6 +831,34 @@ export function createWorkflowRunnerCommand({
     }
   }
 
+  function normalizeBindAgentSpecs(bindAgents) {
+    if (bindAgents === undefined) return [];
+    const specs = Array.isArray(bindAgents) ? bindAgents : [bindAgents];
+    return specs.map((spec) => {
+      const text = String(spec ?? '');
+      const separator = text.indexOf('=');
+      if (separator <= 0 || separator === text.length - 1) {
+        throw new Error("continue --bind-agent must use '<step-id>=<agent-id>'");
+      }
+      const stepId = text.slice(0, separator);
+      const agentId = text.slice(separator + 1);
+      assertSafeStepId(stepId);
+      assertAgentId(agentId);
+      return { stepId, agentId };
+    });
+  }
+
+  async function orchestratorDebugNote({ orchestratorDebugJson, orchestratorDebugFile }) {
+    if (orchestratorDebugJson === undefined && orchestratorDebugFile === undefined) return undefined;
+    if (orchestratorDebugJson !== undefined && orchestratorDebugFile !== undefined) {
+      throw new Error('continue accepts only one orchestrator debug source');
+    }
+    const json = orchestratorDebugJson !== undefined
+      ? orchestratorDebugJson
+      : await readText(orchestratorDebugFile, '--orchestrator-debug-file');
+    return parseOutputJson(json);
+  }
+
   function batonWithWorkerBinding(baton, bindingKey, agentId) {
     const nextBaton = structuredClone(baton);
     nextBaton.workerBindings = {
@@ -795,6 +868,39 @@ export function createWorkflowRunnerCommand({
     return nextBaton;
   }
 
+  function applyWorkerBindingsForContinue({ baton, runtime, response, bindAgents }) {
+    let nextBaton = baton;
+    const entries = [];
+    for (const { stepId, agentId } of bindAgents) {
+      const request = currentRequestForStep(response, stepId);
+      if (!request) throw staleWorkflowCommandError(stepId, response);
+      if (request.action !== 'run_worker') throw new Error(`workflow step '${stepId}' is not a run_worker request`);
+      const acceptedStepId = stepIdForRequest(request);
+      const workflowStepId = workflowStepIdForRequest(request);
+      const bindingKey = request.ownerStepId ? acceptedStepId : workerBindingKeyForStep(workflowStepId, runtime.workflow.steps?.[workflowStepId]);
+      nextBaton = batonWithWorkerBinding(nextBaton, bindingKey, agentId);
+      entries.push({ acceptedStepId, baton: nextBaton, requests: response.requests ?? [] });
+    }
+    return { baton: nextBaton, entries };
+  }
+
+  async function writeContinuePreActionHistory(paths, { bindingHistoryEntries, debugNote, baton, response, currentHistoryText, leaseToken }) {
+    for (const entry of bindingHistoryEntries) {
+      await writePersistedRunStateUpdate(paths, {
+        baton: entry.baton,
+        history: { source: 'workflow-runner-continue-bind-agent', baton: entry.baton, output: `bound-agent:${entry.acceptedStepId}`, requests: entry.requests },
+      });
+    }
+    if (debugNote === undefined) return;
+    const details = orchestratorDebugHistoryDetails({ note: debugNote, leaseToken });
+    const historyScope = latestNonOrchestratorHistoryScope(currentHistoryText);
+    await appendHistoryOnce(
+      paths,
+      { source: 'workflow-runner-continue-orchestrator', baton, requests: response.requests ?? [], details },
+      { dedupeKey: `workflow-runner-continue-orchestrator:${historyScope}:${details.join('\n')}` },
+    );
+  }
+
   function latestNonOrchestratorHistoryScope(historyText) {
     if (typeof historyText !== 'string' || historyText.length === 0) return 'empty-history';
     const starts = [...historyText.matchAll(/^## /gm)].map((match) => match.index);
@@ -802,7 +908,7 @@ export function createWorkflowRunnerCommand({
       const start = starts[index];
       const end = starts[index + 1] ?? historyText.length;
       const entry = historyText.slice(start, end);
-      if (!entry.includes('\n- source: workflow-runner-orchestrator\n')) return entry.trim();
+      if (!entry.includes('\n- source: workflow-runner-continue-orchestrator\n')) return entry.trim();
     }
     return 'orchestrator-only-history';
   }
@@ -877,80 +983,6 @@ export function createWorkflowRunnerCommand({
     return publicApiCall(() => writeOutputInternal(options), { ...options, command: 'write-output' });
   }
 
-  async function recordOrchestratorInternal({ runId, workflowPath, json, leaseToken, now = new Date(), runsRoot } = {}) {
-    const note = parseOutputJson(json);
-    const lockPaths = resolveRunPaths({ runId, runsRoot });
-    await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
-    return withRunStateLock(lockPaths, async () => {
-      const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
-      await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
-      await ensureRunFiles(paths);
-      await recoverDurableCommit(paths);
-      const current = await readPersistedRunState(paths);
-      const response = await currentResponse(paths, current, { leaseToken });
-      if (response.status !== 'needs_host_actions') throw new Error(`current runner response is '${response.status}', not needs_host_actions`);
-      const details = orchestratorDebugHistoryDetails({ note, leaseToken });
-      const historyScope = latestNonOrchestratorHistoryScope(current.history?.text);
-      const recorded = await appendHistoryOnce(
-        paths,
-        { source: 'workflow-runner-orchestrator', baton: current.baton, requests: response.requests ?? [], details },
-        { dedupeKey: `workflow-runner-orchestrator:${historyScope}:${details.join('\n')}` },
-      );
-      const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
-      await upsertRunIndexEntry(paths, { workflowPath: paths.workflowPath, workerLease });
-      return {
-        ok: true,
-        runId: paths.runId,
-        recorded,
-      };
-    });
-  }
-
-  async function recordOrchestrator(options = {}) {
-    return publicApiCall(() => recordOrchestratorInternal(options), { ...options, command: 'record-orchestrator' });
-  }
-
-  async function bindAgentInternal({ runId, workflowPath, stepId, agentId, leaseToken, now = new Date(), runsRoot } = {}) {
-    await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
-    assertSafeStepId(stepId);
-    assertAgentId(agentId);
-    const lockPaths = resolveRunPaths({ runId, runsRoot });
-    await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
-    return withRunStateLock(lockPaths, async () => {
-      const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
-      await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
-      await ensureRunFiles(paths);
-      await recoverDurableCommit(paths);
-      const current = await readPersistedRunState(paths);
-      const { runtime, response } = await currentRuntimeAndResponse(paths, current, { leaseToken });
-      if (response.status !== 'needs_host_actions') throw staleWorkflowCommandError(stepId, response);
-      const request = currentRequestForStep(response, stepId);
-      if (!request) throw staleWorkflowCommandError(stepId, response);
-      if (request.action !== 'run_worker') throw new Error(`workflow step '${stepId}' is not a run_worker request`);
-      const acceptedStepId = stepIdForRequest(request);
-      const workflowStepId = workflowStepIdForRequest(request);
-      const bindingKey = request.ownerStepId ? acceptedStepId : workerBindingKeyForStep(workflowStepId, runtime.workflow.steps?.[workflowStepId]);
-      const baton = batonWithWorkerBinding(current.baton, bindingKey, agentId);
-      await writePersistedRunStateUpdate(paths, {
-        baton,
-        currentRequests: response.requests ?? [],
-        history: { source: 'workflow-runner-bind-agent', baton, output: `bound-agent:${acceptedStepId}`, requests: response.requests ?? [] },
-      });
-      const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
-      await upsertRunIndexEntry(paths, { workflowPath: paths.workflowPath, workerLease });
-      return {
-        ok: true,
-        runId: paths.runId,
-        stepId: acceptedStepId,
-        bound: true,
-      };
-    });
-  }
-
-  async function bindAgent(options = {}) {
-    return publicApiCall(() => bindAgentInternal(options), { ...options, command: 'bind-agent' });
-  }
-
   async function loadInstructionsInternal({ runId, workflowPath, stepId, followUp = false, leaseToken, now = new Date(), runsRoot } = {}) {
     await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
     assertSafeStepId(stepId);
@@ -982,13 +1014,11 @@ export function createWorkflowRunnerCommand({
   }
 
   return {
-    bindAgent,
     continueRun,
     listPointerTransitions,
     loadInstructions,
     movePointer,
     next,
-    recordOrchestrator,
     writeOutput,
   };
 }

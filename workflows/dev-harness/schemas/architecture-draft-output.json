@@ -14,67 +14,32 @@
       "description": "Producer must emit the single enum value that reflects the completed stage state; use blocked only when blocker explains the recoverable pause.",
       "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when this says blocked or needs revision."
     },
-    "architecture_contract": {
-      "type": "object",
-      "required": [
-        "decision",
-        "entities",
-        "boundaries",
-        "non_goals"
-      ],
-      "properties": {
-        "decision": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Producer must state the selected architecture approach or routing conclusion, including required or deferred architecture artifacts.",
-          "x-usage": "Treat this as the proposed structural direction. Do not freeze it until the contract receives an approval/pass outcome."
-        },
-        "entities": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          },
-          "description": "Producer must list architecture entities, ownership zones, or contract surfaces affected by the scoped task.",
-          "x-usage": "Use these as the structural surfaces that need coverage. Do not infer file-level ownership from vague entity names alone."
-        },
-        "boundaries": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "Producer must list dependencies, seams, ownership rules, and constraints the implementation must not violate.",
-          "x-usage": "Treat these as constraints for later work unless a newer approved contract changes them. Stop and report if they conflict with the assigned task."
-        },
-        "non_goals": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "Producer must list explicit exclusions for this architecture slice.",
-          "x-usage": "Treat these as excluded scope. Do not implement or request work for excluded items unless a newer approved contract changes them."
-        }
-      },
-      "additionalProperties": true,
-      "description": "Producer must draft the architecture contract for the scoped implementation, covering decisions, entities, boundaries, and non-goals.",
-      "x-usage": "Treat this as a draft structural contract until an approval/pass outcome freezes it. Use it to constrain later work; do not treat embedded implementation detail as edit instructions."
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Producer must summarize the architecture artifact decision and handoff in concise human-readable form without embedding the artifact body.",
+      "x-usage": "Use this as orientation metadata only. The reasons-canvas-architecture artifact is the source of truth for review, approval, and planning."
     },
     "artifacts": {
       "type": "array",
       "items": {
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
       },
-      "description": "Producer may emit named structured artifacts created by this stage when they are part of the handoff. When a research REASONS artifact exists, emit the new reasons-canvas-architecture artifact.",
-      "x-usage": "Use these as architecture-owned immutable artifacts to preserve or pass along. Do not treat them as routing decisions unless another field explicitly references them."
-    },
-    "results": {
-      "type": "array",
-      "items": {
-        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
-      },
-      "description": "Producer may emit compact structured results, decisions, or evidence summaries created by this stage.",
-      "x-usage": "Use these as supporting evidence or compact summaries. Do not let them override outcome, selected steps, blockers, or approved contracts."
+      "description": "Producer must emit artifact metadata for the required immutable reasons-canvas-architecture artifact when outcome is ready_for_attack.",
+      "x-usage": "Emit only artifact metadata here; the full architecture contract body lives in the referenced artifact file.",
+      "minItems": 1,
+      "maxItems": 1,
+      "contains": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "const": "reasons-canvas-architecture"
+          }
+        }
+      }
     },
     "blocker": {
       "type": "object",
@@ -139,7 +104,8 @@
       },
       "then": {
         "required": [
-          "architecture_contract"
+          "summary",
+          "artifacts"
         ]
       }
     },
