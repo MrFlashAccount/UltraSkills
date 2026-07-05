@@ -11,7 +11,7 @@ function fail(message) {
 }
 
 function usage() {
-  return 'usage: bun ./lib/entrypoints/cli/workflow-runner.mjs next --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--user-prompt <text> | --user-prompt-file <path>] [--lease-token <token> + diagnostics metadata] | continue --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--lease-token <token> + diagnostics metadata] | instructions --run-id <id> --step-id <id> [--follow-up] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | bind-agent --run-id <id> --step-id <id> --agent-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | write-output --run-id <id> --step-id <id> [--json <json>] [--debug-summary-file <path>] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | record-orchestrator --run-id <id> [--json <json>] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | list-pointer-transitions --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | move-pointer --run-id <id> --transition-id <id> [--acknowledge-retained-state] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata]';
+  return 'usage: bun ./lib/entrypoints/cli/workflow-runner.mjs next --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--user-prompt <text> | --user-prompt-file <path>] [--lease-token <token> + diagnostics metadata] | continue --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--bind-agent <step-id=agent-id>...] [--orchestrator-debug-json <json> | --orchestrator-debug-file <path>] [--lease-token <token> + diagnostics metadata] | instructions --run-id <id> --step-id <id> [--follow-up] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | bind-agent --run-id <id> --step-id <id> --agent-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | write-output --run-id <id> --step-id <id> [--json <json>] [--debug-summary-file <path>] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | record-orchestrator --run-id <id> [--json <json>] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | list-pointer-transitions --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | move-pointer --run-id <id> --transition-id <id> [--acknowledge-retained-state] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata]';
 }
 
 async function readStdin() {
@@ -38,6 +38,9 @@ function parseCliArgs(argv) {
         'user-prompt': { type: 'string' },
         'user-prompt-file': { type: 'string' },
         'debug-summary-file': { type: 'string' },
+        'orchestrator-debug-json': { type: 'string' },
+        'orchestrator-debug-file': { type: 'string' },
+        'bind-agent': { type: 'string', multiple: true },
         'transition-id': { type: 'string' },
         'acknowledge-retained-state': { type: 'boolean', default: false },
         owner: { type: 'string' },
@@ -62,6 +65,10 @@ function parseCliArgs(argv) {
     if (!['next', 'continue'].includes(mode) && parsed.values['only-instructions']) fail(usage());
     if (!['write-output', 'record-orchestrator'].includes(mode) && parsed.values.json !== undefined) fail(usage());
     if (mode !== 'write-output' && parsed.values['debug-summary-file'] !== undefined) fail(usage());
+    if (mode !== 'continue' && parsed.values['orchestrator-debug-json'] !== undefined) fail(usage());
+    if (mode !== 'continue' && parsed.values['orchestrator-debug-file'] !== undefined) fail(usage());
+    if (parsed.values['orchestrator-debug-json'] !== undefined && parsed.values['orchestrator-debug-file'] !== undefined) fail(usage());
+    if (mode !== 'continue' && parsed.values['bind-agent'] !== undefined) fail(usage());
     if (!['next', 'continue'].includes(mode) && parsed.values.diagnostics) fail(usage());
     if (mode === 'move-pointer' && !hasTransitionId) fail(usage());
     if (mode !== 'move-pointer' && hasTransitionId) fail(usage());
@@ -158,6 +165,9 @@ try {
       includeDiagnostics: values.diagnostics,
       userPrompt: values['user-prompt'],
       userPromptFile: values['user-prompt-file'],
+      bindAgents: values['bind-agent'],
+      orchestratorDebugJson: values['orchestrator-debug-json'],
+      orchestratorDebugFile: values['orchestrator-debug-file'],
       ...leaseArgs(values),
     });
     writeHostResponse(response, { onlyInstructions: values['only-instructions'] });

@@ -33,7 +33,7 @@ function requestInstructionBlock(request) {
     if (request.loadFollowupInstructionsCommand) {
       lines.push(`  load follow-up instructions when restoring the preferred worker: ${request.loadFollowupInstructionsCommand}`);
     }
-    if (request.bindAgentCommand) lines.push(`  bind actual worker id after dispatch: ${request.bindAgentCommand}`);
+    lines.push(`  pass actual worker id to continue: --bind-agent '${request.stepId}=<agent-id>'`);
     if (request.recoverableBlocker) lines.push(`  recoverable blocker: ${JSON.stringify(request.recoverableBlocker)}`);
     if (request.shard) lines.push(`  shard: ${JSON.stringify(request.shard)}`);
     if (request.matrix) lines.push(`  matrix: ${JSON.stringify(request.matrix)}`);
@@ -71,9 +71,7 @@ const TERMINAL_ORCHESTRATOR_INSTRUCTIONS_BY_STATUS = Object.freeze({
   needs_host_actions: (ctx) => [
     hostRequestInstructionList(ctx.requests),
     ctx.inlineInstructions,
-    "Before continue, record a concise orchestrator debug summary with this validating runner command. Replace only the JSON body. Include what host actions you completed, why, commands/tools used, validation/evidence, and any remaining risks or blockers. Do not include private prompts, hidden reasoning, tokens, or raw transcripts.",
-    ctx.orchestratorDebugCommand,
-    "Then run:",
+    "Then run this single continue command after every current request has accepted output. Replace every <agent-id> placeholder with the actual selected worker id, and replace the debug JSON placeholder with a concise orchestrator debug summary covering completed host actions, rationale, commands/tools used, validation/evidence, and remaining risks or blockers. Do not include private prompts, hidden reasoning, tokens, or raw transcripts.",
     ctx.continueCommand,
     "Follow that stdout instruction exactly.",
   ].filter(Boolean).join("\n"),
@@ -261,6 +259,10 @@ export function toHostResponse(interpreterResponse, options) {
       continueCommand: continueInstructionCommandForRun(options.runId, {
         runsRoot: options.runsRoot,
         leaseToken: options.leaseToken,
+        bindAgentSteps: requests
+          .filter((request) => request.action === "run_worker")
+          .map((request) => request.stepId),
+        includeOrchestratorDebug: status === "needs_host_actions",
       }),
       orchestratorDebugCommand: recordOrchestratorCommandForRun(options.runId, {
         runsRoot: options.runsRoot,

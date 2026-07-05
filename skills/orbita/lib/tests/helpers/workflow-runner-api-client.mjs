@@ -23,6 +23,16 @@ function hasFlag(args, name) {
   return args.includes(name) || args.some((arg) => typeof arg === 'string' && arg === `${name}=true`);
 }
 
+function valuesAfter(args, name) {
+  const values = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === name) values.push(args[index + 1]);
+    else if (typeof arg === 'string' && arg.startsWith(`${name}=`)) values.push(arg.slice(name.length + 1));
+  }
+  return values.length > 0 ? values : undefined;
+}
+
 function jsonStdout(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
@@ -118,6 +128,9 @@ export async function runWorkflowRunnerApi(args, options = {}) {
         userPrompt: valueAfter(args, '--user-prompt'),
         userPromptFile: valueAfter(args, '--user-prompt-file'),
         output: valueAfter(args, '--output') === undefined ? undefined : [valueAfter(args, '--output')],
+        bindAgents: valuesAfter(args, '--bind-agent'),
+        orchestratorDebugJson: valueAfter(args, '--orchestrator-debug-json'),
+        orchestratorDebugFile: valueAfter(args, '--orchestrator-debug-file'),
       });
       if (hasFlag(args, '--only-instructions')) {
         return { status: 0, stdout: `${response.orchestratorInstruction}\n`, stderr: '' };
