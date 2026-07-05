@@ -16,6 +16,7 @@ Before creating the research artifact or moving toward a proposal, run a user di
 - When multiple plausible solution directions remain, return outcome blocked with blocker.source_step_id = research_draft and a user-facing discussion prompt in blocker.needed for the orchestrator to discuss with the user through the recoverable blocker flow.
 - The discussion prompt must present the main solution options, trade-offs, edge cases, failure modes, migration/compatibility impact, operational cost, and your recommended direction.
 - Ask one focused discussion question at a time. After the orchestrator resolves it, continue the same research step and either ask the next needed discussion question or proceed only when the solution direction, edge cases, and scope decisions are resolved.
+- Phrase every user-answerable blocker.needed as a direct user-facing question; the orchestrator must route it to the user as a question, not answer it from inference or convert it into a summary.
 Do not create `reasons-canvas-research` before the needed user dialogue is complete or evidence shows no user dialogue is needed.
 Read the task context, gather local/project evidence, identify constraints, risks, open questions, and architecture-sensitive pressure.
 Create exactly one first-class human-facing research artifact named `reasons-canvas-research`. Do not create any separate legacy research artifact or structured legacy output.
@@ -23,6 +24,7 @@ Fill only the research-owned depth in `reasons-canvas-research`: evidence-backed
 Do not create arbitrary temp/export files for handoff; the artifact metadata/path accepted into baton is the source of truth.
 Return outcome ready_for_attack when the required research Canvas artifact is ready.
 When missing implementation-critical input is answerable by the user, return a recoverable blocked output with blocker.source_step_id = research_draft and the smallest concrete question or permission needed.
+For any user-answerable research blocker, blocker.needed must be the exact user-facing question to ask.
 Return blocked for non-user-answerable unsafe or impossible progress as well, but make blocker.needed distinguish the external blocker from a user decision.
 When revising after research_attack feedback or approve_research rejection, read feedback from input.research_attack and input.approve_research and address it explicitly while preserving approved constraints.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
@@ -106,6 +108,7 @@ Read the approved/current `reasons-canvas-research` artifact from `research_draf
 Produce the minimal architecture decision or structural contract required by the approved research in architecture_contract.
 Before finalizing architecture_contract or `reasons-canvas-architecture`, explicitly identify the public contract and API surfaces affected by the task: exported APIs, CLI/user-facing commands, schemas, workflow interfaces, integration boundaries, compatibility promises, and observable behavior. If code, docs, or existing contracts answer a question, inspect them instead of asking the user.
 When user-owned choices remain about public contract shape, API compatibility, naming, migration behavior, or accepted breakage, return outcome blocked with blocker.source_step_id = architecture_draft and the smallest focused blocker.needed question for the orchestrator to resolve through the recoverable blocker flow; include your recommended answer in blocker.summary or blocker.needed.
+For any user-answerable architecture blocker, blocker.needed must be the exact user-facing question to ask; the orchestrator must route it to the user as a question, not answer it from inference or convert it into a summary.
 After the orchestrator resolves the recoverable blocker, continue the same architecture step from the resolved public contract/API decision and proceed only when the needed decisions are resolved or evidence shows no such discussion is needed.
 When `reasons-canvas-research` exists, derive one new immutable human-facing workflow artifact named `reasons-canvas-architecture`. Copy forward research-owned Requirements and observed domain Entities as frozen input unless new evidence proves a conflict; record any correction in the new architecture artifact instead of editing the research artifact. Own the architecture-depth sections: structural Entities, Approach, Structure, Operations at planning depth, Norms, Safeguards, and remaining open tensions.
 Do not create arbitrary temp/export files for handoff; the artifact metadata/path accepted into baton is the source of truth.

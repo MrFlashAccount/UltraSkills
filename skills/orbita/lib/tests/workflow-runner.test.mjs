@@ -193,8 +193,10 @@ test('runner: next returns a single host action request with load command only',
   assert.match(response.orchestratorInstruction, /Use the JSON response requests field as the machine-readable source when available/);
   assert.match(response.orchestratorInstruction, /Current host requests:\n- run_worker: prepare/);
   assert.doesNotMatch(response.orchestratorInstruction, /run_worker request, enforce this host watchdog/);
-  assert.match(response.orchestratorInstruction, new RegExp(`load fresh instructions: .*workflow-runner\\.mjs' instructions --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));
-  assert.match(response.orchestratorInstruction, new RegExp(`load follow-up instructions when restoring the preferred worker: .*workflow-runner\\.mjs' instructions --follow-up --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));
+  assert.match(response.orchestratorInstruction, new RegExp(`fresh-worker instruction-loader command: .*workflow-runner\\.mjs' instructions --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));
+  assert.match(response.orchestratorInstruction, /send that command to the worker bootstrap; do not run it in the orchestrator/);
+  assert.match(response.orchestratorInstruction, new RegExp(`preferred-worker follow-up instruction-loader command: .*workflow-runner\\.mjs' instructions --follow-up --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));
+  assert.match(response.orchestratorInstruction, /send that command only when restoring the preferred worker; do not run it in the orchestrator/);
   assert.match(response.orchestratorInstruction, new RegExp(`bind actual worker id after dispatch: .*workflow-runner\\.mjs' bind-agent --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --agent-id <agent-id> --lease-token '${leaseToken}'`));
   assert.match(response.orchestratorInstruction, /Before continue, record a concise orchestrator debug summary/);
   assert.match(response.orchestratorInstruction, new RegExp(`workflow-runner\\.mjs' record-orchestrator --run-id '${runId}' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`));

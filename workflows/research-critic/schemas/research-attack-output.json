@@ -52,6 +52,7 @@
     "questions": {
       "type": "array",
       "description": "Blocking user questions when outcome is needs_input.",
+      "x-usage": "Route these strings to the user as questions. Do not answer them from orchestrator inference or collapse them into a summary.",
       "items": {
         "type": "string",
         "minLength": 1
@@ -94,7 +95,8 @@
         },
         "needed": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "x-usage": "When this is user-answerable, route it to the user as a question. Do not answer it from orchestrator inference or collapse it into a summary."
         },
         "evidence": {
           "type": "array",

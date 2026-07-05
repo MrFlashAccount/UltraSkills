@@ -154,7 +154,9 @@ If the instructions cannot be loaded, stop with an error and do not continue.
 - If the retry also gives no accepted output, concrete progress evidence, or blocker within the same 10 minute plus 2 minute watchdog window, submit a validated blocked output for the same current request when possible and keep the run recoverable from that request id.
 - Do not use heartbeat as a substitute for this watchdog; worker bootstrap hangs must be detected before waiting out the run lease. Do not persist progress in baton, scrape transcripts, read private runner state, or add durable worker status storage.
 
-For `resolve_worker_blocker`, the orchestrator handles the request directly. Read `recoverableBlocker`, resolve the missing decision/input/capability through the smallest safe action, then write strict JSON with `writeResolutionCommand`:
+For `resolve_worker_blocker`, the orchestrator handles the request directly. Read `recoverableBlocker`, resolve the missing decision/input/capability through the smallest safe action, then write strict JSON with `writeResolutionCommand`.
+
+If a researcher or architect step returns a user-answerable question in `recoverableBlocker.needed`, route it to the user as a question. Do not answer it from orchestrator inference, collapse it into a summary, or mark it resolved without the user's answer unless the blocker explicitly says it is a non-user-answerable capability or environment blocker.
 
 ```json
 {
