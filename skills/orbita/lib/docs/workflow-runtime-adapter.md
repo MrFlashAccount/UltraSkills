@@ -96,7 +96,7 @@ Native sharding is an opt-in workflow-runner capability for large review runs. T
 
 Approved source manifest for this contract:
 
-- `ARCH-CONTRACT`: final structural contract from `architecture_draft.architecture_contract`, authoritative for entities, boundaries, invariants, non-goals, and artifact decision.
+- `ARCH-CONTRACT`: final structural contract from the `reasons-canvas-architecture` artifact emitted by `architecture_draft`, authoritative for entities, boundaries, invariants, non-goals, and artifact decision.
 - `REASONS`: immutable `reasons-canvas-architecture` artifact from the approved source manifest, authoritative for workstream conversion and drift review context.
 - `ARCH-ATTACK`: architecture attack verdict, authoritative for approval evidence: no findings; confirms `update_existing` document decision and the command-only lease/token exception.
 - `RUNTIME-DOC`: this file, `skills/orbita/lib/docs/workflow-runtime-adapter.md`, is the durable runtime contract and final drift-check target.

@@ -22,7 +22,7 @@ Only create or revise `reasons-canvas-research` after the needed user dialogue i
 
 ## Architecture contract and API discussion
 
-The architecture step must identify affected public contract and API surfaces before finalizing `architecture_contract` or `reasons-canvas-architecture`.
+The architecture step must identify affected public contract and API surfaces before finalizing `reasons-canvas-architecture` and its compact output `summary`.
 
 Public contract/API surfaces include exported APIs, CLI or user-facing commands, schemas, workflow interfaces, integration boundaries, compatibility promises, and observable behavior.
 
@@ -34,4 +34,4 @@ When code, docs, or existing contracts answer the question, inspect them instead
 - include the recommended answer in `blocker.summary` or `blocker.needed`;
 - ask one question at a time.
 
-After the orchestrator resolves the blocker, continue the same architecture step from the resolved decision and only then finalize the architecture contract or artifact.
+After the orchestrator resolves the blocker, continue the same architecture step from the resolved decision and only then finalize the architecture artifact and compact summary.

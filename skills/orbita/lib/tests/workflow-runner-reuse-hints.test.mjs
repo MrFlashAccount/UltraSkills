@@ -103,15 +103,14 @@ function devHarnessImplementationSchema() {
     type: 'object',
     required: ['outcome'],
     properties: {
-      outcome: { enum: ['implemented', 'blocked', 'ready'] },
-      implementation_handoff: { type: 'object' },
+      outcome: { enum: ['implemented', 'blocked'] },
+      summary: { type: 'string' },
       changed_files: { type: 'array' },
       verification: { type: 'array' },
       blocker: { type: 'object', additionalProperties: true },
-      results: { type: 'array' },
       artifacts: { type: 'array' },
     },
-    additionalProperties: true,
+    additionalProperties: false,
   });
   return path.basename(schemaPath);
 }
@@ -161,16 +160,26 @@ function devHarnessImplementationWorkflow({ parallel = false } = {}) {
   };
 }
 
-function implementedOutput(summary, extra = {}) {
+function implementationArtifactPathFor(runDir, stepId, summary) {
+  const filePath = path.join(runDir, stepId, 'artifacts', `implementation-handoff-${summary.replaceAll(/\W+/g, '-')}.md`);
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(filePath, `${summary} handoff\n`, { flag: 'w' });
+  return filePath;
+}
+
+function implementedOutput(summary, { artifactPath, ...extra } = {}) {
+  if (!artifactPath) throw new Error('implementation artifact path is required');
   return {
     outcome: 'implemented',
-    implementation_handoff: {
-      summary,
-      covered_contract_rows: [{ id: summary, status: 'covered' }],
-      review_notes: ['ready for review'],
-    },
+    summary,
     changed_files: ['skills/orbita/lib/example.mjs'],
     verification: [{ command: 'node:test', result: 'passed' }],
+    artifacts: [{
+      id: 'implementation-handoff',
+      content_type: 'text/markdown',
+      path: artifactPath,
+      summary: `${summary} handoff`,
+    }],
     ...extra,
   };
 }
@@ -459,7 +468,9 @@ test('runner reuse hints: recoverable implementation blocker keeps host work act
     runId,
     workflowPath,
     stepId: 'backend_implementation',
-    json: JSON.stringify(implementedOutput('backend recovered')),
+    json: JSON.stringify(implementedOutput('backend recovered', {
+      artifactPath: implementationArtifactPathFor(runDir, 'backend_implementation', 'backend recovered'),
+    })),
     debugSummaryFile: debugSummaryFileFor(runDir, 'backend_implementation', 'recovered implementation\n'),
     leaseToken,
     now,
@@ -584,8 +595,7 @@ test('runner reuse hints: recoverable implementation blocker preserves accepted 
     workflowPath,
     stepId: 'frontend_implementation',
     json: JSON.stringify(implementedOutput('frontend complete', {
-      results: [{ type: 'implementation', summary: 'frontend aggregate result' }],
-      artifacts: [{ id: 'frontend-handoff', content_type: 'text/markdown', path: frontendArtifactPath, summary: 'frontend handoff artifact' }],
+      artifactPath: frontendArtifactPath,
     })),
     debugSummaryFile: debugSummaryFileFor(runDir, 'frontend_implementation'),
     leaseToken,
@@ -609,10 +619,9 @@ test('runner reuse hints: recoverable implementation blocker preserves accepted 
   assert.equal(recovery.requests[0].stepId, 'backend_implementation');
   assert.equal(recovery.requests[0].action, 'resolve_worker_blocker');
   assert.equal(recovery.baton.state.backend_implementation, undefined);
-  assert.equal(recovery.baton.state.frontend_implementation.implementation_handoff.summary, 'frontend complete');
-  assert.equal(recovery.baton.state.results.at(-1).summary, 'frontend aggregate result');
+  assert.equal(recovery.baton.state.frontend_implementation.summary, 'frontend complete');
   assert.equal(recovery.baton.state.artifacts.at(-1).producerStepId, 'frontend_implementation');
-  assert.equal(recovery.baton.state.artifacts.at(-1).artifact.id, 'frontend-handoff');
+  assert.equal(recovery.baton.state.artifacts.at(-1).artifact.id, 'implementation-handoff');
 
   await writeOutput({
     runId,
@@ -625,24 +634,24 @@ test('runner reuse hints: recoverable implementation blocker preserves accepted 
   const resolved = await continueRun({ runId, workflowPath, leaseToken, now });
   assert.equal(resolved.requests[0].action, 'run_worker');
   assert.equal(resolved.requests[0].stepId, 'backend_implementation');
-  assert.equal(resolved.baton.state.frontend_implementation.implementation_handoff.summary, 'frontend complete');
-  assert.equal(resolved.baton.state.results.at(-1).summary, 'frontend aggregate result');
+  assert.equal(resolved.baton.state.frontend_implementation.summary, 'frontend complete');
   assert.equal(resolved.baton.state.artifacts.at(-1).producerStepId, 'frontend_implementation');
 
   await writeOutput({
     runId,
     workflowPath,
     stepId: 'backend_implementation',
-    json: JSON.stringify(implementedOutput('backend recovered after sibling')),
+    json: JSON.stringify(implementedOutput('backend recovered after sibling', {
+      artifactPath: implementationArtifactPathFor(runDir, 'backend_implementation', 'backend recovered after sibling'),
+    })),
     debugSummaryFile: debugSummaryFileFor(runDir, 'backend_implementation', 'backend recovered after sibling\n'),
     leaseToken,
     now,
   });
   const joined = await continueRun({ runId, workflowPath, leaseToken, now });
   assert.equal(joined.requests[0].stepId, 'implementation_join');
-  assert.equal(joined.baton.state.frontend_implementation.implementation_handoff.summary, 'frontend complete');
-  assert.equal(joined.baton.state.results.at(-1).summary, 'frontend aggregate result');
-  assert.equal(joined.baton.state.artifacts.at(-1).producerStepId, 'frontend_implementation');
+  assert.equal(joined.baton.state.frontend_implementation.summary, 'frontend complete');
+  assert.ok(joined.baton.state.artifacts.some((entry) => entry.producerStepId === 'frontend_implementation'));
 });
 
 test('runner reuse hints: recoverable approval blocker waits for orchestrator resolution before approval resumes', async () => {
