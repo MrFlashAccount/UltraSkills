@@ -65,13 +65,20 @@ export function bindAgentCommandForStep(
   return `${WORKFLOW_RUNNER_COMMAND} bind-agent --run-id ${shellQuote(runId)} --step-id ${shellQuote(stepId)}${runsRootArg} --agent-id <agent-id> --lease-token ${token}`;
 }
 
-export function continueCommandForRun(runId, { runsRoot, leaseToken } = {}) {
+export function continueCommandForRun(runId, { runsRoot, leaseToken, bindAgentSteps = [], includeOrchestratorDebug = false } = {}) {
   const runsRootArg = runsRoot ? ` --runs-root ${shellQuote(runsRoot)}` : "";
   const token =
     typeof leaseToken === "string" && leaseToken.length > 0
       ? shellQuote(leaseToken)
       : "<lease-token>";
-  return `${WORKFLOW_RUNNER_COMMAND} continue --run-id ${shellQuote(runId)}${runsRootArg} --lease-token ${token}`;
+  const bindArgs = bindAgentSteps.map((stepId) => {
+    assertSafeStepId(stepId);
+    return ` --bind-agent ${shellQuote(`${stepId}=<agent-id>`)}`;
+  }).join("");
+  const debugArg = includeOrchestratorDebug
+    ? ` --orchestrator-debug-json ${shellQuote("<paste orchestrator debug JSON here>")}`
+    : "";
+  return `${WORKFLOW_RUNNER_COMMAND} continue --run-id ${shellQuote(runId)}${runsRootArg} --lease-token ${token}${bindArgs}${debugArg}`;
 }
 
 export function continueInstructionCommandForRun(runId, options = {}) {
