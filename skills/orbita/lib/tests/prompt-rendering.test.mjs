@@ -355,7 +355,7 @@ test('prompt renderer: joins prompt arrays before interpolation', () => {
   ]);
 });
 
-test('prompt renderer: interpolated object JSON is compact and bounded', () => {
+test('prompt renderer: interpolated object JSON is compact and not size bounded', () => {
   const step = {
     name: 'Worker step',
     kind: 'worker',
@@ -379,21 +379,20 @@ test('prompt renderer: interpolated object JSON is compact and bounded', () => {
 
   assert.match(compact.prompt, /```json\n\{"alpha":\["one","two"\],"nested":\{"ok":true\}\}\n```/);
 
-  assert.throws(
-    () => renderFixture({
-      label: 'render-interpolation-json-too-large',
-      stepId: 'worker_step',
-      step,
-      batonDoc: baton({
-        state: {
-          artifacts: [],
-          results: [],
-          source: { payload: { text: 'x'.repeat(13000) } },
-        },
-      }),
+  const large = renderFixture({
+    label: 'render-large-json-interpolation',
+    stepId: 'worker_step',
+    step,
+    batonDoc: baton({
+      state: {
+        artifacts: [],
+        results: [],
+        source: { payload: { text: 'x'.repeat(13000) } },
+      },
     }),
-    /interpolated JSON value exceeds 12000 characters.*project a smaller prompt input field/,
-  );
+  });
+
+  assert.match(large.prompt, /```json\n\{"text":"x{13000}"\}\n```/);
 });
 
 test('prompt renderer: uses prompt interpolation default for missing prompt input paths', () => {

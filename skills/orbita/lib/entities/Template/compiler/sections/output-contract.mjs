@@ -38,6 +38,7 @@ function artifactOutputDirectoryInstruction(artifactOutputDir) {
     `Artifact output directory for this step: ${trimmedDir}`,
     '- Write every generated artifact content file for this step inside that directory.',
     '- Use the artifact id as the artifact file name/stem unless the schema or step prompt is stricter.',
+    '- Keep artifact bodies only in those files. The JSON output must contain artifact metadata only, never the markdown/file body or other full artifact content.',
     '- Set artifacts[].path to the full absolute filesystem path of each created artifact file.',
     '- Do not use temp dirs, ad-hoc export paths, or paths outside the step artifact output directory.',
   ].join('\n');
