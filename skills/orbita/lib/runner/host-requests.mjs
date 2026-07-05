@@ -27,9 +27,11 @@ function requestInstructionBlock(request) {
 
   if (request.action === "run_worker") {
     if (request.preferredAgentId) lines.push(`  preferred worker id: ${request.preferredAgentId}`);
-    lines.push(`  load fresh instructions: ${request.loadInstructionsCommand}`);
+    lines.push(`  fresh-worker instruction-loader command: ${request.loadInstructionsCommand}`);
+    lines.push("  send that command to the worker bootstrap; do not run it in the orchestrator");
     if (request.loadFollowupInstructionsCommand) {
-      lines.push(`  load follow-up instructions when restoring the preferred worker: ${request.loadFollowupInstructionsCommand}`);
+      lines.push(`  preferred-worker follow-up instruction-loader command: ${request.loadFollowupInstructionsCommand}`);
+      lines.push("  send that command only when restoring the preferred worker; do not run it in the orchestrator");
     }
     lines.push(`  pass actual worker id to continue: --bind-agent '${request.stepId}=<agent-id>'`);
     if (request.recoverableBlocker) lines.push(`  recoverable blocker: ${JSON.stringify(request.recoverableBlocker)}`);

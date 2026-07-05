@@ -169,8 +169,10 @@ test('runner CLI: next --only-instructions prints only orchestrator instruction 
   assert.throws(() => JSON.parse(result.stdout));
   assert.match(result.stdout, /Execute every current host request below/);
   assert.match(result.stdout, /Current host requests:\n- run_worker: prepare/);
-  assert.match(result.stdout, /load fresh instructions: .*workflow-runner\.mjs' instructions --run-id/);
-  assert.match(result.stdout, /load follow-up instructions when restoring the preferred worker: .*instructions --follow-up --run-id/);
+  assert.match(result.stdout, /fresh-worker instruction-loader command: .*workflow-runner\.mjs' instructions --run-id/);
+  assert.match(result.stdout, /send that command to the worker bootstrap; do not run it in the orchestrator/);
+  assert.match(result.stdout, /preferred-worker follow-up instruction-loader command: .*instructions --follow-up --run-id/);
+  assert.match(result.stdout, /send that command only when restoring the preferred worker; do not run it in the orchestrator/);
   assert.match(result.stdout, /pass actual worker id to continue: --bind-agent 'prepare=<agent-id>'/);
   assert.match(result.stdout, /workflow-runner\.mjs' continue --run-id/);
   assert.match(result.stdout, /--bind-agent 'prepare=<agent-id>'/);

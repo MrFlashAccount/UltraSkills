@@ -65,7 +65,7 @@
           "type": "string",
           "minLength": 1,
           "description": "Producer must state the exact missing decision, permission, input, or evidence required to proceed.",
-          "x-usage": "Surface this exact missing input, permission, evidence, or decision before proceeding. Do not substitute assumptions for it."
+          "x-usage": "Surface this exact missing input, permission, evidence, or decision before proceeding. When the blocker is user-answerable, treat this as the exact user-facing question to route to the user; do not substitute assumptions, summarize it away, or answer it from orchestrator inference."
         },
         "evidence": {
           "type": "array",
@@ -84,7 +84,7 @@
       },
       "additionalProperties": false,
       "description": "Producer must populate this when outcome is blocked, naming the recoverable pause reason, owning step, and specific missing input or permission.",
-      "x-usage": "Treat this as a recoverable pause. Surface the missing input or decision, then continue this same workflow step after it is resolved."
+      "x-usage": "Treat this as a recoverable pause. Surface the missing input or decision, route user-answerable questions to the user as questions, then continue this same workflow step after it is resolved."
     }
   },
   "additionalProperties": false,
