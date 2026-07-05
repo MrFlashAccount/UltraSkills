@@ -251,7 +251,7 @@ test('runner CLI: continue accepts bind-agent and orchestrator debug flags', asy
   assert.equal(response.status, 'done');
   assert.deepEqual(response.baton.workerBindings, { prepare: 'cli-worker-1' });
   const history = readFileSync(path.join(runDir, 'history.md'), 'utf8');
-  assert.match(history, /source: workflow-runner-bind-agent/);
+  assert.match(history, /source: workflow-runner-continue-bind-agent/);
   assert.match(history, /cli combined continue/);
 });
 

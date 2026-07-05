@@ -6,7 +6,6 @@ import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import {
-  bindAgent,
   continueRun,
   listPointerTransitions,
   movePointer,
@@ -124,9 +123,8 @@ function rawRunFiles(paths) {
 test('runner pointer API lists adjacent transitions and moves pointer with retained-state acknowledgement', async () => {
   const run = await createClaimedRun('api-retained');
   await next({ ...run, userPrompt: 'keep prompt marker', now: new Date('2026-06-01T10:00:01.000Z') });
-  await bindAgent({ ...run, stepId: 'prepare', agentId: 'agent-prepare', now: new Date('2026-06-01T10:00:02.000Z') });
   await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared' });
-  await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
+  await continueRun({ ...run, bindAgents: ['prepare=agent-prepare'], now: new Date('2026-06-01T10:02:00.000Z') });
   const beforeMove = snapshot(run.paths);
 
   const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });

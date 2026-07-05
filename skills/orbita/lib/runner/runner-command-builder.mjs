@@ -51,20 +51,6 @@ export function loadFollowupInstructionsCommandForStep(
   return `${WORKFLOW_RUNNER_COMMAND} instructions --follow-up --run-id ${shellQuote(runId)} --step-id ${shellQuote(stepId)}${runsRootArg} --lease-token ${token}`;
 }
 
-export function bindAgentCommandForStep(
-  runId,
-  stepId,
-  { runsRoot, leaseToken } = {},
-) {
-  assertSafeStepId(stepId);
-  const runsRootArg = runsRoot ? ` --runs-root ${shellQuote(runsRoot)}` : "";
-  const token =
-    typeof leaseToken === "string" && leaseToken.length > 0
-      ? shellQuote(leaseToken)
-      : "<lease-token>";
-  return `${WORKFLOW_RUNNER_COMMAND} bind-agent --run-id ${shellQuote(runId)} --step-id ${shellQuote(stepId)}${runsRootArg} --agent-id <agent-id> --lease-token ${token}`;
-}
-
 export function continueCommandForRun(runId, { runsRoot, leaseToken, bindAgentSteps = [], includeOrchestratorDebug = false } = {}) {
   const runsRootArg = runsRoot ? ` --runs-root ${shellQuote(runsRoot)}` : "";
   const token =
@@ -83,19 +69,6 @@ export function continueCommandForRun(runId, { runsRoot, leaseToken, bindAgentSt
 
 export function continueInstructionCommandForRun(runId, options = {}) {
   return `${continueCommandForRun(runId, options)} --only-instructions`;
-}
-
-export function recordOrchestratorCommandForRun(runId, { runsRoot, leaseToken } = {}) {
-  const runsRootArg = runsRoot ? ` --runs-root ${shellQuote(runsRoot)}` : "";
-  const token =
-    typeof leaseToken === "string" && leaseToken.length > 0
-      ? shellQuote(leaseToken)
-      : "<lease-token>";
-  return [
-    `${WORKFLOW_RUNNER_COMMAND} record-orchestrator --run-id ${shellQuote(runId)}${runsRootArg} --lease-token ${token} <<'JSON'`,
-    "<paste orchestrator debug JSON here>",
-    "JSON",
-  ].join("\n");
 }
 
 export function writeOutputCommandForStep(

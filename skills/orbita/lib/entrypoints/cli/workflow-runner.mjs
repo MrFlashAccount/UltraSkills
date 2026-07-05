@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { parseArgs } from 'node:util';
 import { WorkflowRuntimeError } from '../../errors.mjs';
-import { bindAgent, continueRun, listPointerTransitions, loadInstructions, movePointer, next, recordOrchestrator, writeOutput } from '../workflow-runner-command.mjs';
+import { continueRun, listPointerTransitions, loadInstructions, movePointer, next, writeOutput } from '../workflow-runner-command.mjs';
 import { publicErrorMessage } from '../../public-error.mjs';
 
 
@@ -11,7 +11,7 @@ function fail(message) {
 }
 
 function usage() {
-  return 'usage: bun ./lib/entrypoints/cli/workflow-runner.mjs next --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--user-prompt <text> | --user-prompt-file <path>] [--lease-token <token> + diagnostics metadata] | continue --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--bind-agent <step-id=agent-id>...] [--orchestrator-debug-json <json> | --orchestrator-debug-file <path>] [--lease-token <token> + diagnostics metadata] | instructions --run-id <id> --step-id <id> [--follow-up] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | bind-agent --run-id <id> --step-id <id> --agent-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | write-output --run-id <id> --step-id <id> [--json <json>] [--debug-summary-file <path>] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | record-orchestrator --run-id <id> [--json <json>] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | list-pointer-transitions --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | move-pointer --run-id <id> --transition-id <id> [--acknowledge-retained-state] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata]';
+  return 'usage: bun ./lib/entrypoints/cli/workflow-runner.mjs next --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--user-prompt <text> | --user-prompt-file <path>] [--lease-token <token> + diagnostics metadata] | continue --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--bind-agent <step-id=agent-id>...] [--orchestrator-debug-json <json> | --orchestrator-debug-file <path>] [--lease-token <token> + diagnostics metadata] | instructions --run-id <id> --step-id <id> [--follow-up] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | write-output --run-id <id> --step-id <id> [--json <json>] [--debug-summary-file <path>] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | list-pointer-transitions --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | move-pointer --run-id <id> --transition-id <id> [--acknowledge-retained-state] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata]';
 }
 
 async function readStdin() {
@@ -22,7 +22,7 @@ async function readStdin() {
 
 function parseCliArgs(argv) {
   const [mode, ...rest] = argv;
-  if (!['next', 'continue', 'instructions', 'bind-agent', 'write-output', 'record-orchestrator', 'list-pointer-transitions', 'move-pointer'].includes(mode)) fail(usage());
+  if (!['next', 'continue', 'instructions', 'write-output', 'list-pointer-transitions', 'move-pointer'].includes(mode)) fail(usage());
   try {
     const parsed = parseArgs({
       args: rest,
@@ -55,15 +55,14 @@ function parseCliArgs(argv) {
     });
     const hasTransitionId = parsed.values['transition-id'] !== undefined;
     if (!parsed.values['run-id']) fail(usage());
-    if (['instructions', 'bind-agent', 'write-output'].includes(mode) && !parsed.values['step-id']) fail(usage());
-    if (!['instructions', 'bind-agent', 'write-output'].includes(mode) && parsed.values['step-id']) fail(usage());
-    if (mode === 'bind-agent' && !parsed.values['agent-id']) fail(usage());
-    if (mode !== 'bind-agent' && parsed.values['agent-id']) fail(usage());
+    if (['instructions', 'write-output'].includes(mode) && !parsed.values['step-id']) fail(usage());
+    if (!['instructions', 'write-output'].includes(mode) && parsed.values['step-id']) fail(usage());
+    if (parsed.values['agent-id']) fail(usage());
     if (mode !== 'next' && (parsed.values['user-prompt'] !== undefined || parsed.values['user-prompt-file'] !== undefined)) fail(usage());
     if (mode === 'instructions' && parsed.values.diagnostics) fail(usage());
     if (mode !== 'instructions' && parsed.values['follow-up']) fail(usage());
     if (!['next', 'continue'].includes(mode) && parsed.values['only-instructions']) fail(usage());
-    if (!['write-output', 'record-orchestrator'].includes(mode) && parsed.values.json !== undefined) fail(usage());
+    if (mode !== 'write-output' && parsed.values.json !== undefined) fail(usage());
     if (mode !== 'write-output' && parsed.values['debug-summary-file'] !== undefined) fail(usage());
     if (mode !== 'continue' && parsed.values['orchestrator-debug-json'] !== undefined) fail(usage());
     if (mode !== 'continue' && parsed.values['orchestrator-debug-file'] !== undefined) fail(usage());
@@ -109,15 +108,6 @@ try {
       ...leaseArgs(values),
     });
     process.stdout.write(instructions);
-  } else if (mode === 'bind-agent') {
-    await bindAgent({
-      runId: values['run-id'],
-      workflowPath: values.workflow,
-      runsRoot: values['runs-root'],
-      stepId: values['step-id'],
-      agentId: values['agent-id'],
-      ...leaseArgs(values),
-    });
   } else if (mode === 'write-output') {
     const response = await writeOutput({
       runId: values['run-id'],
@@ -126,15 +116,6 @@ try {
       stepId: values['step-id'],
       json: values.json ?? await readStdin(),
       debugSummaryFile: values['debug-summary-file'],
-      ...leaseArgs(values),
-    });
-    console.log(JSON.stringify(response, null, 2));
-  } else if (mode === 'record-orchestrator') {
-    const response = await recordOrchestrator({
-      runId: values['run-id'],
-      workflowPath: values.workflow,
-      runsRoot: values['runs-root'],
-      json: values.json ?? await readStdin(),
       ...leaseArgs(values),
     });
     console.log(JSON.stringify(response, null, 2));

@@ -1,11 +1,9 @@
 import {
-  bindAgent,
   continueRun,
   listPointerTransitions,
   loadInstructions,
   movePointer,
   next,
-  recordOrchestrator,
   writeOutput,
 } from './orbita-production-api.mjs';
 import { claimWorkflowRunAtRoot, registerWorkflowRunAtRoot } from '../../persistence/run-state/workflow-runs.mjs';
@@ -84,27 +82,12 @@ export async function runWorkflowRunnerApi(args, options = {}) {
       });
       return { status: 0, stdout: instructions, stderr: '' };
     }
-    if (mode === 'bind-agent') {
-      await bindAgent({
-        ...common,
-        stepId: valueAfter(args, '--step-id'),
-        agentId: valueAfter(args, '--agent-id'),
-      });
-      return { status: 0, stdout: '', stderr: '' };
-    }
     if (mode === 'write-output') {
       const response = await writeOutput({
         ...common,
         stepId: valueAfter(args, '--step-id'),
         json: valueAfter(args, '--json') ?? options.input ?? '',
         debugSummaryFile: valueAfter(args, '--debug-summary-file'),
-      });
-      return { status: 0, stdout: jsonStdout(response), stderr: '' };
-    }
-    if (mode === 'record-orchestrator') {
-      const response = await recordOrchestrator({
-        ...common,
-        json: valueAfter(args, '--json') ?? options.input ?? '',
       });
       return { status: 0, stdout: jsonStdout(response), stderr: '' };
     }

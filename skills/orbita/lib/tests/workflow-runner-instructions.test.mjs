@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, sym
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
-import { bindAgent as runnerBindAgent, continueRun as runnerContinueRun, loadInstructions as runnerLoadInstructions, next as runnerNext, writeOutput as runnerWriteOutput } from './helpers/orbita-production-api.mjs';
+import { continueRun as runnerContinueRun, loadInstructions as runnerLoadInstructions, next as runnerNext, writeOutput as runnerWriteOutput } from './helpers/orbita-production-api.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-check-'));
@@ -279,11 +279,6 @@ test('runner: stale older-response commands name the current request step ids', 
   assert.match(staleInstructions.stderr, /current request step ids: join/);
   assert.match(staleInstructions.stderr, /Use the latest workflow-runner response\/instructions/);
 
-  const staleBind = await runRunner(['bind-agent', '--run-id', runId, '--step-id', 'branch_a', '--agent-id', 'worker-branch-a']);
-  assert.notEqual(staleBind.status, 0);
-  assert.match(staleBind.stderr, /stale workflow-runner command from an older response/);
-  assert.match(staleBind.stderr, /requested step 'branch_a'/);
-  assert.match(staleBind.stderr, /current request step ids: join/);
 });
 
 test('runner: instructions rejects unknown and unsafe step ids, and recomputes missing prompt files', async () => {
@@ -493,13 +488,12 @@ test('runner API propagates custom runsRoot through next, instructions, and cont
   assert.equal(first.requests[0].stepId, 'prepare');
   assert.equal(first.requests[0].loadInstructionsCommand.includes(`--runs-root '${runsRoot}'`), true);
   assert.equal(first.requests[0].loadFollowupInstructionsCommand.includes(`--runs-root '${runsRoot}'`), true);
-  assert.equal(first.requests[0].bindAgentCommand.includes(`--runs-root '${runsRoot}'`), true);
   assert.equal(first.requests[0].loadInstructionsCommand.includes(`--lease-token '${leaseToken}'`), true);
   assert.equal(first.requests[0].loadFollowupInstructionsCommand.includes(`--lease-token '${leaseToken}'`), true);
-  assert.equal(first.requests[0].bindAgentCommand.includes(`--lease-token '${leaseToken}'`), true);
-  assert.equal(first.requests[0].bindAgentCommand.includes('--agent-id <agent-id>'), true);
   assert.equal(first.orchestratorInstruction.includes(`--runs-root '${runsRoot}'`), true);
   assert.equal(first.orchestratorInstruction.includes(`--lease-token '${leaseToken}'`), true);
+  assert.equal(first.orchestratorInstruction.includes(`--bind-agent 'prepare=<agent-id>'`), true);
+  assert.equal(first.orchestratorInstruction.includes(`--orchestrator-debug-json '<paste orchestrator debug JSON here>'`), true);
   assert.equal(first.orchestratorInstruction.includes('--only-instructions'), true);
 
   const instructions = await runnerLoadInstructions({ runId, stepId: 'prepare', runsRoot, leaseToken });
@@ -513,9 +507,6 @@ test('runner API propagates custom runsRoot through next, instructions, and cont
   assert.equal(followUpInstructions.includes(`--runs-root '${runsRoot}'`), true);
   assert.equal(followUpInstructions.includes(`--lease-token '${leaseToken}'`), true);
 
-  const bound = await runnerBindAgent({ runId, stepId: 'prepare', agentId: 'custom-root-worker', runsRoot, leaseToken });
-  assert.deepEqual(bound, { ok: true, runId, stepId: 'prepare', bound: true });
-
   const writeOutput = await runnerWriteOutput({
     runId,
     workflowPath,
@@ -528,18 +519,16 @@ test('runner API propagates custom runsRoot through next, instructions, and cont
   assert.equal(writeOutput.ok, true);
   assert.equal(writeOutput.accepted, true);
   assert.equal(Object.hasOwn(writeOutput, 'orchestratorInstruction'), false);
-  const continued = await runnerContinueRun({ runId, runsRoot, leaseToken });
+  const continued = await runnerContinueRun({ runId, runsRoot, bindAgents: ['prepare=custom-root-worker'], leaseToken });
 
   assert.equal(continued.status, 'needs_host_actions');
   assert.equal(continued.requests[0].loadInstructionsCommand.includes(`--lease-token '${leaseToken}'`), true);
   assert.equal(continued.requests[0].loadFollowupInstructionsCommand.includes(`--lease-token '${leaseToken}'`), true);
-  assert.equal(continued.requests[0].bindAgentCommand.includes(`--lease-token '${leaseToken}'`), true);
   assert.equal(continued.orchestratorInstruction.includes('--only-instructions'), true);
   assert.deepEqual(continued.requests.map((request) => request.stepId).sort(), ['branch_a', 'branch_b']);
   for (const request of continued.requests) {
     assert.equal(request.loadInstructionsCommand.includes(`--runs-root '${runsRoot}'`), true);
     assert.equal(request.loadFollowupInstructionsCommand.includes(`--runs-root '${runsRoot}'`), true);
-    assert.equal(request.bindAgentCommand.includes(`--runs-root '${runsRoot}'`), true);
   }
   const baton = JSON.parse(readFileSync(path.join(resolveRunPaths({ runId, runsRoot }).runDir, 'baton.json'), 'utf8'));
   assert.deepEqual(baton.workerBindings, { prepare: 'custom-root-worker' });
@@ -561,6 +550,5 @@ test('runner API emits absolute runsRoot in portable commands for relative custo
   assert.equal(first.requests[0].loadInstructionsCommand.includes(`--runs-root '${resolvedRunsRoot}'`), true);
   assert.equal(first.requests[0].loadInstructionsCommand.includes(`--runs-root '${runsRoot}'`), false);
   assert.equal(first.requests[0].loadFollowupInstructionsCommand.includes(`--runs-root '${resolvedRunsRoot}'`), true);
-  assert.equal(first.requests[0].bindAgentCommand.includes(`--runs-root '${resolvedRunsRoot}'`), true);
   assert.equal(first.orchestratorInstruction.includes(`--runs-root '${resolvedRunsRoot}'`), true);
 });

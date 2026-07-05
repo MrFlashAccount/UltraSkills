@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
-import { bindAgent, continueRun, loadInstructions, next, writeOutput } from './helpers/orbita-production-api.mjs';
+import { continueRun, loadInstructions, next, writeOutput } from './helpers/orbita-production-api.mjs';
 import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../runner/runner-command-builder.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 import { readRunsIndex } from '../persistence/run-state/run-index.mjs';
@@ -261,7 +261,6 @@ test('runner reuse hints: run_worker request exposes only approved reuse fields'
   assert.match(response.orchestratorInstruction, /Use the JSON response requests field as the machine-readable source when available/);
   assert.deepEqual(Object.keys(response.requests[0]).sort(), [
     'action',
-    'bindAgentCommand',
     'id',
     'loadFollowupInstructionsCommand',
     'loadInstructionsCommand',
@@ -271,7 +270,6 @@ test('runner reuse hints: run_worker request exposes only approved reuse fields'
   assert.equal(response.requests[0].preferredAgentId, null);
   assert.equal(response.requests[0].loadInstructionsCommand, `${workflowRunnerCommand} instructions --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`);
   assert.equal(response.requests[0].loadFollowupInstructionsCommand, `${workflowRunnerCommand} instructions --follow-up --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --lease-token '${leaseToken}'`);
-  assert.equal(response.requests[0].bindAgentCommand, `${workflowRunnerCommand} bind-agent --run-id '${runId}' --step-id 'prepare' --runs-root '${runsRoot}' --agent-id <agent-id> --lease-token '${leaseToken}'`);
 });
 
 test('runner reuse hints: follow-up instructions preserve validating output contract', async () => {
@@ -293,30 +291,28 @@ test('runner reuse hints: follow-up instructions preserve validating output cont
   assert.doesNotMatch(followUp, /write-output[^\n]*--only-instructions/);
 });
 
-test('runner reuse hints: bind-agent stores and overwrites top-level worker binding', async () => {
+test('runner reuse hints: continue bind-agent flag stores top-level worker binding', async () => {
   const workflow = structuredClone(workflowDoc);
-  workflow.steps.prepare.next = 'done';
+  workflow.steps.prepare.next = 'branch_a';
+  workflow.steps.branch_a.next = 'done';
   const { runId, runDir, workflowPath, leaseToken, now } = await runCase('bind-agent-single', workflow);
 
   const first = await next({ runId, workflowPath, leaseToken, now });
   assert.equal(first.requests[0].preferredAgentId, null);
-
-  assert.deepEqual(await bindAgent({ runId, workflowPath, stepId: 'prepare', agentId: 'worker-1', leaseToken, now }), {
-    ok: true,
+  await writeOutput({
     runId,
+    workflowPath,
     stepId: 'prepare',
-    bound: true,
+    json: JSON.stringify(workerOutput('prepared')),
+    debugSummaryFile: debugSummaryFileFor(runDir, 'prepare'),
+    leaseToken,
+    now,
   });
+
+  const response = await continueRun({ runId, workflowPath, bindAgents: ['prepare=worker-1'], leaseToken, now });
   assert.deepEqual(readBaton(runDir).workerBindings, { prepare: 'worker-1' });
   assert.equal(readBaton(runDir).state.workerBindings, undefined);
-
-  const response = await next({ runId, workflowPath, leaseToken, now });
-  assert.equal(response.requests[0].preferredAgentId, 'worker-1');
-
-  await bindAgent({ runId, workflowPath, stepId: 'prepare', agentId: 'worker-2', leaseToken, now });
-  assert.deepEqual(readBaton(runDir).workerBindings, { prepare: 'worker-2' });
-  const retried = await next({ runId, workflowPath, leaseToken, now });
-  assert.equal(retried.requests[0].preferredAgentId, 'worker-2');
+  assert.equal(response.requests[0].preferredAgentId, null);
 });
 
 test('runner reuse hints: logical agent name reuses one worker across different workflow steps', async () => {
@@ -331,9 +327,6 @@ test('runner reuse hints: logical agent name reuses one worker across different 
   assert.equal(first.requests[0].stepId, 'prepare');
   assert.equal(first.requests[0].preferredAgentId, null);
 
-  await bindAgent({ runId, workflowPath, stepId: 'prepare', agentId: 'architect-worker', leaseToken, now });
-  assert.deepEqual(readBaton(runDir).workerBindings, { architect: 'architect-worker' });
-
   await writeOutput({
     runId,
     workflowPath,
@@ -344,25 +337,34 @@ test('runner reuse hints: logical agent name reuses one worker across different 
     now,
   });
 
-  const followUp = await continueRun({ runId, workflowPath, leaseToken, now });
+  const followUp = await continueRun({ runId, workflowPath, bindAgents: ['prepare=architect-worker'], leaseToken, now });
+  assert.deepEqual(readBaton(runDir).workerBindings, { architect: 'architect-worker' });
   assert.equal(followUp.requests[0].stepId, 'branch_a');
   assert.equal(followUp.requests[0].preferredAgentId, 'architect-worker');
 });
 
-test('runner reuse hints: bind-agent renews stale matching worker lease', async () => {
+test('runner reuse hints: continue bind-agent renews stale matching worker lease', async () => {
   const workflow = structuredClone(workflowDoc);
   workflow.steps.prepare.next = 'done';
   const { runId, workflowPath, leaseToken, now } = await runCase('bind-agent-renews-lease', workflow);
   const paths = resolveRunPaths({ runId, workflowPath });
   await next({ runId, workflowPath, leaseToken, now });
-  const before = (await readRunsIndex(paths)).runs[runId].workerLease;
-  assert.equal(before.leaseExpiresAt, '2026-06-01T11:00:01.000Z');
-
-  await bindAgent({
+  await writeOutput({
     runId,
     workflowPath,
     stepId: 'prepare',
-    agentId: 'worker-after-expiry',
+    json: JSON.stringify(workerOutput('prepared')),
+    debugSummaryFile: debugSummaryFileFor(paths.runDir, 'prepare'),
+    leaseToken,
+    now,
+  });
+  const before = (await readRunsIndex(paths)).runs[runId].workerLease;
+  assert.equal(before.leaseExpiresAt, '2026-06-01T11:00:01.000Z');
+
+  await continueRun({
+    runId,
+    workflowPath,
+    bindAgents: ['prepare=worker-after-expiry'],
     leaseToken,
     now: new Date('2026-06-01T11:05:00.000Z'),
   });
@@ -373,7 +375,7 @@ test('runner reuse hints: bind-agent renews stale matching worker lease', async 
   assert.equal(after.leaseExpiresAt, '2026-06-01T12:05:00.000Z');
 });
 
-test('runner reuse hints: bind-agent keeps parallel step bindings separated', async () => {
+test('runner reuse hints: continue bind-agent keeps parallel step bindings separated', async () => {
   const { runId, runDir, workflowPath, leaseToken, now } = await runCase('parallel-bindings');
   await next({ runId, workflowPath, leaseToken, now });
   await writeOutput({
@@ -391,18 +393,29 @@ test('runner reuse hints: bind-agent keeps parallel step bindings separated', as
     ['branch_b', null],
   ]);
 
-  await bindAgent({ runId, workflowPath, stepId: 'branch_a', agentId: 'worker-a', leaseToken, now });
-  await bindAgent({ runId, workflowPath, stepId: 'branch_b', agentId: 'worker-b', leaseToken, now });
+  await writeOutput({
+    runId,
+    workflowPath,
+    stepId: 'branch_a',
+    json: JSON.stringify(workerOutput('branch a')),
+    debugSummaryFile: debugSummaryFileFor(runDir, 'branch_a'),
+    leaseToken,
+    now,
+  });
+  await writeOutput({
+    runId,
+    workflowPath,
+    stepId: 'branch_b',
+    json: JSON.stringify(workerOutput('branch b')),
+    debugSummaryFile: debugSummaryFileFor(runDir, 'branch_b'),
+    leaseToken,
+    now,
+  });
+  await continueRun({ runId, workflowPath, bindAgents: ['branch_a=worker-a', 'branch_b=worker-b'], leaseToken, now });
   assert.deepEqual(readBaton(runDir).workerBindings, {
     branch_a: 'worker-a',
     branch_b: 'worker-b',
   });
-
-  const response = await next({ runId, workflowPath, leaseToken, now });
-  assert.deepEqual(response.requests.map((request) => [request.stepId, request.preferredAgentId]), [
-    ['branch_a', 'worker-a'],
-    ['branch_b', 'worker-b'],
-  ]);
 });
 
 test('runner reuse hints: recoverable implementation blocker keeps host work active with same-worker follow-up', async () => {
@@ -411,7 +424,6 @@ test('runner reuse hints: recoverable implementation blocker keeps host work act
 
   const first = await next({ runId, workflowPath, leaseToken, now });
   assert.equal(first.requests[0].stepId, 'backend_implementation');
-  await bindAgent({ runId, workflowPath, stepId: 'backend_implementation', agentId: 'backend-worker-1', leaseToken, now });
   await writeOutput({
     runId,
     workflowPath,
@@ -422,7 +434,7 @@ test('runner reuse hints: recoverable implementation blocker keeps host work act
     now,
   });
 
-  const recovery = await continueRun({ runId, workflowPath, leaseToken, now });
+  const recovery = await continueRun({ runId, workflowPath, bindAgents: ['backend_implementation=backend-worker-1'], leaseToken, now });
 
   assert.equal(recovery.status, 'needs_host_actions');
   assert.equal(recovery.baton.status, 'running');
@@ -807,16 +819,26 @@ test('runner reuse hints: recoverable blocker request redacts private fields and
 
 test('runner reuse hints: write-output rejects binding metadata and preserves workerBindings', async () => {
   const workflow = structuredClone(workflowDoc);
-  workflow.steps.prepare.next = 'done';
+  workflow.steps.prepare.next = 'branch_a';
+  workflow.steps.branch_a.next = 'done';
   const { runId, runDir, workflowPath, leaseToken, now } = await runCase('write-output-purity', workflow);
   await next({ runId, workflowPath, leaseToken, now });
-  await bindAgent({ runId, workflowPath, stepId: 'prepare', agentId: 'worker-before-output', leaseToken, now });
+  await writeOutput({
+    runId,
+    workflowPath,
+    stepId: 'prepare',
+    json: JSON.stringify(workerOutput('prepared')),
+    debugSummaryFile: debugSummaryFileFor(runDir, 'prepare'),
+    leaseToken,
+    now,
+  });
+  await continueRun({ runId, workflowPath, bindAgents: ['prepare=worker-before-output'], leaseToken, now });
 
   await assert.rejects(
     () => writeOutput({
       runId,
       workflowPath,
-      stepId: 'prepare',
+      stepId: 'branch_a',
       json: JSON.stringify({ outcome: 'ready', workerBindings: { prepare: 'bad-worker' } }),
       leaseToken,
       now,
@@ -828,12 +850,12 @@ test('runner reuse hints: write-output rejects binding metadata and preserves wo
   await writeOutput({
     runId,
     workflowPath,
-    stepId: 'prepare',
+    stepId: 'branch_a',
     json: JSON.stringify(workerOutput('accepted without binding mutation')),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'prepare'),
+    debugSummaryFile: debugSummaryFileFor(runDir, 'branch_a'),
     leaseToken,
     now,
   });
   assert.deepEqual(readBaton(runDir).workerBindings, { prepare: 'worker-before-output' });
-  assert.equal(readBaton(runDir).state.prepare.results[0].summary, 'accepted without binding mutation');
+  assert.equal(readBaton(runDir).state.branch_a.results[0].summary, 'accepted without binding mutation');
 });
