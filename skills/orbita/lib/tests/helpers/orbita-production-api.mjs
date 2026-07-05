@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { applyWorkflowOutput } from '../../use-cases/ApplyWorkflowOutput.mjs';
 import { validateRunnerAcceptedOutput } from '../../use-cases/WorkflowRunnerOutputValidation.mjs';
@@ -48,6 +48,7 @@ const validateWorkflowStartup = createWorkflowStartupValidator({
 
 const workflowRunnerCommand = createWorkflowRunnerCommand({
   readFile,
+  stat,
   join,
   resolve,
   applyWorkflowOutput,
@@ -110,13 +111,11 @@ const workflowRuns = createWorkflowRuns({
 });
 
 export const {
-  bindAgent,
   continueRun,
   listPointerTransitions,
   loadInstructions,
   movePointer,
   next,
-  recordOrchestrator,
   writeOutput,
 } = workflowRunnerCommand;
 

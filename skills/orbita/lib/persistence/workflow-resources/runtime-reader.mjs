@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { readWorkflowFileRef, defaultRepositoryRootForWorkflow } from './resource-resolver.mjs';
 import { loadOutputSchema } from './output-schema-loader.mjs';
@@ -8,12 +8,26 @@ import { listAllowedWorkflowRoles, workflowRoleMaterialPath, REQUIRED_WORKFLOW_R
 import { assertWorkflowSchema } from '../../file-contracts/workflow-document-schema.mjs';
 import { readWorkflowDocument } from './workflow-document-reader.mjs';
 import { assertBatonSchema, batonSchema } from '../../file-contracts/baton/baton-schema.mjs';
+import { compileWorkflowForRuntime } from '../../runtime/compiled-workflow.mjs';
+
+const compiledRuntimeCache = new Map();
+const COMPILED_RUNTIME_CACHE_MAX_ENTRIES = 64;
 
 function readJson(pathname, kind) {
   try {
     return JSON.parse(readFileSync(pathname, 'utf8'));
   } catch (error) {
     throw new WorkflowRuntimeError(`failed to read ${kind} JSON: ${error.message}`);
+  }
+}
+
+function fileSignature(pathname) {
+  try {
+    const stats = statSync(pathname);
+    return `${path.resolve(pathname)}:${stats.mtimeMs}:${stats.size}`;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return `${path.resolve(pathname)}:missing`;
+    throw error;
   }
 }
 
@@ -164,17 +178,81 @@ export function loadWorkflowResources({ workflow, workflowPath, repositoryRoot =
   };
 }
 
-export function loadWorkflowRuntime({ workflowPath, batonPath, baton }) {
+function runScopedResources(runDir) {
+  return {
+    runDir: runDir ? path.resolve(runDir) : undefined,
+    readRunArtifact: artifactReaderForRunDir(runDir),
+    resolveRunArtifactPath: artifactPathResolverForRunDir(runDir),
+  };
+}
+
+function loadWorkflowStaticResources({ workflow, workflowPath, repositoryRoot = defaultRepositoryRootForWorkflow(workflowPath) } = {}) {
+  return {
+    templates: loadTemplates({ workflow, workflowPath, repositoryRoot }),
+    outputSchemas: loadSchemas({ workflow, workflowPath, repositoryRoot }),
+    schemaDefinitions: [batonSchema],
+    roleMaterials: loadRoleMaterials({ workflow, repositoryRoot }),
+    allowedRoles: listAllowedWorkflowRoles({ repositoryRoot }),
+  };
+}
+
+function resourceSignaturePaths({ workflowPath, repositoryRoot, resources }) {
+  const paths = [workflowPath, path.join(repositoryRoot, 'roles')];
+  for (const template of Object.values(resources.templates ?? {})) {
+    if (template?.path) paths.push(template.path);
+  }
+  for (const loaded of Object.values(resources.outputSchemas ?? {})) {
+    if (loaded?.schemaPath) paths.push(loaded.schemaPath);
+  }
+  for (const materials of Object.values(resources.roleMaterials ?? {})) {
+    for (const material of materials ?? []) {
+      if (material?.path) paths.push(material.path);
+    }
+  }
+  return [...new Set(paths.map((entry) => path.resolve(entry)))].sort();
+}
+
+function resourceSignature(paths) {
+  return paths.map(fileSignature).join('\u001f');
+}
+
+function loadCompiledWorkflowPackage({ workflowPath }) {
+  const cacheKey = path.resolve(workflowPath);
+  const cached = compiledRuntimeCache.get(cacheKey);
+  if (cached && resourceSignature(cached.signaturePaths) === cached.signature) return cached;
+
   const workflow = readWorkflowDocument(workflowPath, 'workflow');
   assertWorkflowSchema(workflow);
+  const repositoryRoot = defaultRepositoryRootForWorkflow(workflowPath);
+  const staticResources = loadWorkflowStaticResources({ workflow, workflowPath, repositoryRoot });
+  const signaturePaths = resourceSignaturePaths({ workflowPath, repositoryRoot, resources: staticResources });
+  const entry = {
+    workflow: compileWorkflowForRuntime(workflow, staticResources),
+    repositoryRoot,
+    staticResources,
+    signaturePaths,
+    signature: resourceSignature(signaturePaths),
+  };
+  if (!compiledRuntimeCache.has(cacheKey) && compiledRuntimeCache.size >= COMPILED_RUNTIME_CACHE_MAX_ENTRIES) {
+    compiledRuntimeCache.delete(compiledRuntimeCache.keys().next().value);
+  }
+  compiledRuntimeCache.set(cacheKey, entry);
+  return entry;
+}
+
+export function loadWorkflowRuntime({ workflowPath, batonPath, baton }) {
   const batonDoc = baton ?? readJson(batonPath, 'baton');
   assertBatonSchema(batonDoc);
-  const repositoryRoot = defaultRepositoryRootForWorkflow(workflowPath);
+  const compiledPackage = loadCompiledWorkflowPackage({ workflowPath });
+  const resources = {
+    ...compiledPackage.staticResources,
+    ...runScopedResources(batonPath ? path.dirname(batonPath) : undefined),
+  };
   return {
-    workflow,
+    workflow: compileWorkflowForRuntime(compiledPackage.workflow, resources),
     baton: batonDoc,
-    resources: loadWorkflowResources({ workflow, workflowPath, repositoryRoot, runDir: batonPath ? path.dirname(batonPath) : undefined }),
-    repositoryRoot,
+    resources,
+    repositoryRoot: compiledPackage.repositoryRoot,
   };
 }
 

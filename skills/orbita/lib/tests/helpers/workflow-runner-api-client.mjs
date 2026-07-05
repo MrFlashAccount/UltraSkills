@@ -1,11 +1,9 @@
 import {
-  bindAgent,
   continueRun,
   listPointerTransitions,
   loadInstructions,
   movePointer,
   next,
-  recordOrchestrator,
   writeOutput,
 } from './orbita-production-api.mjs';
 import { claimWorkflowRunAtRoot, registerWorkflowRunAtRoot } from '../../persistence/run-state/workflow-runs.mjs';
@@ -21,6 +19,16 @@ function valueAfter(args, name) {
 
 function hasFlag(args, name) {
   return args.includes(name) || args.some((arg) => typeof arg === 'string' && arg === `${name}=true`);
+}
+
+function valuesAfter(args, name) {
+  const values = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === name) values.push(args[index + 1]);
+    else if (typeof arg === 'string' && arg.startsWith(`${name}=`)) values.push(arg.slice(name.length + 1));
+  }
+  return values.length > 0 ? values : undefined;
 }
 
 function jsonStdout(value) {
@@ -74,27 +82,12 @@ export async function runWorkflowRunnerApi(args, options = {}) {
       });
       return { status: 0, stdout: instructions, stderr: '' };
     }
-    if (mode === 'bind-agent') {
-      await bindAgent({
-        ...common,
-        stepId: valueAfter(args, '--step-id'),
-        agentId: valueAfter(args, '--agent-id'),
-      });
-      return { status: 0, stdout: '', stderr: '' };
-    }
     if (mode === 'write-output') {
       const response = await writeOutput({
         ...common,
         stepId: valueAfter(args, '--step-id'),
         json: valueAfter(args, '--json') ?? options.input ?? '',
         debugSummaryFile: valueAfter(args, '--debug-summary-file'),
-      });
-      return { status: 0, stdout: jsonStdout(response), stderr: '' };
-    }
-    if (mode === 'record-orchestrator') {
-      const response = await recordOrchestrator({
-        ...common,
-        json: valueAfter(args, '--json') ?? options.input ?? '',
       });
       return { status: 0, stdout: jsonStdout(response), stderr: '' };
     }
@@ -118,6 +111,9 @@ export async function runWorkflowRunnerApi(args, options = {}) {
         userPrompt: valueAfter(args, '--user-prompt'),
         userPromptFile: valueAfter(args, '--user-prompt-file'),
         output: valueAfter(args, '--output') === undefined ? undefined : [valueAfter(args, '--output')],
+        bindAgents: valuesAfter(args, '--bind-agent'),
+        orchestratorDebugJson: valueAfter(args, '--orchestrator-debug-json'),
+        orchestratorDebugFile: valueAfter(args, '--orchestrator-debug-file'),
       });
       if (hasFlag(args, '--only-instructions')) {
         return { status: 0, stdout: `${response.orchestratorInstruction}\n`, stderr: '' };
