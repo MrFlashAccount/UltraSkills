@@ -14,41 +14,11 @@
       "description": "Producer must emit the single enum value that reflects the completed stage state; use blocked only when blocker explains a concrete external or contract-level recoverable pause.",
       "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when this says blocked or needs revision. Verification failures caused by the worker's own in-scope changes are implementation work to fix and rerun, not blockers by themselves."
     },
-    "implementation_handoff": {
-      "type": "object",
-      "required": [
-        "summary",
-        "covered_contract_rows",
-        "review_notes"
-      ],
-      "properties": {
-        "summary": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Producer must summarize the relevant decision or handoff in concise human-readable form without adding new scope.",
-          "x-usage": "Use this as concise human-readable context only. Do not route, approve, or expand scope from this text."
-        },
-        "covered_contract_rows": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          },
-          "description": "Producer must identify the plan or contract rows this slice claims to cover.",
-          "x-usage": "Compare these coverage claims against the approved contract. Do not treat them as independent approval."
-        },
-        "review_notes": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "Producer must list cautions, assumptions, or focus areas created during implementation.",
-          "x-usage": "Use these notes as focus areas for the next agent. Do not treat them as blockers unless outcome or findings make them blocking."
-        }
-      },
-      "additionalProperties": true,
-      "description": "Producer must describe the completed implementation slice, covered contract rows, and reviewer notes.",
-      "x-usage": "Treat this as the worker-reported implementation evidence, not approval. Verify claims against changed files and checks before accepting them."
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Producer must summarize the completed implementation slice in concise human-readable form without embedding the handoff artifact body.",
+      "x-usage": "Use this as orientation metadata only. The implementation-handoff artifact is the source of truth for review handoff detail."
     },
     "changed_files": {
       "type": "array",
@@ -91,16 +61,21 @@
       "items": {
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
       },
-      "description": "Producer may emit named structured artifacts created by this stage when they are part of the handoff.",
-      "x-usage": "Use these only as supporting named artifacts to preserve or pass along. Do not treat them as routing decisions unless another field explicitly references them."
-    },
-    "results": {
-      "type": "array",
-      "items": {
-        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
-      },
-      "description": "Producer may emit compact structured results, decisions, or evidence summaries created by this stage.",
-      "x-usage": "Use these as supporting evidence or compact summaries. Do not let them override outcome, selected steps, blockers, or approved contracts."
+      "description": "Producer must emit artifact metadata for the required immutable implementation-handoff artifact when outcome is implemented.",
+      "x-usage": "Emit only artifact metadata here; the full implementation handoff body lives in the referenced artifact file.",
+      "minItems": 1,
+      "maxItems": 1,
+      "contains": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "const": "implementation-handoff"
+          }
+        }
+      }
     },
     "blocker": {
       "type": "object",
@@ -165,9 +140,10 @@
       },
       "then": {
         "required": [
-          "implementation_handoff",
+          "summary",
           "changed_files",
-          "verification"
+          "verification",
+          "artifacts"
         ]
       }
     },

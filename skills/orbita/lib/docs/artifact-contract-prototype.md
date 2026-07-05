@@ -84,7 +84,7 @@ Those mechanics belong in schema definitions and renderer-generated field notes.
 2. `research_attack` reads artifact `reasons-canvas-research` from `research_draft` and reviews/attacks that artifact.
 3. If attack returns `needs_revision`, `research_draft` projects `research_attack`, revises the Canvas, and emits a fresh artifact for the revised Canvas using the same central schema contract.
 4. `approve_research` presents artifact `reasons-canvas-research` from `research_draft` plus `research_attack.verdict` and waits for explicit human approval.
-5. On approval, `architecture_draft` uses the approved/current `reasons-canvas-research` artifact from `research_draft` as the research source of truth and produces the minimal architecture decision/structural contract required by that approved research. If architecture work is unnecessary, it records the explicit no-artifact decision in `architecture_contract`.
+5. On approval, `architecture_draft` uses the approved/current `reasons-canvas-research` artifact from `research_draft` as the research source of truth and emits the minimal architecture decision/structural contract as `reasons-canvas-architecture` artifact metadata plus a compact output `summary`. The full architecture contract body lives in the referenced artifact file, not inline JSON.
 
 The JSON output remains authoritative for workflow branching, prompt input context, and gates. The markdown artifact is the human-facing Canvas for review/approval. If the user asks the orchestrator for the research/proposal file, the orchestrator must retrieve or export the existing run artifact referenced by prompt input/output artifacts; it must not ask a worker to recreate the Canvas in an arbitrary temp path.
 
