@@ -2,8 +2,6 @@ import { WorkflowRuntimeError } from '../errors.mjs';
 import { parsePathExpression } from './expression.mjs';
 import { fencedJson } from './state-selection.mjs';
 
-export const MAX_INTERPOLATED_JSON_CHARS = 12000;
-
 const TOKEN_PATTERN = /\$\{\{[\s\S]*?\}\}/g;
 const TOKEN_INNER_PATTERN = /^\$\{\{\s*([\s\S]*?)\s*\}\}$/;
 const PATH_WITH_DEFAULT_PATTERN = /^([A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*)(?:\s*\|\s*default\s*:\s*([\s\S]+))?$/;
@@ -77,11 +75,7 @@ function renderPromptValue(value) {
   if (typeof value === 'string') return value;
   if (value === null) return 'null';
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  const rendered = fencedJson(value).trimEnd();
-  if (rendered.length > MAX_INTERPOLATED_JSON_CHARS) {
-    throw new WorkflowRuntimeError(`workflow prompt render failed: interpolated JSON value exceeds ${MAX_INTERPOLATED_JSON_CHARS} characters; project a smaller prompt input field or hand off an artifact reference instead`);
-  }
-  return rendered;
+  return fencedJson(value).trimEnd();
 }
 
 export function interpolatePromptExpressions(prompt, inputContext = {}) {

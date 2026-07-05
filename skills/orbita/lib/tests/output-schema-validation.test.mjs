@@ -639,7 +639,7 @@ test('output.schema: central artifact contract accepts simplified shape and reje
 
   assert.equal(validateAgainstOutputSchema({ schema, output: { outcome: 'ready', artifacts: [{ id: 'packet', content_type: 'text/markdown', path: '/runs/worker_step/artifacts/packet.md' }] } }).ok, true);
 
-  for (const staleField of ['type', 'kind', 'ref', 'producer_step_id', 'version', 'replaces', 'aliases']) {
+  for (const staleField of ['type', 'kind', 'ref', 'producer_step_id', 'version', 'replaces', 'aliases', 'content', 'body', 'markdown', 'text']) {
     const validation = validateAgainstOutputSchema({
       schema,
       output: { outcome: 'ready', artifacts: [{ id: 'packet', content_type: 'text/markdown', path: '/runs/worker_step/artifacts/packet.md', [staleField]: staleField === 'aliases' ? [] : 'legacy' }] },
