@@ -24,7 +24,7 @@ import { readPersistedRunState } from '../../persistence/run-state/PersistedRunS
 import { defaultWorkflowPath, ensureRunFiles, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../../persistence/run-state/paths.mjs';
 import { createRunIndexEntry, readRunsIndex, runsIndexPathsForRoot, upsertRunIndexEntry } from '../../persistence/run-state/run-index.mjs';
 import { withRunStateLock } from '../../persistence/run-state/lock.mjs';
-import { claimWorkflowRunAtRoot, heartbeatWorkflowRunAtRoot, listWorkflowRunsAtRoot, registerWorkflowRunAtRoot, summarizeWorkflowRuns as summarizeWorkflowRunsAtRoot } from '../../persistence/run-state/workflow-runs.mjs';
+import { claimWorkflowRunAtRoot, deleteWorkflowRunAtRoot, heartbeatWorkflowRunAtRoot, listWorkflowRunsAtRoot, registerWorkflowRunAtRoot, summarizeWorkflowRuns as summarizeWorkflowRunsAtRoot } from '../../persistence/run-state/workflow-runs.mjs';
 import { publicErrorMessage } from '../../public-error.mjs';
 import { assertAbsoluteWorkflowPath, resolveAbsoluteWorkflowPath } from '../../workflow-path-boundary.mjs';
 import { isRecoverableWorkerBlockerOutput, publicRecoverableBlockerDetails, publicRecoveryResolutionDetails } from '../../runtime/recoverable-worker-blocker.mjs';
@@ -100,6 +100,7 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
 
 const workflowRuns = createWorkflowRuns({
   claimWorkflowRunAtRoot,
+  deleteWorkflowRunAtRoot,
   heartbeatWorkflowRunAtRoot,
   listWorkflowRunsAtRoot,
   registerWorkflowRunAtRoot,
@@ -121,6 +122,7 @@ export const {
 
 export const {
   claimWorkflowRun,
+  deleteWorkflowRun,
   heartbeatWorkflowRun,
   listWorkflowRuns,
   registerWorkflowRun,

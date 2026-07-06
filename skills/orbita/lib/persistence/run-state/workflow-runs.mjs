@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { rename, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { assertSafeRunId, defaultWorkflowPath, migrateLegacyWorkflowRunsRootIfNeeded, resolveRunPaths, workflowRunsRoot } from './paths.mjs';
-import { createRunIndexEntry, readRunsIndex, runsIndexPathsForRoot, updateRunIndexEntry } from './run-index.mjs';
+import { assertSafeRunId, defaultWorkflowPath, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths, workflowRunsRoot } from './paths.mjs';
+import { createRunIndexEntry, deleteRunIndexEntry, readRunsIndex, runsIndexPathsForRoot, updateRunIndexEntry } from './run-index.mjs';
 import { assertMatchingTokenAuthority, buildTokenLease, generateLeaseToken, occupancyForLease, renewTokenLease } from './lease-authority.mjs';
 import { withRunStateLock } from './lock.mjs';
 import { resolveAbsoluteWorkflowPath } from '../../workflow-path-boundary.mjs';
@@ -150,4 +151,42 @@ export async function claimWorkflowRunAtRoot({ runId, workflowPath, runsRoot = w
 export async function heartbeatWorkflowRunAtRoot({ leaseToken, ...options } = {}) {
   if (!leaseToken) throw new Error('workflow run token is required');
   return claimWorkflowRunAtRoot({ ...options, leaseToken });
+}
+
+async function renameRunDirForDeletion(paths) {
+  const tombstonePath = `${paths.runDir}.deleting-${process.pid}-${Date.now()}-${randomUUID()}`;
+  try {
+    await rename(paths.runDir, tombstonePath);
+    return tombstonePath;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+export async function deleteWorkflowRunAtRoot({ runId, runsRoot = workflowRunsRoot, now = new Date() } = {}) {
+  await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
+  const safeRunId = assertSafeRunId(runId);
+  const paths = resolveRunPaths({ runId: safeRunId, workflowPath: defaultWorkflowPath, runsRoot });
+  const directoryExisted = await pathExists(paths.runDir);
+  let existing = null;
+  let tombstonePath = null;
+  await withRunStateLock(paths, async () => {
+    const index = await readRunsIndex(runsIndexPathsForRoot(runsRoot));
+    existing = index.runs[safeRunId] ?? null;
+    if (occupancyForLease(existing?.workerLease, now).state === 'occupied') {
+      const conflict = new Error(`workflow run is occupied: ${safeRunId}`);
+      conflict.code = 'WORKFLOW_RUN_OCCUPIED';
+      conflict.run = publicRun(existing, { now });
+      throw conflict;
+    }
+    existing = await deleteRunIndexEntry(paths);
+    tombstonePath = await renameRunDirForDeletion(paths);
+  });
+  if (tombstonePath) await rm(tombstonePath, { recursive: true, force: true });
+  return {
+    ok: true,
+    deleted: Boolean(existing || directoryExisted),
+    runId: safeRunId,
+  };
 }

@@ -7,7 +7,7 @@ import { afterAll, beforeEach, test } from 'bun:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { listWorkflowRuns, summarizeWorkflowRuns } from './helpers/orbita-production-api.mjs';
 import { publicErrorMessage } from '../public-error.mjs';
-import { claimWorkflowRunAtRoot, heartbeatWorkflowRunAtRoot, listWorkflowRunsAtRoot, registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
+import { claimWorkflowRunAtRoot, deleteWorkflowRunAtRoot, heartbeatWorkflowRunAtRoot, listWorkflowRunsAtRoot, registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
 import { buildTokenLease, formatLeaseTokenEntropy } from '../persistence/run-state/lease-authority.mjs';
 import { createRunIndexEntry, readRunsIndex, runsIndexPathsForRoot } from '../persistence/run-state/run-index.mjs';
 import { resolveRunPaths, workflowRunsRoot } from '../persistence/run-state/paths.mjs';
@@ -490,6 +490,85 @@ test('workflow-runs CLI claim keeps JSON default and supports token-only stdout'
   assert.equal(missingTokenResult.status, 1);
   assert.equal(missingTokenResult.stdout, '');
   assert.match(missingTokenResult.stderr, /workflow-runs: claim did not return a lease token/);
+});
+
+test('workflow runs API delete removes index entry and run directory', async () => {
+  const runId = `${runPrefix}delete-api`;
+  await registerWorkflowRunAtRoot({ runsRoot, runId, title: 'Delete me' });
+  mkdirSync(path.join(runsRoot, runId, 'research_draft', 'artifacts'), { recursive: true });
+  writeFileSync(path.join(runsRoot, runId, 'baton.json'), '{}\n', { mode: 0o600 });
+
+  const response = await deleteWorkflowRunAtRoot({ runsRoot, runId });
+
+  assert.deepEqual(response, { ok: true, deleted: true, runId });
+  assert.equal(existsSync(path.join(runsRoot, runId)), false);
+  const index = await readRunsIndex(runsIndexPathsForRoot(runsRoot));
+  assert.equal(Object.hasOwn(index.runs, runId), false);
+});
+
+test('workflow runs API delete refuses occupied lease without mutating run', async () => {
+  const runId = `${runPrefix}delete-occupied-api`;
+  await registerWorkflowRunAtRoot({
+    runsRoot,
+    runId,
+    title: 'Do not delete active run',
+    claim: true,
+    owner: 'alice',
+    leaseMs: 60_000,
+    now: new Date('2026-06-01T10:00:00.000Z'),
+  });
+  writeFileSync(path.join(runsRoot, runId, 'baton.json'), '{}\n', { mode: 0o600 });
+
+  await assert.rejects(
+    () => deleteWorkflowRunAtRoot({ runsRoot, runId, now: new Date('2026-06-01T10:00:10.000Z') }),
+    /workflow run is occupied/,
+  );
+
+  assert.equal(existsSync(path.join(runsRoot, runId, 'baton.json')), true);
+  const index = await readRunsIndex(runsIndexPathsForRoot(runsRoot));
+  assert.equal(Object.hasOwn(index.runs, runId), true);
+  assert.equal(index.runs[runId].workerLease.leaseExpiresAt, '2026-06-01T10:01:00.000Z');
+});
+
+test('workflow-runs CLI delete removes index entry and run directory', async () => {
+  const helperPath = path.join(root, 'skills/orbita/lib/entrypoints/cli/workflow-runs.mjs');
+  const runId = `${runPrefix}cli-delete`;
+  removeDefaultRunsForTestPrefix();
+  await registerWorkflowRunAtRoot({ runsRoot: cliRunsRoot, runId, title: 'CLI delete me' });
+  mkdirSync(path.join(cliRunsRoot, runId, '.workflow-runner'), { recursive: true });
+  writeFileSync(path.join(cliRunsRoot, runId, 'history.md'), '', { mode: 0o600 });
+
+  const result = spawnSync(process.execPath, [helperPath, 'delete', '--run-id', runId], { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUNS_ROOT: cliRunsRoot } });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { ok: true, deleted: true, runId });
+  assert.equal(existsSync(path.join(cliRunsRoot, runId)), false);
+  assert.equal(Object.hasOwn((await readRunsIndex(runsIndexPathsForRoot(cliRunsRoot))).runs, runId), false);
+});
+
+test('workflow-runs CLI delete refuses occupied lease without mutating run', async () => {
+  const helperPath = path.join(root, 'skills/orbita/lib/entrypoints/cli/workflow-runs.mjs');
+  const runId = `${runPrefix}cli-delete-occupied`;
+  removeDefaultRunsForTestPrefix();
+  await registerWorkflowRunAtRoot({
+    runsRoot: cliRunsRoot,
+    runId,
+    title: 'CLI active run',
+    claim: true,
+    owner: 'alice',
+    leaseMs: 60_000,
+  });
+  writeFileSync(path.join(cliRunsRoot, runId, 'history.md'), '', { mode: 0o600 });
+
+  const result = spawnSync(process.execPath, [helperPath, 'delete', '--run-id', runId], { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUNS_ROOT: cliRunsRoot } });
+
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /workflow-runs: workflow run is occupied/);
+  assert.equal(existsSync(path.join(cliRunsRoot, runId, 'history.md')), true);
+  const index = await readRunsIndex(runsIndexPathsForRoot(cliRunsRoot));
+  assert.equal(Object.hasOwn(index.runs, runId), true);
+  assert.equal(index.runs[runId].workerLease.tokenEpoch, 1);
 });
 
 test('workflow runs API rejects symlinked runs root for list without reading escaped index', async () => {

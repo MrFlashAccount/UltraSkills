@@ -1,5 +1,6 @@
 import {
   claimWorkflowRunAtRoot,
+  deleteWorkflowRunAtRoot,
   heartbeatWorkflowRunAtRoot,
   listWorkflowRunsAtRoot,
   registerWorkflowRunAtRoot,
@@ -19,6 +20,7 @@ const validateWorkflowStartup = createWorkflowStartupValidator({
 
 const workflowRuns = createWorkflowRuns({
   claimWorkflowRunAtRoot,
+  deleteWorkflowRunAtRoot,
   heartbeatWorkflowRunAtRoot,
   listWorkflowRunsAtRoot,
   registerWorkflowRunAtRoot,
@@ -31,6 +33,7 @@ const workflowRuns = createWorkflowRuns({
 
 export const {
   claimWorkflowRun,
+  deleteWorkflowRun,
   heartbeatWorkflowRun,
   listWorkflowRuns,
   registerWorkflowRun,
