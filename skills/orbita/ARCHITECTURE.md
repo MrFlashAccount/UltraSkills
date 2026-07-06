@@ -37,8 +37,10 @@ baton cursor/status through the existing lease, lock, validation, durable writer
 history, and run-index path. Neither surface rolls back, prunes, rewrites, or cleans
 `baton.state`, accepted outputs, artifacts/results, worker bindings, prompt
 markers, attempts, or existing history. The first supported slice is limited to
-one adjacent observed transition edge from the current pointer/status; terminal
-`done`/`blocked` runs and parallel/array cursors are explicitly unsupported.
+one adjacent observed transition edge from the current pointer/status. Terminal
+single-cursor positions, including a completed `done` run, may move backward to
+an observed non-terminal step; terminal status must not by itself make pointer
+recovery unsupported. Parallel/array cursors remain explicitly unsupported.
 Targets with retained accepted output require visible retained-state disclosure
 and explicit acknowledgement before mutation.
 
@@ -655,7 +657,8 @@ Architecture review must verify:
   rules
 - pointer recovery docs, API exports, CLI modes, tests, and source agree that
   `listPointerTransitions` and `movePointer` require active lease authority,
-  preserve baton state, reject terminal/parallel first-slice scope, require
+  preserve baton state, allow terminal single-cursor rollback along observed
+  non-terminal backward edges, reject parallel/array cursor scope, require
   retained-output acknowledgement where applicable, and expose only redacted
   bounded metadata
 - dashboard changes preserve the read-only observer boundary, safe projection
