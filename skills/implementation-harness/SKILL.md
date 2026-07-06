@@ -11,7 +11,7 @@ Use only after approval. This skill executes against approved research and appro
 
 1. Read [references/input-contract.md](references/input-contract.md).
 2. Read [references/workflow.md](references/workflow.md).
-3. Before spawning implementer workers, read [../dev-harness/references/roles/implementers.md](../dev-harness/references/roles/implementers.md) and use the selected implementer section as the role-load contract.
+3. Before spawning implementer workers, read [references/roles/implementers.md](references/roles/implementers.md) and use the selected implementer section as the role-load contract.
 4. Read [references/testing.md](references/testing.md) before verification.
 5. Read [references/output-contract.md](references/output-contract.md) before returning results.
 
@@ -38,7 +38,7 @@ Use only after approval. This skill executes against approved research and appro
 - If required implementer delegation is unavailable, fails to start, or cannot be used, stop as `blocked`; do not fall back to manual implementation in the parent/orchestrator session.
 - Treat the approved `reasons-canvas-research` plus approved execution plan as the implementation contract unless a concrete blocker, contradiction, or missing implementation-critical fact survived earlier stages.
 - Use only canonical implementer labels: `backend`, `frontend`.
-- A role label alone is not a role contract. Each implementer prompt must include the shared delegated role task template from [../../shared/delegate/delegated-role-task-template.md](../../shared/delegate/delegated-role-task-template.md), the selected role material path, compact implementer focus from [../dev-harness/references/roles/implementers.md](../dev-harness/references/roles/implementers.md), and the concrete approved task packet/scope/verification expectations.
+- A role label alone is not a role contract. Each implementer prompt must include the shared delegated role task template from [../../shared/delegate/delegated-role-task-template.md](../../shared/delegate/delegated-role-task-template.md), the selected role material path, compact implementer focus from [references/roles/implementers.md](references/roles/implementers.md), and the concrete approved task packet/scope/verification expectations.
 - Do not accept implementer output for a required file zone if required role material cannot be loaded or loaded role material's additional, final-answer, or output requirements cannot be satisfied; mark the stage `blocked` instead.
 - One owner per file zone. If zones overlap, collapse to one implementer.
 - Verification is mandatory before handing the slice to post-implementation review.

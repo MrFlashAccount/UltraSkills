@@ -1,12 +1,12 @@
 # Implementer Roles
 
-Paths in this compact role/focus guidance are resolved relative to the `dev-harness` skill root (`skills/dev-harness/`), not relative to this reference file.
+Paths in this compact role/focus guidance are resolved relative to the `implementation-harness` skill root (`skills/implementation-harness/`), not relative to this reference file.
 
 Read only the sections for implementer roles you are about to launch.
 
-`../../roles/*/ROLE.md` and `../../roles/*/RUBRIC.md` are the only canonical role files this overlay may require directly. The sections below are routing/load guidance and compact prompt-shape guidance, not duplicated role rulebooks.
+`../../roles/*/ROLE.md` and `../../roles/*/RUBRIC.md` are the only canonical role files this guidance may require directly. The sections below are routing/load guidance and compact prompt-shape guidance, not duplicated role rulebooks.
 
-Role label alone is never sufficient. Before spawning an implementer worker/subagent, the parent must include the shared delegated role task template from [../../../../shared/delegate/delegated-role-task-template.md](../../../../shared/delegate/delegated-role-task-template.md), filled for the selected role, plus the selected compact section below.
+Role label alone is never sufficient. Before spawning an implementer worker/subagent, the parent must include the shared delegated role task template from `../../shared/delegate/delegated-role-task-template.md`, filled for the selected role, plus the selected compact section below.
 
 ## Common implementer prompt contract
 
