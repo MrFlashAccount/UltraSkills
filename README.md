@@ -124,7 +124,6 @@ When a canonical label and folder path differ, the folder path is the source of 
 - market-facing copy, copy refreshes, content planning, launch planning, pricing/packaging, sales collateral, competitor dossiers, customer research, cold outreach, or lifecycle email -> `roles/marketing` (start at `roles/marketing/ROLE.md` and follow the role's own task-type routing table)
 - create or refactor a skill -> `skills/create-skill`
 - workflow-runner orchestration through CLI-returned instructions -> `skills/orbita`
-- planning + slice + approval flow for code work -> `skills/dev-harness`
 - multi-role review -> `skills/code-review-orchestrator`
 - pre-implementation Researcher -> Critic research verdict -> `skills/research-critic`
 
@@ -222,11 +221,6 @@ Fresh clones can use the committed schema-validation library dist artifact direc
   - What it is: workflow-runner host adapter skill for following runner-returned `next`/`continue --only-instructions` directives.
   - Use when: driving a workflow-runner run through CLI-returned host requests, worker delegation, approval waits, and exact embedded continuation commands.
   - Do not use when: the task is ordinary implementation, planning, research, or review that does not run through workflow-runner.
-
-- `skills/dev-harness`
-  - What it is: top-level execution-planning harness that turns closed research into an approved implementation contract and routes the work onward.
-  - Use when: the task needs planning, slicing, approval flow, delegation, or coordinated handoff after research is already closed enough.
-  - Do not use when: the task still needs broad research/discovery, or when scope is already approved and closed for direct implementation or review.
 
 - `skills/implementation-harness`
   - What it is: direct implementation harness for already-approved work.

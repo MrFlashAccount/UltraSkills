@@ -34,11 +34,8 @@ DELEGATION_DOCS = (
     "skills/create-architecture/references/workflow.md",
     "skills/create-design/references/workflow.md",
     "skills/create-skill/references/workflow.md",
-    "skills/dev-harness/SKILL.md",
-    "skills/dev-harness/references/roles/implementers.md",
-    "skills/dev-harness/references/roles/reviewers.md",
-    "skills/dev-harness/references/task-contract.md",
     "skills/implementation-harness/SKILL.md",
+    "skills/implementation-harness/references/roles/implementers.md",
     "skills/implementation-harness/references/workflow.md",
 )
 DUPLICATED_DELEGATION_SNIPPETS = (
@@ -62,7 +59,6 @@ CANONICAL_REVIEWER_LABEL_FOLDERS = {
 }
 
 REVIEWER_MAPPING_DOCS = (
-    "skills/dev-harness/references/roles/reviewers.md",
     "skills/code-review-orchestrator/references/role-prompts.md",
 )
 
@@ -127,7 +123,7 @@ def scan_delegated_role_wrapper_smells(errors: list[str]) -> None:
 
 
 def scan_implementer_prompt_compactness(errors: list[str]) -> None:
-    rel = "skills/dev-harness/references/roles/implementers.md"
+    rel = "skills/implementation-harness/references/roles/implementers.md"
     path = ROOT / rel
     if not path.exists():
         errors.append(f"{rel}: missing implementer role overlay")
@@ -183,10 +179,7 @@ def scan_exact_reviewer_role_mappings(errors: list[str]) -> None:
             if mapping_line not in text:
                 errors.append(f"{rel}: missing exact canonical mapping {mapping_line}")
 
-            if rel.endswith("dev-harness/references/roles/reviewers.md"):
-                section_heading = f"Reviewer role: `{label}` v1"
-            else:
-                section_heading = CODE_REVIEW_SECTION_HEADINGS[label]
+            section_heading = CODE_REVIEW_SECTION_HEADINGS[label]
             section = markdown_section(text, section_heading)
             if section is None:
                 errors.append(f"{rel}: missing reviewer section for {label!r}")
@@ -211,63 +204,6 @@ def scan_exact_reviewer_role_mappings(errors: list[str]) -> None:
                     errors.append(f"{rel}: reviewer label {label!r} uses non-canonical path `{wrong_path}`")
 
 
-def scan_reviewer_prompt_compactness(errors: list[str]) -> None:
-    rel = "skills/dev-harness/references/roles/reviewers.md"
-    path = ROOT / rel
-    if not path.exists():
-        errors.append(f"{rel}: missing reviewer role overlay")
-        return
-    lines = path.read_text(encoding="utf-8").splitlines()
-    headings = [(idx, line) for idx, line in enumerate(lines) if line.startswith("## Reviewer role:")]
-    roles = (
-        "architect",
-        "critic",
-        "backend",
-        "frontend",
-        "frontend taste",
-        "security",
-        "privacy/data-safety",
-        "qa/reliability",
-        "performance",
-    )
-    for role in roles:
-        matching = [(idx, line) for idx, line in headings if f"`{role}`" in line]
-        if len(matching) != 1:
-            errors.append(f"{rel}: expected exactly one compact {role} reviewer section")
-            continue
-        start, _ = matching[0]
-        following = [idx for idx, _ in headings if idx > start]
-        end = following[0] if following else len(lines)
-        section = "\n".join(lines[start:end])
-        section_line_count = end - start
-        if section_line_count > 10:
-            errors.append(f"{rel}: {role} reviewer section is too long for compact parent prompt guidance ({section_line_count} lines)")
-        if "Load `../../roles/" not in section and "Read repo `DESIGN.md` first" not in section:
-            errors.append(f"{rel}: {role} reviewer section must name selected role material path")
-        if "follow the loaded role files" not in section and "Follow the loaded role files" not in section:
-            errors.append(f"{rel}: {role} reviewer section must defer role rules to loaded role material")
-        forbidden_phrases = (
-            "- Purpose:",
-            "- Focus:",
-            "- Must-check questions:",
-            "- Must-read / must-load references:",
-            "- Non-goals:",
-            "- Escalation rules:",
-            "- Done criteria:",
-            "does the implementation still match",
-            "can this be simpler with fewer moving parts",
-            "does this preserve or intentionally change the backend contract",
-            "is data/loading ownership at the right boundary",
-            "does the rendered screen communicate priority clearly",
-            "does the slice reveal machine-specific paths",
-            "can the touched flow fail, recover, retry",
-            "does the change add avoidable work on a hot",
-        )
-        for phrase in forbidden_phrases:
-            if phrase in section:
-                errors.append(f"{rel}: {role} reviewer section contains inlined role-rule phrase {phrase!r}")
-
-
 def main() -> int:
     errors: list[str] = []
 
@@ -286,7 +222,6 @@ def main() -> int:
     scan_delegated_role_wrapper_smells(errors)
     scan_implementer_prompt_compactness(errors)
     scan_exact_reviewer_role_mappings(errors)
-    scan_reviewer_prompt_compactness(errors)
 
     for rel in DELEGATION_DOCS:
         path = ROOT / rel

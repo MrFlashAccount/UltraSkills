@@ -1,6 +1,6 @@
 ---
 name: create-skill
-description: Create, rewrite, audit, or materially restructure a Claude/OpenClaw skill folder from source material or an existing skill. Use when the task is to build a skill from a PDF, SOP, workflow, prompt pack, or notes; review an existing skill like `dev-harness`; tighten trigger metadata/frontmatter; or refactor what belongs in `SKILL.md` vs `references/`/`scripts/`/`assets/`. This skill is for approved skill work, including approved audit-only passes and approved implementation/rewrite passes.
+description: Create, rewrite, audit, or materially restructure a Claude/OpenClaw skill folder from source material or an existing skill. Use when the task is to build a skill from a PDF, SOP, workflow, prompt pack, or notes; review an existing skill; tighten trigger metadata/frontmatter; or refactor what belongs in `SKILL.md` vs `references/`/`scripts/`/`assets/`. This skill is for approved skill work, including approved audit-only passes and approved implementation/rewrite passes.
 ---
 
 Turn source material or an existing skill into a clean source-first skill workflow.

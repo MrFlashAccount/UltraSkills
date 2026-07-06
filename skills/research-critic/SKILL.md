@@ -46,7 +46,7 @@ Do not own:
 5. Return one structured wrapper verdict matching `references/output-contract.md`.
 6. Stop there. For non-trivial work, another layer may persist or route the result only after the wrapper verdict and explicit user approval.
 
-For architecture-sensitive or structurally underspecified work, the next chain is `user approval -> Architect A -> Architect B attack -> structural contract -> execution planning`. Architect consumes the approved `reasons-canvas-research` artifact and owns structural entities and the final structural contract. For non-architecture-sensitive work, the next stage is execution planning after user approval, typically handled by `dev-harness` consuming the approved Canvas.
+For architecture-sensitive or structurally underspecified work, the next chain is `user approval -> Architect A -> Architect B attack -> structural contract -> execution planning`. Architect consumes the approved `reasons-canvas-research` artifact and owns structural entities and the final structural contract. For non-architecture-sensitive work, the next stage is execution planning after user approval by the caller's selected planning workflow.
 
 ## Rules
 

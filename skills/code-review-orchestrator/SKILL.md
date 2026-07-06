@@ -10,7 +10,7 @@ Run one review entrypoint, choose the right reviewer set from the canonical post
 
 If required reviewer delegation is unavailable, fails to start, or cannot be used, stop as `blocked` and report that state; do not replace the delegated review gate with a manual review in the orchestrator session.
 
-This is stage 4, the post-implementation review gate. The pre-implementation `research` flow lives in `research-critic`, and `execution plan` lives in `dev-harness`. For non-trivial code work, this gate should act as an adversarial contract check with binary pass/fail semantics, not a soft advisory lap.
+This is stage 4, the post-implementation review gate. The pre-implementation `research` flow lives in `research-critic`, while execution planning is supplied by the caller's approved task contract. For non-trivial code work, this gate should act as an adversarial contract check with binary pass/fail semantics, not a soft advisory lap.
 
 Reviewer prompts must inline this hostile-prior contract: Start from a hostile prior: assume the change, proposal, draft, or packet is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
 
