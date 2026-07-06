@@ -2,7 +2,8 @@
 
 `lib/dashboard/**` owns the read-only Orbita dashboard observer subsystem.
 It observes durable workflow-runner state, projects safe dashboard DTOs, serves
-a local read-only API/event/static surface, and renders the browser board UI.
+a local read-only API/event/static surface, and renders the browser board UI as
+a TypeScript React SPA.
 
 This context implements the dashboard section of `../../ARCHITECTURE.md` and
 uses `../../DESIGN.md` as the board/drawer UI input.
@@ -17,8 +18,11 @@ uses `../../DESIGN.md` as the board/drawer UI input.
 - `server/**` owns the local daemon request handler, list/detail/SSE/static
   surfaces, watch/poll refresh, restart rebuild behavior, public error shape,
   and per-run read isolation.
-- `ui/**` owns browser rendering and browser API/SSE consumption from dashboard
-  DTOs only.
+- `ui/**` owns the browser-only TypeScript React SPA over dashboard DTOs only:
+  typed API/SSE client, unknown-to-DTO narrowing, local view state, selectors,
+  React components, react-aria-components accessibility primitives, CSS
+  Modules, large-list windowing, focus/keyboard behavior, and typed browser
+  fixtures.
 
 ## Binding rules
 
@@ -41,9 +45,16 @@ uses `../../DESIGN.md` as the board/drawer UI input.
 - `server/**` may perform read-only filesystem/API/static IO and response
   formatting. It must route all browser-visible run data through the safe
   projection/contract boundary.
-- `ui/**` must depend only on browser APIs and dashboard DTO contracts. It must
-  not import Node filesystem modules, persistence adapters, workflow-runner API
-  shells, CLI modules, use cases, or entity internals.
+- `ui/**` must depend only on React, react-aria-components, TanStack
+  browser/runtime surfaces, TypeScript type-only DTO contracts, CSS Modules,
+  browser APIs, and dashboard DTO contracts. It must not import Node filesystem
+  modules, persistence adapters, workflow-runner API shells, CLI modules,
+  mutation/control use cases, lease or lock authority, run-state writers, host
+  worker lifecycle modules, or entity internals.
+- `ui/**` source must be TypeScript/TSX with strict no-any discipline. DTOs,
+  API/SSE payloads, state/selectors, component props, event handlers,
+  virtualization state, and fixtures must have explicit types or
+  unknown-to-known narrowing; `any` is not allowed as an escape hatch.
 - Degraded dashboard state describes observer/read health only. It must stay
   ephemeral and must not be persisted as workflow state or represented as a
   workflow blocked result unless durable state is actually blocked.
@@ -79,6 +90,11 @@ Dashboard changes must include focused evidence for:
 
 - no runner mutation/control imports or command strings in dashboard runtime
   code;
+- no forbidden UI imports from Node IO, persistence, entrypoints, runner
+  control/use-case internals, leases/locks, run-state writers, or host worker
+  lifecycle modules;
+- no `any` usage in dashboard SPA source, DTO/type definitions, state,
+  selectors, props, event handlers, virtualization state, or fixtures;
 - no pointer-recovery controls, imports, command strings, lease acquisition, or
   manual current-pointer movement affordances in dashboard runtime or browser UI;
 - safe DTO redaction for forbidden fields above;
@@ -88,3 +104,6 @@ Dashboard changes must include focused evidence for:
 - UI rendering from daemon DTOs or an explicitly named adapter over those DTOs;
 - no control affordances, drag/drop, manual lane movement, or browser direct
   filesystem reads.
+
+The approved dashboard runtime decision is recorded in
+`../../../docs/adr/0001-orbita-dashboard-react-spa.md`.

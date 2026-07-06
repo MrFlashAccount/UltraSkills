@@ -455,7 +455,7 @@ the backend/UI boundary that makes those design rules safe.
 Target shape:
 
 ```text
-run-state files -> observer reader -> safe projection -> dashboard API/events -> browser UI
+run-state files -> observer reader -> safe projection -> dashboard API/events -> TypeScript React browser UI
 ```
 
 Intended source zones:
@@ -469,7 +469,10 @@ Intended source zones:
 - `lib/dashboard/contracts/**` owns browser-visible DTO schemas and examples
   for list, detail, event, degraded diagnostic, artifact summary, cursor chip,
   and mini-map surfaces.
-- `lib/dashboard/ui/**` owns browser rendering against those DTOs only.
+- `lib/dashboard/ui/**` owns the browser-only TypeScript React SPA over those
+  DTOs only: typed API/SSE client, unknown-to-DTO narrowing, local view state,
+  selectors, React components, react-aria-components accessibility primitives,
+  CSS Modules, large-list windowing, and typed browser fixtures.
 
 If these zones become substantial, add `lib/dashboard/CONTEXT.md` in the same
 slice to record local ownership and forbidden dependencies. Do not create that
@@ -491,11 +494,17 @@ instructions, private prompts, token-bearing commands, hidden transcripts,
 instruction storage paths, preferred worker agent ids, worker binding flags, or
 unnecessary host control-plane metadata.
 
-Dashboard UI is a browser-only inspection context. It consumes safe DTOs from
-the daemon API/event surface and follows `DESIGN.md`. It must not read
-`~/.orbita` directly, infer runner state from filesystem paths, include
-drag/drop movement, or show controls that resemble `next`, `continue`,
-`write-output`, retry, repair, or manual lane movement.
+Dashboard UI is a browser-only TypeScript React inspection context. It consumes
+safe typed DTOs from the daemon API/event surface and follows `DESIGN.md`.
+Transport payloads must enter as `unknown` and be narrowed before state,
+selectors, components, fixtures, or event handlers consume them. Source under
+`lib/dashboard/ui/**` must be TypeScript/TSX with strict no-any discipline,
+React components, react-aria-components for accessible interaction/focus
+primitives, CSS Modules for component styling, and TanStack Start/build
+integration for SPA assets. It must not read `~/.orbita` directly, infer runner
+state from filesystem paths, include drag/drop movement, or show controls that
+resemble `next`, `continue`, `write-output`, retry, repair, or manual lane
+movement.
 
 ### Dashboard Relationships
 
@@ -506,7 +515,7 @@ flowchart LR
   projection[Safe dashboard projection\nallowlisted DTOs]
   api[Dashboard daemon API\nlist, detail, events, static UI]
   sse[SSE-first event surface\nlossy updates]
-  ui[Browser dashboard UI\nboard, drawer, mini-map]
+  ui[TypeScript React dashboard UI\nboard, drawer, mini-map]
   design[DESIGN.md\nboard/drawer input]
 
   runs -->|read only| observer
@@ -530,9 +539,16 @@ Binding rules for dashboard code:
   command builders, lease authority, write-output/continue/next/
   listPointerTransitions/movePointer API handlers, list-pointer-transitions/
   move-pointer CLI modes, or host worker lifecycle code.
-- Browser UI code must depend only on dashboard DTO contracts and browser
-  platform APIs; it must not import persistence, filesystem helpers,
-  workflow-runner API shells, or Node-only modules.
+- Browser UI code must depend only on React, react-aria-components, TanStack
+  browser/runtime surfaces, TypeScript type-only DTO contracts, CSS Modules,
+  dashboard DTO contracts, and browser platform APIs. It must not import
+  persistence, filesystem helpers, workflow-runner API shells, CLI modules,
+  mutation/control use cases, lease/lock authority, run-state writers, host
+  worker lifecycle modules, entity internals, or Node-only modules.
+- Dashboard SPA source must stay TypeScript/TSX with strict no-any discipline.
+  DTOs, API/SSE payloads, state/selectors, component props, event handlers,
+  virtualization state, and fixtures must have explicit types or
+  unknown-to-known narrowing; `any` is not an approved escape hatch.
 - Projection code may depend on DTO/schema/value helpers and read-only records,
   but must not depend on CLI argument parsing, process environment, locks,
   leases, or mutation use cases.
@@ -544,10 +560,12 @@ Binding rules for dashboard code:
   and must not be written back into run directories.
 
 Add mechanical boundary checks for these rules when dashboard code is added.
-At minimum, tests/checks must prove absence of lease tokens, token-bearing
-commands, raw instruction commands, private prompts, hidden transcripts, raw
-instruction paths, preferred agent ids, worker binding flags, and unnecessary
-host control-plane metadata in browser-visible DTOs.
+At minimum, tests/checks must prove absence of forbidden UI imports, no-any
+usage, lease tokens, token-bearing commands, raw instruction commands, private
+prompts, hidden transcripts, raw instruction paths, preferred agent ids, worker
+binding flags, and unnecessary host control-plane metadata in browser-visible
+DTOs. The dashboard runtime ADR is recorded in
+`docs/adr/0001-orbita-dashboard-react-spa.md`.
 
 ### Workflow Loop Policies
 

@@ -8,6 +8,7 @@ import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { listDashboardRuns, getDashboardRun, startDashboardServer } from '../dashboard/api.mjs';
 import { DashboardEventPublisher } from '../dashboard/server/dashboard-event-publisher.mjs';
+import { resolveDashboardStaticFile } from '../dashboard/server/dashboard-static-assets.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const defaultWorkflow = path.join(root, 'workflows/dev-harness/workflow.toml');
@@ -287,18 +288,18 @@ test('dashboard local server exposes list, detail, events, and static surfaces',
     assert.equal(staticResponse.status, 200);
     const staticHtml = await staticResponse.text();
     assert.match(staticHtml, /Orbita Dashboard/);
-    assert.match(staticHtml, /\/dashboard\/style\.css/);
-    assert.match(staticHtml, /\/dashboard\/client\.js/);
+    assert.match(staticHtml, /orbita-dashboard-root/);
+    assert.match(staticHtml, /\/dashboard\/assets\/index-[A-Za-z0-9_-]+\.js/);
+    assert.match(staticHtml, /\/dashboard\/assets\/index-[A-Za-z0-9_-]+\.css/);
+    assert.doesNotMatch(staticHtml, /\/dashboard\/client\.js|\/dashboard\/render\.mjs|\/dashboard\/style\.css/);
+    assert.doesNotMatch(staticHtml, /\.tsx|main\.tsx/);
 
-    const clientResponse = await fetch(`${dashboard.url}/dashboard/client.js`);
-    assert.equal(clientResponse.status, 200);
-    assert.match(clientResponse.headers.get('content-type'), /text\/javascript/);
-    assert.match(await clientResponse.text(), /\/api\/runs/);
-
-    const renderModuleResponse = await fetch(`${dashboard.url}/dashboard/render.mjs`);
-    assert.equal(renderModuleResponse.status, 200);
-    assert.match(renderModuleResponse.headers.get('content-type'), /text\/javascript/);
-    assert.match(await renderModuleResponse.text(), /renderDashboard/);
+    const assetPath = staticHtml.match(/\/dashboard\/assets\/index-[A-Za-z0-9_-]+\.js/)?.[0];
+    assert.ok(assetPath);
+    const assetResponse = await fetch(`${dashboard.url}${assetPath}`);
+    assert.equal(assetResponse.status, 200);
+    assert.match(assetResponse.headers.get('content-type'), /text\/javascript/);
+    assert.match(await assetResponse.text(), /orbita-dashboard-root|createRoot/);
 
     const sse = await readSseEvent(`${dashboard.url}/api/events`);
     assert.equal(sse.statusCode, 200);
@@ -371,6 +372,34 @@ test('dashboard static read failures do not expose local static paths', async ()
     assert.equal(payload.error, 'static asset not found');
     assert.doesNotMatch(JSON.stringify(payload), /private-static-root/);
     assert.doesNotMatch(JSON.stringify(payload), new RegExp(runsRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  } finally {
+    await dashboard.close();
+  }
+});
+
+test('dashboard static root serves built app shells and nested hashed assets safely', async () => {
+  const runsRoot = await makeRunsRoot('built-static');
+  await writeIndex(runsRoot, {});
+  const staticRoot = path.join(runsRoot, 'built-dashboard');
+  await mkdir(path.join(staticRoot, 'assets'), { recursive: true });
+  await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><script type="module" src="/dashboard/assets/app-abc123.js"></script>\n', { mode: 0o600 });
+  await writeFile(path.join(staticRoot, 'assets/app-abc123.js'), 'window.__dashboardBuiltAsset = true;\n', { mode: 0o600 });
+
+  const dashboard = await startDashboardServer({ runsRoot, staticRoot, pollMs: 25 });
+  try {
+    const shellResponse = await fetch(`${dashboard.url}/`);
+    assert.equal(shellResponse.status, 200);
+    assert.match(await shellResponse.text(), /\/dashboard\/assets\/app-abc123\.js/);
+
+    const assetResponse = await fetch(`${dashboard.url}/dashboard/assets/app-abc123.js`);
+    assert.equal(assetResponse.status, 200);
+    assert.match(assetResponse.headers.get('content-type'), /text\/javascript/);
+    assert.match(await assetResponse.text(), /__dashboardBuiltAsset/);
+
+    assert.equal(
+      resolveDashboardStaticFile({ staticRoot, pathname: '/dashboard/assets/%2e%2e/index.html' }),
+      undefined,
+    );
   } finally {
     await dashboard.close();
   }

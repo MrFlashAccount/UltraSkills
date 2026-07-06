@@ -125,6 +125,15 @@ module.exports = {
         pathNot: '^skills/orbita/lib/dtos/$1(?:[.]mjs$|/)',
       },
     },
+    {
+      name: 'orbita-dashboard-ui-browser-boundary',
+      severity: 'error',
+      comment: 'Dashboard UI must stay browser-only and DTO-only; it cannot import Node IO, persistence, entrypoints, runner control/use-case internals, leases, locks, run-state writers, or host worker lifecycle modules.',
+      from: { path: '^skills/orbita/lib/dashboard/ui/' },
+      to: {
+        path: '^(?:(?:node:)?(?:fs|fs/promises|path|os|child_process|worker_threads|process)$|skills/orbita/lib/(?:persistence/|entrypoints/|use-cases/|entities/|locks/|lease-|host-|workflow-runner-command[.]mjs|workflow-runs-api[.]mjs))',
+      },
+    },
   ],
   options: {
     doNotFollow: {
@@ -139,7 +148,7 @@ module.exports = {
       ],
     },
     enhancedResolveOptions: {
-      extensions: ['.mjs', '.js', '.json'],
+      extensions: ['.mjs', '.js', '.ts', '.tsx', '.json'],
     },
     progress: { type: 'none' },
   },
