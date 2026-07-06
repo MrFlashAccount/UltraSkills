@@ -67,6 +67,18 @@ const getCurrentUser = cache(async (userId: string) => {
 
 ## Component extraction seams
 
+For non-trivial React UI work, component extraction is a delivery requirement, not polish. Keep page/route containers responsible for data/state orchestration, and move repeated or responsibility-specific UI into named components/hooks/selectors with clear props. Do not leave route/page composition, list/card rendering, drawers/dialogs, detail sections, loading/error surfaces, and focus policy in one file unless the approved plan explicitly allows a temporary exception.
+
+Default structure for new or materially rewritten React UI:
+
+- route/page shell owns loading/error routing, high-level state, and data refresh;
+- view component owns screen composition;
+- controls, lists/cards, drawer/dialog, empty/error surfaces, and detail sections become separate components when they have distinct responsibilities;
+- pure selectors/normalizers stay outside component render bodies and are tested when non-trivial;
+- component-local types and CSS Modules stay next to the component; shared DTO/contracts live in a local shared contract module only when truly reused.
+
+Reusable components must have an explicit purpose and boundary. In the implementer handoff, name each reusable component introduced or changed, what it owns, what it accepts, and where it is expected to be reused.
+
 ### Bad smell: one component owns every concern
 
 ```tsx

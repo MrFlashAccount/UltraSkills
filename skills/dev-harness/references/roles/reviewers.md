@@ -50,7 +50,7 @@ Load `../../roles/backend/ROLE.md` and `../../roles/backend/RUBRIC.md` first, th
 
 ## Reviewer role: `frontend` v1
 
-Load `../../roles/frontend/ROLE.md` and `../../roles/frontend/RUBRIC.md` first, then follow the loaded role files for any additional frontend references before applying this frozen-scope frontend review overlay. Check frontend/client correctness, contract consumption, state/data ownership, loading/error/empty/pending/success states, routing/hydration, async terminal states, form/interaction behavior, and maintainability. Route visual presentation issues to `frontend taste`.
+Load `../../roles/frontend/ROLE.md` and `../../roles/frontend/RUBRIC.md` first, then follow the loaded role files for any additional frontend references before applying this frozen-scope frontend review overlay. Check frontend/client correctness, contract consumption, state/data ownership, loading/error/empty/pending/success states, routing/hydration, async terminal states, form/interaction behavior, and maintainability. For React or another named frontend framework, verify that relevant docs or repo-local examples were inspected before accepting framework/router/UI-kit/build integration claims. For user-facing UI, enforce component decomposition, reusable-component handoff notes, colocation of component code/types/styles/tests where practical, and use of existing UI kit/design-system primitives before local hand-rolled primitives. Treat actionable should-fix findings in this frozen scope as `needs_changes`; pass only with no actionable current-scope findings or with explicit can-delay notes. Route visual presentation issues to `frontend taste`.
 
 ## Reviewer role: `frontend taste` v1
 
