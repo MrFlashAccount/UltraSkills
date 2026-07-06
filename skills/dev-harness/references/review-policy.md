@@ -24,6 +24,7 @@ Read this before any review pass.
 - Check review-gate quality drift: canonical symbolic values, duplicated literals, function/file growth, mixed responsibilities, and new indirect coupling.
 - When event names, statuses, artifact kinds, action names, or similar symbolic values have canonical constants/names, flag new raw string use outside the canonical definition, tests/fixtures, or explicit migration compatibility.
 - Collect findings into a short report.
+- Treat actionable `should-fix` findings as required rework before pass. A review may pass with `can-delay` notes only when the reviewer states that the item is explicitly outside the approved slice, non-actionable in the current pass, or requires a separate user-approved scope. Do not bury current-scope maintainability, documentation, component-architecture, contract, accessibility, or verification findings under `should-fix` while returning pass.
 - Feed in-scope fixes back to the relevant implementers without asking for fresh approval each pass.
 - If a review finding expands scope, forces redesign, or surfaces a high-risk contradiction, stop and go back to the user for re-approval.
 - For non-trivial work, run up to 3 review/fix passes; stop early when review is clean.
@@ -45,7 +46,7 @@ Use critic here as a short challenge role, not as a second implementer, second d
 - Critic is the adversarial simplification/challenge reviewer, not a polite lightweight reviewer or the primary reviewer for correctness, security, privacy/data-safety, QA, performance, or redesign.
 - Critic should aggressively challenge avoidable complexity, bloat, duplication, hidden coupling, unclear boundaries, overlarge files/functions, and cheaper/simpler alternatives, including small issues when they compound maintainability drift.
 - Output shape: `Pass/fail / Must-fix / Should-fix / Can-delay`.
-- Cap `Must-fix` at 3 items, ranked by severity.
+- Do not cap `Must-fix` or actionable `Should-fix` counts. Keep reports concise by deduplicating and grouping related evidence, but include every distinct in-scope finding that must be fixed before approval or acceptance.
 - Every material finding should point to an artifact: acceptance criteria, proposal field, risk, file/line, test gap, or contradiction.
 - Before approval, critic challenges the proposal only; no code-ish content and no implementation recipes.
 - After approval, critic challenges the accepted result inside frozen scope; do not reopen design unless a blocker or high-risk contradiction forces it.

@@ -78,9 +78,18 @@ Keep this framework-agnostic unless the calling skill explicitly supplies a fram
 ### Maintainability
 Is the UI logic understandable, localized, and not smeared across brittle abstractions?
 
-User-facing frontend files should stay near the existing ~200 LOC pressure rule where practical.
-For frontend-authored source or test files, ending a change with a file over 400 lines is a review blocker/must-fix unless the excess is generated, vendor, lock, snapshot, data fixture, or migration content with explicit justification.
-Existing oversized files should not be made larger or given mixed responsibility; if the task is not about splitting them, treat size as should-fix debt unless the change makes it worse.
+For non-trivial user-facing frontend work, actionable `should_fix` review findings are required rework before pass. Do not pass a frontend implementation with unresolved `should_fix` maintainability, component-architecture, documentation, accessibility, contract-consumption, or UI-kit findings. Use `can_delay` only for explicitly non-actionable future cleanup that is outside the approved slice and does not weaken the current implementation.
+
+User-facing frontend files should stay near the existing ~200 LOC pressure rule by default. For new or materially rewritten user-facing source files, exceeding ~200 LOC is a `must_fix` unless the approved plan explicitly grants an exception with a reason. For frontend-authored source or test files, ending a change with a file over 400 lines is always a review blocker/must-fix unless the excess is generated, vendor, lock, snapshot, data fixture, or migration content with explicit justification.
+Existing oversized files should not be made larger or given mixed responsibility; if the task touches the oversized behavior, split the touched responsibility instead of carrying the debt forward.
+
+Frontend implementers must decompose user-facing UI into named, reviewable components rather than leaving page composition, data display, controls, overlays, and state/focus behavior in one blob. Reusable components introduced or materially changed in the slice must be named in the handoff with their purpose, ownership boundary, expected inputs/outputs, and reuse scope.
+
+Follow colocation by default: keep a component's implementation, local types, styles, tests/stories/fixtures when present, and component-specific helpers close to that component. Shared cross-component contracts may live in a local `contracts`/`types` module only when they are truly shared; do not dump all UI types or styles into broad files just to avoid small colocated modules.
+
+Before creating controls or layout primitives, identify the repo's existing UI kit, design-system primitives, tokens, and component conventions. Use them as the default implementation base. If no UI kit or suitable primitive exists, state that evidence in the handoff and use the approved primitive library or native semantic element rather than hand-rolling an incompatible local primitive.
+
+When the slice introduces or materially changes a named frontend framework, router, UI kit, accessibility primitive library, or build integration, inspect relevant current documentation before implementation/review. Prefer official docs or repo-local package docs/examples; if documentation cannot be accessed and the behavior is contract-significant, return blocked or record the explicit uncertainty instead of guessing.
 
 Frontend functions/hooks should normally either perform side effects or compute/transform data. When a touched path must mix both, the reason should be local and explicit enough for review to verify.
 

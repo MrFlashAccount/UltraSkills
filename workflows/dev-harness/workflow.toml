@@ -370,6 +370,11 @@ This workflow supports at most one frontend_implementation worker; handle all fr
 Read prior step outputs from input.<step_id> fields only; do not rely on artifacts/results globals.
 Preserve frozen research, architecture, execution plan, and user constraints.
 Treat the approved proposal, plan, and source-contract rows assigned to frontend_implementation as mandatory hard gates. Do not approximate, rename, or improvise around them without an approved mapping in the input context.
+Before implementing named frontend frameworks, routers, UI kits, accessibility primitive libraries, or build/runtime integrations, inspect relevant current docs or repo-local package examples and record the docs/examples used in the implementer handoff. If the needed documentation cannot be accessed and the behavior is contract-significant, return blocked instead of guessing.
+For user-facing UI, decompose the slice into named, reviewable components/hooks/selectors; do not leave page composition, lists/cards, overlays/drawers/dialogs, detail sections, loading/error surfaces, and focus/interaction policy in one large component unless the approved plan grants an explicit exception.
+Follow component colocation by default: keep component implementation, component-local types, styles, tests/stories/fixtures when present, and component-specific helpers near that component. Use shared contracts/types only for genuinely shared DTOs or cross-component APIs.
+Identify the repo's UI kit/design-system primitives, tokens, and component conventions before creating controls or layout primitives. Use them by default; if none exists or none fits, record that evidence and use the approved primitive library or semantic native element.
+Name every reusable component introduced or materially changed in the implementer handoff with its purpose, boundary, expected inputs/outputs, and intended reuse scope.
 Treat red tests, lint failures, typecheck failures, or other verification failures caused by this worker's own in-scope frontend changes as implementation work to fix and rerun, not as blockers by themselves.
 Return blocked only when fixing the failure requires missing external input, permission, an approved-contract change, a redesign/plan decision, or when repo/environment state makes continued work unsafe.
 If a required source row cannot be satisfied in the assigned frontend scope, or if implementation requires a deviation or exposes a contradiction in the approved contract, return blocked with the smallest concrete approval question instead of redesigning silently.
@@ -377,6 +382,7 @@ Treat the approved implementation plan as the executable contract. Do not edit, 
 Return implemented or blocked with blocker.source_step_id = frontend_implementation.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
 When rerun from review_join needs_changes, read input.review_join and reviewer outputs, apply only the required changes for this step, and preserve all approved contracts.
+Treat `must_fix` and `should_fix` review findings routed to frontend_implementation as mandatory rework. Do not leave actionable current-scope `should_fix` items unresolved in the next handoff.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
 If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = frontend_implementation and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
@@ -508,6 +514,7 @@ next = "review_join"
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review implementation against approved architecture decision, ownership seams, dependency direction, compatibility surfaces, and artifact obligations.
+Do not approve unapproved semantic substitutions for named architecture/runtime/framework decisions. If the approved contract names a specific framework/runtime/build architecture, implementation must use that architecture directly or carry explicit human-approved mapping in the input context.
 Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = architect_review.
 Read architecture_draft, architecture_attack, and approve_architecture when present; fail on drift between the approved architecture artifact and implementation/review evidence.
 
@@ -566,6 +573,9 @@ next = "review_join"
 role = "frontend"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review frontend correctness, data flow, state handling, accessibility-relevant behavior, and tests for the slice selected by the approved plan contract.
+For named frontend frameworks, routers, UI kits, accessibility primitive libraries, or build/runtime integrations, verify that relevant current docs or repo-local examples were inspected and that implementation follows the documented integration shape rather than a close-sounding substitution.
+For user-facing UI, review component decomposition, reusable-component handoff notes, colocation of component code/types/styles/tests where practical, and use of existing UI kit/design-system primitives before local hand-rolled primitives.
+Return passed only when there are no actionable current-scope `must_fix` or `should_fix` findings. Return needs_changes with required_implementation_steps for any actionable current-scope issue, including component architecture, documentation/best-practice evidence, colocation, UI-kit primitive usage, accessibility-relevant interaction behavior, or maintainability debt introduced or left in touched frontend zones. Use can-delay notes only for explicit future cleanup outside the approved slice.
 Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = frontend_review.
 
 Input context:
@@ -701,7 +711,8 @@ next = "${{ output.next }}"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Aggregate exactly the review outputs named by review_dispatch.verdict.selected_review_steps from input.<step_id> fields.
 This is a join/decision step, not a critique pass.
-If every selected reviewer passed, return outcome passed and next done.
+If every selected reviewer passed and no selected review verdict contains actionable current-scope `must_fix` or `should_fix` findings, return outcome passed and next done.
+If any selected review verdict contains actionable current-scope `must_fix` or `should_fix` findings, return outcome needs_changes even if that reviewer mislabeled its top-level outcome as passed; route next to the owning required implementation step ids. Treat only explicit `can_delay` notes as allowed to pass.
 If changes are needed, return outcome needs_changes and next equal to the relevant implementation step ids from reviewer required_implementation_steps, not every implementation branch.
 If review cannot finish safely, return outcome blocked with blocker.source_step_id = review_join; do not set next for blocked outputs because the runner keeps the same step recoverable.
 

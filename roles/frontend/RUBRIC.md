@@ -10,14 +10,18 @@ Use this as a compact checklist when a calling skill wants frontend implementati
 - **State/async flow**: Are state ownership, derived data, and async transitions clear and stable? Are independent promises started together and awaited only when needed?
 - **States**: Are loading, pending, empty, success, error/retry, focus, disabled, and permission/partial-data states handled intentionally where applicable?
 - **Routing/hydration**: Are route transitions and client/server boundary assumptions safe?
-- **Component architecture**: Are user-facing files/components kept near the ~200 LOC pressure rule, with extraction seams or explicit justification for larger slices?
-  Frontend-authored source/test files over 400 lines after a change are blockers unless explicitly justified as generated, vendor, lock, snapshot, data fixture, or migration exceptions; existing oversized files must not be made worse.
-  Are data/orchestration and presentation split when that clarifies behavior?
+- **Mandatory findings**: Are all actionable `must_fix` and `should_fix` findings fixed before pass? A frontend review with unresolved actionable `should_fix` items should return `needs_changes`, not `passed`; reserve `can_delay` for explicit out-of-scope future cleanup.
+- **Documentation and best practices**: For named frameworks, routers, UI kits, accessibility primitive libraries, or build/runtime integrations, did the implementer/reviewer inspect relevant current docs or repo-local examples and cite the evidence? If docs were unavailable, is the uncertainty explicit rather than guessed through?
+- **Component architecture**: Are user-facing files/components kept near the ~200 LOC pressure rule, with extraction seams or explicit approved justification for larger slices?
+  New or materially rewritten user-facing source files over ~200 lines are must-fix unless the approved plan grants an exception; frontend-authored source/test files over 400 lines after a change are blockers unless explicitly justified as generated, vendor, lock, snapshot, data fixture, or migration exceptions; existing oversized files must not be made worse.
+  Are data/orchestration, controls, overlays, lists/cards, detail sections, and focus/interaction policy split into named components/hooks/selectors when that clarifies behavior?
+  Are reusable components named in the handoff with purpose, boundary, expected inputs/outputs, and reuse scope?
+- **Colocation**: Are component implementation, component-local types, styles, tests/stories/fixtures where present, and component-specific helpers colocated rather than smeared across broad UI files?
 - **Canonical values**: Are client-visible statuses, actions, artifact kinds, route/state names, and similar symbolic values reused through canonical constants/names instead of scattered raw strings, except definitions, tests/fixtures, or explicit migration compatibility?
 - **Side-effect boundaries**: Do functions/hooks avoid mixing side effects with compute/transform logic unless the reason is local and explicit?
 - **State placement**: Is state kept in the narrowest correct home: local, lifted, context, URL, server/cache, or global client store?
 - **Code docs**: Are file purpose, state ownership, async/data-contract assumptions, critical UI states, and exported hook/helper/component contracts documented where they would otherwise be non-obvious?
-- **Design-system discipline**: Does the UI use existing tokens, primitives, and scales instead of raw colors, arbitrary spacing, inline style escapes, mixed primitive systems, or local visual law?
+- **Design-system discipline**: Does the UI identify and use existing UI kit primitives, semantic native elements, tokens, and scales instead of raw colors, arbitrary spacing, inline style escapes, mixed primitive systems, or local visual law?
 - **Baseline UI red flags**: Are destructive actions confirmed, mobile viewport/fixed UI safe, errors near their fields/actions, paste allowed, data/text formatted robustly, z-index layered by scale, and empty states given one clear next action?
 - **Interaction/motion craft**: If motion exists, does it have a purpose, frequency-appropriate duration, origin-aware behavior, interruptible transitions/gestures, reduced-motion fallback, and transform/opacity-first performance?
 - **Performance mechanics**: Does the implementation avoid async waterfalls, broad/barrel imports, unnecessary render churn, duplicated client I/O, and repeated browser/JS hot-path work?
