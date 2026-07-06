@@ -125,6 +125,24 @@ module.exports = {
         pathNot: '^skills/orbita/lib/dtos/$1(?:[.]mjs$|/)',
       },
     },
+    {
+      name: 'orbita-dashboard-ui-browser-not-to-private-runtime',
+      severity: 'error',
+      comment: 'Browser dashboard source must consume only safe daemon DTO endpoints and must not import private runtime/control surfaces.',
+      from: { path: '^skills/orbita/lib/dashboard/ui/src/' },
+      to: {
+        path: '^skills/orbita/lib/(?:entrypoints|persistence|use-cases|entities|dtos|workflow-|command-|public-command|locks?|lease|worker|runtime-reader)',
+      },
+    },
+    {
+      name: 'orbita-dashboard-ui-browser-not-to-node-core',
+      severity: 'error',
+      comment: 'Browser dashboard source must not import Node core modules.',
+      from: { path: '^skills/orbita/lib/dashboard/ui/src/' },
+      to: {
+        dependencyTypes: ['core'],
+      },
+    },
   ],
   options: {
     doNotFollow: {
@@ -139,7 +157,7 @@ module.exports = {
       ],
     },
     enhancedResolveOptions: {
-      extensions: ['.mjs', '.js', '.json'],
+      extensions: ['.mjs', '.js', '.ts', '.tsx', '.json'],
     },
     progress: { type: 'none' },
   },

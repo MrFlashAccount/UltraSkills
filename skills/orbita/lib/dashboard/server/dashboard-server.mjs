@@ -1,8 +1,7 @@
 import { createServer } from 'node:http';
-import { dirname, extname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
-import { renderDashboardShell } from '../ui/render.mjs';
 import { DashboardEventPublisher } from './dashboard-event-publisher.mjs';
 import { RunsRootObserverReader } from './runs-root-observer-reader.mjs';
 import { publicErrorMessage } from '../../public-error.mjs';
@@ -12,8 +11,11 @@ const STATIC_TYPES = {
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml; charset=utf-8',
+  '.ico': 'image/x-icon',
 };
-const dashboardUiRoot = join(dirname(fileURLToPath(import.meta.url)), '../ui');
+const dashboardStaticRoot = join(dirname(fileURLToPath(import.meta.url)), '../ui/dist');
 const API_LIST_PATHS = new Set(['/api/runs', '/api/dashboard/runs']);
 const API_EVENTS_PATHS = new Set(['/api/events', '/api/dashboard/events']);
 
@@ -43,16 +45,42 @@ function dashboardDetailRunId(pathname) {
   return undefined;
 }
 
-function staticAssetPath(pathname) {
-  if (!pathname.startsWith('/dashboard/') || pathname.includes('..')) return undefined;
-  const relativePath = pathname.slice('/dashboard/'.length);
-  if (!relativePath || relativePath.includes('/')) return undefined;
-  return relativePath;
+function isPathUnderRoot(rootPath, candidatePath) {
+  const relativePath = relative(rootPath, candidatePath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath));
+}
+
+function staticAssetFilePath({ pathname, staticRoot }) {
+  if (!pathname.startsWith('/dashboard/')) return undefined;
+  const relativePath = decodeURIComponent(pathname.slice('/dashboard/'.length));
+  const segments = relativePath.split('/');
+  if (!relativePath || relativePath.endsWith('.map') || segments.some((segment) => segment.startsWith('.'))) return undefined;
+  const rootPath = resolve(staticRoot);
+  const filePath = resolve(rootPath, relativePath);
+  return isPathUnderRoot(rootPath, filePath) ? filePath : undefined;
+}
+
+function staticRootIndexPath(staticRoot) {
+  return resolve(staticRoot, 'index.html');
+}
+
+async function readStaticFile(filePath, { runsRoot, staticRoot }) {
+  try {
+    return { ok: true, content: await readFile(filePath) };
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: error?.code === 'ENOENT' ? 404 : 500,
+      error: error?.code === 'ENOENT'
+        ? 'static asset not found'
+        : publicDashboardErrorMessage(error, { runsRoot, staticRoot }),
+    };
+  }
 }
 
 export function createDashboardRequestHandler({ observer, publisher, staticRoot } = {}) {
   const reader = observer ?? new RunsRootObserverReader();
-  const resolvedStaticRoot = staticRoot ?? dashboardUiRoot;
+  const resolvedStaticRoot = staticRoot ?? dashboardStaticRoot;
   const errorMessage = (error) => publicDashboardErrorMessage(error, { runsRoot: reader.runsRoot, staticRoot: resolvedStaticRoot });
   const events = publisher ?? new DashboardEventPublisher({ snapshot: () => reader.listRuns(), errorMessage });
   events.start();
@@ -85,23 +113,30 @@ export function createDashboardRequestHandler({ observer, publisher, staticRoot 
         return;
       }
       if (request.method === 'GET' && url.pathname === '/') {
-        sendText(response, 200, renderDashboardShell({ runs: [] }), STATIC_TYPES['.html']);
-        return;
-      }
-      const staticPath = request.method === 'GET' ? staticAssetPath(url.pathname) : undefined;
-      if (staticPath !== undefined) {
-        const fileUrl = new URL(staticPath, pathToFileURL(`${resolvedStaticRoot}/`));
-        let content;
-        try { content = await readFile(fileUrl); }
-        catch (error) {
-          sendJson(response, error?.code === 'ENOENT' ? 404 : 500, {
-            error: error?.code === 'ENOENT'
-              ? 'static asset not found'
-              : publicDashboardErrorMessage(error, { runsRoot: reader.runsRoot, staticRoot: resolvedStaticRoot }),
-          });
+        const appShell = await readStaticFile(staticRootIndexPath(resolvedStaticRoot), {
+          runsRoot: reader.runsRoot,
+          staticRoot: resolvedStaticRoot,
+        });
+        if (appShell.ok) {
+          sendText(response, 200, appShell.content, STATIC_TYPES['.html']);
           return;
         }
-        sendText(response, 200, content, STATIC_TYPES[extname(url.pathname)] ?? 'application/octet-stream');
+        sendJson(response, appShell.statusCode, { error: appShell.error });
+        return;
+      }
+      const staticPath = request.method === 'GET'
+        ? staticAssetFilePath({ pathname: url.pathname, staticRoot: resolvedStaticRoot })
+        : undefined;
+      if (staticPath !== undefined) {
+        const asset = await readStaticFile(staticPath, {
+          runsRoot: reader.runsRoot,
+          staticRoot: resolvedStaticRoot,
+        });
+        if (!asset.ok) {
+          sendJson(response, asset.statusCode, { error: asset.error });
+          return;
+        }
+        sendText(response, 200, asset.content, STATIC_TYPES[extname(url.pathname)] ?? 'application/octet-stream');
         return;
       }
       sendJson(response, 404, { error: 'not found' });
@@ -113,7 +148,7 @@ export function createDashboardRequestHandler({ observer, publisher, staticRoot 
 
 export function startDashboardServer({ runsRoot, host = '127.0.0.1', port = 0, pollMs = 1000, staticRoot } = {}) {
   const observer = new RunsRootObserverReader({ runsRoot });
-  const resolvedStaticRoot = staticRoot ?? dashboardUiRoot;
+  const resolvedStaticRoot = staticRoot ?? dashboardStaticRoot;
   const publisher = new DashboardEventPublisher({
     snapshot: () => observer.listRuns(),
     pollMs,

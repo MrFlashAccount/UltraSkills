@@ -454,6 +454,12 @@ join the runner control protocol and does not become another host adapter.
 drawer, lane, mini-map, and no-control UI rules. This architecture section owns
 the backend/UI boundary that makes those design rules safe.
 
+Issue #201 selects React, TanStack Start, React Aria Components, CSS Modules,
+and TypeScript for the dashboard frontend foundation. TanStack Start is the
+browser app structure, routing, route-level data orchestration, and build
+framework for the dashboard UI. It is not a new Orbita host adapter, persistence
+adapter, runner API, or filesystem-reading server layer.
+
 Target shape:
 
 ```text
@@ -463,15 +469,18 @@ run-state files -> observer reader -> safe projection -> dashboard API/events ->
 Intended source zones:
 
 - `lib/dashboard/server/**` owns the local daemon/API shell, static UI serving,
-  SSE event stream, file-watch or polling loop, restart rebuild, and degraded
-  read isolation.
+  SSE event stream, file-watch or polling loop, restart rebuild, compiled
+  dashboard asset serving, public error redaction, and degraded read isolation.
 - `lib/dashboard/projection/**` owns safe dashboard read models, lane
   classification, history excerpt policy, workflow mini-map projection, and
   redaction policy.
 - `lib/dashboard/contracts/**` owns browser-visible DTO schemas and examples
   for list, detail, event, degraded diagnostic, artifact summary, cursor chip,
   and mini-map surfaces.
-- `lib/dashboard/ui/**` owns browser rendering against those DTOs only.
+- `lib/dashboard/ui/**` owns the browser-only React/TanStack Start source,
+  route-level data fetching over daemon DTO endpoints, browser API/SSE client,
+  view-model derivation, dashboard-local UI kit, CSS Modules, virtualization,
+  generated static assets, and browser rendering against those DTOs only.
 
 If these zones become substantial, add `lib/dashboard/CONTEXT.md` in the same
 slice to record local ownership and forbidden dependencies. Do not create that
@@ -494,10 +503,40 @@ instruction storage paths, preferred worker agent ids, worker binding flags, or
 unnecessary host control-plane metadata.
 
 Dashboard UI is a browser-only inspection context. It consumes safe DTOs from
-the daemon API/event surface and follows `DESIGN.md`. It must not read
-`~/.orbita` directly, infer runner state from filesystem paths, include
-drag/drop movement, or show controls that resemble `next`, `continue`,
-`write-output`, retry, repair, or manual lane movement.
+the daemon API/event surface and follows `DESIGN.md`. Dashboard route-level data
+fetching must call the existing safe daemon surfaces such as `/api/runs`,
+`/api/runs/:runId`, `/api/events`, and compatibility aliases under
+`/api/dashboard/*`; it must not bypass projection through TanStack Start server
+functions, direct filesystem reads, persistence adapters, runner APIs, or
+workflow-runner command builders. The UI must not read `~/.orbita` directly,
+infer runner state from filesystem paths, include drag/drop movement, or show
+controls that resemble `next`, `continue`, `write-output`, retry, repair, or
+manual lane movement.
+
+Dashboard frontend source should make its browser-only shape obvious. Route
+code owns URL/search/detail-selection orchestration, client code owns safe
+HTTP/SSE calls, view-model code owns DTO filtering/lane grouping/drawer
+selection, component code owns the local UI kit and dashboard widgets, CSS
+Modules own component-local styling, and virtualization code owns large
+lane/card rendering. These are source zones inside `lib/dashboard/ui/**`, not
+new durable workflow entities.
+
+The dashboard-local UI kit may provide primitives such as Link, Button, Drawer,
+Card, Text, chips, lanes, and layout helpers. It is scoped to this dashboard and
+must not become a repository-wide design system without a separate architecture
+decision. UI kit components consume DTOs or browser view models only; they must
+not fetch run state, import runner internals, or own workflow policy.
+
+Rejected frontend architecture alternatives:
+
+- plain browser modules as the primary UI foundation, because they do not give
+  enough route/component/state/virtualization structure for the approved
+  dashboard;
+- Solid/Vite, because the approved runtime direction is React/TanStack Start;
+- React without TanStack Start, because the approved runtime direction includes
+  TanStack Start;
+- TanStack Start as a direct Orbita server/data layer, because that would bypass
+  the read-only daemon DTO boundary.
 
 ### Dashboard Relationships
 
@@ -524,6 +563,16 @@ restart or watcher loss. Event delivery is lossy and observational: SSE/poll
 recovery must never create backpressure into workflow execution, hold run
 leases, or delay `workflow-runner` control commands.
 
+Compiled dashboard assets are served by the existing dashboard daemon static
+boundary. The daemon may serve nested or hashed generated assets when the
+frontend build emits them, but every resolved asset must remain under the
+configured static root, path traversal must be rejected, and public static read
+errors must not expose local static roots, runs roots, source paths, raw artifact
+paths, or instruction storage paths. Source maps are disabled by default; if a
+later implementation enables them, tests or checks must prove they do not expose
+private local paths, hidden runtime artifacts, run roots, raw artifact paths, or
+instruction storage paths.
+
 ### Dashboard Dependency Rules
 
 Binding rules for dashboard code:
@@ -534,13 +583,24 @@ Binding rules for dashboard code:
   move-pointer CLI modes, or host worker lifecycle code.
 - Browser UI code must depend only on dashboard DTO contracts and browser
   platform APIs; it must not import persistence, filesystem helpers,
-  workflow-runner API shells, or Node-only modules.
+  workflow-runner API shells, use cases, entities, command builders, or
+  Node-only modules.
+- TanStack Start route code and any server-capable framework surface must not
+  import persistence, runner internals, workflow-runner entrypoints, Node IO, or
+  local run-state readers. Dashboard data access from routes must go through
+  the safe daemon DTO endpoints or an adapter that calls only those endpoints.
+- Dashboard UI dependency checks must reject imports from `node:fs`,
+  `node:path`, `lib/persistence/**`, `lib/entrypoints/**`, `lib/use-cases/**`,
+  `lib/entities/**`, workflow-runner command builders, lease/lock/write modules,
+  pointer-recovery APIs, and host worker lifecycle/session modules.
 - Projection code may depend on DTO/schema/value helpers and read-only records,
   but must not depend on CLI argument parsing, process environment, locks,
   leases, or mutation use cases.
 - Dashboard server code may coordinate read-only IO and response formatting, but
   workflow-domain decisions still belong in existing entities/use cases and
-  dashboard-specific display decisions belong in projection.
+  dashboard-specific display decisions belong in projection. Server code may
+  serve compiled UI assets; it must not import browser route/component modules
+  as runtime data logic.
 - Dashboard artifacts, degraded diagnostics, bounded history excerpts, cursor
   chips, and mini-map data are projections. They are not durable workflow state
   and must not be written back into run directories.
@@ -550,6 +610,9 @@ At minimum, tests/checks must prove absence of lease tokens, token-bearing
 commands, raw instruction commands, private prompts, hidden transcripts, raw
 instruction paths, preferred agent ids, worker binding flags, and unnecessary
 host control-plane metadata in browser-visible DTOs.
+When the React/TanStack Start frontend source is added, `.dependency-cruiser.cjs`
+is the executable owner for enforceable UI no-go imports, and CI must run it
+through `bun run depcruise:check`.
 
 ### Workflow Loop Policies
 
@@ -667,6 +730,14 @@ Architecture review must verify:
 - dashboard tests or boundary checks prove browser DTOs exclude private
   runner/control fields and dashboard code does not import or call runner
   mutation/control surfaces
+- dashboard frontend changes preserve the React/TanStack Start/React Aria/CSS
+  Modules/TypeScript decision while keeping route-level data access on safe
+  daemon DTO endpoints only
+- dashboard static serving supports compiled app shell/assets without path
+  traversal or local/private path exposure, and generated source maps/static
+  metadata are disabled or proven private-path safe
+- dashboard docs, dependency-cruiser rules, frontend/backend tests, and static
+  output agree on the browser-only UI boundary and no-control dashboard contract
 - matrix docs, workflow schema, Baton schema, runtime behavior, tests, and
   boundary checks agree on the first-class `kind: "matrix"` contract,
   `state.matrix` ownership, and `state.shards` compatibility

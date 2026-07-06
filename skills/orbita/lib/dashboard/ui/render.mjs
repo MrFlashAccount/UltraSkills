@@ -1,7 +1,5 @@
 import { dashboardCopy, dashboardLaneIds, dashboardLanes, fallbackLaneId } from './constants.mjs';
 
-const runnerControlPattern = /\b(next|continue|write-output|bind-agent|retry|rerun|repair|move|drag|drop)\b/i;
-
 export function renderDashboardShell(snapshot = {}, options = {}) {
   const title = escapeHtml(options.title ?? 'Orbita Dashboard');
   return `<!doctype html>
@@ -275,7 +273,7 @@ function relativeTimeLabel(value) {
 }
 
 function redactControlText(value) {
-  return String(value).replace(runnerControlPattern, 'control action');
+  return String(value);
 }
 
 function escapeHtml(value) {

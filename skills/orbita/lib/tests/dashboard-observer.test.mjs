@@ -287,18 +287,24 @@ test('dashboard local server exposes list, detail, events, and static surfaces',
     assert.equal(staticResponse.status, 200);
     const staticHtml = await staticResponse.text();
     assert.match(staticHtml, /Orbita Dashboard/);
-    assert.match(staticHtml, /\/dashboard\/style\.css/);
-    assert.match(staticHtml, /\/dashboard\/client\.js/);
+    assert.doesNotMatch(staticHtml, /\/src\/|\/dashboard\/client\.js|\/dashboard\/render\.mjs/);
 
-    const clientResponse = await fetch(`${dashboard.url}/dashboard/client.js`);
+    const compiledScript = staticHtml.match(/src="(\/dashboard\/client\/assets\/[^"]+\.js)"/)?.[1];
+    const compiledStyle = staticHtml.match(/href="(\/dashboard\/client\/assets\/[^"]+\.css)"/)?.[1];
+    assert.ok(compiledScript, 'default dashboard shell must load compiled JavaScript asset');
+    assert.ok(compiledStyle, 'default dashboard shell must load compiled CSS asset');
+
+    const clientResponse = await fetch(`${dashboard.url}${compiledScript}`);
     assert.equal(clientResponse.status, 200);
     assert.match(clientResponse.headers.get('content-type'), /text\/javascript/);
     assert.match(await clientResponse.text(), /\/api\/runs/);
 
-    const renderModuleResponse = await fetch(`${dashboard.url}/dashboard/render.mjs`);
-    assert.equal(renderModuleResponse.status, 200);
-    assert.match(renderModuleResponse.headers.get('content-type'), /text\/javascript/);
-    assert.match(await renderModuleResponse.text(), /renderDashboard/);
+    const cssResponse = await fetch(`${dashboard.url}${compiledStyle}`);
+    assert.equal(cssResponse.status, 200);
+    assert.match(cssResponse.headers.get('content-type'), /text\/css/);
+
+    const legacyClientResponse = await fetch(`${dashboard.url}/dashboard/client.js`);
+    assert.equal(legacyClientResponse.status, 404);
 
     const sse = await readSseEvent(`${dashboard.url}/api/events`);
     assert.equal(sse.statusCode, 200);
@@ -365,12 +371,79 @@ test('dashboard static read failures do not expose local static paths', async ()
   const staticRoot = path.join(runsRoot, 'private-static-root');
   const dashboard = await startDashboardServer({ runsRoot, staticRoot, pollMs: 25 });
   try {
+    const rootResponse = await fetch(`${dashboard.url}/`);
+    assert.equal(rootResponse.status, 404);
+    const rootPayload = await rootResponse.json();
+    assert.equal(rootPayload.error, 'static asset not found');
+    assert.doesNotMatch(JSON.stringify(rootPayload), /private-static-root/);
+    assert.doesNotMatch(JSON.stringify(rootPayload), new RegExp(runsRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
     const response = await fetch(`${dashboard.url}/dashboard/client.js`);
     assert.equal(response.status, 404);
     const payload = await response.json();
     assert.equal(payload.error, 'static asset not found');
     assert.doesNotMatch(JSON.stringify(payload), /private-static-root/);
     assert.doesNotMatch(JSON.stringify(payload), new RegExp(runsRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  } finally {
+    await dashboard.close();
+  }
+});
+
+test('dashboard server serves compiled app shell and nested assets without static metadata leaks', async () => {
+  const runsRoot = await makeRunsRoot('compiled-static');
+  await writeIndex(runsRoot, {});
+  const staticRoot = path.join(runsRoot, 'compiled-static-private');
+  await mkdir(path.join(staticRoot, 'assets/chunks'), { recursive: true });
+  await mkdir(path.join(staticRoot, '.vite'), { recursive: true });
+  await writeFile(path.join(staticRoot, 'index.html'), [
+    '<!doctype html>',
+    '<html><head>',
+    '<link rel="stylesheet" href="/dashboard/assets/chunks/app.abc123.css">',
+    '</head><body><div id="root"></div>',
+    '<script type="module" src="/dashboard/assets/app.def456.js"></script>',
+    '</body></html>',
+  ].join(''), { mode: 0o600 });
+  await writeFile(path.join(staticRoot, 'assets/app.def456.js'), 'fetch("/api/runs");\n', { mode: 0o600 });
+  await writeFile(path.join(staticRoot, 'assets/chunks/app.abc123.css'), ':root { color-scheme: light dark; }\n', { mode: 0o600 });
+  await writeFile(path.join(staticRoot, 'assets/app.def456.js.map'), JSON.stringify({
+    sources: [`${runsRoot}/.orbita/workflow-runs/v1/private.js`],
+  }), { mode: 0o600 });
+  await writeFile(path.join(staticRoot, '.vite/manifest.json'), JSON.stringify({
+    file: `${runsRoot}/private-build-input.tsx`,
+  }), { mode: 0o600 });
+  await writeFile(path.join(runsRoot, 'secret.txt'), 'escaped static root\n', { mode: 0o600 });
+
+  const dashboard = await startDashboardServer({ runsRoot, staticRoot, pollMs: 25 });
+  try {
+    const rootResponse = await fetch(`${dashboard.url}/`);
+    assert.equal(rootResponse.status, 200);
+    const rootHtml = await rootResponse.text();
+    assert.match(rootHtml, /\/dashboard\/assets\/app\.def456\.js/);
+    assert.match(rootHtml, /\/dashboard\/assets\/chunks\/app\.abc123\.css/);
+    assert.doesNotMatch(rootHtml, new RegExp(runsRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+    const jsResponse = await fetch(`${dashboard.url}/dashboard/assets/app.def456.js`);
+    assert.equal(jsResponse.status, 200);
+    assert.match(jsResponse.headers.get('content-type'), /text\/javascript/);
+    assert.match(await jsResponse.text(), /\/api\/runs/);
+
+    const cssResponse = await fetch(`${dashboard.url}/dashboard/assets/chunks/app.abc123.css`);
+    assert.equal(cssResponse.status, 200);
+    assert.match(cssResponse.headers.get('content-type'), /text\/css/);
+
+    const traversalResponse = await fetch(`${dashboard.url}/dashboard/%2e%2e%2fsecret.txt`);
+    assert.equal(traversalResponse.status, 404);
+    assert.doesNotMatch(await traversalResponse.text(), /escaped static root/);
+
+    const sourceMapResponse = await fetch(`${dashboard.url}/dashboard/assets/app.def456.js.map`);
+    assert.equal(sourceMapResponse.status, 404);
+    const sourceMapPayload = await sourceMapResponse.json();
+    assert.doesNotMatch(JSON.stringify(sourceMapPayload), /workflow-runs|private\.js|compiled-static-private/);
+
+    const metadataResponse = await fetch(`${dashboard.url}/dashboard/.vite/manifest.json`);
+    assert.equal(metadataResponse.status, 404);
+    const metadataPayload = await metadataResponse.json();
+    assert.doesNotMatch(JSON.stringify(metadataPayload), /private-build-input|compiled-static-private/);
   } finally {
     await dashboard.close();
   }
@@ -389,6 +462,7 @@ test('dashboard backend source does not import or call workflow runner control s
 
   assert.doesNotMatch(source, /lease-authority/);
   assert.doesNotMatch(source, /runner-command-builder/);
+  assert.doesNotMatch(source, /renderDashboardShell|dashboard\/ui\/render/);
   assert.doesNotMatch(source, /PersistedRunStateWriter/);
   assert.doesNotMatch(source, /claimWorkflowRun|heartbeatWorkflowRun|continueRun|runNext/);
   assert.doesNotMatch(source, /workflow-runner\.mjs['"]?\s+(next|continue|write-output|bind-agent)\b/);
