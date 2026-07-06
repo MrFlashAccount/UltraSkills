@@ -460,16 +460,26 @@ run-state files -> observer reader -> safe projection -> dashboard API/events ->
 
 Intended source zones:
 
-- `lib/dashboard/server/**` owns the local daemon/API shell, static UI serving,
-  SSE event stream, file-watch or polling loop, restart rebuild, and degraded
-  read isolation.
+- `lib/dashboard/app/**` owns the dashboard TanStack Start app shell, app
+  routes, server route handlers, route loaders, build/dev integration, and
+  root/dashboard app serving.
+- `lib/dashboard/server/**` owns the thin local Start launcher, runtime context
+  wiring, read-only observer construction, SSE publisher lifecycle, file-watch
+  or polling loop, restart rebuild, degraded read isolation, and public error
+  shape used by the TanStack Start route/server boundary.
 - `lib/dashboard/projection/**` owns safe dashboard read models, lane
   classification, history excerpt policy, workflow mini-map projection, and
   redaction policy.
 - `lib/dashboard/contracts/**` owns browser-visible DTO schemas and examples
   for list, detail, event, degraded diagnostic, artifact summary, cursor chip,
   and mini-map surfaces.
-- `lib/dashboard/ui/**` owns browser rendering against those DTOs only.
+- `lib/dashboard/ui/**` owns TypeScript/TSX browser rendering against those DTOs
+  only: React components, React Aria based reusable interactive controls, CSS
+  Modules, presentation state, browser DTO client, UI fixtures, and large-run
+  rendering behavior.
+- `lib/dashboard/adr/tanstack-start-runtime.md` records the accepted runtime
+  decision, rejected alternatives, supported dashboard surfaces, and
+  implementation evidence ownership for the TanStack Start migration.
 
 If these zones become substantial, add `lib/dashboard/CONTEXT.md` in the same
 slice to record local ownership and forbidden dependencies. Do not create that
@@ -483,6 +493,12 @@ read-only filesystem adapters, then project the result into dashboard DTOs. It
 must isolate per-run read/parse failures as degraded dashboard records and must
 not persist those degraded records into workflow state.
 
+Dashboard TanStack Start runtime is an app/backend serving context. It owns the
+dashboard app route surface and may host or delegate list/detail/SSE handlers,
+but it must remain a read-only dashboard adapter. It must not become a runner
+control protocol surface, acquire leases, move pointers, write output, repair
+run state, or expose mutation/control endpoints.
+
 Dashboard projection is a read-model context. It owns allowlisted DTOs and
 classification policy for `Waiting for user`, `Worker running`, `Blocked`,
 `Degraded`, and `Done`. It may expose bounded, redacted history excerpts and
@@ -491,11 +507,13 @@ instructions, private prompts, token-bearing commands, hidden transcripts,
 instruction storage paths, preferred worker agent ids, worker binding flags, or
 unnecessary host control-plane metadata.
 
-Dashboard UI is a browser-only inspection context. It consumes safe DTOs from
-the daemon API/event surface and follows `DESIGN.md`. It must not read
-`~/.orbita` directly, infer runner state from filesystem paths, include
-drag/drop movement, or show controls that resemble `next`, `continue`,
-`write-output`, retry, repair, or manual lane movement.
+Dashboard UI is a browser-only inspection context. Migrated runtime code is
+TypeScript/TSX. It consumes safe DTOs from the dashboard API/event surface and
+follows `DESIGN.md`. Reusable interactive controls must be based on React Aria
+Components when a matching primitive exists. UI code must not read `~/.orbita`
+directly, infer runner state from filesystem paths, import server/projection
+internals, include drag/drop movement, or show controls that resemble `next`,
+`continue`, `write-output`, retry, repair, or manual lane movement.
 
 ### Dashboard Relationships
 
@@ -504,16 +522,19 @@ flowchart LR
   runs[(Durable run state\n~/.orbita/workflow-runs/v1)]
   observer[Dashboard observer reader\nread-only adapter]
   projection[Safe dashboard projection\nallowlisted DTOs]
-  api[Dashboard daemon API\nlist, detail, events, static UI]
+  start[TanStack Start dashboard runtime\napp routes and server handlers]
+  api[Dashboard API\nlist, detail, events]
   sse[SSE-first event surface\nlossy updates]
-  ui[Browser dashboard UI\nboard, drawer, mini-map]
+  ui[Browser dashboard UI\nReact, React Aria, CSS Modules]
   design[DESIGN.md\nboard/drawer input]
 
   runs -->|read only| observer
   observer --> projection
   projection --> api
+  api --> start
+  start --> ui
   api --> sse
-  api --> ui
+  sse --> ui
   design --> ui
 ```
 
@@ -530,9 +551,15 @@ Binding rules for dashboard code:
   command builders, lease authority, write-output/continue/next/
   listPointerTransitions/movePointer API handlers, list-pointer-transitions/
   move-pointer CLI modes, or host worker lifecycle code.
-- Browser UI code must depend only on dashboard DTO contracts and browser
-  platform APIs; it must not import persistence, filesystem helpers,
-  workflow-runner API shells, or Node-only modules.
+- TanStack Start backend handlers may call read-only dashboard observer/API
+  services, but must not import runner mutation/control entrypoints, leases,
+  locks, claim/heartbeat authority, pointer movement, persisted-state writers,
+  host worker lifecycle, or CLI command builders.
+- Browser UI code must depend only on dashboard DTO contracts/types, browser
+  platform APIs, React, React DOM, TanStack Start browser/client integration,
+  React Aria Components, and CSS Modules; it must not import persistence,
+  filesystem helpers, workflow-runner API shells, entrypoints, use cases,
+  entity internals, dashboard server/projection internals, or Node-only modules.
 - Projection code may depend on DTO/schema/value helpers and read-only records,
   but must not depend on CLI argument parsing, process environment, locks,
   leases, or mutation use cases.
@@ -542,12 +569,22 @@ Binding rules for dashboard code:
 - Dashboard artifacts, degraded diagnostics, bounded history excerpts, cursor
   chips, and mini-map data are projections. They are not durable workflow state
   and must not be written back into run directories.
+- Migrated dashboard runtime surfaces are TypeScript/TSX. Compatibility `.mjs`
+  wrappers may remain only for public CLI/API surfaces or explicit temporary
+  migration fixtures with owner and removal condition.
+- Reusable interactive UI components must be based on React Aria Components
+  when a matching primitive exists; bespoke reusable interaction requires local
+  justification and must remain read-only.
 
 Add mechanical boundary checks for these rules when dashboard code is added.
-At minimum, tests/checks must prove absence of lease tokens, token-bearing
-commands, raw instruction commands, private prompts, hidden transcripts, raw
-instruction paths, preferred agent ids, worker binding flags, and unnecessary
-host control-plane metadata in browser-visible DTOs.
+At minimum, tests/checks must prove TS/TSX dependency rules, absence of lease
+tokens, token-bearing commands, raw instruction commands, private prompts,
+hidden transcripts, raw instruction paths, preferred agent ids, worker binding
+flags, and unnecessary host control-plane metadata in browser-visible DTOs.
+Implementation evidence must also cover TanStack Start root/dashboard app
+serving, canonical list/detail/SSE routes, retained alias routes, redacted
+public errors, unchanged `orbita-dashboard serve` semantics, React Aria
+reusable controls, and 1000+ run behavior.
 
 ### Workflow Loop Policies
 

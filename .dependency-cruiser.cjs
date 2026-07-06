@@ -125,6 +125,33 @@ module.exports = {
         pathNot: '^skills/orbita/lib/dtos/$1(?:[.]mjs$|/)',
       },
     },
+    {
+      name: 'orbita-dashboard-ui-tsx-browser-only',
+      severity: 'error',
+      comment: 'Dashboard browser UI TypeScript/TSX must stay browser/DTO-only and not import backend, persistence, runner, or Node IO surfaces.',
+      from: { path: '^skills/orbita/lib/dashboard/ui/.*[.](?:ts|tsx)$' },
+      to: {
+        path: '^(?:node:|skills/orbita/lib/(?:persistence|entrypoints|use-cases|entities)/|skills/orbita/lib/dashboard/(?:server|projection)/)',
+      },
+    },
+    {
+      name: 'orbita-dashboard-start-backend-not-to-control-plane',
+      severity: 'error',
+      comment: 'Dashboard Start backend handlers may serve read-only app/API/event surfaces but must not import runner mutation/control authority.',
+      from: { path: '^skills/orbita/lib/dashboard/app/.*[.](?:ts|tsx|mjs|js)$' },
+      to: {
+        path: '^skills/orbita/lib/(?:entrypoints|use-cases/runtime|persistence/run-state/(?:lease|lock|writer)|runner/|runtime/output/)',
+      },
+    },
+    {
+      name: 'orbita-dashboard-start-backend-not-to-cli-or-control-strings',
+      severity: 'error',
+      comment: 'Dashboard Start backend code must not route through workflow-runner command builders or CLI adapters.',
+      from: { path: '^skills/orbita/lib/dashboard/app/.*[.](?:ts|tsx|mjs|js)$' },
+      to: {
+        path: '^(?:skills/orbita/lib/entrypoints/cli/|skills/orbita/lib/entrypoints/workflow-runner-command[.]mjs$)',
+      },
+    },
   ],
   options: {
     doNotFollow: {
@@ -139,7 +166,7 @@ module.exports = {
       ],
     },
     enhancedResolveOptions: {
-      extensions: ['.mjs', '.js', '.json'],
+      extensions: ['.mjs', '.js', '.ts', '.tsx', '.json'],
     },
     progress: { type: 'none' },
   },

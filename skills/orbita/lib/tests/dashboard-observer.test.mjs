@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { get } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -255,6 +255,14 @@ function bodyContainsEvent(error) {
   return error?.code === 'ECONNRESET';
 }
 
+function sourceFiles(dir) {
+  return readdirSync(dir).flatMap((name) => {
+    const filePath = path.join(dir, name);
+    if (statSync(filePath).isDirectory()) return sourceFiles(filePath);
+    return /\.(?:mjs|js|ts|tsx)$/.test(name) ? [filePath] : [];
+  });
+}
+
 test('dashboard local server exposes list, detail, events, and static surfaces', async () => {
   const runsRoot = await makeRunsRoot('server');
   const runId = `dashboard-server-${process.pid}`;
@@ -271,43 +279,27 @@ test('dashboard local server exposes list, detail, events, and static surfaces',
     assert.equal(listResponse.status, 200);
     assert.equal((await listResponse.json()).runs[0].runId, runId);
 
-    const aliasListResponse = await fetch(`${dashboard.url}/api/dashboard/runs`);
-    assert.equal(aliasListResponse.status, 200);
-    assert.equal((await aliasListResponse.json()).runs[0].runId, runId);
-
     const detailResponse = await fetch(`${dashboard.url}/api/runs/${encodeURIComponent(runId)}`);
     assert.equal(detailResponse.status, 200);
     assert.equal((await detailResponse.json()).run.runId, runId);
-
-    const aliasDetailResponse = await fetch(`${dashboard.url}/api/dashboard/runs/${encodeURIComponent(runId)}`);
-    assert.equal(aliasDetailResponse.status, 200);
-    assert.equal((await aliasDetailResponse.json()).run.runId, runId);
 
     const staticResponse = await fetch(`${dashboard.url}/`);
     assert.equal(staticResponse.status, 200);
     const staticHtml = await staticResponse.text();
     assert.match(staticHtml, /Orbita Dashboard/);
-    assert.match(staticHtml, /\/dashboard\/style\.css/);
-    assert.match(staticHtml, /\/dashboard\/client\.js/);
+    assert.doesNotMatch(staticHtml, /\/dashboard\/client\.js|\/dashboard\/render\.mjs|renderDashboardShell|start-client\.js/);
 
-    const clientResponse = await fetch(`${dashboard.url}/dashboard/client.js`);
-    assert.equal(clientResponse.status, 200);
-    assert.match(clientResponse.headers.get('content-type'), /text\/javascript/);
-    assert.match(await clientResponse.text(), /\/api\/runs/);
-
-    const renderModuleResponse = await fetch(`${dashboard.url}/dashboard/render.mjs`);
-    assert.equal(renderModuleResponse.status, 200);
-    assert.match(renderModuleResponse.headers.get('content-type'), /text\/javascript/);
-    assert.match(await renderModuleResponse.text(), /renderDashboard/);
+    const dashboardAppResponse = await fetch(`${dashboard.url}/dashboard`);
+    assert.equal(dashboardAppResponse.status, 200);
+    assert.match(await dashboardAppResponse.text(), /Orbita Dashboard/);
 
     const sse = await readSseEvent(`${dashboard.url}/api/events`);
     assert.equal(sse.statusCode, 200);
     assert.match(sse.body, /event: dashboard\.snapshot/);
     assert.match(sse.body, new RegExp(runId));
 
-    const aliasSse = await readSseEvent(`${dashboard.url}/api/dashboard/events`);
-    assert.equal(aliasSse.statusCode, 200);
-    assert.match(aliasSse.body, /event: dashboard\.snapshot/);
+    const aliasListResponse = await fetch(`${dashboard.url}/api/dashboard/runs`);
+    assert.equal(aliasListResponse.status, 404);
   } finally {
     await dashboard.close();
   }
@@ -329,7 +321,7 @@ test('dashboard API and server redact corrupt runs index paths', async () => {
 
   const dashboard = await startDashboardServer({ runsRoot, pollMs: 25 });
   try {
-    const response = await fetch(`${dashboard.url}/api/dashboard/runs`);
+    const response = await fetch(`${dashboard.url}/api/runs`);
     assert.equal(response.status, 500);
     const payload = await response.json();
     assert.match(payload.error, /workflow runs index/);
@@ -346,31 +338,28 @@ test('dashboard SSE error events redact corrupt runs index paths', async () => {
   const runsRootPattern = new RegExp(runsRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const dashboard = await startDashboardServer({ runsRoot, pollMs: 25 });
   try {
-    for (const eventsPath of ['/api/events', '/api/dashboard/events']) {
-      const sse = await readSseEvent(`${dashboard.url}${eventsPath}`);
-      assert.equal(sse.statusCode, 200);
-      assert.match(sse.body, /event: dashboard\.error/);
-      assert.match(sse.body, /workflow runs index/);
-      assert.doesNotMatch(sse.body, /runs\.json/);
-      assert.doesNotMatch(sse.body, runsRootPattern);
-    }
+    const sse = await readSseEvent(`${dashboard.url}/api/events`);
+    assert.equal(sse.statusCode, 200);
+    assert.match(sse.body, /event: dashboard\.error/);
+    assert.match(sse.body, /workflow runs index/);
+    assert.doesNotMatch(sse.body, /runs\.json/);
+    assert.doesNotMatch(sse.body, runsRootPattern);
+
+    const aliasResponse = await fetch(`${dashboard.url}/api/dashboard/events`);
+    assert.equal(aliasResponse.status, 404);
   } finally {
     await dashboard.close();
   }
 });
 
-test('dashboard static read failures do not expose local static paths', async () => {
+test('dashboard unknown app asset paths do not expose local paths', async () => {
   const runsRoot = await makeRunsRoot('static-redaction');
   await writeIndex(runsRoot, {});
-  const staticRoot = path.join(runsRoot, 'private-static-root');
-  const dashboard = await startDashboardServer({ runsRoot, staticRoot, pollMs: 25 });
+  const dashboard = await startDashboardServer({ runsRoot, pollMs: 25 });
   try {
-    const response = await fetch(`${dashboard.url}/dashboard/client.js`);
+    const response = await fetch(`${dashboard.url}/dashboard/missing.js`);
     assert.equal(response.status, 404);
-    const payload = await response.json();
-    assert.equal(payload.error, 'static asset not found');
-    assert.doesNotMatch(JSON.stringify(payload), /private-static-root/);
-    assert.doesNotMatch(JSON.stringify(payload), new RegExp(runsRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.doesNotMatch(await response.text(), new RegExp(runsRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   } finally {
     await dashboard.close();
   }
@@ -381,9 +370,10 @@ test('dashboard backend source does not import or call workflow runner control s
   const entrypoint = path.join(root, 'skills/orbita/lib/entrypoints/api/dashboard.mjs');
   const files = [
     entrypoint,
-    ...readdirSync(path.join(dashboardRoot, 'contracts')).map((file) => path.join(dashboardRoot, 'contracts', file)),
-    ...readdirSync(path.join(dashboardRoot, 'projection')).map((file) => path.join(dashboardRoot, 'projection', file)),
-    ...readdirSync(path.join(dashboardRoot, 'server')).map((file) => path.join(dashboardRoot, 'server', file)),
+    ...sourceFiles(path.join(dashboardRoot, 'app')),
+    ...sourceFiles(path.join(dashboardRoot, 'contracts')),
+    ...sourceFiles(path.join(dashboardRoot, 'projection')),
+    ...sourceFiles(path.join(dashboardRoot, 'server')),
   ];
   const source = files.map((file) => readFileSync(file, 'utf8')).join('\n');
 

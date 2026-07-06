@@ -6,6 +6,10 @@
   "scripts": {
     "test": "AGENT=1 make -C skills/orbita test",
     "test:workflow-e2e": "AGENT=1 make -C skills/orbita test-workflow-e2e",
+    "dashboard:dev": "vite dev --config skills/orbita/lib/dashboard/app/vite.config.ts",
+    "dashboard:build": "vite build --config skills/orbita/lib/dashboard/app/vite.config.ts",
+    "dashboard:typecheck": "tsc -p skills/orbita/lib/dashboard/app/tsconfig.json --noEmit",
+    "dashboard:test": "bun test --timeout=30000 skills/orbita/lib/tests/dashboard-observer.test.mjs skills/orbita/lib/tests/dashboard-start-routes.test.mjs",
     "workflow:validate": "bun skills/orbita/lib/entrypoints/cli/validate-workflow.mjs workflows",
     "validate": "bun run depcruise:check && bun run role-evidence:check && bun run test && bun run workflow:validate && bun run agents:check && bun run schema-validation:check-vendor-ajv",
     "prepare": "git config core.hooksPath .githooks || true",
@@ -18,10 +22,23 @@
     "role-evidence:check": "python3 scripts/check_role_evidence.py"
   },
   "devDependencies": {
+    "@types/node": "26.1.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.3",
     "ajv": "^8.17.1",
-    "dependency-cruiser": "18.0.0"
+    "dependency-cruiser": "18.0.0",
+    "typescript": "6.0.3",
+    "vite": "8.1.3"
   },
   "workspaces": [
     "shared/scripts/schema-validation"
-  ]
+  ],
+  "dependencies": {
+    "@tanstack/react-router": "1.170.17",
+    "@tanstack/react-start": "1.168.27",
+    "react": "19.2.7",
+    "react-aria-components": "1.19.0",
+    "react-dom": "19.2.7"
+  }
 }
