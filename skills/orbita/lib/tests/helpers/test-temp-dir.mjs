@@ -10,18 +10,19 @@ const testSessionRoot = join(testRunsBaseRoot, `orbita-tests-${process.pid}-${Da
 let cleanupRegistered = false;
 let sequence = 0;
 
+function cleanup() {
+  rmSync(testSessionRoot, { recursive: true, force: true });
+  try {
+    rmdirSync(testRunsBaseRoot);
+  } catch (error) {
+    if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error?.code)) throw error;
+  }
+}
+
 function registerCleanup() {
+  afterAll(cleanup);
   if (cleanupRegistered) return;
   cleanupRegistered = true;
-  const cleanup = () => {
-    rmSync(testSessionRoot, { recursive: true, force: true });
-    try {
-      rmdirSync(testRunsBaseRoot);
-    } catch (error) {
-      if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error?.code)) throw error;
-    }
-  };
-  afterAll(cleanup);
   process.once('exit', cleanup);
 }
 

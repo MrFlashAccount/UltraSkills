@@ -80,7 +80,7 @@ accepted output that a later `continue` may reuse, the command requires explicit
 
 Commands returned in host responses are rendered with the absolute path to `workflow-runner.mjs` and an explicit absolute `--runs-root`, quoted for shell execution, so a worker or host can run them from any current working directory. The relative examples above are only for humans running the CLI from the skill root.
 
-The default runs root is workspace-local: `<workspace>/.orbita/workflow-runs/v1`. Hosts that launch public commands from a plugin/cache root or any cwd where the default would not resolve to the active task workspace must set `WORKFLOW_RUNS_ROOT` to `<active-workspace>/.orbita/workflow-runs/v1` before the first run command. Source-checkout skill-root cwd is guarded to resolve back to the repository root, but plugin/cache skill roots cannot reliably infer the task workspace without this host hint.
+The default runs root is `~/.orbita/workflow-runs/v1`, or `$ORBITA_HOME/workflow-runs/v1` when `ORBITA_HOME` is set. Hosts that need a different storage location must set the single explicit override `WORKFLOW_RUNS_ROOT` before the first run command.
 
 ### Startup user prompt
 
