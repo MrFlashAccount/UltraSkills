@@ -259,7 +259,7 @@ test('runner pointer API rejects stale transition ids and wrong leases without m
   assert.deepEqual(snapshot(run.paths), afterStaleRejected);
 });
 
-test('runner pointer API reports terminal and parallel cursors as unsupported', async () => {
+test('runner pointer API allows rollback from terminal cursors and reports parallel cursors as unsupported', async () => {
   const terminalRun = await createClaimedRun('api-terminal');
   await next({ ...terminalRun, now: new Date('2026-06-01T10:00:01.000Z') });
   await acceptCurrentWorkerOutput({ ...terminalRun, stepId: 'prepare', summary: 'prepared terminal' });
@@ -269,8 +269,19 @@ test('runner pointer API reports terminal and parallel cursors as unsupported', 
   await acceptCurrentWorkerOutput({ ...terminalRun, stepId: 'finalize', summary: 'finalized terminal' });
   await continueRun({ ...terminalRun, now: new Date('2026-06-01T10:04:00.000Z') });
   const terminal = await listPointerTransitions({ ...terminalRun, now: new Date('2026-06-01T10:05:00.000Z') });
-  assert.equal(terminal.unsupported.reason, 'terminal_run_unsupported');
-  assert.deepEqual(terminal.transitions, []);
+  assert.equal(terminal.unsupported, undefined);
+  assert.deepEqual(terminal.transitions.map((transition) => [transition.direction, transition.to.cursor]), [['backward', 'finalize']]);
+  assert.equal(terminal.transitions[0].retainedState.acknowledgementRequired, true);
+  assert.deepEqual(terminal.transitions[0].retainedState.stepIds, ['finalize']);
+  const terminalMoved = await movePointer({
+    ...terminalRun,
+    transitionId: terminal.transitions[0].id,
+    acknowledgeRetainedState: true,
+    now: new Date('2026-06-01T10:06:00.000Z'),
+  });
+  assert.equal(terminalMoved.current.cursor, 'finalize');
+  assert.equal(terminalMoved.current.status, 'running');
+  assert.equal(snapshot(terminalRun.paths).index.status, 'needs_host_actions');
 
   const parallelWorkflow = structuredClone(workflowDoc);
   parallelWorkflow.steps.prepare.next = ['branch_a', 'branch_b'];

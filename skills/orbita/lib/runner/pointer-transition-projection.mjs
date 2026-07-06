@@ -78,20 +78,13 @@ function retainedStateSummary(baton, cursor) {
   };
 }
 
-function assertSingleRunningPointer(baton) {
+function assertSinglePointer(baton) {
   const currentStepIds = normalizeCursor(baton.cursor);
   if (currentStepIds.length > 1) {
     return {
       supported: false,
       reason: 'parallel_cursor_unsupported',
       detail: 'pointer recovery supports only a single current cursor',
-    };
-  }
-  if (TERMINAL_STATUSES.has(baton.status)) {
-    return {
-      supported: false,
-      reason: 'terminal_run_unsupported',
-      detail: 'pointer recovery does not move terminal runs',
     };
   }
   return { supported: true };
@@ -117,7 +110,7 @@ function uniqueTransitions(transitions) {
 export function projectPointerTransitions({ workflow, baton, historyText } = {}) {
   new Baton(baton).validateAgainst(workflow);
   const current = pointerPosition(baton.cursor, baton.status);
-  const support = assertSingleRunningPointer(baton);
+  const support = assertSinglePointer(baton);
   if (!support.supported) {
     return {
       current,
