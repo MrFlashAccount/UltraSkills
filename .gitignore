@@ -26,5 +26,7 @@ skills/cover-letter-writer/private/*
 !skills/cover-letter-writer/private/.gitkeep
 
 # Local workflow runtime state
+.testruns/
+.orbita/workflow-runs/
 develop/.workflow-runs/
 skills/orbita/.workflow-runs/

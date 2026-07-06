@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { claimWorkflowRunForTest } from './helpers/workflow-runner-api-client.mjs';
+import { makeTestDir } from './helpers/test-temp-dir.mjs';
 import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../runner/runner-command-builder.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-cli-check-'));
+const tempDir = makeTestDir('workflow-runner-cli-check');
 const testLeaseToken = `workflow-runner-cli-test-token-${process.pid}`;
 const leaseTokensByRunId = new Map();
 process.env.WORKFLOW_RUN_TOKEN = testLeaseToken;

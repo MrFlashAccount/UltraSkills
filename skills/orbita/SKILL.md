@@ -14,7 +14,8 @@ Hard rules:
 - Latest runner stdout is the only active directive; each `next` or `continue --only-instructions` stdout supersedes all older runner stdout.
 - Invoke public `workflow-runner` commands with `--only-instructions` when supported, then follow stdout exactly.
 - `workflow-runner write-output` accepts or rejects one host request output only; it is not navigation.
-- Use only public run/runner commands from the skill root. Do not inspect or mutate private runtime files, task repository source, workflow source, runner `lib/**`, schemas, or CLI help to infer protocol.
+- Use only public run/runner commands. Do not inspect or mutate private runtime files, task repository source, workflow source, runner `lib/**`, schemas, or CLI help to infer protocol.
+- Before the first `workflow-runs` / `workflow-runner` command, identify the active task workspace. If the command cwd is a plugin/cache root or any directory where the default would not resolve to that active workspace, set `WORKFLOW_RUNS_ROOT` to `<active-workspace>/.orbita/workflow-runs/v1` for every run/runner command. This keeps runtime state under the task workspace instead of under the skill package.
 - Orbita is not the task implementer. While a worker owns a step, do not do independent research, implementation, review, or tests for that task.
 - Execute only the current stdout and its embedded commands. Do not reconstruct missing `write-output`, `continue`, or approval JSON from source. If stdout lacks enough executable instruction, report a runner contract bug without inventing a workflow terminal state.
 - After spawning a worker, wait for that worker's accepted output or blocker before continuing the run.

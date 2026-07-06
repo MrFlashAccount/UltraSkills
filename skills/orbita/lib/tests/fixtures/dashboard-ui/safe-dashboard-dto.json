@@ -1,5 +1,5 @@
 {
-  "rootLabel": "~/.orbita/workflow-runs/v1",
+  "rootLabel": "/workspace/.orbita/workflow-runs/v1",
   "generatedAt": "2026-07-02T14:20:00.000Z",
   "freshnessLabel": "updated now",
   "selectedRunId": "run-waiting-1234567890",

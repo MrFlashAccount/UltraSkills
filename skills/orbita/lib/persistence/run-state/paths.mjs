@@ -1,6 +1,6 @@
-import { constants, existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { constants, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { access, cp, mkdir, open, readdir, rename, rm, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defaultRepositoryRootForWorkflow } from '../workflow-resources/resource-resolver.mjs';
@@ -13,7 +13,16 @@ export const repositoryRoot = resolve(runnerDir, '../../../../..');
 export const defaultWorkflowPath = join(repositoryRoot, 'workflows/dev-harness/workflow.toml');
 export const legacyWorkflowRunsRoot = join(repositoryRoot, 'skills/orbita/.workflow-runs');
 export const orbitaHome = resolve(process.env.ORBITA_HOME ?? join(homedir(), '.orbita'));
-export const defaultWorkflowRunsRoot = join(orbitaHome, 'workflow-runs/v1');
+const sourceSkillRoot = join(repositoryRoot, 'skills/orbita');
+
+export function defaultWorkspaceRootForCwd(cwd = process.cwd()) {
+  const resolvedCwd = resolve(cwd);
+  if (resolvedCwd === sourceSkillRoot || resolvedCwd.startsWith(`${sourceSkillRoot}/`)) return repositoryRoot;
+  return resolvedCwd;
+}
+
+export const workspaceRoot = defaultWorkspaceRootForCwd();
+export const defaultWorkflowRunsRoot = join(workspaceRoot, '.orbita/workflow-runs/v1');
 
 const TEST_RUN_ID_RE = /^(workflow-runner-test-|workflow-runner-reuse-hints-|workflow-runner-fairness-|workflow-runner-pointer-|persisted-state-test-|workflow-e2e-|binding-)/;
 
@@ -92,9 +101,18 @@ function isCurrentProcessTestRunId(runId) {
 function configureWorkflowRunsRoot() {
   if (!isNodeTestRunner()) return process.env.WORKFLOW_RUNS_ROOT ?? defaultWorkflowRunsRoot;
   if (!process.env.WORKFLOW_RUNS_ROOT) {
-    const testRunsRoot = mkdtempSync(join(tmpdir(), 'orbita-test-workflow-runs-'));
+    const testRunsBaseRoot = join(repositoryRoot, '.testruns');
+    const testRunsRoot = join(testRunsBaseRoot, `orbita-workflow-runs-${process.pid}-${Date.now()}`);
+    mkdirSync(testRunsRoot, { recursive: true });
     process.env.WORKFLOW_RUNS_ROOT = testRunsRoot;
-    process.once('exit', () => rmSync(testRunsRoot, { recursive: true, force: true }));
+    process.once('exit', () => {
+      rmSync(testRunsRoot, { recursive: true, force: true });
+      try {
+        rmdirSync(testRunsBaseRoot);
+      } catch (error) {
+        if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error?.code)) throw error;
+      }
+    });
     return testRunsRoot;
   }
 
