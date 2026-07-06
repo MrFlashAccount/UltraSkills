@@ -4,6 +4,16 @@ This workflow is the heavy path for non-trivial implementation work. Use it when
 
 Keep workflow mechanics in `workflow.toml` and schemas in `schemas/*.json`. Use this README for human workflow intent and EA-agent operating rules, not for runtime routing.
 
+## Approval summaries and artifacts
+
+Every draft step that feeds a human approval gate must emit a compact `summary` as the human-facing proposal state and a file-backed artifact for the proposal body.
+
+Approval gates present the draft-produced `summary`, attach the referenced artifact, include the attack verdict, and wait for explicit approval. The orchestrator must not read the artifact body to invent a fresh approval summary.
+
+Attack, review, implementation, and planning workers should continue to consume the artifact or structured contract fields they need. Do not replace their evidence context with the approval summary.
+
+The implementation plan body is artifact-only. `planning_draft` JSON must not inline the readable plan/proposal body; it should contain only compact routing and reviewer-selection fields needed by the runner plus `summary`, `artifacts`, and blockers.
+
 ## Research solution discussion
 
 The research step must not create `reasons-canvas-research` while important user-owned product, API, architecture, edge-case, or scope choices are still unresolved.

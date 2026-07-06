@@ -15,61 +15,11 @@
       "description": "Producer must emit the single enum value that reflects the completed stage state; use blocked only when blocker explains the recoverable pause.",
       "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when this says blocked or needs revision."
     },
-    "implementation_plan": {
-      "type": "object",
-      "required": [
-        "goal",
-        "workstreams",
-        "definition_of_done",
-        "verification",
-        "rollback"
-      ],
-      "properties": {
-        "goal": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Producer must state one implementation goal aligned with the approved architecture contract.",
-          "x-usage": "Use this to check scope alignment. Do not add work outside the listed workstreams and done criteria."
-        },
-        "workstreams": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "object"
-          },
-          "description": "Producer must list planner-level workstreams or implementation entities without patch-level instructions.",
-          "x-usage": "Use these to assign ownership and coverage. Do not infer exact code edits, signatures, or patch steps from the wording."
-        },
-        "definition_of_done": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "Producer must list acceptance criteria required before implementation can join.",
-          "x-usage": "Use these as required acceptance criteria. If any item is unmet, request rework or report a blocker."
-        },
-        "verification": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "Producer must list required verification checks or evidence for the slice.",
-          "x-usage": "Use these as the exact checks to request or report, or explain why they are blocked/skipped. Do not treat this list as evidence that checks already ran."
-        },
-        "rollback": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Producer must define the rollback or revert strategy for the implementation slice.",
-          "x-usage": "Use this as the recovery strategy for risk assessment and reporting. Do not execute rollback automatically from this field alone."
-        }
-      },
-      "additionalProperties": true,
-      "description": "Producer must draft the implementation contract for the approved architecture scope: goal, workstreams, done criteria, verification, and rollback.",
-      "x-usage": "Treat this as a proposed implementation contract until an approval/pass outcome freezes it. Build it from approved architecture artifacts, including reasons-canvas-architecture when present; do not consume research separately. After approval, do not change it without an approved replacement plan."
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Producer must summarize the implementation plan proposal state for human approval without embedding the implementation-plan artifact body.",
+      "x-usage": "Use this as the human-facing approval state for the implementation plan gate. Show it with the artifact attachment; do not recreate the summary from artifact contents in the orchestrator."
     },
     "selected_implementation_steps": {
       "type": "array",
@@ -351,8 +301,21 @@
       "items": {
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
       },
-      "description": "Producer may emit named structured artifacts created by this stage when they are part of the handoff.",
-      "x-usage": "Use these only as supporting named artifacts to preserve or pass along. Do not treat them as routing decisions unless another field explicitly references them."
+      "minItems": 1,
+      "maxItems": 1,
+      "contains": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "const": "implementation-plan"
+          }
+        }
+      },
+      "description": "Producer must emit artifact metadata for the required immutable implementation-plan artifact when outcome is ready_for_attack.",
+      "x-usage": "Emit only the required implementation-plan artifact. The full readable plan/proposal body lives in the referenced artifact file; structured routing fields remain in JSON."
     },
     "results": {
       "type": "array",
@@ -438,11 +401,12 @@
       },
       "then": {
         "required": [
-          "implementation_plan",
+          "summary",
           "selected_implementation_steps",
           "implementation_route",
           "selected_review_steps",
-          "review_plan"
+          "review_plan",
+          "artifacts"
         ]
       }
     },

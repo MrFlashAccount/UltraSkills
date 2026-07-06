@@ -14,6 +14,12 @@
       "description": "Producer must emit the single enum value that reflects the completed stage state; use blocked only when blocker explains the recoverable pause.",
       "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when this says blocked or needs revision."
     },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Producer must summarize the research proposal state for human approval without embedding the reasons-canvas-research artifact body.",
+      "x-usage": "Use this as the human-facing approval state for the research gate. Show it with the artifact attachment; do not recreate the summary from artifact contents in the orchestrator."
+    },
     "artifacts": {
       "type": "array",
       "items": {
@@ -106,6 +112,7 @@
       },
       "then": {
         "required": [
+          "summary",
           "artifacts"
         ]
       }

@@ -17,8 +17,8 @@
     "summary": {
       "type": "string",
       "minLength": 1,
-      "description": "Producer must summarize the architecture artifact decision and handoff in concise human-readable form without embedding the artifact body.",
-      "x-usage": "Use this as orientation metadata only. The reasons-canvas-architecture artifact is the source of truth for review, approval, and planning."
+      "description": "Producer must summarize the architecture proposal state for human approval without embedding the reasons-canvas-architecture artifact body.",
+      "x-usage": "Use this as the human-facing approval state for the architecture gate. Show it with the artifact attachment; do not recreate the summary from artifact contents in the orchestrator."
     },
     "artifacts": {
       "type": "array",
