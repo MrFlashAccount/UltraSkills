@@ -51,6 +51,26 @@ Rules:
 - Preserve `<boundary/invariant/compatibility rule>`.
 - Update `<test/doc/check>` required by the source contract checklist.
 
+## Frontend component map
+
+Complete this section when the slice includes non-trivial user-facing UI. If not applicable, state why.
+
+| Layer | Components / hooks / selectors implemented or changed | Files | Boundary / reuse scope | Existing primitive/token path used |
+| --- | --- | --- | --- | --- |
+| Page / screen containers | <route/page/view shells> | <files> | <composition/orchestration boundary> | <repo convention or n/a> |
+| Feature components | <domain panels/forms/cards/tables/editors> | <files> | <domain responsibility> | <repo convention or n/a> |
+| Layout components | <shells/sections/stacks/grids/toolbars/rows> | <files> | <layout-only responsibility> | <tokens/layout primitives> |
+| Primitives / UI kit | <Button/Link/Input/etc. used or introduced> | <files> | <control contract> | <existing primitive/token path> |
+| Overlays and composites | <Dialog/Drawer/Menu/List/Card/etc.> | <files> | <composite behavior> | <existing primitive/composite path> |
+| State surfaces | <loading/error/empty/skeleton/disabled/permission> | <files> | <visible state/recovery behavior> | <existing state pattern> |
+| Hooks / selectors / adapters | <useX/selectX/normalizeX/mutation/url-state> | <files> | <state ownership / side effects / derived data> | <state/data convention> |
+
+Frontend component-map rules:
+
+- Name any approved `Frontend composition plan` deviations and why they were necessary.
+- Name repeated style/control/list/overlay/state scaffolding eliminated or intentionally left with justification.
+- Do not use this section to claim componentization without matching files and boundaries.
+
 ## Verification expected from implementer
 
 - Run:

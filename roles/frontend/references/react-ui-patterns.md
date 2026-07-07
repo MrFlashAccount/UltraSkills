@@ -69,11 +69,18 @@ const getCurrentUser = cache(async (userId: string) => {
 
 For non-trivial React UI work, component extraction is a delivery requirement, not polish. Keep page/route containers responsible for data/state orchestration, and move repeated or responsibility-specific UI into named components/hooks/selectors with clear props. Do not leave route/page composition, list/card rendering, drawers/dialogs, detail sections, loading/error surfaces, and focus policy in one file unless the approved plan explicitly allows a temporary exception.
 
+Start new or materially rewritten user-facing React UI from the approved frontend component map when one exists. If none exists for a non-trivial frontend slice, stop and request the missing plan rather than discovering the component architecture by growing a page component until it needs cleanup.
+
 Default structure for new or materially rewritten React UI:
 
 - route/page shell owns loading/error routing, high-level state, and data refresh;
 - view component owns screen composition;
-- controls, lists/cards, drawer/dialog, empty/error surfaces, and detail sections become separate components when they have distinct responsibilities;
+- feature components own domain-specific panels, forms, cards, tables, editors, and detail sections;
+- layout helpers own only spacing and structure such as page shells, sections, stacks, grids, toolbars, and form rows;
+- primitives/UI-kit components or native semantic elements own control behavior and token-backed styling;
+- composites own drawer/dialog/menu/tabs/toast/list/card/form-field families when they share behavior;
+- loading/error/empty/skeleton/disabled/permission surfaces become named state components when they are visible task states rather than one-line fallbacks;
+- hooks, reducers/state machines, selectors, normalizers, mutation helpers, URL-state helpers, and server-state adapters own state transitions and derived data outside render bodies;
 - pure selectors/normalizers stay outside component render bodies and are tested when non-trivial;
 - component-local types and CSS Modules stay next to the component; shared DTO/contracts live in a local shared contract module only when truly reused.
 
