@@ -40,17 +40,29 @@ Route the surface before describing it. Use repo-local design law first; do not 
 - Secondary actions:
 - Success signal:
 
+## User Questions / Decisions
+
+Record the questions the user would naturally ask or need to answer before a frontend implementer commits to the surface. Prefer concrete, user-facing questions over hidden assumptions.
+
+| Question / decision | Why it matters for the UI | Current answer / assumption | Status |
+| --- | --- | --- | --- |
+| <question about workflow, priority, data, density, visual proof, interaction, or risk> | <what changes in the screen if answered differently> | <answered from research/design law, assumed conservatively, or unknown> | Answered | Assumed | Needs user approval |
+
+If an unanswered question materially changes layout, primary action, risk posture, density, or visual direction, return blocked/reroute instead of guessing.
+
 ## Screen / Surface Structure
 
 | Zone | Purpose | Primary content/actions | Notes / constraints |
 | --- | --- | --- | --- |
 | <toolbar/header/filter/list/detail/form/dialog/etc.> | <why this zone exists> | <what it must contain> | <constraints, if any> |
 
-## First Read / Hierarchy
+## First Read / Work Surface
 
 - What the user should understand in the first 3 seconds:
+- Primary work surface and reading order:
 - Most important visual/action priority:
-- Secondary information:
+- Secondary information and where it should live:
+- Range / viewport behavior for dense or horizontal surfaces:
 - Dangerous or irreversible actions:
 - What must not compete for attention:
 
@@ -90,6 +102,13 @@ Use this section to carry the design artifact that frontend can implement agains
 | Asset | Type | Source / path / URL | What it proves | How frontend should use it |
 | --- | --- | --- | --- | --- |
 | <current screen / approved direction / reference / proof page / mockup> | Screenshot / reference / generated image / demo / none | <artifact/path/link or "missing"> | <layout, density, state, tone, component behavior, etc.> | <preserve, compare against, ignore specific parts, capture after implementation, etc.> |
+
+## Rendered Proof Expectation
+
+- Required for this task: Yes | No
+- Expected proof: <desktop screenshot, mobile screenshot, state screenshots, Storybook/demo page, Playwright capture, or explicit reason none is needed>
+- Minimum states to capture:
+- If proof cannot be captured locally:
 
 If high-confidence visual direction is required and no `DESIGN.md`, existing screen, reference, screenshot, or approved proof exists, return blocked or route to `create-design` / Frontend-Taste direction work instead of guessing.
 
