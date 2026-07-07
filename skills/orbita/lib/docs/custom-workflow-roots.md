@@ -17,14 +17,15 @@ Public CLI smoke for a promoted custom workflow package:
 ```bash
 export WORKFLOW_RUNS_ROOT="$(mktemp -d)"
 export ORBITA_CONFIG="$HOME/.orbita/orbita.toml"
+export ORBITA_SKILL_ROOT="<absolute path to skills/orbita>"
 
-bun skills/orbita/lib/entrypoints/cli/validate-workflow.mjs "$HOME/.orbita/workflows/sample/workflow.json"
-bun skills/orbita/lib/entrypoints/cli/workflow-catalog.mjs list --json --config "$ORBITA_CONFIG"
-bun skills/orbita/lib/entrypoints/cli/workflow-catalog.mjs resolve 'team:sample' --json --config "$ORBITA_CONFIG"
-bun skills/orbita/lib/entrypoints/cli/workflow-runs.mjs create --run-id sample-run --workflow "$HOME/.orbita/workflows/sample/workflow.json"
-lease_token="$(bun skills/orbita/lib/entrypoints/cli/workflow-runs.mjs claim --run-id sample-run --print-lease-token)"
-bun skills/orbita/lib/entrypoints/cli/workflow-runner.mjs next --run-id sample-run --lease-token "$lease_token"
-bun skills/orbita/lib/entrypoints/cli/workflow-runner.mjs instructions --run-id sample-run --step-id prepare --lease-token "$lease_token"
+bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/validate-workflow.mjs" "$HOME/.orbita/workflows/sample/workflow.json"
+bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-catalog.mjs" list --json --config "$ORBITA_CONFIG"
+bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-catalog.mjs" resolve 'team:sample' --json --config "$ORBITA_CONFIG"
+bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" create --run-id sample-run --workflow "$HOME/.orbita/workflows/sample/workflow.json"
+lease_token="$(bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" claim --run-id sample-run --print-lease-token)"
+bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" next --run-id sample-run --lease-token "$lease_token"
+bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" instructions --run-id sample-run --step-id prepare --lease-token "$lease_token"
 ```
 
 Use an isolated `WORKFLOW_RUNS_ROOT` for smoke runs. Do not write run artifacts into `skills/orbita/.workflow-runs`.

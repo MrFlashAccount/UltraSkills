@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { afterAll, beforeEach, test } from 'bun:test';
@@ -71,7 +71,7 @@ test('workflow runs API lists empty array when index is missing', async () => {
   assert.deepEqual(await listWorkflowRunsAtRoot({ runsRoot }), []);
 });
 
-test('workflow runs default root lives under the current workspace outside the skill tree', () => {
+test('workflow runs default root lives under Orbita home regardless of command cwd', () => {
   const orbitaHome = path.join(tempDir, 'orbita-home');
   const workspaceRoot = path.join(tempDir, 'workspace-default-root');
   mkdirSync(workspaceRoot, { recursive: true });
@@ -81,34 +81,31 @@ test('workflow runs default root lives under the current workspace outside the s
 
   const result = spawnSync(process.execPath, [
     '--eval',
-    `import { repositoryRoot, workspaceRoot, workflowRunsRoot } from ${JSON.stringify(pathsModuleUrl)}; console.log(JSON.stringify({ repositoryRoot, workspaceRoot, workflowRunsRoot }));`,
+    `import { repositoryRoot, orbitaHome, workflowRunsRoot } from ${JSON.stringify(pathsModuleUrl)}; console.log(JSON.stringify({ repositoryRoot, orbitaHome, workflowRunsRoot }));`,
   ], { cwd: workspaceRoot, encoding: 'utf8', env });
 
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
-  const resolvedWorkspaceRoot = realpathSync(workspaceRoot);
-  assert.equal(payload.workspaceRoot, resolvedWorkspaceRoot);
-  assert.equal(payload.workflowRunsRoot, path.join(resolvedWorkspaceRoot, '.orbita/workflow-runs/v1'));
-  assert.equal(payload.workflowRunsRoot.startsWith(orbitaHome), false);
+  assert.equal(payload.orbitaHome, orbitaHome);
+  assert.equal(payload.workflowRunsRoot, path.join(orbitaHome, 'workflow-runs/v1'));
   assert.equal(payload.workflowRunsRoot.startsWith(path.join(payload.repositoryRoot, 'skills/orbita')), false);
 });
 
-test('workflow runs default root resolves source skill-root cwd back to repository root', () => {
+test('workflow runs default root does not use source skill-root cwd', () => {
+  const orbitaHome = path.join(tempDir, 'orbita-home-skill-cwd');
   const skillRoot = path.join(root, 'skills/orbita');
   const pathsModuleUrl = pathToFileURL(path.join(root, 'skills/orbita/lib/persistence/run-state/paths.mjs')).href;
-  const env = { ...process.env };
-  delete env.ORBITA_HOME;
+  const env = { ...process.env, ORBITA_HOME: orbitaHome };
   delete env.WORKFLOW_RUNS_ROOT;
 
   const result = spawnSync(process.execPath, [
     '--eval',
-    `import { repositoryRoot, workspaceRoot, workflowRunsRoot } from ${JSON.stringify(pathsModuleUrl)}; console.log(JSON.stringify({ repositoryRoot, workspaceRoot, workflowRunsRoot }));`,
+    `import { repositoryRoot, workflowRunsRoot } from ${JSON.stringify(pathsModuleUrl)}; console.log(JSON.stringify({ repositoryRoot, workflowRunsRoot }));`,
   ], { cwd: skillRoot, encoding: 'utf8', env });
 
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
-  assert.equal(payload.workspaceRoot, root);
-  assert.equal(payload.workflowRunsRoot, path.join(root, '.orbita/workflow-runs/v1'));
+  assert.equal(payload.workflowRunsRoot, path.join(orbitaHome, 'workflow-runs/v1'));
   assert.equal(payload.workflowRunsRoot.startsWith(path.join(root, 'skills/orbita')), false);
 });
 
@@ -120,12 +117,11 @@ test('WORKFLOW_RUNS_ROOT is the single explicit override for command cwd mismatc
 
   const result = spawnSync(process.execPath, [
     '--eval',
-    `import { workspaceRoot, workflowRunsRoot } from ${JSON.stringify(pathsModuleUrl)}; console.log(JSON.stringify({ workspaceRoot, workflowRunsRoot }));`,
+    `import { workflowRunsRoot } from ${JSON.stringify(pathsModuleUrl)}; console.log(JSON.stringify({ workflowRunsRoot }));`,
   ], { cwd: skillRoot, encoding: 'utf8', env });
 
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
-  assert.equal(payload.workspaceRoot, root);
   assert.equal(payload.workflowRunsRoot, runsRoot);
 });
 
@@ -161,8 +157,9 @@ test('direct bun test import isolates default workflow runs root and cleans it o
 
 test('workflow runs default root migrates legacy skill-local runs when target is empty', () => {
   const legacyRoot = path.join(root, 'skills/orbita/.workflow-runs');
+  const orbitaHome = path.join(tempDir, 'orbita-home-migration');
   const workspaceRoot = path.join(tempDir, 'workspace-migration');
-  const migratedRoot = path.join(workspaceRoot, '.orbita/workflow-runs/v1');
+  const migratedRoot = path.join(orbitaHome, 'workflow-runs/v1');
   const apiModuleUrl = pathToFileURL(path.join(root, 'skills/orbita/lib/entrypoints/workflow-runs-api.mjs')).href;
   const runId = `${runPrefix}legacy-migration`;
   if (existsSync(legacyRoot)) {
@@ -187,8 +184,7 @@ test('workflow runs default root migrates legacy skill-local runs when target is
       },
     }, null, 2)}\n`);
 
-    const env = { ...process.env };
-    delete env.ORBITA_HOME;
+    const env = { ...process.env, ORBITA_HOME: orbitaHome };
     delete env.WORKFLOW_RUNS_ROOT;
     const result = spawnSync(process.execPath, [
       '--eval',
@@ -201,14 +197,16 @@ test('workflow runs default root migrates legacy skill-local runs when target is
     assert.equal(existsSync(legacyRoot), false);
   } finally {
     rmSync(legacyRoot, { recursive: true, force: true });
+    rmSync(orbitaHome, { recursive: true, force: true });
     rmSync(workspaceRoot, { recursive: true, force: true });
   }
 });
 
 test('workflow runs default root blocks silent legacy migration when target is not empty', () => {
   const legacyRoot = path.join(root, 'skills/orbita/.workflow-runs');
+  const orbitaHome = path.join(tempDir, 'orbita-home-migration-conflict');
   const workspaceRoot = path.join(tempDir, 'workspace-migration-conflict');
-  const migratedRoot = path.join(workspaceRoot, '.orbita/workflow-runs/v1');
+  const migratedRoot = path.join(orbitaHome, 'workflow-runs/v1');
   const apiModuleUrl = pathToFileURL(path.join(root, 'skills/orbita/lib/entrypoints/workflow-runs-api.mjs')).href;
   if (existsSync(legacyRoot)) {
     return;
@@ -221,8 +219,7 @@ test('workflow runs default root blocks silent legacy migration when target is n
     writeFileSync(path.join(legacyRoot, 'runs.json'), `${JSON.stringify({ schemaVersion: 1, topologyVersion: 'workflow-runs-v1', runs: {} }, null, 2)}\n`);
     writeFileSync(path.join(migratedRoot, 'runs.json'), `${JSON.stringify({ schemaVersion: 1, topologyVersion: 'workflow-runs-v1', runs: {} }, null, 2)}\n`);
 
-    const env = { ...process.env };
-    delete env.ORBITA_HOME;
+    const env = { ...process.env, ORBITA_HOME: orbitaHome };
     delete env.WORKFLOW_RUNS_ROOT;
     const result = spawnSync(process.execPath, [
       '--eval',
@@ -235,6 +232,7 @@ test('workflow runs default root blocks silent legacy migration when target is n
     assert.equal(existsSync(path.join(migratedRoot, 'runs.json')), true);
   } finally {
     rmSync(legacyRoot, { recursive: true, force: true });
+    rmSync(orbitaHome, { recursive: true, force: true });
     rmSync(workspaceRoot, { recursive: true, force: true });
   }
 });

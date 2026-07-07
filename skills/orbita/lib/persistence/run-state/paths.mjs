@@ -13,16 +13,7 @@ export const repositoryRoot = resolve(runnerDir, '../../../../..');
 export const defaultWorkflowPath = join(repositoryRoot, 'workflows/dev-harness/workflow.toml');
 export const legacyWorkflowRunsRoot = join(repositoryRoot, 'skills/orbita/.workflow-runs');
 export const orbitaHome = resolve(process.env.ORBITA_HOME ?? join(homedir(), '.orbita'));
-const sourceSkillRoot = join(repositoryRoot, 'skills/orbita');
-
-export function defaultWorkspaceRootForCwd(cwd = process.cwd()) {
-  const resolvedCwd = resolve(cwd);
-  if (resolvedCwd === sourceSkillRoot || resolvedCwd.startsWith(`${sourceSkillRoot}/`)) return repositoryRoot;
-  return resolvedCwd;
-}
-
-export const workspaceRoot = defaultWorkspaceRootForCwd();
-export const defaultWorkflowRunsRoot = join(workspaceRoot, '.orbita/workflow-runs/v1');
+export const defaultWorkflowRunsRoot = join(orbitaHome, 'workflow-runs/v1');
 
 const TEST_RUN_ID_RE = /^(workflow-runner-test-|workflow-runner-reuse-hints-|workflow-runner-fairness-|workflow-runner-pointer-|persisted-state-test-|workflow-e2e-|binding-)/;
 

@@ -39,3 +39,12 @@ test('issue 197: Orbita host watchdog instructions split bootstrap silence from 
   assert.match(skillText, /continue that same worker and ask for the next bounded checkpoint/);
   assert.match(skillText, /Do not persist progress in baton, scrape transcripts, read private runner state, or add durable worker status storage/);
 });
+
+test('Orbita skill invokes bundled CLI entrypoints from the resolved skill root', () => {
+  const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
+  assert.match(skillText, /set `ORBITA_SKILL_ROOT` to the directory containing this `SKILL\.md`/);
+  assert.match(skillText, /\$ORBITA_SKILL_ROOT\/lib\/entrypoints\/cli\/workflow-catalog\.mjs/);
+  assert.match(skillText, /\$ORBITA_SKILL_ROOT\/lib\/entrypoints\/cli\/workflow-runs\.mjs/);
+  assert.match(skillText, /\$ORBITA_SKILL_ROOT\/lib\/entrypoints\/cli\/workflow-runner\.mjs/);
+  assert.doesNotMatch(skillText, /bun \.\/lib\/entrypoints\/cli\//);
+});
