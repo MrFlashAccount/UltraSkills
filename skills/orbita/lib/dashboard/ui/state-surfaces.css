@@ -1,0 +1,53 @@
+.status-banner {
+  align-items: center;
+  background: var(--surface-lane);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  padding: 8px 18px;
+}
+
+.status-banner strong,
+.status-banner span {
+  font-size: 13px;
+}
+
+.status-banner--error strong {
+  color: var(--blocked);
+}
+
+.lane__bounded {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
+  padding: 10px;
+}
+
+.run-card--skeleton {
+  min-height: 128px;
+  opacity: 0.72;
+  position: relative;
+}
+
+.run-card--skeleton::before,
+.run-card--skeleton::after {
+  background: var(--border);
+  border-radius: 999px;
+  content: "";
+  height: 12px;
+  left: 10px;
+  position: absolute;
+  right: 10px;
+}
+
+.run-card--skeleton::before {
+  top: 14px;
+}
+
+.run-card--skeleton::after {
+  top: 44px;
+  width: 62%;
+}

@@ -1,3 +1,6 @@
+@import url('/dashboard/state-surfaces.css');
+@import url('/dashboard/responsive.css');
+
 :root {
   color-scheme: dark;
   --app-bg: #14131A;
@@ -26,6 +29,7 @@ body {
   margin: 0;
   background: var(--app-bg);
   color: var(--text);
+  overflow-x: hidden;
 }
 
 button,
@@ -40,6 +44,7 @@ code {
 .orbita-dashboard {
   min-height: 100vh;
   background: var(--app-bg);
+  overflow-x: hidden;
 }
 
 .topbar {
@@ -128,6 +133,7 @@ code {
 .board-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  min-width: 0;
   min-height: calc(100vh - 72px);
 }
 
@@ -137,6 +143,7 @@ code {
   gap: 12px;
   grid-auto-columns: minmax(240px, 1fr);
   grid-auto-flow: column;
+  min-width: 0;
   overflow-x: auto;
   padding: 14px;
 }
@@ -187,6 +194,8 @@ code {
   border-radius: 8px;
   display: grid;
   gap: 9px;
+  min-width: 0;
+  overflow: hidden;
   padding: 10px;
 }
 
@@ -205,6 +214,10 @@ code {
   display: flex;
   gap: 8px;
   justify-content: space-between;
+}
+
+.run-card__meta div {
+  min-width: 0;
 }
 
 .run-card h3 {
@@ -231,15 +244,43 @@ code {
 
 .run-card__meta dt,
 .drawer__facts dt {
+  flex: 0 0 auto;
   font-weight: 700;
 }
 
-.run-card__meta dd,
 .drawer__facts dd {
+  flex: 1 1 auto;
   margin: 0;
+  max-width: 100%;
   min-width: 0;
+  overflow: hidden;
   overflow-wrap: anywhere;
   text-align: right;
+}
+
+.drawer__facts dd code {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  width: 100%;
+}
+
+.run-card__meta dd {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-card__meta dd code {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status-chip--waiting_for_user {
@@ -271,10 +312,39 @@ code {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .cursor-chip {
   border-color: var(--focus);
+  display: block;
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cursor-chip code {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.cursor-chips--drawer .cursor-chip {
+  width: 100%;
+}
+
+.cursor-chips--drawer .cursor-chip code {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .drawer {
@@ -283,6 +353,7 @@ code {
   display: grid;
   gap: 14px;
   max-height: calc(100vh - 72px);
+  min-width: 0;
   overflow: auto;
   padding: 16px;
 }
@@ -296,6 +367,7 @@ code {
 .drawer-section {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .drawer h2 {
@@ -340,7 +412,34 @@ code {
   display: flex;
   gap: 8px;
   justify-content: space-between;
+  min-width: 0;
   padding: 7px 8px;
+}
+
+.mini-map__step code,
+.artifact-list code,
+.history-list span,
+.diagnostics span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-map__step code,
+.artifact-list code {
+  display: block;
+  white-space: nowrap;
+}
+
+.mini-map__step span,
+.history-list time,
+.artifact-list span,
+.diagnostics strong {
+  flex: 0 0 auto;
+}
+
+.diagnostics span {
+  overflow-wrap: anywhere;
 }
 
 .mini-map__step--active {
@@ -353,32 +452,4 @@ code {
 
 .diagnostics strong {
   color: var(--degraded);
-}
-
-@media (max-width: 900px) {
-  .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .topbar__meta {
-    justify-content: flex-start;
-  }
-
-  .board-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .drawer {
-    border-left: 0;
-    border-top: 1px solid var(--border-strong);
-    max-height: none;
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .run-card,
-  .drawer {
-    transition: background-color 120ms ease, border-color 120ms ease;
-  }
 }

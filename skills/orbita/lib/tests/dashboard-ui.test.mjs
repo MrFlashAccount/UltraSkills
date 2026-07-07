@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { startDashboardServer } from '../dashboard/server/dashboard-server.mjs';
 import { dashboardLanes } from '../dashboard/ui/constants.mjs';
 import { normalizeRuns, renderDashboard, renderDashboardShell } from '../dashboard/ui/render.mjs';
+import { laneRenderLimit, runsForLane } from '../dashboard/ui/selectors.mjs';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const fixturePath = path.join(testDir, 'fixtures/dashboard-ui/safe-dashboard-dto.json');
@@ -109,6 +110,7 @@ test('dashboard browser client consumes API and SSE surfaces without filesystem 
   assert.doesNotMatch(client, /\/api\/dashboard\//);
   assert.doesNotMatch(client, /updateSelection/);
   assert.match(client, /EventSource/);
+  assert.match(client, /mergeRunUpdate/);
   assert.equal(/\bnode:fs\b|\bfs\.|readFile|writeFile|workflow-runner|lease-token/.test(client), false);
   assert.equal(/dragstart|drop|draggable/.test(client), false);
 });
@@ -128,14 +130,89 @@ test('dashboard search filters board cards from safe DTO state', () => {
   assert.match(html, /value="Backend observer"/);
 });
 
+test('dashboard renders loading, error, and empty filter states explicitly', () => {
+  const loadingHtml = renderDashboard({ runs: [], isLoading: true });
+  const errorHtml = renderDashboard({ ...fixture, readError: 'observer read failed' });
+  const emptyFilterHtml = renderDashboard({ ...fixture, searchQuery: 'missing-run-title' });
+
+  assert.match(loadingHtml, /Loading board snapshot/);
+  assert.match(loadingHtml, /run-card--skeleton/);
+  assert.match(errorHtml, /Dashboard read degraded/);
+  assert.match(errorHtml, /observer read failed/);
+  assert.match(emptyFilterHtml, /No runs found/);
+  assert.match(emptyFilterHtml, /Clear the filter/);
+});
+
+test('dashboard redacts visible read errors before rendering', () => {
+  const html = renderDashboard({
+    ...fixture,
+    readError: 'failed to read /Users/sergeygarin/.orbita/workflow-runs/v1/private.json with lease-token=secret123',
+  });
+
+  assert.match(html, /Dashboard read degraded/);
+  assert.match(html, /\[redacted local path\]/);
+  assert.match(html, /\[redacted credential\]/);
+  assert.doesNotMatch(html, /\/Users\/sergeygarin|private\.json|secret123/);
+});
+
+test('dashboard redacts degraded diagnostic messages before rendering', () => {
+  const html = renderDashboard({
+    runs: [{
+      id: 'run-degraded-private',
+      laneId: 'degraded',
+      title: 'Private degraded diagnostic',
+      degraded: {
+        message: 'failed to read /Users/sergeygarin/.orbita/private.json with lease-token=secret123',
+      },
+    }],
+    selectedRunId: 'run-degraded-private',
+  });
+
+  assert.match(html, /Degraded diagnostics/);
+  assert.match(html, /\[redacted local path\]/);
+  assert.match(html, /\[redacted credential\]/);
+  assert.doesNotMatch(html, /\/Users\/sergeygarin|private\.json|secret123/);
+});
+
+test('dashboard bounds large lane rendering while keeping selected run visible', () => {
+  const runs = normalizeRuns(Array.from({ length: 1005 }, (_, index) => ({
+    ...fixture.runs[0],
+    runId: `large-run-${String(index).padStart(4, '0')}`,
+    title: `Large run ${index}`,
+  })));
+  const laneWindow = runsForLane(runs, 'waiting_for_user', 'large-run-1004');
+  const html = renderDashboard({ ...fixture, runs, selectedRunId: 'large-run-1004' });
+
+  assert.equal(laneWindow.visible[0].id, 'large-run-1004');
+  assert.equal((html.match(/<article class="run-card/g) ?? []).length, laneRenderLimit);
+  assert.match(html, /data-run-id="large-run-1004"/);
+  assert.ok(html.indexOf('data-run-id="large-run-1004"') < html.indexOf('data-run-id="large-run-0000"'));
+  assert.match(html, /selected run pinned when needed; 955 more match the current filter/);
+});
+
+test('dashboard browser client keeps explicit drawer close across snapshot refresh', () => {
+  const client = readFileSync(path.join(uiRoot, 'client.js'), 'utf8');
+
+  assert.match(client, /selectionInitialized/);
+  assert.match(client, /if \(!state\.selectionInitialized\)/);
+  assert.doesNotMatch(client, /selectedRunId \?\?=/);
+  assert.match(client, /state\.selectedRunId = null/);
+});
+
 test('dashboard style follows the DESIGN token baseline', () => {
   const css = readFileSync(path.join(uiRoot, 'style.css'), 'utf8');
+  const responsiveCss = readFileSync(path.join(uiRoot, 'responsive.css'), 'utf8');
 
   for (const color of ['#14131A', '#191720', '#201D29', '#292632', '#332F40', '#CBA6F7']) {
     assert.match(css, new RegExp(color, 'i'));
   }
   assert.match(css, /grid-auto-flow: column/);
-  assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /\.run-card__meta dd[\s\S]*text-overflow: ellipsis/);
+  assert.match(css, /\.cursor-chip[\s\S]*min-width: 0[\s\S]*overflow: hidden[\s\S]*white-space: nowrap/);
+  assert.match(css, /\.mini-map__step code,[\s\S]*\.artifact-list code[\s\S]*text-overflow: ellipsis/);
+  assert.match(css, /\.drawer__facts dd code[\s\S]*overflow-wrap: anywhere/);
+  assert.doesNotMatch(css, /\.run-card__meta dd,\n\.drawer__facts dd[\s\S]*overflow-wrap: anywhere/);
+  assert.match(responsiveCss, /prefers-reduced-motion/);
 });
 
 test('dashboard run normalization degrades unknown lanes instead of crashing', () => {
@@ -161,6 +238,14 @@ test('dashboard server root loads the implemented UI assets', async () => {
     const renderResponse = await fetch(`${dashboard.url}/dashboard/render.mjs`);
     assert.equal(renderResponse.status, 200);
     assert.match(await renderResponse.text(), /renderDashboard/);
+
+    const stateSurfaceResponse = await fetch(`${dashboard.url}/dashboard/state-surfaces.css`);
+    assert.equal(stateSurfaceResponse.status, 200);
+    assert.match(await stateSurfaceResponse.text(), /status-banner/);
+
+    const responsiveResponse = await fetch(`${dashboard.url}/dashboard/responsive.css`);
+    assert.equal(responsiveResponse.status, 200);
+    assert.match(await responsiveResponse.text(), /max-width: 520px/);
   } finally {
     await dashboard.close();
   }
