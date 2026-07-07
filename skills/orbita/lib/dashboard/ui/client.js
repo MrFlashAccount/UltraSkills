@@ -1,3 +1,4 @@
+import { nextSelectedRunId, redactPrivateText } from './model.mjs';
 import { renderDashboard } from './render.mjs';
 
 const state = {
@@ -5,7 +6,10 @@ const state = {
   runs: [],
   selectedRunId: null,
   lastSelectedRunId: null,
+  hasLoadedRuns: false,
+  selectionDismissed: false,
   searchQuery: '',
+  readError: '',
 };
 
 const endpoints = {
@@ -20,13 +24,26 @@ async function loadRuns() {
   const snapshot = await response.json();
   state.snapshot = snapshot && typeof snapshot === 'object' ? snapshot : {};
   state.runs = Array.isArray(snapshot.runs) ? snapshot.runs : [];
-  state.selectedRunId ??= state.runs[0]?.runId ?? state.runs[0]?.id ?? null;
+  state.selectedRunId = nextSelectedRunId({
+    currentSelectedRunId: state.selectedRunId,
+    runs: state.runs,
+    hasLoadedRuns: state.hasLoadedRuns,
+    selectionDismissed: state.selectionDismissed,
+  });
+  state.hasLoadedRuns = true;
+  state.readError = '';
   renderSnapshot();
 }
 
 async function selectRun(runId) {
   state.selectedRunId = runId;
   state.lastSelectedRunId = runId;
+  state.selectionDismissed = false;
+  await refreshRun(runId);
+  focusDrawer();
+}
+
+async function refreshRun(runId) {
   const response = await fetch(endpoints.detail(runId), { headers: { accept: 'application/json' } });
   if (!response.ok) {
     showReadError(new Error(`dashboard detail failed: ${response.status}`));
@@ -35,8 +52,8 @@ async function selectRun(runId) {
   const detail = await response.json();
   const nextRun = detail.run ?? detail;
   state.runs = state.runs.map((run) => ((run.runId ?? run.id) === runId ? { ...run, ...nextRun } : run));
+  state.readError = '';
   renderSnapshot();
-  focusDrawer();
 }
 
 function renderSnapshot() {
@@ -45,6 +62,7 @@ function renderSnapshot() {
     runs: state.runs,
     selectedRunId: state.selectedRunId,
     searchQuery: state.searchQuery,
+    readError: state.readError,
   };
   const existing = document.querySelector('.orbita-dashboard');
   if (existing) {
@@ -75,16 +93,34 @@ function connectEvents() {
   });
   source.addEventListener('dashboard.run_updated', (event) => {
     const update = JSON.parse(event.data);
-    if (update?.runId) selectRun(update.runId).catch(showReadError);
+    if (!update?.runId) return;
+    if (update.runId === state.selectedRunId) {
+      refreshRun(update.runId).catch(showReadError);
+    } else {
+      loadRuns().catch(showReadError);
+    }
   });
 }
 
 function showReadError(error) {
+  state.readError = redactPrivateText(error.message);
+  renderSnapshot();
   const target = document.querySelector('.freshness');
-  if (target) target.textContent = error.message;
+  if (target) target.textContent = state.readError;
+}
+
+function closeDrawer() {
+  state.selectedRunId = null;
+  state.selectionDismissed = true;
+  renderSnapshot();
+  focusLastSelectedCard();
 }
 
 document.addEventListener('click', (event) => {
+  if (event.target.closest?.('[data-drawer-close]')) {
+    closeDrawer();
+    return;
+  }
   const card = event.target.closest?.('.run-card[data-run-id]');
   if (!card) return;
   selectRun(card.getAttribute('data-run-id')).catch(showReadError);
@@ -106,9 +142,7 @@ document.addEventListener('keydown', (event) => {
     }
   }
   if (event.key === 'Escape') {
-    state.selectedRunId = null;
-    renderSnapshot();
-    focusLastSelectedCard();
+    closeDrawer();
   }
 });
 

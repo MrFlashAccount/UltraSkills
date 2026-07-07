@@ -10,9 +10,13 @@ export const dashboardLaneIds = new Set(dashboardLanes.map((lane) => lane.id));
 
 export const fallbackLaneId = 'degraded';
 
+export const laneRenderWindowSize = 80;
+
 export const dashboardCopy = {
   emptyRoot: 'Root not configured',
   emptyResults: 'No runs found',
   drawerEmpty: 'Select a run to inspect read-only details.',
   minimapLabel: 'Workflow mini-map provenance',
+  largeLaneWindow: 'Showing visible card window',
+  observerDegraded: 'Observer degraded',
 };

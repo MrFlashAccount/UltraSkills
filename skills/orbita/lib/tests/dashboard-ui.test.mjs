@@ -5,6 +5,7 @@ import { test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { startDashboardServer } from '../dashboard/server/dashboard-server.mjs';
 import { dashboardLanes } from '../dashboard/ui/constants.mjs';
+import { nextSelectedRunId } from '../dashboard/ui/model.mjs';
 import { normalizeRuns, renderDashboard, renderDashboardShell } from '../dashboard/ui/render.mjs';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
@@ -106,9 +107,14 @@ test('dashboard browser client consumes API and SSE surfaces without filesystem 
 
   assert.match(client, /\/api\/runs/);
   assert.match(client, /\/api\/events/);
+  assert.match(client, /redactPrivateText\(error\.message\)/);
+  assert.match(client, /target\.textContent = state\.readError/);
+  assert.match(client, /state\.selectionDismissed = true/);
+  assert.match(client, /nextSelectedRunId/);
   assert.doesNotMatch(client, /\/api\/dashboard\//);
   assert.doesNotMatch(client, /updateSelection/);
   assert.match(client, /EventSource/);
+  assert.doesNotMatch(client, /dashboard\.run_updated'[\s\S]{0,400}selectRun/);
   assert.equal(/\bnode:fs\b|\bfs\.|readFile|writeFile|workflow-runner|lease-token/.test(client), false);
   assert.equal(/dragstart|drop|draggable/.test(client), false);
 });
@@ -120,12 +126,72 @@ test('dashboard drawer can close without selecting the first run again', () => {
   assert.doesNotMatch(html, /aria-current="true"/);
 });
 
+test('dashboard selection model preserves a user-closed drawer across refreshes', () => {
+  const selectedOnInitialLoad = nextSelectedRunId({
+    currentSelectedRunId: null,
+    runs: fixture.runs,
+    hasLoadedRuns: false,
+    selectionDismissed: false,
+  });
+  const selectedAfterCloseRefresh = nextSelectedRunId({
+    currentSelectedRunId: null,
+    runs: fixture.runs,
+    hasLoadedRuns: true,
+    selectionDismissed: true,
+  });
+  const selectedAfterSseSnapshot = nextSelectedRunId({
+    currentSelectedRunId: null,
+    runs: fixture.runs,
+    hasLoadedRuns: true,
+    selectionDismissed: false,
+  });
+
+  assert.equal(selectedOnInitialLoad, fixture.runs[0].runId);
+  assert.equal(selectedAfterCloseRefresh, null);
+  assert.equal(selectedAfterSseSnapshot, null);
+});
+
+test('dashboard drawer exposes a read-only close utility', () => {
+  const html = renderDashboard(fixture);
+
+  assert.match(html, /data-drawer-close/);
+  assert.match(html, /aria-label="Close run details"/);
+});
+
 test('dashboard search filters board cards from safe DTO state', () => {
   const html = renderDashboard({ ...fixture, searchQuery: 'Backend observer' });
 
   assert.match(html, /Backend observer daemon/);
   assert.doesNotMatch(html, /Approve implementation plan/);
   assert.match(html, /value="Backend observer"/);
+});
+
+test('dashboard renders a bounded lane card window for large run lists', () => {
+  const manyRuns = Array.from({ length: 1000 }, (_, index) => ({
+    ...fixture.runs[0],
+    runId: `run-waiting-${String(index).padStart(4, '0')}`,
+    title: `Waiting run ${index}`,
+  }));
+  const html = renderDashboard({
+    ...fixture,
+    runs: manyRuns,
+    selectedRunId: 'run-waiting-0999',
+  });
+
+  assert.equal((html.match(/<article class="run-card/g) ?? []).length, 80);
+  assert.match(html, /1000 runs/);
+  assert.match(html, /Showing visible card window: 80 of 1000; selected run is pinned in view\./);
+  assert.match(html, /Waiting run 999/);
+});
+
+test('dashboard observer notice redacts local paths', () => {
+  const html = renderDashboard({ ...fixture, readError: 'failed to read /Users/sergeygarin/private/state.json with token fake-secret-token-value-1234567890' });
+
+  assert.match(html, /Observer degraded/);
+  assert.match(html, /\[local path\]/);
+  assert.match(html, /\[private token\]/);
+  assert.doesNotMatch(html, /\/Users\/sergeygarin/);
+  assert.doesNotMatch(html, /fake-secret-token-value/);
 });
 
 test('dashboard style follows the DESIGN token baseline', () => {
