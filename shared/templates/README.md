@@ -1,6 +1,6 @@
 # Shared Templates
 
-Reusable markdown templates for cross-skill planning artifacts and worker output formats.
+Reusable artifact templates for cross-skill planning artifacts and worker output formats.
 
 This package is reference-only. It is not a runtime skill and must not contain `SKILL.md`.
 
@@ -13,6 +13,7 @@ These files are reusable output templates. Workflow descriptors reference them w
 - [`research-canvas-save-metadata-template.md`](research-canvas-save-metadata-template.md): compact persistence metadata for saved research Canvas artifacts.
 - [`architecture-proposal-template.md`](architecture-proposal-template.md): concise architecture proposal for entities, placement, ownership, dependencies, interfaces, integrations, and docs impact. No implementation plan or code.
 - [`reasons/`](reasons/): shared SPDD structured prompt/spec template for immutable REASONS Canvas artifacts.
+- [`ui-design-proposal-template.html`](ui-design-proposal-template.html): first-class inspectable UI design proposal with visual frames, annotations, component inventory, color/copy maps, product-level data hierarchy, card anatomy/content model, card visual rules, drawer/sidebar states, wrapping rules, responsive containment, and flow notes.
 - [`implementation-plan-template.md`](implementation-plan-template.md): concrete approved-work plan with ABCD workstreams, exact file zones, planning-level entities/methods, DoD, owners, reviewers, rollback, and generic source appendices.
 - [`implementer-handoff-template.md`](implementer-handoff-template.md): implementation handoff packet for an assigned slice, including source-of-truth context, todo checklist, contract rows, evidence expectations, and output fields.
 - [`reviewer-handoff-template.md`](reviewer-handoff-template.md): review handoff packet with source-of-truth context, implementation evidence, review checklist, contract-trace rows, and verdict fields.

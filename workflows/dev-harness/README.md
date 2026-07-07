@@ -47,3 +47,9 @@ When code, docs, or existing contracts answer the question, inspect them instead
 - ask one question at a time.
 
 After the orchestrator resolves the non-blocking stop, continue the same architecture step from the resolved decision and only then finalize the architecture artifact and compact summary.
+
+## UI design proposal contract
+
+When the UI design proposal gate applies, the HTML artifact must specify product-level data hierarchy, card anatomy/content model, card visual rules, selected/unselected item behavior, drawer/sidebar placement by breakpoint, drawer open/closed/no-selection states, animation properties, reduced-motion behavior, responsive containment, and forbidden wrapping for chips, buttons, pills, tabs, segmented controls, and status labels.
+
+Default detail placement is a right-side drawer/sidebar on desktop and a bottom sheet/drawer on mobile unless the design proposal explicitly chooses otherwise.

@@ -48,25 +48,30 @@
 
 - In `<file/zone>`, add/change `<class/entity/function/method/config/doc section>` to <planning-level behavior>.
 
-## UI Intent Contract
+## UI Design Proposal
 
-Complete this section when an approved `ui-intent-contract` is applicable. If the UI intent gate marked the slice not applicable, record that reason instead of inventing UI intent.
+Complete this section when an approved `ui-design-proposal` is applicable. If the UI design proposal gate marked the slice not applicable, record that reason instead of inventing UI design proposal.
 
-| Topic | Approved UI intent | Implementation planning consequence |
+| Topic | Approved UI design proposal | Implementation planning consequence |
 | --- | --- | --- |
 | User / task | <who and what job> | <what the plan must preserve> |
 | Product / surface route | <dashboard/admin/marketing/docs/app shell/mixed/etc. + evidence> | <which UI rules/review expectations apply> |
 | Primary / secondary actions | <actions> | <workstream / DoD coverage> |
 | First read / hierarchy | <what should be understood first> | <screen/component planning implication> |
 | Screen / zones | <semantic zones> | <component/file-zone planning implication> |
+| Product-level data hierarchy | <product concepts, primary facts, secondary facts, debug/detail-only facts> | <data shaping and rendering implication> |
+| Card anatomy / content model | <header/body/footer, primary/secondary facts, hidden/deferred fields> | <component/state/proof implication> |
+| Card visual rules / selection | <selected/unselected/hover/focus states, spacing, containment, visual emphasis> | <style/state/proof implication> |
+| Drawer / sidebar behavior | <desktop right/mobile bottom placement unless overridden, open/closed/no-selection states, selected sync, animation properties, focus, reduced motion> | <overlay/state/responsive/proof implication> |
+| Responsive containment / wrapping | <containment rules and forbidden wrapping for chips/buttons/pills/tabs/segmented controls/status labels> | <layout/control/proof implication> |
 | Required states | <loading/empty/error/success/disabled/etc.> | <state/component/test implication> |
 | Interaction expectations | <forms/dialogs/drawers/navigation/focus/responsive/motion> | <implementation/review implication> |
 | Design basis | <DESIGN.md/existing UI/reference/fallback> | <UI-kit/tokens/taste-review implication> |
 | Visual evidence / proof assets | <screenshots/references/proof pages/mockups/current UI/gaps> | <what to preserve, compare, capture, or request> |
 
-UI intent gates:
-- Preserve the approved UI intent; do not rewrite visual hierarchy, density, tone, or screen semantics in implementation planning.
-- If architecture or implementation reality conflicts with approved UI intent, return blocked or request plan revision instead of silently changing the interface.
+UI design proposal gates:
+- Preserve the approved UI design proposal; do not rewrite visual hierarchy, density, tone, or screen semantics in implementation planning.
+- If architecture or implementation reality conflicts with approved UI design proposal, return blocked or request plan revision instead of silently changing the interface.
 - Keep file/component architecture in the Frontend composition plan, not in this section.
 
 ## Frontend composition plan
@@ -123,5 +128,5 @@ When a structured output schema asks for reviewer selection, keep this table ali
 - Be concrete and file-level: name file zones, classes, entities, functions, methods, configs, and docs at planning level.
 - Use ABCD workstreams when helpful; keep roles/owners explicit.
 - Include DoD, reviewer roles, rollback, and any source appendices needed to make the plan self-contained.
-- Consume the approved architecture summary, `reasons-canvas-architecture`, and applicable `ui-intent-contract` artifacts as the active contracts. Do not consume research separately; rely on the architecture and UI intent artifacts to carry forward any research context that remains valid.
+- Consume the approved architecture summary, `reasons-canvas-architecture`, and applicable `ui-design-proposal` artifacts as the active contracts. Do not consume research separately; rely on the architecture and UI design proposal artifacts to carry forward any research context that remains valid.
 - Do not include code, diffs, command sequences, or process handoff instructions.

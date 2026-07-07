@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>&lt;Project/Issue&gt; UI Design Proposal - &lt;Surface&gt;</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f1115;
+      --panel: #171a21;
+      --panel-2: #20242d;
+      --text: #f2f5f8;
+      --muted: #a8b0bd;
+      --line: #343946;
+      --accent: #7aa2f7;
+      --ok: #8bd5a5;
+      --warn: #f2c97d;
+      --danger: #f28f8f;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+    section { margin: 28px 0; }
+    h1, h2, h3 { margin: 0 0 12px; line-height: 1.15; }
+    p { color: var(--muted); margin: 0 0 12px; }
+    .proposal-header, .frame, .spec, .flow, .annotation {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+    }
+    .proposal-header { padding: 20px; }
+    .grid { display: grid; gap: 16px; }
+    .grid.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .frame { min-height: 360px; padding: 16px; overflow: hidden; }
+    .frame.mobile { max-width: 420px; }
+    .surface-placeholder {
+      min-height: 280px;
+      border: 1px dashed var(--line);
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+      padding: 24px;
+    }
+    .spec { padding: 16px; }
+    .spec table { width: 100%; border-collapse: collapse; }
+    .spec th, .spec td {
+      border-top: 1px solid var(--line);
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .chip {
+      display: inline-flex;
+      max-width: 100%;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .token {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+    .flow { padding: 16px; min-height: 160px; }
+    .annotation { padding: 12px; color: var(--muted); }
+    .must { color: var(--ok); }
+    .risk { color: var(--warn); }
+    .forbidden { color: var(--danger); }
+    @media (max-width: 760px) {
+      main { padding: 16px; }
+      .grid.two { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="proposal-header">
+      <h1>&lt;Project/Issue&gt; UI Design Proposal - &lt;Surface&gt;</h1>
+      <p>This HTML artifact is the first-class design proposal. Text contract details, product-level data hierarchy, card anatomy, detail drawer behavior, component rules, visual states, annotations, and flow sketches live inside this file.</p>
+      <div class="grid two">
+        <div><strong>Owner:</strong> &lt;name&gt;</div>
+        <div><strong>Date:</strong> &lt;date&gt;</div>
+        <div><strong>Source artifacts:</strong> &lt;links/paths&gt;</div>
+        <div><strong>UI gate decision:</strong> Applicable | Not applicable</div>
+      </div>
+    </header>
+
+    <section>
+      <h2>Decision Summary</h2>
+      <div class="spec">
+        <p>&lt;Summarize the user task, surface type, design basis, open decisions, and the reason this proposal is ready or blocked.&gt;</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Desktop Proposal</h2>
+      <div class="frame">
+        <div class="surface-placeholder">Replace with a real-ish desktop mock surface, not a prose-only description.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Mobile / Narrow Proposal</h2>
+      <div class="frame mobile">
+        <div class="surface-placeholder">Replace with a 390px-class mobile/narrow mock surface.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>States And Pathological Data</h2>
+      <div class="grid two">
+        <div class="frame"><div class="surface-placeholder">Loading / empty / error / degraded state</div></div>
+        <div class="frame"><div class="surface-placeholder">Long ids, long labels, dense data, selected detail/drawer</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Product-Level Data Hierarchy</h2>
+      <div class="spec">
+        <table>
+          <thead>
+            <tr><th>Product concept</th><th>User question answered</th><th>Primary facts</th><th>Secondary facts</th><th>Debug / detail-only facts</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>&lt;Run / item / object / account / task&gt;</td><td>&lt;what the user needs to decide&gt;</td><td>&lt;facts visible first&gt;</td><td>&lt;facts visible after scan&gt;</td><td>&lt;facts hidden until detail/drawer&gt;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Card Anatomy / Content Model</h2>
+      <div class="grid two">
+        <div class="spec">
+          <h3>Card Structure</h3>
+          <table>
+            <thead>
+              <tr><th>Zone</th><th>Content</th><th>Visual rule</th><th>Interaction</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Header</td><td>&lt;primary label/title + status&gt;</td><td>&lt;single first-read line; no raw ids unless title&gt;</td><td>&lt;click/select target&gt;</td></tr>
+              <tr><td>Body</td><td>&lt;2-4 key facts&gt;</td><td>&lt;label/value rows, stable gaps, no debug dump&gt;</td><td>&lt;optional inline affordance&gt;</td></tr>
+              <tr><td>Footer/meta</td><td>&lt;timestamp, owner, secondary status&gt;</td><td>&lt;muted, compact, contained&gt;</td><td>&lt;secondary action if needed&gt;</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="spec">
+          <h3>Card Visual Contract</h3>
+          <p><span class="must">Must define:</span> radius, padding, min/max size, selected/unselected/hover/focus states, density, and what makes the card readable in two seconds.</p>
+          <p><span class="forbidden">Forbidden by default:</span> one-letter wraps, unbounded rounded pills around long text, raw technical dumps, accidental card growth from long ids, and hidden horizontal overflow.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Detail Drawer / Sidebar</h2>
+      <div class="spec">
+        <table>
+          <thead>
+            <tr><th>Breakpoint / state</th><th>Placement</th><th>Size / containment</th><th>Behavior</th><th>Animation</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Desktop selected</td><td>Right side panel unless design states otherwise</td><td>&lt;width, max-width, scroll zone&gt;</td><td>&lt;selected item details, close affordance, focus behavior&gt;</td><td>&lt;duration/easing/transform/opacity + reduced-motion fallback&gt;</td></tr>
+            <tr><td>Mobile selected</td><td>Bottom sheet unless design states otherwise</td><td>&lt;height cap, safe-area, inner scrolling&gt;</td><td>&lt;sheet handle/header, dismiss behavior&gt;</td><td>&lt;slide-up, reduced-motion fallback&gt;</td></tr>
+            <tr><td>No selection</td><td>&lt;hidden, empty panel, or instructional placeholder&gt;</td><td>&lt;reserved or collapsed space&gt;</td><td>&lt;what users see before selecting an item&gt;</td><td>&lt;no jarring layout shift&gt;</td></tr>
+            <tr><td>Deselection / close</td><td>&lt;where panel goes&gt;</td><td>&lt;list/card state after close&gt;</td><td>&lt;focus returns to selected trigger or sensible origin&gt;</td><td>&lt;exit animation and reduced-motion behavior&gt;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Wrapping / Truncation Rules</h2>
+      <div class="spec">
+        <table>
+          <thead>
+            <tr><th>Element type</th><th>Wrapping policy</th><th>Overflow behavior</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Buttons / tabs / segmented controls</td><td>Forbidden to wrap</td><td>Short label, icon, menu, or approved truncation</td><td>No accidental multi-line controls.</td></tr>
+            <tr><td>Chips / badges / pills / status labels</td><td>Forbidden to wrap</td><td>Ellipsis or move full value to detail</td><td>No one-letter line breaks.</td></tr>
+            <tr><td>Cards / rows</td><td>Controlled wrapping only</td><td>Clamp/truncate raw tokens</td><td>Cards must not become debug dumps.</td></tr>
+            <tr><td>Drawer / detail panels</td><td>Allowed for prose/diagnostics</td><td>Contain long ids/tokens</td><td>Keep label/value hierarchy.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Components, Icons, Colors, Copy</h2>
+      <div class="grid two">
+        <div class="spec"><h3>Component Inventory</h3><p>&lt;buttons, icon buttons, chips, badges, cards, drawers, tables, inputs, empty/error states&gt;</p></div>
+        <div class="spec"><h3>Color / Token Map</h3><p>&lt;status colors, accents, selected state, danger/warning/neutral, surfaces, borders&gt;</p></div>
+        <div class="spec"><h3>Icon Map</h3><p>&lt;icon names and where they appear&gt;</p></div>
+        <div class="spec"><h3>Copy Map</h3><p>&lt;labels, headings, empty/error messages, button text&gt;</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Flow / Microinteractions</h2>
+      <div class="flow">
+        Draw or describe compact transitions: card -> drawer, no selection -> selected detail, selected -> deselected, filter -> result, error -> recovery, loading -> ready.
+        Specify interaction triggers, focus target, keyboard/escape behavior where applicable, animation properties, direction, duration/easing, and reduced-motion behavior.
+      </div>
+    </section>
+
+    <section>
+      <h2>Responsive Containment</h2>
+      <div class="annotation">
+        <p>Specify desktop, tablet, and mobile containment for the work surface, drawer/sidebar, cards/rows, toolbar, filters, chips, buttons, tabs, segmented controls, and status labels. No page-level horizontal overflow. Compact controls must stay single-line; move controls into menus, stacks, or secondary rows instead of wrapping labels.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Review Checklist</h2>
+      <div class="annotation">
+        <p>No wrapped chips/buttons/pills/tabs/segmented controls/status labels. No one-letter wraps. No raw debug dumps in cards. Product-level data hierarchy is explicit. Card anatomy and card visual rules are specified. Drawer/sidebar desktop-right/mobile-bottom defaults, open/closed/no-selection states, animation, reduced-motion behavior, focus, and responsive containment are specified. Selected/unselected item behavior is visible. No page-level horizontal overflow. Desktop and mobile frames are inspectable. Pathological data is represented. Content priority is visible. Typography and spacing are stable.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

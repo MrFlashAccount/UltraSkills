@@ -1,6 +1,6 @@
 {
-  "title": "DevHarness UI Intent Draft Output",
-  "description": "Producer output contract for the DevHarness UI intent draft gate before architecture.",
+  "title": "DevHarness UI Design Proposal Draft Output",
+  "description": "Producer output contract for the DevHarness UI design proposal draft gate before architecture.",
   "type": "object",
   "required": [
     "outcome"
@@ -17,26 +17,30 @@
     "summary": {
       "type": "string",
       "minLength": 1,
-      "description": "Producer must summarize the UI intent proposal state for human approval without embedding the ui-intent-contract artifact body.",
-      "x-usage": "Use this as the human-facing approval state for the UI intent gate. Show it with the artifact attachment; do not recreate the summary from artifact contents in the orchestrator."
+      "description": "Producer must summarize the UI design proposal state for human approval without embedding the ui-design-proposal artifact body.",
+      "x-usage": "Use this as the human-facing approval state for the UI design proposal gate. Show it with the artifact attachment; do not recreate the summary from artifact contents in the orchestrator."
     },
     "artifacts": {
       "type": "array",
       "items": {
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
       },
-      "description": "Producer must emit artifact metadata for the required immutable ui-intent-contract artifact when outcome is ready_for_attack.",
-      "x-usage": "Emit only the required immutable ui-intent-contract artifact. Exact artifact field semantics come from the shared baton artifact schema.",
+      "description": "Producer must emit artifact metadata for the required immutable ui-design-proposal HTML artifact when outcome is ready_for_attack.",
+      "x-usage": "Emit only the required immutable ui-design-proposal artifact with content_type text/html. Exact artifact field semantics come from the shared baton artifact schema.",
       "minItems": 1,
       "maxItems": 1,
       "contains": {
         "type": "object",
         "required": [
-          "id"
+          "id",
+          "content_type"
         ],
         "properties": {
           "id": {
-            "const": "ui-intent-contract"
+            "const": "ui-design-proposal"
+          },
+          "content_type": {
+            "const": "text/html"
           }
         }
       }

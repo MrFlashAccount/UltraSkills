@@ -1,6 +1,6 @@
 name = "frontend-ui-pr-smoke"
 version = 1
-description = "Experimental small UI workflow: draft a UI intent/design artifact, implement the frontend slice, review frontend engineering and taste, then open or prepare a pull request. Use for testing the design-to-implementation path on small UI tasks; do not use for backend-heavy or high-risk product work."
+description = "Experimental small UI workflow: draft a UI design proposal artifact, implement the frontend slice, review frontend engineering and taste, then open or prepare a pull request. Use for testing the design-to-implementation path on small UI tasks; do not use for backend-heavy or high-risk product work."
 start = "design_draft"
 done = "done"
 
@@ -13,8 +13,13 @@ agent = "frontend-taste"
 role = "frontend-taste"
 prompt = '''This is a design-artifact phase for a small frontend UI PR smoke test.
 Inspect the task, repo design memory, existing UI, screenshots/references if present, and relevant frontend-taste routing material. Do not edit files, run implementation, or author durable `DESIGN.md`.
-Produce exactly one first-class artifact named `ui-intent-contract` using the UI intent contract template. This artifact is the design artifact that frontend implementation must follow.
-The artifact must include: UI applicability, product/surface routing, design-basis preflight, user task, primary/secondary actions, user questions/decisions, first-read/work-surface hierarchy, screen/zones, required states, interactions, density/tone, responsive expectations, visual evidence/proof assets, rendered-proof expectations, and open UI tensions.
+Produce exactly one first-class HTML artifact named `ui-design-proposal` using the UI design proposal template and content_type `text/html`. This artifact is the design artifact that frontend implementation must follow.
+The artifact should be an inspectable design proposal, not a prose-only markdown contract: include real-ish desktop/mobile frames, annotations, component inventory, icon/color/copy maps, product-level data hierarchy, card anatomy/content model, card visual rules, drawer/sidebar state rules, wrapping/truncation rules, state examples, and flow/microinteraction sketches when useful.
+The artifact must include: UI applicability, product/surface routing, design-basis preflight, user task, primary/secondary actions, user questions/decisions, first-read/work-surface hierarchy, screen/zones, product-level data hierarchy, content model/data hierarchy, text wrapping/truncation policy, required states, interactions, density/tone, responsive containment, visual evidence/proof assets, rendered-proof expectations, and open UI tensions.
+For non-trivial UI, explicitly decide what each card/row/table/drawer/control/chip/button surface should show, defer, truncate, or hide. Do not leave raw technical metadata, debug noise, or long token placement for implementation to guess.
+For card/list UIs, specify card anatomy/content model and visual rules: header/body/footer zones, primary facts, secondary facts, status placement, action affordances, selected/unselected/hover/focus states, radius/padding/gaps, size bounds, and the exact facts that must not appear in cards.
+For detail drawer/sidebar/bottom-sheet UIs, specify breakpoint behavior and states: desktop right-side placement, mobile bottom-sheet placement, size/scroll containment, selected/open state, no-selection state, closed-by-user state, deselection/close/reopen behavior, focus return, animation properties, direction, duration/easing, and reduced-motion behavior. Do not leave "drawer appears somehow" for implementation to guess.
+Define where wrapping is allowed and where it is forbidden. Buttons, tabs, segmented controls, chips, badges, pills, and compact status labels must not wrap unless the design basis explicitly approves it; long labels/tokens must be shortened, truncated, moved to detail, or otherwise contained. One-letter wraps are never acceptable proof.
 For non-trivial UI, include 3-7 concrete user-facing questions or decisions with status Answered, Assumed, or Needs user approval. If an unanswered question would materially change layout, primary action, risk posture, density, visual direction, or proof expectations, return blocked with the smallest concrete question instead of guessing.
 If no user-facing UI is involved, return blocked with blocker.source_step_id = design_draft; this workflow is only useful for UI smoke tests.
 If the requested UI needs high-confidence new visual direction but the repo has no useful design basis, screenshot, reference, prior approved visual direction, or product context, return blocked with the smallest concrete request for a design brief, screenshot/reference, or create-design routing. Do not guess.
@@ -23,7 +28,7 @@ Return ready_for_attack when the artifact is ready for implementation or blocked
 '''
 
 [steps.design_draft.output]
-template = "../../shared/templates/ui-intent-contract-template.md"
+template = "../../shared/templates/ui-design-proposal-template.html"
 schema = "../dev-harness/schemas/ui-intent-draft-output.json"
 
 [steps.design_draft.next]
@@ -38,7 +43,7 @@ kind = "worker"
 
 [steps.frontend_implementation.input]
 role = "frontend"
-prompt = '''Implement the small frontend UI slice described by `design_draft`'s approved `ui-intent-contract`.
+prompt = '''Implement the small frontend UI slice described by `design_draft`'s approved `ui-design-proposal`.
 Read the artifact as the source of truth. Do not invent a different screen, density, hierarchy, state model, or visual evidence basis.
 Before editing, inspect existing UI kit/design-system primitives, tokens, layout conventions, and nearby screens. Build a short component map from the design artifact and repo conventions, then implement against that map.
 Use existing primitives by default. Create local named components/hooks/selectors for stable responsibilities: screen zones, feature panels, forms, lists/cards/tables, overlays, state surfaces, and derived state. Avoid one large page blob and avoid repeated className/token/control scaffolds.
@@ -47,7 +52,7 @@ Run relevant tests/checks for this small slice. Fix failures caused by your chan
 When implemented, emit one `implementation-handoff` artifact and compact JSON with changed_files and verification.
 
 Input context:
-- UI intent/design artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
+- UI design proposal artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
 - Prior implementation output after review changes: ${{ input.frontend_implementation | default: "No prior implementation output." }}
 - Review join feedback: ${{ input.review_join.verdict | default: "No prior review feedback." }}'''
 
@@ -69,11 +74,11 @@ next = "review_join"
 [steps.frontend_review.input]
 role = "frontend"
 prompt = '''Review the frontend implementation for correctness, component decomposition, state ownership, accessibility-relevant behavior, use of existing UI kit/primitives/tokens, responsive behavior, and verification evidence.
-Read the `ui-intent-contract` and `implementation-handoff`. Fail actionable current-scope issues, especially page blobs, copied control/style scaffolds, missing state surfaces, missing component map, inaccessible interactions, or implementation that ignores the design artifact.
+Read the `ui-design-proposal` and `implementation-handoff`. Fail actionable current-scope issues, especially page blobs, copied control/style scaffolds, missing state surfaces, missing component map, inaccessible interactions, missing product-level data hierarchy, missing card anatomy/visual rules, missing selected/unselected behavior, missing drawer/sidebar desktop-right/mobile-bottom placement or open/closed/no-selection behavior, missing responsive containment, missing reduced-motion handling, or implementation that ignores the design artifact.
 Return passed, needs_changes with required_implementation_steps = ["frontend_implementation"], or blocked.
 
 Input context:
-- UI intent/design artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
+- UI design proposal artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
 - Frontend implementation output: ${{ input.frontend_implementation | default: "No frontend implementation output is available." }}'''
 
 [steps.frontend_review.output]
@@ -87,13 +92,14 @@ next = "review_join"
 
 [steps.frontend_taste_review.input]
 role = "frontend-taste"
-prompt = '''Review the implemented UI against the `ui-intent-contract`, repo `DESIGN.md` or design basis, existing UI, screenshots/references/proof assets, and frontend-taste quality criteria.
-Focus on product-surface quality: first read, hierarchy, density, tone, states, interaction feel, responsive expectations, visual evidence fidelity, and avoidance of generic UI slop. Do not take ownership of code architecture except when visible composition failure affects the surface.
+prompt = '''Review the implemented UI against the `ui-design-proposal`, repo `DESIGN.md` or design basis, existing UI, screenshots/references/proof assets, and frontend-taste quality criteria.
+Focus on product-surface quality: first read, hierarchy, product-level data hierarchy, content model/data hierarchy, typography, spacing, density, tone, states, interaction feel, responsive containment, visual evidence fidelity, and avoidance of generic UI slop. Check whether cards/rows/drawers/controls/chips/buttons show the right facts at the right priority instead of leaking debug dumps. For card/detail UIs, check card anatomy/content model, card visual rules, selected/unselected visual states, no-selection behavior, drawer/sidebar desktop-right/mobile-bottom placement by breakpoint, drawer open/closed states, animation/motion properties, reduced-motion behavior, and whether the detail surface reads like a product panel instead of a raw data dump. Do not take ownership of code architecture except when visible composition failure affects the surface.
+Treat wrapped chips, badges, pills, compact status labels, buttons, tabs, segmented controls, or one-letter text wraps as current-scope visual defects unless the `ui-design-proposal` explicitly allowed that behavior for the surface. Long ids/tokens must be contained with a deliberate truncation/detail/copy policy, not accidental wrapping.
 For non-trivial UI that can render locally, missing screenshot/rendered proof is a current-scope review finding. Return needs_changes unless the implementation gives a concrete environment blocker explaining why proof could not be captured.
 Return passed, needs_changes with required_implementation_steps = ["frontend_implementation"], or blocked.
 
 Input context:
-- UI intent/design artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
+- UI design proposal artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
 - Frontend implementation output: ${{ input.frontend_implementation | default: "No frontend implementation output is available." }}'''
 
 [steps.frontend_taste_review.output]
@@ -137,7 +143,7 @@ If the current user request or workflow invocation clearly permits pushing and o
 Record the PR URL, branch, commit, and verification results.
 
 Input context:
-- UI intent/design artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
+- UI design proposal artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
 - Frontend implementation output: ${{ input.frontend_implementation | default: "No frontend implementation output is available." }}
 - Frontend review: ${{ input.frontend_review | default: "No frontend_review output." }}
 - Frontend taste review: ${{ input.frontend_taste_review | default: "No frontend_taste_review output." }}'''
