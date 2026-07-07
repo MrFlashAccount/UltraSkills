@@ -14,15 +14,21 @@
   }
 
   .board {
-    max-width: 100vw;
+    grid-auto-columns: clamp(218px, 72vw, 280px);
+    max-width: 100%;
+    overflow-x: auto;
     width: 100%;
+  }
+
+  .lane {
+    min-width: 0;
   }
 
   .drawer {
     border-left: 0;
     border-top: 1px solid var(--border-strong);
     max-height: none;
-    max-width: 100vw;
+    max-width: 100%;
     width: 100%;
   }
 }
@@ -61,18 +67,18 @@
   }
 
   .drawer__facts dd {
-    max-width: calc(100vw - 32px);
+    max-width: 100%;
     text-align: left;
     width: 100%;
   }
 
   .cursor-chips--drawer {
-    max-width: calc(100vw - 32px);
+    max-width: 100%;
     width: 100%;
   }
 
   .cursor-chips--drawer .cursor-chip {
-    max-width: calc(100vw - 32px);
+    max-width: 100%;
   }
 }
 

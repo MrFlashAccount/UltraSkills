@@ -1,5 +1,4 @@
 @import url('/dashboard/state-surfaces.css');
-@import url('/dashboard/responsive.css');
 
 :root {
   color-scheme: dark;
@@ -132,27 +131,31 @@ code {
 
 .board-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 27vw, 400px);
   min-width: 0;
   min-height: calc(100vh - 72px);
+  overflow: hidden;
 }
 
 .board {
   align-items: stretch;
   display: grid;
   gap: 12px;
-  grid-auto-columns: minmax(240px, 1fr);
+  grid-auto-columns: minmax(190px, 1fr);
   grid-auto-flow: column;
+  max-width: 100%;
   min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   padding: 14px;
+  scrollbar-gutter: stable;
 }
 
 .lane {
   background: var(--surface-lane);
   border: 1px solid var(--border);
   border-radius: 8px;
-  min-width: 240px;
+  min-width: 190px;
 }
 
 .lane__header {
@@ -220,6 +223,10 @@ code {
   min-width: 0;
 }
 
+.drawer__facts div {
+  min-width: 0;
+}
+
 .run-card h3 {
   font-size: 14px;
   line-height: 1.25;
@@ -254,16 +261,18 @@ code {
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
-  overflow-wrap: anywhere;
   text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .drawer__facts dd code {
   display: block;
   max-width: 100%;
   min-width: 0;
-  overflow-wrap: anywhere;
-  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   width: 100%;
 }
 
@@ -343,8 +352,9 @@ code {
 }
 
 .cursor-chips--drawer .cursor-chip code {
-  overflow-wrap: anywhere;
-  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .drawer {
@@ -353,6 +363,7 @@ code {
   display: grid;
   gap: 14px;
   max-height: calc(100vh - 72px);
+  max-width: 100%;
   min-width: 0;
   overflow: auto;
   padding: 16px;

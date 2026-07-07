@@ -66,10 +66,10 @@ export function renderDrawer(run) {
       <p class="drawer__summary">${escapeHtml(run.summary ?? run.promptSummary ?? '')}</p>
     </header>
     <dl class="drawer__facts">
-      <div><dt>Run id</dt><dd><code>${escapeHtml(run.id)}</code></dd></div>
-      <div><dt>Workflow</dt><dd>${escapeHtml(run.workflowName)}</dd></div>
+      <div><dt>Run id</dt><dd title="${escapeAttribute(run.id)}"><code>${escapeHtml(run.id)}</code></dd></div>
+      <div><dt>Workflow</dt><dd title="${escapeAttribute(run.workflowName)}">${escapeHtml(run.workflowName)}</dd></div>
       <div><dt>Current status</dt><dd>${escapeHtml(run.statusLabel)}</dd></div>
-      <div><dt>Current step</dt><dd><code>${escapeHtml(run.stepId)}</code></dd></div>
+      <div><dt>Current step</dt><dd title="${escapeAttribute(run.stepId)}"><code>${escapeHtml(run.stepId)}</code></dd></div>
     </dl>
     ${renderCursorChips(run.cursorBranches, 'drawer')}
     ${renderMiniMap(run.miniMap, run.cursorBranches, run.miniMapProvenance)}
@@ -133,7 +133,7 @@ function renderEmptyLane(lane) {
 function renderCursorChips(cursorBranches, scope) {
   if (cursorBranches.length === 0) return '';
   return `<div class="cursor-chips cursor-chips--${scope}" aria-label="Active cursor branches">
-${cursorBranches.map((branch) => `              <span class="cursor-chip"><code>${escapeHtml(branch)}</code></span>`).join('\n')}
+${cursorBranches.map((branch) => `              <span class="cursor-chip" title="${escapeAttribute(branch)}"><code>${escapeHtml(branch)}</code></span>`).join('\n')}
             </div>`;
 }
 
@@ -152,7 +152,7 @@ ${steps.map((step) => renderMiniMapStep(step, active)).join('\n')}
 function renderMiniMapStep(step, active) {
   const id = String(step.id ?? step.stepId ?? '');
   const state = active.has(id) ? 'active' : step.state || 'pending';
-  return `        <li class="mini-map__step mini-map__step--${escapeAttribute(state)}"><code>${escapeHtml(id)}</code><span>${escapeHtml(state)}</span></li>`;
+  return `        <li class="mini-map__step mini-map__step--${escapeAttribute(state)}"><code title="${escapeAttribute(id)}">${escapeHtml(id)}</code><span>${escapeHtml(state)}</span></li>`;
 }
 
 function renderArtifacts(artifacts) {
