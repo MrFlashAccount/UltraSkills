@@ -131,7 +131,7 @@ next = "done"
 [steps.pull_request.input]
 prompt = '''Open or prepare a pull request for the reviewed frontend UI smoke-test implementation.
 First inspect git status, branch, commit history, and remote. Ensure only intended files are included. Commit the changes with a concise message if they are not committed yet.
-If the current user request or workflow invocation clearly permits pushing and opening a PR, push the branch and open a PR against the repository default branch using the available GitHub tooling. If explicit external-write permission is absent or credentials/tools are unavailable, return blocked with the exact command/handoff needed instead of pretending a PR was opened.
+If the current user request or workflow invocation clearly permits pushing and opening a PR, push the branch and open a PR against the base branch named by the task prompt; if no base branch is named, use the repository default branch. If explicit external-write permission is absent or credentials/tools are unavailable, return blocked with the exact command/handoff needed instead of pretending a PR was opened.
 Record the PR URL, branch, commit, and verification results.
 
 Input context:
