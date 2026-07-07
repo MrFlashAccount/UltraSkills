@@ -36,4 +36,5 @@ Use this as the expected worker answer format for critic/reviewer gates. Keep it
 - Do not include code, diffs, command sequences, or implementation recipes.
 - Tie every blocking finding to evidence.
 - Do not return `passed` with actionable `must_fix` or `should_fix` findings. Return `needs_changes` and list the owning implementation step. Use `can_delay` only for non-actionable future cleanup outside the approved slice.
+- For user-facing frontend review, missing or cosmetic component maps, page/route blobs that own controls/lists/overlays/state surfaces together, repeated className/token/control scaffolds, hand-rolled existing primitives, missing state-owner boundaries, and colocation violations are current-scope findings unless the evidence proves they are outside the approved slice. Do not downgrade them to `can_delay` just because the UI appears visually acceptable.
 - Keep transition labels aligned with the current workflow edge map.

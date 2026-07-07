@@ -48,6 +48,26 @@
 
 - In `<file/zone>`, add/change `<class/entity/function/method/config/doc section>` to <planning-level behavior>.
 
+## Frontend composition plan
+
+Complete this section when `frontend_implementation` is selected for non-trivial user-facing UI. If the frontend slice is non-UI, trivial, or intentionally preserves an existing component shape, record that reason instead of inventing components.
+
+| Layer | Planned components / hooks / selectors | Existing UI kit / tokens / conventions to use | File zones | Responsibility boundary |
+| --- | --- | --- | --- | --- |
+| Page / screen containers | <route/page/view shells> | <repo conventions> | <files/folders> | <data orchestration, composition, routing/state boundary> |
+| Feature components | <domain panels/forms/cards/tables/editors> | <repo conventions> | <files/folders> | <domain-specific rendering/interaction> |
+| Layout components | <PageShell/Section/Stack/Grid/Toolbar/FormRow/etc.> | <tokens/layout primitives> | <files/folders> | <spacing/structure only> |
+| Primitives / UI kit | <Button/Link/Input/Select/etc. existing or new> | <existing primitive/token path> | <files/folders> | <control behavior/styling contract> |
+| Overlays and composites | <Modal/Drawer/Menu/Tabs/Toast/List/Card/etc.> | <existing primitive/composite path> | <files/folders> | <overlay/list/form family behavior> |
+| State surfaces | <loading/error/empty/skeleton/disabled/permission states> | <existing state components/patterns> | <files/folders> | <visible recovery and pending behavior> |
+| Hooks / selectors / adapters | <useXModel/selectX/normalizeX/mutations/url-state> | <state/data conventions> | <files/folders> | <state ownership, derived data, side effects> |
+
+Frontend composition gates:
+- The route/page component should remain mostly orchestration and composition; it should not own control styling, repeated list/card markup, overlay internals, state surfaces, and business-state transitions inline.
+- Repeated className/token clusters, repeated controls, repeated overlay/list/form scaffolds, and repeated status-state branches should use existing primitives/composites or be extracted into named local components/helpers.
+- New shared primitives require evidence that no suitable repo primitive exists; otherwise use the existing design-system path.
+- Do not split decorative one-off markup into files without a stable responsibility.
+
 ## Definition of Done
 
 - <Functional result is present.>

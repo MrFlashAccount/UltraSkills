@@ -91,11 +91,22 @@ For non-trivial user-facing frontend work, actionable `should_fix` review findin
 User-facing frontend files should stay near the existing ~200 LOC pressure rule by default. For new or materially rewritten user-facing source files, exceeding ~200 LOC is a `must_fix` unless the approved plan explicitly grants an exception with a reason. For frontend-authored source or test files, ending a change with a file over 400 lines is always a review blocker/must-fix unless the excess is generated, vendor, lock, snapshot, data fixture, or migration content with explicit justification.
 Existing oversized files should not be made larger or given mixed responsibility; if the task touches the oversized behavior, split the touched responsibility instead of carrying the debt forward.
 
-Frontend implementers must decompose user-facing UI into named, reviewable components rather than leaving page composition, data display, controls, overlays, and state/focus behavior in one blob. Reusable components introduced or materially changed in the slice must be named in the handoff with their purpose, ownership boundary, expected inputs/outputs, and reuse scope.
+Frontend implementers must decompose user-facing UI into named, reviewable components rather than leaving page composition, data display, controls, overlays, and state/focus behavior in one blob. Treat component decomposition as an implementation contract, not a refactor preference: for non-trivial user-facing UI, implementation should start from a small component map covering page/screen containers, feature components, layout components, controls, overlays, forms, lists/cards, required UI states, hooks/selectors, and the intended file zones. Reusable components introduced or materially changed in the slice must be named in the handoff with their purpose, ownership boundary, expected inputs/outputs, and reuse scope.
+
+Use responsibility-based seams, not decorative fragmentation. Extract a stable component, hook, selector, reducer/state machine, or local helper when it owns a distinct concern such as data orchestration, URL/server/local state, a form field group, an action toolbar, a list/table/card family, a modal/drawer/popover, an empty/error/loading surface, or focus/keyboard policy. Do not split one-off markup that has no durable responsibility, but do not keep repeated styling, control behavior, overlay mechanics, or state transitions inline with a page container.
+
+For user-facing component taxonomy, prefer these default buckets when the repo shape allows them:
+- **primitives / UI kit**: Button, IconButton, Link, Input, Select, Switch/Checkbox, Tooltip, Badge, Spinner/Skeleton, and semantic native controls wrapped only when the repo already has that convention
+- **layout**: PageShell, Section, Stack, Inline, Grid, SplitPane, Toolbar, FormRow, and other spacing/structure helpers backed by existing tokens
+- **composites**: Dialog/Modal, Drawer/Sheet, Dropdown/Menu, Tabs/SegmentedControl, Toast, DataTable/List, Card/ListItem, and overlay/list/form families with shared behavior
+- **feature components**: domain-specific panels, forms, cards, tables, detail sections, editors, and task flows
+- **state helpers**: `useXModel`, reducers/state machines, selectors, normalizers, URL-state helpers, server-state adapters, and mutation helpers
 
 Follow colocation by default: keep a component's implementation, local types, styles, tests/stories/fixtures when present, and component-specific helpers close to that component. Shared cross-component contracts may live in a local `contracts`/`types` module only when they are truly shared; do not dump all UI types or styles into broad files just to avoid small colocated modules.
 
 Before creating controls or layout primitives, identify the repo's existing UI kit, design-system primitives, tokens, and component conventions. Use them as the default implementation base. If no UI kit or suitable primitive exists, state that evidence in the handoff and use the approved primitive library or native semantic element rather than hand-rolling an incompatible local primitive.
+
+Do not accept raw style copy-paste as componentization. Repeated className/token clusters, repeated control markup, repeated overlay/list/form scaffolding, or repeated status-state branches should either use an existing primitive/composite or be extracted into a named local component/helper with a clear owner. Arbitrary colors, spacing, shadows, radii, and inline style escapes are `should_fix` when a token or primitive path exists.
 
 When the slice introduces or materially changes a named frontend framework, router, UI kit, accessibility primitive library, or build integration, inspect relevant current documentation before implementation/review. Prefer official docs or repo-local package docs/examples; if documentation cannot be accessed and the behavior is contract-significant, return blocked or record the explicit uncertainty instead of guessing.
 
@@ -222,14 +233,17 @@ Use this as a compact checklist when a calling skill wants frontend implementati
 - **Documentation and best practices**: For named frameworks, routers, UI kits, accessibility primitive libraries, or build/runtime integrations, did the implementer/reviewer inspect relevant current docs or repo-local examples and cite the evidence? If docs were unavailable, is the uncertainty explicit rather than guessed through?
 - **Component architecture**: Are user-facing files/components kept near the ~200 LOC pressure rule, with extraction seams or explicit approved justification for larger slices?
   New or materially rewritten user-facing source files over ~200 lines are must-fix unless the approved plan grants an exception; frontend-authored source/test files over 400 lines after a change are blockers unless explicitly justified as generated, vendor, lock, snapshot, data fixture, or migration exceptions; existing oversized files must not be made worse.
+  For non-trivial user-facing UI, did the plan or implementation handoff include a component map naming screen/page containers, feature components, layout components, primitives/UI-kit usage, overlays, forms, lists/cards, state surfaces, hooks/selectors, and file zones before or alongside implementation?
   Are data/orchestration, controls, overlays, lists/cards, detail sections, and focus/interaction policy split into named components/hooks/selectors when that clarifies behavior?
   Are reusable components named in the handoff with purpose, boundary, expected inputs/outputs, and reuse scope?
+  Does the page/route component stay mostly orchestration/composition rather than owning control styling, repeated card/list markup, modal/drawer internals, loading/error/empty surfaces, and business-state transitions inline?
 - **Colocation**: Are component implementation, component-local types, styles, tests/stories/fixtures where present, and component-specific helpers colocated rather than smeared across broad UI files?
 - **Canonical values**: Are client-visible statuses, actions, artifact kinds, route/state names, and similar symbolic values reused through canonical constants/names instead of scattered raw strings, except definitions, tests/fixtures, or explicit migration compatibility?
 - **Side-effect boundaries**: Do functions/hooks avoid mixing side effects with compute/transform logic unless the reason is local and explicit?
 - **State placement**: Is state kept in the narrowest correct home: local, lifted, context, URL, server/cache, or global client store?
 - **Code docs**: Are file purpose, state ownership, async/data-contract assumptions, critical UI states, and exported hook/helper/component contracts documented where they would otherwise be non-obvious?
 - **Design-system discipline**: Does the UI identify and use existing UI kit primitives, semantic native elements, tokens, and scales instead of raw colors, arbitrary spacing, inline style escapes, mixed primitive systems, or local visual law?
+  Are repeated className/token clusters, repeated controls, repeated overlay/list/form scaffolds, and repeated status-state branches extracted or routed through existing primitives rather than copy-pasted?
 - **Baseline UI red flags**: Are destructive actions confirmed, mobile viewport/fixed UI safe, errors near their fields/actions, paste allowed, data/text formatted robustly, z-index layered by scale, and empty states given one clear next action?
 - **Interaction/motion craft**: If motion exists, does it have a purpose, frequency-appropriate duration, origin-aware behavior, interruptible transitions/gestures, reduced-motion fallback, and transform/opacity-first performance?
 - **Performance mechanics**: Does the implementation avoid async waterfalls, broad/barrel imports, unnecessary render churn, duplicated client I/O, and repeated browser/JS hot-path work?
@@ -605,11 +619,18 @@ const getCurrentUser = cache(async (userId: string) => {
 
 For non-trivial React UI work, component extraction is a delivery requirement, not polish. Keep page/route containers responsible for data/state orchestration, and move repeated or responsibility-specific UI into named components/hooks/selectors with clear props. Do not leave route/page composition, list/card rendering, drawers/dialogs, detail sections, loading/error surfaces, and focus policy in one file unless the approved plan explicitly allows a temporary exception.
 
+Start new or materially rewritten user-facing React UI from the approved frontend component map when one exists. If none exists for a non-trivial frontend slice, stop and request the missing plan rather than discovering the component architecture by growing a page component until it needs cleanup.
+
 Default structure for new or materially rewritten React UI:
 
 - route/page shell owns loading/error routing, high-level state, and data refresh;
 - view component owns screen composition;
-- controls, lists/cards, drawer/dialog, empty/error surfaces, and detail sections become separate components when they have distinct responsibilities;
+- feature components own domain-specific panels, forms, cards, tables, editors, and detail sections;
+- layout helpers own only spacing and structure such as page shells, sections, stacks, grids, toolbars, and form rows;
+- primitives/UI-kit components or native semantic elements own control behavior and token-backed styling;
+- composites own drawer/dialog/menu/tabs/toast/list/card/form-field families when they share behavior;
+- loading/error/empty/skeleton/disabled/permission surfaces become named state components when they are visible task states rather than one-line fallbacks;
+- hooks, reducers/state machines, selectors, normalizers, mutation helpers, URL-state helpers, and server-state adapters own state transitions and derived data outside render bodies;
 - pure selectors/normalizers stay outside component render bodies and are tested when non-trivial;
 - component-local types and CSS Modules stay next to the component; shared DTO/contracts live in a local shared contract module only when truly reused.
 
@@ -870,10 +891,24 @@ Escalate a finding when a failure blocks task completion, hides state, breaks ke
 Prefer small, named seams over one large component that owns every concern.
 
 Strong defaults:
+- Start non-trivial user-facing UI work from a component map, not from a page blob. Name the intended page/screen containers, feature components, layout helpers, primitives/UI-kit usage, overlays, forms, lists/cards, UI states, hooks/selectors, and file zones before implementation settles.
 - Colocate component implementation, tests, stories/examples, component-local hooks, and types when repo convention supports it.
 - Separate data loading/mutation orchestration from pure presentation when mixing them hides state transitions or contracts.
 - Prefer composition over boolean-prop matrices and broad configuration objects.
 - Keep shared abstractions earned by repeated use; do not turn one screen's temporary shape into a generic helper.
+
+Default taxonomy for user-facing UI:
+- **primitives / UI kit**: controls and tokens already provided by the repo, or native semantic controls when no primitive exists
+- **layout**: shells, sections, stacks, grids, toolbars, rows, and reusable spacing structure
+- **composites**: dialog/modal, drawer/sheet, menu/dropdown, tabs, toast, table/list, card/list item, and form-field families
+- **feature components**: domain-specific panels, cards, forms, tables, editors, and detail sections
+- **state helpers**: hooks, selectors, reducers/state machines, normalizers, URL-state helpers, server-state adapters, and mutation helpers
+
+Review blockers / strong findings:
+- A page or route owns data orchestration, controls, list/card markup, overlay internals, loading/error/empty surfaces, and focus/keyboard policy in one component without an approved exception.
+- Existing UI-kit controls or layout primitives are bypassed by hand-rolled equivalents without evidence of a gap.
+- Repeated className/token clusters, repeated controls, repeated overlay/list/form scaffolds, or repeated status-state branches are copy-pasted instead of extracted or routed through primitives.
+- Component-local types, styles, tests/stories/examples, and helpers are smeared into broad files when repo convention supports colocation.
 
 ### 200 LOC pressure rule
 
