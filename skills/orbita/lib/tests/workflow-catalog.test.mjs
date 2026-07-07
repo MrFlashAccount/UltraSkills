@@ -430,10 +430,11 @@ test('custom workflow docs sample keeps isolated runs root in scope for lifecycl
   const docs = readFileSync(path.join(root, 'skills/orbita/lib/docs/custom-workflow-roots.md'), 'utf8');
   assert.equal(docs.includes('export WORKFLOW_RUNS_ROOT='), true);
   assert.equal(docs.includes('export ORBITA_CONFIG='), true);
-  assert.equal(docs.includes('workflow-runs.mjs create --run-id sample-run'), true);
-  assert.equal(docs.includes('workflow-runs.mjs claim --run-id sample-run'), true);
-  assert.equal(docs.includes('workflow-runner.mjs next --run-id sample-run'), true);
-  assert.equal(docs.includes('workflow-runner.mjs instructions --run-id sample-run'), true);
+  assert.equal(docs.includes('export ORBITA_SKILL_ROOT='), true);
+  assert.equal(docs.includes('bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" create --run-id sample-run'), true);
+  assert.equal(docs.includes('bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" claim --run-id sample-run'), true);
+  assert.equal(docs.includes('bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" next --run-id sample-run'), true);
+  assert.equal(docs.includes('bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" instructions --run-id sample-run'), true);
   assert.equal(docs.includes('WORKFLOW_RUNS_ROOT="$(mktemp -d)" ORBITA_CONFIG='), false);
 });
 
