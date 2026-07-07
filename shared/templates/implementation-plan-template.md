@@ -55,12 +55,14 @@ Complete this section when an approved `ui-intent-contract` is applicable. If th
 | Topic | Approved UI intent | Implementation planning consequence |
 | --- | --- | --- |
 | User / task | <who and what job> | <what the plan must preserve> |
+| Product / surface route | <dashboard/admin/marketing/docs/app shell/mixed/etc. + evidence> | <which UI rules/review expectations apply> |
 | Primary / secondary actions | <actions> | <workstream / DoD coverage> |
 | First read / hierarchy | <what should be understood first> | <screen/component planning implication> |
 | Screen / zones | <semantic zones> | <component/file-zone planning implication> |
 | Required states | <loading/empty/error/success/disabled/etc.> | <state/component/test implication> |
 | Interaction expectations | <forms/dialogs/drawers/navigation/focus/responsive/motion> | <implementation/review implication> |
 | Design basis | <DESIGN.md/existing UI/reference/fallback> | <UI-kit/tokens/taste-review implication> |
+| Visual evidence / proof assets | <screenshots/references/proof pages/mockups/current UI/gaps> | <what to preserve, compare, capture, or request> |
 
 UI intent gates:
 - Preserve the approved UI intent; do not rewrite visual hierarchy, density, tone, or screen semantics in implementation planning.

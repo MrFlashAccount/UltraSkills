@@ -1,0 +1,152 @@
+name = "frontend-ui-pr-smoke"
+version = 1
+description = "Experimental small UI workflow: draft a UI intent/design artifact, implement the frontend slice, review frontend engineering and taste, then open or prepare a pull request. Use for testing the design-to-implementation path on small UI tasks; do not use for backend-heavy or high-risk product work."
+start = "design_draft"
+done = "done"
+
+[steps.design_draft]
+name = "Design artifact draft"
+kind = "worker"
+agent = "frontend-taste"
+
+[steps.design_draft.input]
+role = "frontend-taste"
+prompt = '''This is a design-artifact phase for a small frontend UI PR smoke test.
+Inspect the task, repo design memory, existing UI, screenshots/references if present, and relevant frontend-taste routing material. Do not edit files, run implementation, or author durable `DESIGN.md`.
+Produce exactly one first-class artifact named `ui-intent-contract` using the UI intent contract template. This artifact is the design artifact that frontend implementation must follow.
+The artifact must include: UI applicability, product/surface routing, design-basis preflight, user task, primary/secondary actions, first-read hierarchy, screen/zones, required states, interactions, density/tone, responsive expectations, visual evidence/proof assets, and open UI tensions.
+If no user-facing UI is involved, return blocked with blocker.source_step_id = design_draft; this workflow is only useful for UI smoke tests.
+If the requested UI needs high-confidence new visual direction but the repo has no useful design basis, screenshot, reference, prior approved visual direction, or product context, return blocked with the smallest concrete request for a design brief, screenshot/reference, or create-design routing. Do not guess.
+If the design basis is enough for a small conservative implementation, record the basis and proceed.
+Return ready_for_attack when the artifact is ready for implementation or blocked with blocker.source_step_id = design_draft.
+'''
+
+[steps.design_draft.output]
+template = "../../shared/templates/ui-intent-contract-template.md"
+schema = "../dev-harness/schemas/ui-intent-draft-output.json"
+
+[steps.design_draft.next]
+match = "${{ output.outcome }}"
+
+[steps.design_draft.next.cases]
+ready_for_attack = "frontend_implementation"
+
+[steps.frontend_implementation]
+name = "Frontend implementation"
+kind = "worker"
+
+[steps.frontend_implementation.input]
+role = "frontend"
+prompt = '''Implement the small frontend UI slice described by `design_draft`'s approved `ui-intent-contract`.
+Read the artifact as the source of truth. Do not invent a different screen, density, hierarchy, state model, or visual evidence basis.
+Before editing, inspect existing UI kit/design-system primitives, tokens, layout conventions, and nearby screens. Build a short component map from the design artifact and repo conventions, then implement against that map.
+Use existing primitives by default. Create local named components/hooks/selectors for stable responsibilities: screen zones, feature panels, forms, lists/cards/tables, overlays, state surfaces, and derived state. Avoid one large page blob and avoid repeated className/token/control scaffolds.
+When useful, capture or prepare rendered proof evidence such as screenshots, local preview notes, or browser smoke checks. If the app cannot be run locally, record why and what reviewer should inspect.
+Run relevant tests/checks for this small slice. Fix failures caused by your changes. Return blocked only for missing external input, environment failure, or a design-contract contradiction that needs a user decision.
+When implemented, emit one `implementation-handoff` artifact and compact JSON with changed_files and verification.
+
+Input context:
+- UI intent/design artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
+- Prior implementation output after review changes: ${{ input.frontend_implementation | default: "No prior implementation output." }}
+- Review join feedback: ${{ input.review_join.verdict | default: "No prior review feedback." }}'''
+
+[steps.frontend_implementation.output]
+template = "../../shared/templates/implementer-handoff-template.md"
+schema = "../dev-harness/schemas/implementation-output.json"
+
+[steps.frontend_implementation.next]
+match = "${{ output.outcome }}"
+
+[steps.frontend_implementation.next.cases]
+implemented = ["frontend_review", "frontend_taste_review"]
+
+[steps.frontend_review]
+name = "Frontend engineering review"
+kind = "worker"
+next = "review_join"
+
+[steps.frontend_review.input]
+role = "frontend"
+prompt = '''Review the frontend implementation for correctness, component decomposition, state ownership, accessibility-relevant behavior, use of existing UI kit/primitives/tokens, responsive behavior, and verification evidence.
+Read the `ui-intent-contract` and `implementation-handoff`. Fail actionable current-scope issues, especially page blobs, copied control/style scaffolds, missing state surfaces, missing component map, inaccessible interactions, or implementation that ignores the design artifact.
+Return passed, needs_changes with required_implementation_steps = ["frontend_implementation"], or blocked.
+
+Input context:
+- UI intent/design artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
+- Frontend implementation output: ${{ input.frontend_implementation | default: "No frontend implementation output is available." }}'''
+
+[steps.frontend_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "../dev-harness/schemas/gate-review-verdict-output.json"
+
+[steps.frontend_taste_review]
+name = "Frontend taste review"
+kind = "worker"
+next = "review_join"
+
+[steps.frontend_taste_review.input]
+role = "frontend-taste"
+prompt = '''Review the implemented UI against the `ui-intent-contract`, repo `DESIGN.md` or design basis, existing UI, screenshots/references/proof assets, and frontend-taste quality criteria.
+Focus on product-surface quality: first read, hierarchy, density, tone, states, interaction feel, responsive expectations, visual evidence fidelity, and avoidance of generic UI slop. Do not take ownership of code architecture except when visible composition failure affects the surface.
+Return passed, needs_changes with required_implementation_steps = ["frontend_implementation"], or blocked.
+
+Input context:
+- UI intent/design artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
+- Frontend implementation output: ${{ input.frontend_implementation | default: "No frontend implementation output is available." }}'''
+
+[steps.frontend_taste_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "../dev-harness/schemas/gate-review-verdict-output.json"
+
+[steps.review_join]
+name = "Review join"
+kind = "worker"
+
+[steps.review_join.input]
+prompt = '''Join frontend_review and frontend_taste_review.
+If either review has outcome needs_changes, return needs_changes with required_implementation_steps = ["frontend_implementation"] and summarize the exact rework needed.
+If either review is blocked, return blocked with blocker.source_step_id = review_join and the smallest concrete missing input.
+Return passed only when both reviews passed.
+
+Input context:
+- Frontend review: ${{ input.frontend_review | default: "No frontend_review output." }}
+- Frontend taste review: ${{ input.frontend_taste_review | default: "No frontend_taste_review output." }}'''
+
+[steps.review_join.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "../dev-harness/schemas/gate-review-verdict-output.json"
+
+[steps.review_join.next]
+match = "${{ output.outcome }}"
+
+[steps.review_join.next.cases]
+passed = "pull_request"
+needs_changes = "frontend_implementation"
+
+[steps.pull_request]
+name = "Open pull request"
+kind = "worker"
+next = "done"
+
+[steps.pull_request.input]
+prompt = '''Open or prepare a pull request for the reviewed frontend UI smoke-test implementation.
+First inspect git status, branch, commit history, and remote. Ensure only intended files are included. Commit the changes with a concise message if they are not committed yet.
+If the current user request or workflow invocation clearly permits pushing and opening a PR, push the branch and open a PR against the repository default branch using the available GitHub tooling. If explicit external-write permission is absent or credentials/tools are unavailable, return blocked with the exact command/handoff needed instead of pretending a PR was opened.
+Record the PR URL, branch, commit, and verification results.
+
+Input context:
+- UI intent/design artifact: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
+- Frontend implementation output: ${{ input.frontend_implementation | default: "No frontend implementation output is available." }}
+- Frontend review: ${{ input.frontend_review | default: "No frontend_review output." }}
+- Frontend taste review: ${{ input.frontend_taste_review | default: "No frontend_taste_review output." }}'''
+
+[steps.pull_request.output]
+template = "../../shared/templates/pull-request-handoff-template.md"
+schema = "schemas/pull-request-output.json"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Frontend UI PR smoke workflow completed.'''
