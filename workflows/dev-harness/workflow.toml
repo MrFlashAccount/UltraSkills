@@ -1,12 +1,13 @@
 name = "dev-harness"
 version = 1
-description = "End-to-end planning and execution workflow for non-trivial code work: research attack, architecture gate, implementation plan, approval, implementation dispatch, and review. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
+description = "End-to-end planning and execution workflow for non-trivial code work: research attack, optional UI intent gate, architecture gate, implementation plan, approval, implementation dispatch, and review. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
 start = "research_draft"
 done = "done"
 
 [steps.research_draft]
 name = "Research draft"
 kind = "worker"
+agent = "researcher"
 
 [steps.research_draft.input]
 role = "researcher"
@@ -82,7 +83,7 @@ Read research_draft.summary as the human-facing research proposal state. Present
 Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
 If the user asks for a packet/proposal file, retrieve/export the existing artifact referenced by baton/output artifacts; do not ask a worker to recreate it in a temp path.
 Continue only after explicit approval.
-Return approval approved to continue to architecture_draft, rejected to revise research_draft, or blocked with a blocker.
+Return approval approved to continue to ui_intent_draft, rejected to revise research_draft, or blocked with a blocker.
 
 Input context:
 - Research summary for approval: ${{ input.research_draft.summary }}
@@ -96,8 +97,99 @@ schema = "schemas/approval-output.json"
 match = "${{ output.approval }}"
 
 [steps.approve_research.next.cases]
-approved = "architecture_draft"
+approved = "ui_intent_draft"
 rejected = "research_draft"
+
+[steps.ui_intent_draft]
+name = "UI intent draft"
+kind = "worker"
+agent = "researcher"
+
+[steps.ui_intent_draft.input]
+role = "researcher"
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Use the same research-role judgment style as research_draft. Read the approved/current `reasons-canvas-research` artifact from `research_draft` as the source of truth and produce exactly one first-class human-facing artifact named `ui-intent-contract`.
+This step is a lightweight UI/product-surface gate before architecture, not a separate design-law authoring workflow. It must not edit or invent `DESIGN.md`, choose durable visual law, or define file/component implementation architecture.
+If the approved research has no user-facing UI surface, or only trivial UI copy/bug work, still create `ui-intent-contract` with a clear "not applicable / no UI intent gate needed" decision and summary so downstream steps know the gate was considered.
+For non-trivial user-facing UI, the `ui-intent-contract` must capture the interface intent at product-surface depth: user/task, primary and secondary actions, first-read/reading order, screen/zones needed, required visible states, interaction expectations, density/tone, responsive expectations, design-law or existing-UI basis, and any UI open tensions that architecture must preserve. Describe semantic screen structure such as toolbar, filters, list/table, detail drawer, form, dialog, empty/error/loading states; do not choose file paths, component filenames, hooks, state owners, or storage boundaries.
+If design law, existing UI basis, product context, or user choice is missing and the task needs high-confidence new screen direction, return blocked with blocker.source_step_id = ui_intent_draft and the smallest concrete user-facing question or create-design routing need. For small conservative UI work, record the fallback basis instead of blocking.
+Emit artifact metadata for `ui-intent-contract` in artifacts[] and a compact output.summary as the human-facing UI intent proposal state.
+Return ready_for_attack or blocked with blocker.source_step_id = ui_intent_draft.
+When revising after ui_intent_attack feedback or approve_ui_intent rejection, read feedback from input.ui_intent_attack and input.approve_ui_intent and address it explicitly while preserving approved research constraints.
+Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
+If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = ui_intent_draft and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
+
+Input context:
+- Research artifacts, including required `reasons-canvas-research`: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}
+- Research attack verdict: ${{ input.research_attack.verdict }}
+- Human research approval: ${{ input.approve_research }}
+- Previous UI intent artifacts: ${{ input.ui_intent_draft.artifacts | default: "No previous ui_intent_draft artifacts in input context." }}
+- UI intent attack feedback to address: ${{ input.ui_intent_attack.verdict | default: "No prior ui_intent_attack feedback." }}
+- Human UI intent gate feedback to address: ${{ input.approve_ui_intent | default: "No prior approve_ui_intent decision or feedback." }}'''
+
+[steps.ui_intent_draft.output]
+template = "../../shared/templates/ui-intent-contract-template.md"
+schema = "schemas/ui-intent-draft-output.json"
+
+[steps.ui_intent_draft.next]
+match = "${{ output.outcome }}"
+
+[steps.ui_intent_draft.next.cases]
+ready_for_attack = "ui_intent_attack"
+
+[steps.ui_intent_attack]
+name = "UI intent attack"
+kind = "worker"
+
+[steps.ui_intent_attack.input]
+role = "researcher"
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Start from a hostile prior: assume the UI intent draft is wrong, incomplete, overcomplicated, unsupported by research, or drifting into design-law/code architecture until the artifact proves otherwise. Do not give credit for intent, author confidence, or plausible-sounding structure.
+Read artifact `ui-intent-contract` from `ui_intent_draft` and attack it for missing user/task grounding, weak first-read/action hierarchy, missing required states, unsupported design-law basis, hidden assumptions, over-specific code/component architecture, and failure to mark non-UI/trivial UI work as not applicable. Treat a missing `ui-intent-contract` artifact as a blocking UI intent failure.
+Return approved, needs_revision, or blocked.
+If blocked, set blocker.source_step_id = ui_intent_attack.
+
+Input context:
+- UI intent artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI intent artifacts are available in input context." }}
+- Research artifacts: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}'''
+
+[steps.ui_intent_attack.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/gate-attack-verdict-output.json"
+
+[steps.ui_intent_attack.next]
+match = "${{ output.outcome }}"
+
+[steps.ui_intent_attack.next.cases]
+approved = "approve_ui_intent"
+needs_revision = "ui_intent_draft"
+
+[steps.approve_ui_intent]
+name = "Approve UI intent"
+kind = "approval"
+
+[steps.approve_ui_intent.input]
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Read ui_intent_draft.summary as the human-facing UI intent proposal state. Present that summary, attach the `ui-intent-contract` artifact from ui_intent_draft, and include ui_intent_attack.verdict for human approval.
+Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
+If the user asks for a UI intent file, retrieve/export the existing artifact referenced by baton/output artifacts, limited to `ui-intent-contract`. Do not ask a worker to recreate it in a temp path.
+Continue only after explicit approval.
+Return approval approved to continue to architecture_draft, rejected to revise ui_intent_draft, or blocked with a blocker.
+
+Input context:
+- UI intent summary for approval: ${{ input.ui_intent_draft.summary }}
+- UI intent attack verdict: ${{ input.ui_intent_attack.verdict }}
+- UI intent artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI intent artifacts are available in input context." }}'''
+
+[steps.approve_ui_intent.output]
+schema = "schemas/approval-output.json"
+
+[steps.approve_ui_intent.next]
+match = "${{ output.approval }}"
+
+[steps.approve_ui_intent.next.cases]
+approved = "architecture_draft"
+rejected = "ui_intent_draft"
 
 [steps.architecture_draft]
 name = "Architecture draft"
@@ -108,6 +200,7 @@ agent = "architect"
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read the approved/current `reasons-canvas-research` artifact from `research_draft` as the research source of truth and strictly follow it.
+Read the approved/current `ui-intent-contract` artifact from `ui_intent_draft` as the UI/product-surface source of truth when it is applicable. Preserve its user task, screen/zones, first-read/action hierarchy, required states, interaction expectations, design-law basis, and open UI tensions. Do not rewrite visual hierarchy or UI taste in architecture; translate only the code/system implications needed to preserve the approved UI intent.
 Produce the minimal architecture decision or structural contract required by the approved research in the `reasons-canvas-architecture` artifact and a compact output.summary as the human-facing architecture proposal state for approval gates. Do not embed the architecture artifact body in JSON.
 Before finalizing output.summary or `reasons-canvas-architecture`, explicitly identify the public contract and API surfaces affected by the task: exported APIs, CLI/user-facing commands, schemas, workflow interfaces, integration boundaries, compatibility promises, and observable behavior. If code, docs, or existing contracts answer a question, inspect them instead of asking the user.
 When user-owned choices remain about public contract shape, API compatibility, naming, migration behavior, or accepted breakage, return outcome blocked with blocker.source_step_id = architecture_draft and the smallest focused blocker.needed question for the orchestrator to resolve through the recoverable blocker flow; include your recommended answer in blocker.summary or blocker.needed.
@@ -125,6 +218,9 @@ Input context:
 - Research artifacts, including required `reasons-canvas-research`: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}
 - Research attack verdict: ${{ input.research_attack.verdict }}
 - Human research approval: ${{ input.approve_research }}
+- UI intent artifacts, including `ui-intent-contract` when present: ${{ input.ui_intent_draft.artifacts | default: "No UI intent artifacts are available in input context." }}
+- UI intent attack verdict: ${{ input.ui_intent_attack.verdict | default: "No UI intent attack verdict is available." }}
+- Human UI intent approval: ${{ input.approve_ui_intent | default: "No UI intent approval is available." }}
 - Previous architecture artifacts: ${{ input.architecture_draft.artifacts | default: "No previous architecture_draft artifacts in input context." }}
 - Architecture attack feedback to address: ${{ input.architecture_attack.verdict | default: "No prior architecture_attack feedback." }}
 - Human architecture gate feedback to address: ${{ input.approve_architecture | default: "No prior approve_architecture decision or feedback." }}'''
@@ -199,8 +295,9 @@ kind = "worker"
 [steps.planning_draft.input]
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Produce the implementation plan contract for approval from the approved `reasons-canvas-architecture` artifact. Treat `reasons-canvas-architecture` as an immutable source contract: do not edit it, complete missing Canvas sections, or read earlier research artifacts separately. Convert the approved architecture artifact into workstreams, owners, verification, rollback, and reviewer selection in one file-backed artifact.
+Produce the implementation plan contract for approval from the approved `reasons-canvas-architecture` artifact and the approved `ui-intent-contract` artifact when applicable. Treat `reasons-canvas-architecture` and `ui-intent-contract` as immutable source contracts: do not edit them, complete missing sections, or read earlier research artifacts separately. Convert the approved architecture and UI intent artifacts into workstreams, owners, verification, rollback, and reviewer selection in one file-backed artifact.
 Create exactly one first-class human-facing implementation plan artifact named `implementation-plan` and emit its artifact metadata in artifacts[]. Do not embed the readable plan/proposal body in JSON; keep JSON close to research/architecture draft outputs: outcome, compact summary, artifact metadata, routing fields, selected reviewer fields, and blockers only.
+When a `ui-intent-contract` is applicable to the slice, the `implementation-plan` artifact must include a `UI Intent Contract` section that carries forward its user/task, primary actions, first-read hierarchy, screen/zones, required states, interaction expectations, density/tone, responsive expectations, and design-law or existing-UI basis. If the UI intent artifact says no UI intent gate is needed, record that reason instead of inventing UI intent.
 When selected_implementation_steps includes frontend_implementation for non-trivial user-facing UI, the `implementation-plan` artifact must include a `Frontend composition plan` section naming page/screen containers, feature components, layout components, primitives/UI-kit usage, overlays/composites, state surfaces, hooks/selectors/adapters, file zones, and responsibility boundaries. If the frontend slice is non-UI, trivial, or intentionally preserves an existing component shape, record that reason in the section. Treat a missing required frontend composition plan as a planning blocker, not an implementation detail to improvise later.
 Emit a compact output.summary as the human-facing plan proposal state for approval gates. Summarize the artifact's current plan state, selected implementation route, selected reviewers, main risks, and verification/rollback shape without embedding the full plan body.
 The step id remains planning_draft for compatibility, but once approve_plan approves this output, downstream steps must treat it as the final approved plan contract. selected_implementation_steps must contain only unique canonical implementation step ids needed for the plan: backend_implementation, frontend_implementation, architecture_artifact_update. implementation_route must be the normalized route for exactly that unique selected set: backend, frontend, architecture, backend_frontend, backend_architecture, frontend_architecture, or all.
@@ -216,6 +313,8 @@ If concise clarification is needed, do not ask the user directly; return a recov
 Input context:
 - Architecture artifacts, including `reasons-canvas-architecture` when present: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}
 - Architecture attack verdict: ${{ input.architecture_attack.verdict }}
+- UI intent artifacts, including `ui-intent-contract` when present: ${{ input.ui_intent_draft.artifacts | default: "No UI intent artifacts are available in input context." }}
+- UI intent approval: ${{ input.approve_ui_intent | default: "No UI intent approval is available." }}
 - Previous implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No previous planning_draft implementation artifacts in input context." }}
 - Planning attack feedback to address: ${{ input.planning_attack.verdict | default: "No prior planning_attack feedback." }}
 - Human plan gate feedback to address: ${{ input.approve_plan | default: "No prior approve_plan decision or feedback." }}'''
@@ -238,12 +337,14 @@ kind = "worker"
 role = "critic"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read artifact `implementation-plan` from `planning_draft` and challenge it plus selected_implementation_steps, implementation_route, selected_review_steps, review_plan, skipped_review_steps, and review_escalation for faithful conversion from approved architecture artifacts and immutable `reasons-canvas-architecture` when present into workstreams, unique canonical task selection, route/selection consistency, explicit final reviewer selection, no duplicate same-role workers, entity coverage, one-owner-per-file-zone, project baseline, architecture artifact manifest, verification/rollback surfaces, sensitive surfaces, request-path/contract touchpoints, and max-detail leaks. Treat a missing `implementation-plan` artifact as a blocking planning failure.
+When a `ui-intent-contract` is applicable, challenge the implementation-plan for faithful carry-forward of the UI intent: user/task, primary actions, first-read hierarchy, screen/zones, required states, interaction expectations, density/tone, responsive expectations, and design-law/existing-UI basis. If the plan ignores, rewrites, or invents UI intent instead of carrying it forward, return needs_revision or blocked as appropriate.
 When frontend_implementation is selected for non-trivial user-facing UI, challenge the implementation-plan for a concrete `Frontend composition plan`: page/screen containers, feature components, layout components, primitives/UI-kit usage, overlays/composites, state surfaces, hooks/selectors/adapters, file zones, responsibility boundaries, state ownership, and UI-kit/token evidence. If the plan omits this, treats it as cosmetic, leaves component architecture for implementation to invent, or lacks review criteria for component decomposition, return needs_revision or blocked as appropriate.
 Return approved, needs_revision, or blocked.
 If selected tasks contain duplicate/overlapping same-role work that cannot collapse to one canonical step, if selected_review_steps includes reviewers only to confirm absence of a surface, if optional reviewers are selected instead of recorded in skipped_review_steps, if selected_review_steps has more than three entries without strong review_escalation, or if reviewers are missing/recomputed outside planning, return blocked with blocker.source_step_id = planning_attack.
 
 Input context:
 - Implementation plan artifacts under review: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
+- UI intent artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI intent artifacts are available in input context." }}
 - Selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
 - Implementation route: ${{ input.planning_draft.implementation_route }}
 - Selected review steps: ${{ input.planning_draft.selected_review_steps }}
