@@ -1,0 +1,138 @@
+{
+  "title": "DevHarness UI Intent Draft Output",
+  "description": "Producer output contract for the DevHarness UI intent draft gate before architecture.",
+  "type": "object",
+  "required": [
+    "outcome"
+  ],
+  "properties": {
+    "outcome": {
+      "enum": [
+        "ready_for_attack",
+        "blocked"
+      ],
+      "description": "Producer must emit the single enum value that reflects the completed stage state; use blocked only when blocker explains the recoverable pause.",
+      "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when this says blocked."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Producer must summarize the UI intent proposal state for human approval without embedding the ui-intent-contract artifact body.",
+      "x-usage": "Use this as the human-facing approval state for the UI intent gate. Show it with the artifact attachment; do not recreate the summary from artifact contents in the orchestrator."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
+      },
+      "description": "Producer must emit artifact metadata for the required immutable ui-intent-contract artifact when outcome is ready_for_attack.",
+      "x-usage": "Emit only the required immutable ui-intent-contract artifact. Exact artifact field semantics come from the shared baton artifact schema.",
+      "minItems": 1,
+      "maxItems": 1,
+      "contains": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "const": "ui-intent-contract"
+          }
+        }
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
+      },
+      "description": "Producer may emit compact structured results, decisions, or evidence summaries created by this stage.",
+      "x-usage": "Use these as supporting evidence or compact summaries. Do not let them override outcome, selected steps, blockers, or approved contracts."
+    },
+    "blocker": {
+      "type": "object",
+      "required": [
+        "summary",
+        "source_step_id",
+        "needed"
+      ],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Producer must summarize the relevant decision or handoff in concise human-readable form without adding new scope.",
+          "x-usage": "Use this as concise human-readable context only. Do not route, approve, or expand scope from this text."
+        },
+        "source_step_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Producer must name the workflow step id that found or owns this blocker.",
+          "x-usage": "Use this to identify the step that found or owns the blocker. Do not treat it as a retry target by itself."
+        },
+        "needed": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Producer must state the exact missing decision, permission, input, or evidence required to proceed.",
+          "x-usage": "Surface this exact missing input, permission, evidence, or decision before proceeding. When the blocker is user-answerable, treat this as the exact user-facing question to route to the user."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Producer should list concrete evidence references supporting this blocker.",
+          "x-usage": "Use these references to inspect or challenge the claim. Do not assume unreferenced surfaces were checked."
+        },
+        "risk": {
+          "type": "string",
+          "description": "Producer should describe the residual risk if this blocker is ignored.",
+          "x-usage": "Use this to understand why ignoring the item is unsafe. Treat it as risk context unless paired with a blocked outcome."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Producer must populate this when outcome is blocked, naming the recoverable pause reason, owning step, and specific missing input or permission.",
+      "x-usage": "Treat this as a recoverable pause. Surface the missing input or decision, route user-answerable questions to the user as questions, then continue this same workflow step after it is resolved."
+    }
+  },
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/ui-intent-draft-output",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "ready_for_attack"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "summary",
+          "artifacts"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "blocked"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "blocker"
+        ]
+      }
+    }
+  ]
+}

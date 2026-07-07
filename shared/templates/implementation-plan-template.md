@@ -48,6 +48,25 @@
 
 - In `<file/zone>`, add/change `<class/entity/function/method/config/doc section>` to <planning-level behavior>.
 
+## UI Intent Contract
+
+Complete this section when an approved `ui-intent-contract` is applicable. If the UI intent gate marked the slice not applicable, record that reason instead of inventing UI intent.
+
+| Topic | Approved UI intent | Implementation planning consequence |
+| --- | --- | --- |
+| User / task | <who and what job> | <what the plan must preserve> |
+| Primary / secondary actions | <actions> | <workstream / DoD coverage> |
+| First read / hierarchy | <what should be understood first> | <screen/component planning implication> |
+| Screen / zones | <semantic zones> | <component/file-zone planning implication> |
+| Required states | <loading/empty/error/success/disabled/etc.> | <state/component/test implication> |
+| Interaction expectations | <forms/dialogs/drawers/navigation/focus/responsive/motion> | <implementation/review implication> |
+| Design basis | <DESIGN.md/existing UI/reference/fallback> | <UI-kit/tokens/taste-review implication> |
+
+UI intent gates:
+- Preserve the approved UI intent; do not rewrite visual hierarchy, density, tone, or screen semantics in implementation planning.
+- If architecture or implementation reality conflicts with approved UI intent, return blocked or request plan revision instead of silently changing the interface.
+- Keep file/component architecture in the Frontend composition plan, not in this section.
+
 ## Frontend composition plan
 
 Complete this section when `frontend_implementation` is selected for non-trivial user-facing UI. If the frontend slice is non-UI, trivial, or intentionally preserves an existing component shape, record that reason instead of inventing components.
@@ -102,5 +121,5 @@ When a structured output schema asks for reviewer selection, keep this table ali
 - Be concrete and file-level: name file zones, classes, entities, functions, methods, configs, and docs at planning level.
 - Use ABCD workstreams when helpful; keep roles/owners explicit.
 - Include DoD, reviewer roles, rollback, and any source appendices needed to make the plan self-contained.
-- Consume the approved architecture summary and `reasons-canvas-architecture` artifact as the active contract. Do not consume research separately; rely on the architecture artifact to carry forward any research context that remains valid.
+- Consume the approved architecture summary, `reasons-canvas-architecture`, and applicable `ui-intent-contract` artifacts as the active contracts. Do not consume research separately; rely on the architecture and UI intent artifacts to carry forward any research context that remains valid.
 - Do not include code, diffs, command sequences, or process handoff instructions.
