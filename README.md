@@ -126,6 +126,7 @@ When a canonical label and folder path differ, the folder path is the source of 
 - workflow-runner orchestration through CLI-returned instructions -> `skills/orbita`
 - multi-role review -> `skills/code-review-orchestrator`
 - pre-implementation Researcher -> Critic research verdict -> `skills/research-critic`
+- small UI design -> implementation -> review -> PR smoke tests -> `workflows/frontend-ui-pr-smoke`
 
 ### Reuse a role
 
