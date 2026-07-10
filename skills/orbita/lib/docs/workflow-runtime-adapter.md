@@ -73,8 +73,8 @@ and mutates only baton cursor/status through the existing lease, lock,
 validation, durable writer, history append, and run-index path. It
 must not roll back, prune, rewrite, or clean `baton.state`, accepted outputs,
 artifacts/results, worker bindings, prompt markers, attempts, or existing
-history. Terminal `done`/`blocked` runs and parallel/array cursors are
-unsupported in the first pointer-recovery slice. If the target has retained
+history. Terminal `done`/`blocked` runs are unsupported in the first
+pointer-recovery slice; array cursors are invalid persisted state. If the target has retained
 accepted output that a later `continue` may reuse, the command requires explicit
 `--acknowledge-retained-state`.
 
@@ -86,7 +86,7 @@ The default runs root is `~/.orbita/workflow-runs/v1`, or `$ORBITA_HOME/workflow
 
 When starting a new run, `next` may receive the raw startup user prompt with `--user-prompt` or `--user-prompt-file`. The runner stores it once as top-level `baton.user_prompt`. Existing runs are resumed as-is: later `next` calls do not overwrite `baton.user_prompt`, and `continue` preserves it while advancing the baton.
 
-At run initialization, the runner deterministically selects and persists `baton.user_prompt_target` from the static startup topology. A target is stable only when all possible startup paths that can be chosen before the first worker guarantee the same worker target; static fanout may pin one rendered worker branch, but ambiguous dynamic transitions, divergent `match/cases`, and terminal/no-worker `match/cases` branches fail loudly instead of accepting a prompt that might be unused.
+At run initialization, the runner deterministically selects and persists `baton.user_prompt_target` from the startup topology. A target is stable only when all possible startup paths that can be chosen before the first worker guarantee the same worker target; ambiguous dynamic transitions, divergent `match/cases`, and terminal/no-worker `match/cases` branches fail loudly instead of accepting a prompt that might be unused.
 
 The runner/interpreter injects the startup prompt only into the render context for the persisted `baton.user_prompt_target` until that selected worker's output is applied. Rendering validates that the saved target is still defined, is still a worker, and is present whenever the current response renders workers or reaches a terminal step; otherwise the runner fails rather than silently dropping `baton.user_prompt`. It persists `baton.user_prompt_injected: true` only when applying that selected worker output, so a crash or repeated `next` before completion keeps the prompt in that same worker's instructions, while resume or workflow-shape drift after completion cannot reinject it into a later worker. The template compiler only renders a `## User prompt` section for worker steps when that render-time value is passed; it does not decide eligibility itself. `workflow.start` may be a control step; approval/user-gate answers are separate host interactions, not startup `user_prompt`, and later workers do not receive this section unless the workflow explicitly carries derived context through normal state/output paths.
 
@@ -134,8 +134,8 @@ Retry and blocked policy is runner-owned. Retry budgets are recorded on obligati
 
 Compatibility rules:
 
-- Workflows without a sharding policy keep current sequential, approval, fixed parallel fanout/join, output validation, persistence, host request, and instruction-rendering behavior.
-- Existing fixed parallel fanout/join remains separate from native sharding; sharding adds owner-step coverage records, not a replacement for current array cursor behavior.
+- Workflows without a sharding policy keep current sequential, approval, first-class fanout-owner, output validation, persistence, host request, and instruction-rendering behavior.
+- First-class fanout remains separate from native sharding: fanout owns a fixed named branch table, while sharding owns coverage obligations.
 - Code-review v1 integration is explicitly out of scope for this slice. The code-review orchestrator may later consume native runner sharding, but this runtime contract must not depend on that integration.
 
 Implementation and final drift review must compare this contract against:
@@ -144,7 +144,7 @@ Implementation and final drift review must compare this contract against:
 - baton schema and shard record helpers for plan, descriptor, obligation, output, retry/privacy, and join proof;
 - runtime transition/use-case behavior for plan validation, dispatch, accepted output matching, retry/block accounting, and join routing;
 - public host request DTO rendering and negative tests for private fields and standalone token fields;
-- compatibility tests for non-sharded sequential, approval, fixed parallel fanout/join, output validation, persistence, and existing host request behavior;
+- regression tests for non-sharded sequential, approval, fanout owner, output validation, persistence, and existing host request behavior;
 - focused sharding tests for complete coverage pass, missing required output block, role mismatch block, duplicate shard id rejection, retry exhaustion block, unsafe privacy route block, optional obligation behavior, and public DTO privacy/token negative cases.
 
 ## Host request response
@@ -265,7 +265,7 @@ After every current request has accepted output, continue without `--output`:
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" continue --lease-token "$WORKFLOW_RUN_TOKEN" --run-id "$RUN_ID" --workflow "$WORKFLOW" --only-instructions
 ```
 
-For parallel branch requests, call `write-output` once per requested `stepId`; `continue` collects the accepted values from baton/state into the existing portable `{ "steps": { ... } }` envelope internally before applying workflow state.
+For fanout branch requests, call `write-output` once per requested synthetic `stepId`; `continue` collects accepted values from baton/state into the internal `{ "steps": { ... } }` envelope before applying the current fanout batch.
 
 ## History ownership
 

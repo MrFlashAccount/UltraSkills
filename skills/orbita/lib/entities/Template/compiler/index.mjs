@@ -111,7 +111,7 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
     recoverableBlocker: recoverableBlockerBlock({ baton, stepId }),
     inlinePrompt: interpolatePromptExpressions(normalizePromptText(input.prompt), { input: promptInput.value }),
     outputContract,
-    userPrompt: step.kind === 'worker' && userPromptInjected !== true ? userPrompt : undefined,
+    userPrompt: ['worker', 'fanout'].includes(step.kind) && userPromptInjected !== true ? userPrompt : undefined,
     finalReminder,
   });
   const diagnostics = usesDefaultPrompt

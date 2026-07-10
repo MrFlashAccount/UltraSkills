@@ -12,7 +12,7 @@ Durable lessons for authoring workflow-runner workflows. Apply these before desi
 ## Fanout And Review Loops
 
 - Separate selected branches from skipped/considered branches. Optional, informational, or absence-confirmation reviewers belong in skipped evidence, not in the fanout target.
-- Re-review dispatch should route from the current dispatch decision, not from the original plan, so passed branches are not rerun unless their owned surfaces changed.
+- Re-review fanout should route from the current review owner selection, not from the original plan, so passed branches are not rerun unless their owned surfaces changed.
 - Review joins must aggregate the branches selected for the current review pass, not stale planning-time branches.
 - Expanded fanout needs an explicit risk reason. Default to the smallest reviewer set that covers material independent risk classes.
 

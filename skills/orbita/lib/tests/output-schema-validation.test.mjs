@@ -442,15 +442,8 @@ test('output.schema: schema-declared output still must be an object envelope', (
     properties: { outcome: { const: 'ready' } },
     additionalProperties: false,
   });
-  doc.steps.worker_step.next = ['consumer_step'];
-  doc.steps.consumer_step.next = 'join_step';
-  doc.steps.join_step = {
-    name: 'Join step',
-    kind: 'worker',
-    input: { prompt: 'Join consumer output.' },
-    output: { template: 'output.md' },
-    next: 'done',
-  };
+  doc.steps.worker_step.next = 'consumer_step';
+  doc.steps.consumer_step.next = 'done';
 
   const retry = runApply('output-schema-root-envelope-object', baton(), 'ready', true, doc);
 

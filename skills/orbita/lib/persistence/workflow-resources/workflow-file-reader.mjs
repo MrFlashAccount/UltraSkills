@@ -16,10 +16,15 @@ export function readOutputSchemas({ workflow, workflowPath, repositoryRoot = def
   const doc = typeof workflow?.toJSON === 'function' ? workflow.toJSON() : workflow;
   const outputSchemas = new Map();
   for (const [stepId, step] of Object.entries(doc.steps ?? {})) {
-    const schemaRefs = [step.output?.schema, step.worker?.output?.schema].filter(Boolean);
-    for (const schemaRef of schemaRefs) {
-      outputSchemas.set(stepId, loadOutputSchema({ workflow: doc, workflowPath, schemaRef, repositoryRoot }).schema);
-      outputSchemas.set(schemaRef, loadOutputSchema({ workflow: doc, workflowPath, schemaRef, repositoryRoot }).schema);
+    const schemaEntries = [
+      [stepId, step.output?.schema],
+      [`${stepId}.worker`, step.worker?.output?.schema],
+      ...Object.entries(step.branches ?? {}).map(([branchId, branch]) => [branchId, branch?.output?.schema]),
+    ].filter(([, schemaRef]) => Boolean(schemaRef));
+    for (const [producerId, schemaRef] of schemaEntries) {
+      const schema = loadOutputSchema({ workflow: doc, workflowPath, schemaRef, repositoryRoot }).schema;
+      outputSchemas.set(producerId, schema);
+      outputSchemas.set(schemaRef, schema);
     }
   }
   return outputSchemas;

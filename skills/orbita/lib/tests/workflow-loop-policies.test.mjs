@@ -186,7 +186,7 @@ test('workflow loopPolicies reject fanout and non-enumerable dynamic routes', ()
       fanout: { steps: ['producer', 'branch_a', 'branch_b'], maxIterations: 2, onLimit: 'blocked' },
     };
     return doc;
-  }), /loopPolicy 'fanout' does not support fanout transition from step 'producer'/);
+  }), /workflow failed schema validation: .*next must be string/);
 
   assertSemanticFailure(syntheticWorkflow((doc) => {
     doc.steps.producer.output.schema = 'open-route-output.schema.json';

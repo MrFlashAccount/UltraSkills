@@ -31,6 +31,7 @@
           },
           "shard": { "$ref": "#/$defs/shardWorkRequest" },
           "matrix": { "$ref": "#/$defs/matrixWorkRequest" },
+          "fanout": { "$ref": "#/$defs/fanoutWorkRequest" },
           "preferredAgentId": {
             "description": "Advisory opaque worker id previously bound for this step, or null when no binding exists.",
             "type": ["string", "null"],
@@ -121,6 +122,24 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "fanoutWorkRequest": {
+      "type": "object",
+      "required": ["owner_step_id", "activation", "phase", "selected_branch_ids"],
+      "properties": {
+        "owner_step_id": { "type": "string", "minLength": 1 },
+        "activation": { "type": "integer", "minimum": 1 },
+        "phase": { "enum": ["branches", "owner"] },
+        "selected_branch_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "branch_id": { "type": "string", "minLength": 1 },
+        "request_id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
     "matrixWorkRequest": {
       "type": "object",
       "required": ["owner_step_id", "unit_id", "request_id", "required", "attempts", "max_attempts", "context"],

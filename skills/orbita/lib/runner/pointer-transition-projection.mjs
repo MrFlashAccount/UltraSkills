@@ -16,23 +16,16 @@ const TERMINAL_STATUSES = new Set(['done', 'blocked']);
 
 function cursorValue(raw) {
   if (typeof raw !== 'string' || raw.length === 0) return undefined;
-  if (raw.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : undefined;
-    } catch {
-      return undefined;
-    }
-  }
+  if (raw.startsWith('[')) return undefined;
   return raw;
 }
 
 function cursorKey(cursor) {
-  return JSON.stringify(Array.isArray(cursor) ? cursor : [cursor]);
+  return cursor;
 }
 
 function cursorDisplay(cursor) {
-  return Array.isArray(cursor) ? cursor.join(' + ') : cursor;
+  return cursor;
 }
 
 function pointerPosition(cursor, status) {
@@ -70,7 +63,8 @@ function parseObservedTransitions(historyText) {
 }
 
 function retainedStateSummary(baton, cursor) {
-  const stepIds = normalizeCursor(cursor).filter((stepId) => Object.hasOwn(baton?.state ?? {}, stepId));
+  const stepId = normalizeCursor(cursor);
+  const stepIds = Object.hasOwn(baton?.state ?? {}, stepId) ? [stepId] : [];
   return {
     hasAcceptedOutput: stepIds.length > 0,
     stepIds,
@@ -78,22 +72,8 @@ function retainedStateSummary(baton, cursor) {
   };
 }
 
-function assertSinglePointer(baton) {
-  const currentStepIds = normalizeCursor(baton.cursor);
-  if (currentStepIds.length > 1) {
-    return {
-      supported: false,
-      reason: 'parallel_cursor_unsupported',
-      detail: 'pointer recovery supports only a single current cursor',
-    };
-  }
-  return { supported: true };
-}
-
 function transitionIsRunningSingleStep(workflow, transition) {
-  const toStepIds = normalizeCursor(transition.to.cursor);
-  if (toStepIds.length !== 1) return false;
-  const [toStepId] = toStepIds;
+  const toStepId = normalizeCursor(transition.to.cursor);
   const step = workflow.steps?.[toStepId];
   if (!step) return false;
   return statusForStep(workflow, toStepId, step) === transition.to.status && !TERMINAL_STATUSES.has(transition.to.status);
@@ -110,15 +90,6 @@ function uniqueTransitions(transitions) {
 export function projectPointerTransitions({ workflow, baton, historyText } = {}) {
   new Baton(baton).validateAgainst(workflow);
   const current = pointerPosition(baton.cursor, baton.status);
-  const support = assertSinglePointer(baton);
-  if (!support.supported) {
-    return {
-      current,
-      transitions: [],
-      unsupported: { reason: support.reason, detail: support.detail },
-    };
-  }
-
   const currentKey = cursorKey(baton.cursor);
   const adjacent = [];
   for (const observed of parseObservedTransitions(historyText)) {

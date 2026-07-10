@@ -4,7 +4,6 @@ import { Baton } from '../entities/Baton/index.mjs';
 import {
   assertNoNestedMatchCasesTarget,
   isDynamicTransitionNext,
-  isStaticParallelNext,
   normalizeTransitionNext,
 } from '../runtime/transition-next.mjs';
 import { Workflow } from '../entities/Workflow/index.mjs';
@@ -66,7 +65,7 @@ function workflowDoc(overrides = (workflow) => workflow) {
         kind: 'worker',
         input: { role: 'backend' },
         output: { template: 'producer.md', schema: 'route.schema.json' },
-        next: { match: '${{ output.route }}', cases: { direct: 'done', split: ['branch_a', 'branch_b'] } },
+        next: { match: '${{ output.route }}', cases: { direct: 'done', split: 'branch_a' } },
       },
       branch_a: { name: 'Branch A', kind: 'worker', output: { template: 'branch-a.md', schema: 'branch.schema.json' }, next: 'join' },
       branch_b: { name: 'Branch B', kind: 'worker', output: { template: 'branch-b.md', schema: 'branch.schema.json' }, next: 'join' },
@@ -164,18 +163,8 @@ test('Baton.withAppliedOutput stores step output by step id', () => {
   assert.deepEqual(next.state.producer, { outcome: 'ok', artifacts: [], results: [] });
 });
 
-test('normalizeTransitionNext classifies static arrays as static parallel transitions', () => {
-  assert.equal(normalizeTransitionNext(['branch_a', 'branch_b']).kind, 'static-parallel');
-  assert.equal(isStaticParallelNext(['branch_a', 'branch_b']), true);
-});
 
-test('isDynamicTransitionNext treats mixed top-level transition arrays as dynamic parallel items', () => {
-  assert.equal(isDynamicTransitionNext(['branch_a', '${{ output.targets }}']), true);
-});
 
-test('assertNoNestedMatchCasesTarget rejects nested match/cases objects inside parallel cases', () => {
-  assertWorkflowError(() => assertNoNestedMatchCasesTarget([{ match: '${{ output.route }}', cases: { direct: 'done' } }], 'next.cases.split'), /nested match\/cases transitions are not supported at next\.cases\.split\.0/);
-});
 
 test('Step.resolveConcreteTargets rejects approval outputs that use worker outcome fields', () => {
   const step = new Step({ id: 'approve', step: { name: 'Approve', kind: 'approval', next: 'done' } });
@@ -195,15 +184,6 @@ test('Step.resolveConcreteTargets rejects undefined match/cases keys at runtime'
   assertWorkflowError(() => step.resolveConcreteTargets(batonDoc(), workflowDoc(), { outcome: 'ok', route: 'missing', targets: ['branch_a'] }), /next\.match case 'missing' is not defined in next\.cases/);
 });
 
-test('Step.resolveConcreteTargets resolves dynamic parallel array output into targetStepIds', () => {
-  const doc = workflowDoc((workflow) => {
-    workflow.steps.producer.next = '${{ output.targets }}';
-    return workflow;
-  });
-  const step = new Step({ id: 'producer', step: doc.steps.producer });
-
-  assert.deepEqual(step.resolveConcreteTargets(batonDoc(), doc, { outcome: 'ok', route: 'split', targets: ['branch_a', 'branch_b'] }), { targetStepIds: ['branch_a', 'branch_b'] });
-});
 
 test('Step.resolveInputs projects only state keys referenced by dynamic transitions', () => {
   const step = new Step({ id: 'join', step: { name: 'Join', kind: 'worker', input: {}, next: '${{ input.branch_a.next }}' } });
@@ -219,16 +199,6 @@ test('Step.applyOutput clears a stale blocker when a later transition reaches a 
   assert.equal(Object.hasOwn(applied.baton, 'blocker'), false);
 });
 
-test('Step.validateInstructionRequest accepts a requested branch reached by a stored parallel output', () => {
-  const doc = workflowDoc((workflow) => {
-    workflow.steps.producer.next = '${{ output.targets }}';
-    return workflow;
-  });
-  const step = new Step({ id: 'producer', step: doc.steps.producer });
-  const baton = batonDoc({ state: { artifacts: [], results: [], producer: { outcome: 'ok', route: 'split', targets: ['branch_a', 'branch_b'] } } });
-
-  assert.deepEqual(step.validateInstructionRequest({ workflow: doc, baton, runState: { requests: [{ stepId: 'branch_b' }] }, stepId: 'branch_b' }), { ok: true, stepId: 'branch_b' });
-});
 
 test('Step.validateInstructionRequest rejects unknown current request ids', () => {
   const step = new Step({ id: 'producer', step: workflowDoc().steps.producer });
@@ -322,57 +292,17 @@ test('ValidateWorkflow accepts WorkflowDTO boundaries and returns a cloneable re
   assert.deepEqual(result, { ok: true, workflow: 'cycle-two-fixture', steps: Object.keys(doc.steps).length });
 });
 
-test('inspectWorkflow exposes the cursor step when no parallel output has been prepared', () => {
+test('inspectWorkflow exposes the current cursor step', () => {
   const response = inspectWorkflow({ workflowDoc: workflowDoc(), batonDoc: batonDoc(), resources: { outputSchemas } });
 
   assert.deepEqual(response.steps.map((step) => step.id), ['producer']);
 });
 
-test('applyWorkflowOutput prepares dynamic parallel branches from a JSON string output', () => {
-  const response = applyWorkflowOutput({ workflowDoc: workflowDoc(), batonDoc: batonDoc(), resources: { outputSchemas }, outputContent: JSON.stringify({ outcome: 'ok', route: 'split', targets: ['branch_a', 'branch_b'] }) });
 
-  assert.deepEqual(response.baton.cursor, ['branch_a', 'branch_b']);
-  assert.deepEqual(response.baton.state.producer.targets, ['branch_a', 'branch_b']);
-  assert.deepEqual(response.steps.map((step) => step.id), ['branch_a', 'branch_b']);
-});
 
-test('inspectWorkflow resolves stored dynamic parallel output into branch step responses', () => {
-  const response = inspectWorkflow({
-    workflowDoc: workflowDoc(),
-    batonDoc: batonDoc({ cursor: ['branch_a', 'branch_b'], state: { artifacts: [], results: [], producer: { outcome: 'ok', route: 'split', targets: ['branch_a', 'branch_b'] } } }),
-    resources: { outputSchemas },
-  });
 
-  assert.deepEqual(response.steps.map((step) => step.id), ['branch_a', 'branch_b']);
-});
 
-test('applyWorkflowOutput rejects prepared parallel applications without the steps envelope', () => {
-  const baton = batonDoc({ cursor: ['branch_a', 'branch_b'], state: { artifacts: [], results: [], producer: { outcome: 'ok', route: 'split', targets: ['branch_a', 'branch_b'] } } });
 
-  assert.throws(() => applyWorkflowOutput({ workflowDoc: workflowDoc(), batonDoc: baton, resources: { outputSchemas }, outputValue: { branch_a: { outcome: 'ok' } } }), /parallel output must include object steps/);
-});
-
-test('applyWorkflowOutput rejects prepared parallel output that omits one selected target', () => {
-  const baton = batonDoc({ cursor: ['branch_a', 'branch_b'], state: { artifacts: [], results: [], producer: { outcome: 'ok', route: 'split', targets: ['branch_a', 'branch_b'] } } });
-
-  assert.throws(() => applyWorkflowOutput({ workflowDoc: workflowDoc(), batonDoc: baton, resources: { outputSchemas }, outputValue: { steps: { branch_a: { outcome: 'ok' } } } }), /parallel output missing step 'branch_b'/);
-});
-
-test('applyWorkflowOutput rejects prepared parallel output that includes an unexpected branch', () => {
-  const baton = batonDoc({ cursor: ['branch_a', 'branch_b'], state: { artifacts: [], results: [], producer: { outcome: 'ok', route: 'split', targets: ['branch_a', 'branch_b'] } } });
-
-  assert.throws(() => applyWorkflowOutput({ workflowDoc: workflowDoc(), batonDoc: baton, resources: { outputSchemas }, outputValue: { steps: { branch_a: { outcome: 'ok' }, branch_b: { outcome: 'ok' }, extra: { outcome: 'ok' } } } }), /parallel output included unexpected step 'extra'/);
-});
-
-test('applyWorkflowOutput applies all prepared parallel outputs and advances to the shared join step', () => {
-  const baton = batonDoc({ cursor: ['branch_a', 'branch_b'], state: { artifacts: [], results: [], producer: { outcome: 'ok', route: 'split', targets: ['branch_a', 'branch_b'] } } });
-  const response = applyWorkflowOutput({ workflowDoc: workflowDoc(), batonDoc: baton, resources: { outputSchemas }, outputValue: { steps: { branch_a: { outcome: 'ok' }, branch_b: { outcome: 'ok' } } } });
-
-  assert.equal(response.baton.cursor, 'join');
-  assert.equal(response.baton.status, 'running');
-  assert.deepEqual(response.baton.state.branch_a, { outcome: 'ok' });
-  assert.deepEqual(response.baton.state.branch_b, { outcome: 'ok' });
-});
 
 test('applyWorkflowOutput returns a retry response for invalid JSON when a cursor declares output schema', () => {
   const response = applyWorkflowOutput({ workflowDoc: workflowDoc(), batonDoc: batonDoc(), resources: { outputSchemas }, outputContent: '{not json' });

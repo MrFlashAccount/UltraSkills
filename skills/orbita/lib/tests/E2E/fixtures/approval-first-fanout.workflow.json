@@ -22,62 +22,32 @@
         "template": "output.md",
         "schema": "schemas/routing-ready.schema.json"
       },
-      "next": [
-        "branch_a",
-        "branch_b"
-      ]
+      "next": "implementation"
     },
-    "branch_a": {
-      "name": "Branch A",
-      "kind": "worker",
+    "implementation": {
+      "name": "Implementation owner",
+      "kind": "fanout",
       "input": {
+        "branches": ["branch_a", "branch_b"],
         "prompt": [
-          "Do branch A.",
-          "",
-          "Prepare result:",
-          "${{ input.prepare.results }}"
+          "Synthesize current branch results.",
+          "Branch A result: ${{ input.branch_a.results | default: \"branch A not selected\" }}",
+          "Branch B result: ${{ input.branch_b.results | default: \"branch B not selected\" }}"
         ]
       },
       "output": {
         "template": "output.md",
         "schema": "schemas/routing-ready.schema.json"
       },
-      "next": "join"
-    },
-    "branch_b": {
-      "name": "Branch B",
-      "kind": "worker",
-      "input": {
-        "prompt": [
-          "Do branch B.",
-          "",
-          "Prepare result:",
-          "${{ input.prepare.results }}"
-        ]
-      },
-      "output": {
-        "template": "output.md",
-        "schema": "schemas/routing-ready.schema.json"
-      },
-      "next": "join"
-    },
-    "join": {
-      "name": "Join",
-      "kind": "worker",
-      "input": {
-        "prompt": [
-          "Join branch results.",
-          "",
-          "Branch A result:",
-          "${{ input.branch_a.results }}",
-          "",
-          "Branch B result:",
-          "${{ input.branch_b.results }}"
-        ]
-      },
-      "output": {
-        "template": "output.md",
-        "schema": "schemas/routing-ready.schema.json"
+      "branches": {
+        "branch_a": {
+          "input": { "prompt": "Do branch A.\nPrepare result:\n${{ input.prepare.results }}" },
+          "output": { "template": "output.md", "schema": "schemas/routing-ready.schema.json" }
+        },
+        "branch_b": {
+          "input": { "prompt": "Do branch B.\nPrepare result:\n${{ input.prepare.results }}" },
+          "output": { "template": "output.md", "schema": "schemas/routing-ready.schema.json" }
+        }
       },
       "next": "final_approval"
     },
@@ -88,8 +58,8 @@
         "prompt": [
           "Approve final result.",
           "",
-          "Join result:",
-          "${{ input.join.results }}"
+          "Implementation result:",
+          "${{ input.implementation.results }}"
         ]
       },
       "next": {

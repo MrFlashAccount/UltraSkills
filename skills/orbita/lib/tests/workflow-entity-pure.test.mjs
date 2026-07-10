@@ -117,29 +117,6 @@ test('Workflow.validate keeps match/cases transitions exhaustive against closed 
   assertWorkflowFailure(unreachableCase, /next\.cases declares unreachable case 'extra' not present in the selector schema/);
 });
 
-test('Workflow.validate proves dynamic parallel targets are schema-covered and valid join branches', () => {
-  const doc = pureWorkflow((workflow) => {
-    workflow.steps.route.next = '${{ output.parallel_targets }}';
-    return workflow;
-  });
-  const badParallelSchema = {
-    ...routeOutputSchema,
-    properties: {
-      ...routeOutputSchema.properties,
-      parallel_targets: {
-        type: 'array',
-        items: { enum: ['branch_a', 'branch_b'] },
-      },
-    },
-  };
-
-  assert.deepEqual(validate(doc), { ok: true, workflow: 'pure-entity-fixture', steps: Object.keys(doc.steps).length });
-  assertWorkflowFailure(
-    doc,
-    /next expression \$\{\{ output\.parallel_targets \}\} array target schema must declare minItems >= 1/,
-    { outputSchemas: new Map([['route.schema.json', badParallelSchema]]) },
-  );
-});
 
 test('Workflow.validate requires worker output schemas to expose a required string outcome field', () => {
   const doc = pureWorkflow();

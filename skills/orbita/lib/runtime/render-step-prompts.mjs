@@ -1,5 +1,6 @@
-import { renderWorkflowPrompt } from '../../entities/Template/index.mjs';
-import { assertStartupUserPromptTargetRenderable, selectedUserPromptStepId } from '../user-prompt.mjs';
+import { renderWorkflowPrompt } from '../entities/Template/index.mjs';
+import { batonForFanoutPrompt } from './fanout.mjs';
+import { assertStartupUserPromptTargetRenderable, selectedUserPromptStepId } from './user-prompt.mjs';
 
 export function renderStepPrompts({ workflow, baton, steps, resources, includeDiagnostics = false, followUp = false } = {}) {
   assertStartupUserPromptTargetRenderable({ workflow, baton, steps });
@@ -15,7 +16,7 @@ export function renderStepPrompts({ workflow, baton, steps, resources, includeDi
       ...entry,
       compiledPrompt: renderWorkflowPrompt({
         workflow,
-        baton,
+        baton: batonForFanoutPrompt({ workflow, baton, entry }),
         stepId: entry.id,
         step: entry.step,
         resources: stepResources,

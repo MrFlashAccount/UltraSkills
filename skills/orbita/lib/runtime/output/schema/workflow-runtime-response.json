@@ -24,6 +24,7 @@
         "step": { "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/workflow#/$defs/step" },
         "shard": { "$ref": "#/$defs/shardWork" },
         "matrix": { "$ref": "#/$defs/matrixWork" },
+        "fanout": { "$ref": "#/$defs/fanoutWork" },
         "compiledPrompt": { "$ref": "#/$defs/compiledPrompt" }
       },
       "additionalProperties": false
@@ -39,6 +40,24 @@
         "attempts": { "type": "integer", "minimum": 0 },
         "max_attempts": { "type": "integer", "minimum": 1 },
         "context": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "fanoutWork": {
+      "type": "object",
+      "required": ["owner_step_id", "activation", "phase", "selected_branch_ids"],
+      "properties": {
+        "owner_step_id": { "type": "string", "minLength": 1 },
+        "activation": { "type": "integer", "minimum": 1 },
+        "phase": { "enum": ["branches", "owner"] },
+        "selected_branch_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "branch_id": { "type": "string", "minLength": 1 },
+        "request_id": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     },

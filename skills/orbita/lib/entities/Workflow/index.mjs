@@ -12,7 +12,8 @@ import { statusForStep } from '../../runtime/step-status.mjs';
 import { assertLoopPolicies } from '../../runtime/loop-policies.mjs';
 import { assertTransitionDescriptorTargets, normalizeTransitionNext } from '../../runtime/transition-next.mjs';
 import { assertWorkflowShardingPolicies, isShardedStep } from '../../runtime/sharding.mjs';
-import { isMatrixStep, normalizeMatrixSource } from '../../runtime/matrix.mjs';
+import { isMatrixStep, normalizeMatrixInput } from '../../runtime/matrix.mjs';
+import { fanoutBranchIdIssues, isFanoutStep } from '../../runtime/fanout.mjs';
 import { compileWorkflowOutputSchema } from './schema-ref-validation.mjs';
 
 function cloneBoundaryData(dto) {
@@ -74,7 +75,7 @@ function assertWorkflowStepRoles(workflow, allowedRoleNames) {
   const roleCatalog = normalizeAllowedRoleCatalog(allowedRoleNames);
   const allowedRoles = new Set(roleCatalog.names);
   for (const [stepId, step] of Object.entries(workflow.steps)) {
-    if (step.kind !== 'worker') continue;
+    if (step.kind !== 'worker' && !isFanoutStep(step)) continue;
     const role = step.input?.role;
     if (!role) continue;
     try {
@@ -86,6 +87,23 @@ function assertWorkflowStepRoles(workflow, allowedRoleNames) {
     if (roleCatalog.loaded && !allowedRoles.has(role)) {
       const expected = [...allowedRoles].join(', ');
       fail(`step '${stepId}' input.role '${role}' is not an allowed role${expected ? `; expected one of: ${expected}` : ''}`);
+    }
+  }
+  for (const [stepId, step] of Object.entries(workflow.steps)) {
+    if (!isFanoutStep(step)) continue;
+    for (const [branchId, branch] of Object.entries(step.branches ?? {})) {
+      const role = branch.input?.role;
+      if (!role) continue;
+      try {
+        assertRoleDirectoryName(role);
+      } catch (error) {
+        if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' fanout branch '${branchId}' ${error.message.replace(/^workflow role validation failed: /, '')}`);
+        throw error;
+      }
+      if (roleCatalog.loaded && !allowedRoles.has(role)) {
+        const expected = [...allowedRoles].join(', ');
+        fail(`step '${stepId}' fanout branch '${branchId}' input.role '${role}' is not an allowed role${expected ? `; expected one of: ${expected}` : ''}`);
+      }
     }
   }
   for (const [stepId, step] of Object.entries(workflow.steps)) {
@@ -192,7 +210,7 @@ function validateOutputSchemaDocument(schema, schemaRef, workflow, _runtimeConte
   void validation;
 
   const normalizedSchema = normalizeSchemaForSemanticIntrospection(schema);
-  if (requireWorkerOutcomeContract && step?.kind === 'worker') assertWorkerOutputContract({ stepId, schema: normalizedSchema });
+  if (requireWorkerOutcomeContract && ['worker', 'fanout'].includes(step?.kind)) assertWorkerOutputContract({ stepId, schema: normalizedSchema });
   if (isExternalWorkflowOutputSchema(schemaRef, schema)) collectFieldAnnotationWarnings(schema, schemaRef, warnings);
   return normalizedSchema;
 }
@@ -232,6 +250,26 @@ function normalizeStepOutputSchemas({ workflow, outputSchemas = new Map(), warni
       requireWorkerOutcomeContract,
       externalSchemas,
     });
+  }
+  for (const [ownerStepId, step] of Object.entries(workflow.steps)) {
+    if (!isFanoutStep(step)) continue;
+    for (const [branchId, branch] of Object.entries(step.branches ?? {})) {
+      const schemaRef = branch.output?.schema;
+      if (!schemaRef) continue;
+      const loadedSchema = outputSchemaForStep(outputSchemas, branchId, schemaRef)
+        ?? outputSchemaForStep(outputSchemas, `${ownerStepId}.branches.${branchId}`, schemaRef);
+      if (!loadedSchema) {
+        if (requireSchemaPresence) fail(`step '${ownerStepId}' fanout branch '${branchId}' output.schema '${schemaRef}' was not provided to Workflow.validate()`);
+        continue;
+      }
+      const normalizedSchema = validateOutputSchemaDocument(loadedSchema, schemaRef, workflow, undefined, warnings, {
+        stepId: branchId,
+        step: { kind: 'worker' },
+        requireWorkerOutcomeContract,
+        externalSchemas,
+      });
+      schemasByStep.set(branchId, normalizedSchema);
+    }
   }
   return schemasByStep;
 }
@@ -400,32 +438,6 @@ function assertClosedStringValueSchema(schema, errorContext) {
 }
 
 function assertClosedDynamicTargetSchema(schema, errorContext) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
-    fail(`${errorContext} must resolve from a closed string enum/const or array item enum/const schema`);
-  }
-  if (schema.type === 'array' || schema.items) {
-    const itemAnalysis = assertClosedStringValueSchema(schema.items, `${errorContext} array item`);
-    return selectorAnalysis({ itemValues: itemAnalysis.directValues, arraySchemas: [schema] });
-  }
-  if (Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf)) {
-    const variants = schema.anyOf ?? schema.oneOf;
-    if (variants.length === 0) fail(`${errorContext} union schema must declare at least one closed string enum/const or array item enum/const branch`);
-    return variants.reduce((acc, variant) => mergeSelectorAnalysis(acc, assertClosedDynamicTargetSchema(variant, errorContext)), selectorAnalysis());
-  }
-  if (Array.isArray(schema.allOf)) {
-    const finiteBranches = schema.allOf
-      .map((variant) => {
-        try {
-          return assertClosedDynamicTargetSchema(variant, errorContext);
-        } catch (error) {
-          if (error instanceof WorkflowRuntimeError && /open string schema|must resolve from a closed string enum\/const/.test(error.message)) return undefined;
-          throw error;
-        }
-      })
-      .filter(Boolean);
-    if (finiteBranches.length === 0) fail(`${errorContext} must resolve from a closed string enum/const or array item enum/const schema`);
-    return finiteBranches.reduce((acc, branch) => mergeSelectorAnalysis(acc, branch), selectorAnalysis());
-  }
   return assertClosedStringValueSchema(schema, errorContext);
 }
 
@@ -461,7 +473,7 @@ function schemaForExpression({ workflow, schemasByStep, stepId, step, expression
   }
 
   const [stateKey, ...rest] = expression.path;
-  if (!Object.hasOwn(workflow.steps, stateKey)) return { schema: undefined, reason: `input step '${stateKey}' is not a declared workflow step for ${expression.source}` };
+  if (!Object.hasOwn(workflow.steps, stateKey) && !schemasByStep.has(stateKey)) return { schema: undefined, reason: `input step or fanout branch '${stateKey}' is not declared for ${expression.source}` };
   const producerSchema = schemasByStep.get(stateKey);
   if (!producerSchema) return { schema: undefined, reason: `input step '${stateKey}' has no output.schema for ${expression.source}` };
   return { schema: schemaForPath(producerSchema, rest), rootSchema: producerSchema, requiredPath: rest, reason: undefined };
@@ -497,25 +509,6 @@ function assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expr
   for (const target of aggregate.directValues) {
     if (!Object.hasOwn(workflow.steps, target)) fail(`step '${stepId}' ${field} expression ${expression.source} schema allows unknown target '${target}'`);
   }
-  if (aggregate.itemValues.size === 0) return aggregate;
-
-  for (const arraySchema of aggregate.arraySchemas) {
-    if (arraySchema.minItems === undefined || arraySchema.minItems < 1) {
-      fail(`step '${stepId}' ${field} expression ${expression.source} array target schema must declare minItems >= 1`);
-    }
-    if (arraySchema.uniqueItems !== true) {
-      fail(`step '${stepId}' ${field} expression ${expression.source} array target schema must declare uniqueItems: true`);
-    }
-  }
-
-  try {
-    assertTransitionDescriptorTargets(workflow, stepId, { kind: 'static-parallel', targets: [...aggregate.itemValues] });
-    assertNoSyntheticControlParallelTargets(workflow, stepId, [...aggregate.itemValues], field);
-  } catch (error) {
-    if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' ${field} expression ${expression.source} array target schema is not a valid parallel fan-out: ${error.message}`);
-    throw error;
-  }
-
   return aggregate;
 }
 
@@ -554,68 +547,11 @@ function recoverableBlockedOutputSelector(step, expression) {
 }
 
 function targetSetsForMatchCases(possibleCaseKeys, cases) {
-  return [...possibleCaseKeys].map((key) => {
-    const target = cases[key];
-    return typeof target === 'string' ? [target] : [...target];
-  });
+  return [...possibleCaseKeys].map((key) => [cases[key]]);
 }
 
 function targetSetsForDynamicTarget(aggregate) {
-  const sets = [...aggregate.directValues].map((target) => [target]);
-  if (aggregate.itemValues.size > 0) sets.push([...aggregate.itemValues]);
-  return sets;
-}
-
-function combineTargetSets(leftSets, rightSets) {
-  const combined = [];
-  for (const left of leftSets) {
-    for (const right of rightSets) combined.push([...left, ...right]);
-  }
-  return combined;
-}
-
-function assertParallelItemCombinations({ workflow, stepId, itemTargetSets }) {
-  let combinations = [[]];
-  for (const targetSets of itemTargetSets) combinations = combineTargetSets(combinations, targetSets);
-  for (const targets of combinations) {
-    try {
-      assertTransitionDescriptorTargets(workflow, stepId, { kind: 'static-parallel', targets });
-      assertNoSyntheticControlParallelTargets(workflow, stepId, targets, 'next');
-    } catch (error) {
-      if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' next combined parallel targets are invalid: ${error.message}`);
-      throw error;
-    }
-  }
-}
-
-function assertNoSyntheticControlParallelTargets(workflow, stepId, targets, field) {
-  for (const target of targets) {
-    const targetStep = workflow.steps?.[target];
-    if (isMatrixStep(targetStep)) fail(`step '${stepId}' ${field} cannot fan out to matrix step '${target}' in matrix v1`);
-    if (isShardedStep(targetStep)) fail(`step '${stepId}' ${field} cannot fan out to sharded step '${target}' in sharding v1`);
-  }
-}
-
-function assertDescriptorHasNoSyntheticControlParallelTargets(workflow, stepId, descriptor, field = 'next') {
-  if (descriptor.kind === 'static-parallel') {
-    assertNoSyntheticControlParallelTargets(workflow, stepId, descriptor.targets, field);
-    return;
-  }
-  if (descriptor.kind === 'match-cases') {
-    for (const [key, target] of Object.entries(descriptor.cases)) {
-      if (Array.isArray(target)) assertNoSyntheticControlParallelTargets(workflow, stepId, target, `${field}.cases.${key}`);
-    }
-    return;
-  }
-  if (descriptor.kind !== 'parallel-items') return;
-  for (const [index, item] of descriptor.items.entries()) {
-    const itemField = fieldPath(field, index);
-    if (item.kind === 'static-target') {
-      assertNoSyntheticControlParallelTargets(workflow, stepId, [item.target], itemField);
-    } else if (item.kind === 'match-cases') {
-      assertDescriptorHasNoSyntheticControlParallelTargets(workflow, stepId, item, itemField);
-    }
-  }
+  return [...aggregate.directValues].map((target) => [target]);
 }
 
 function assertTransitionSemantics(workflow, schemasByStep, { requireSchemaCoverage = true, requireExpressionRequiredPaths = true, allowUnreachableCases = false, allowOpenTransitionSchemas = false } = {}) {
@@ -625,7 +561,6 @@ function assertTransitionSemantics(workflow, schemasByStep, { requireSchemaCover
     try {
       descriptor = normalizeTransitionNext(step.next);
       assertTransitionDescriptorTargets(workflow, stepId, descriptor);
-      assertDescriptorHasNoSyntheticControlParallelTargets(workflow, stepId, descriptor);
     } catch (error) {
       if (error instanceof WorkflowRuntimeError) fail(error.message);
       throw error;
@@ -642,24 +577,6 @@ function assertTransitionSemantics(workflow, schemasByStep, { requireSchemaCover
     if (descriptor.kind === 'match-cases') {
       assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descriptor, field: 'next', requireSchemaCoverage, requireExpressionRequiredPaths, allowUnreachableCases, allowOpenTransitionSchemas });
       continue;
-    }
-    if (descriptor.kind === 'parallel-items') {
-      const itemTargetSets = [];
-      for (const [index, item] of descriptor.items.entries()) {
-        if (item.kind === 'static-target') {
-          itemTargetSets.push([[item.target]]);
-        } else if (item.kind === 'dynamic-target') {
-          const aggregate = assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expression: item.expression, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths, allowOpenTransitionSchemas });
-          if (aggregate) {
-            assertNoSyntheticControlParallelTargets(workflow, stepId, [...aggregate.itemValues], fieldPath('next', index));
-            itemTargetSets.push(targetSetsForDynamicTarget(aggregate));
-          }
-        } else if (item.kind === 'match-cases') {
-          const possibleCaseKeys = assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descriptor: item, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths, allowUnreachableCases, allowOpenTransitionSchemas });
-          if (possibleCaseKeys) itemTargetSets.push(targetSetsForMatchCases(possibleCaseKeys, item.cases));
-        }
-      }
-      assertParallelItemCombinations({ workflow, stepId, itemTargetSets });
     }
   }
 }
@@ -683,10 +600,6 @@ function collectExpandedRouteGraphEdges(workflow, schemasByStep, { requireSchema
       edges.push({ from: stepId, to: descriptor.target, fanout: false });
       continue;
     }
-    if (descriptor.kind === 'static-parallel') {
-      edges.push(...edgeRows(stepId, [descriptor.targets]));
-      continue;
-    }
     if (descriptor.kind === 'dynamic-target') {
       const aggregate = assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expression: descriptor.expression, field: 'next', requireSchemaCoverage, requireExpressionRequiredPaths });
       if (aggregate) edges.push(...edgeRows(stepId, targetSetsForDynamicTarget(aggregate)));
@@ -698,21 +611,6 @@ function collectExpandedRouteGraphEdges(workflow, schemasByStep, { requireSchema
       continue;
     }
 
-    const itemTargetSets = [];
-    for (const [index, item] of descriptor.items.entries()) {
-      if (item.kind === 'static-target') {
-        itemTargetSets.push([[item.target]]);
-      } else if (item.kind === 'dynamic-target') {
-        const aggregate = assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expression: item.expression, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths });
-        if (aggregate) itemTargetSets.push(targetSetsForDynamicTarget(aggregate));
-      } else if (item.kind === 'match-cases') {
-        const possibleCaseKeys = assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descriptor: item, field: fieldPath('next', index), requireSchemaCoverage, requireExpressionRequiredPaths, allowUnreachableCases });
-        if (possibleCaseKeys) itemTargetSets.push(targetSetsForMatchCases(possibleCaseKeys, item.cases));
-      }
-    }
-    let combinations = [[]];
-    for (const targetSets of itemTargetSets) combinations = combineTargetSets(combinations, targetSets);
-    edges.push(...edgeRows(stepId, combinations));
   }
   return edges;
 }
@@ -720,38 +618,120 @@ function collectExpandedRouteGraphEdges(workflow, schemasByStep, { requireSchema
 function assertWorkflowMatrixPolicies(workflow, schemasByStep) {
   for (const [stepId, step] of Object.entries(workflow.steps)) {
     if (!isMatrixStep(step)) continue;
-    const source = normalizeMatrixSource(step.source, { stepId });
-    if (source.kind === 'static') {
+    const input = normalizeMatrixInput(step.input, { stepId });
+    if (input.kind === 'static') {
       const seen = new Set();
-      for (const item of source.items) {
+      for (const item of input.items) {
         if (seen.has(item.id)) fail(`step '${stepId}' declares duplicate matrix unit id '${item.id}'`);
         seen.add(item.id);
       }
     }
-    if (source.kind === 'dynamic') {
+    if (input.kind === 'dynamic') {
       let expression;
       try {
-        expression = parsePathExpression(source.from);
+        expression = parsePathExpression(input.items);
       } catch (error) {
-        if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' matrix.source.from ${error.message}`);
+        if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' matrix.input.items ${error.message}`);
         throw error;
       }
-      if (expression.root !== 'input') fail(`step '${stepId}' matrix.source.from must use input.* selector`);
+      if (expression.root !== 'input') fail(`step '${stepId}' matrix.input.items must use input.* selector`);
       const resolved = assertExpressionSchemaAvailable({
         workflow,
         schemasByStep,
         stepId,
         step,
         expression,
-        field: 'matrix.source.from',
+        field: 'matrix.input.items',
         requireSchemaCoverage: true,
       });
       assertSchemaRequiresExpressionPath({
         stepId,
         expression,
-        field: 'matrix.source.from',
+        field: 'matrix.input.items',
         rootSchema: resolved.rootSchema,
         pathSegments: resolved.requiredPath,
+      });
+    }
+  }
+}
+
+function fanoutSelectionExpressions(selection) {
+  if (typeof selection === 'string') return [selection];
+  if (selection && typeof selection === 'object' && !Array.isArray(selection) && Array.isArray(selection.first_of)) {
+    return selection.first_of;
+  }
+  return [];
+}
+
+function assertFanoutSelectionSchema({ workflow, schemasByStep, stepId, step, expressionSource, requirePath = false }) {
+  let expression;
+  try {
+    expression = parsePathExpression(expressionSource);
+  } catch (error) {
+    if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' fanout input.branches ${error.message}`);
+    throw error;
+  }
+  if (expression.root !== 'input') fail(`step '${stepId}' fanout input.branches must use input.* selector`);
+  const resolved = assertExpressionSchemaAvailable({
+    workflow,
+    schemasByStep,
+    stepId,
+    step,
+    expression,
+    field: 'fanout input.branches',
+    requireSchemaCoverage: true,
+  });
+  if (requirePath) {
+    assertSchemaRequiresExpressionPath({
+      stepId,
+      expression,
+      field: 'fanout input.branches',
+      rootSchema: resolved.rootSchema,
+      pathSegments: resolved.requiredPath,
+    });
+  }
+
+  const arraySchemas = resolved.schema.flatMap((schema) => schemaVariants(schema))
+    .filter((schema) => schema?.type === 'array' || schema?.items);
+  if (arraySchemas.length === 0) fail(`step '${stepId}' fanout input.branches expression ${expression.source} must resolve to an array schema`);
+  const allowed = new Set(Object.keys(step.branches));
+  for (const schema of arraySchemas) {
+    if (schema.minItems === undefined || schema.minItems < 1) {
+      fail(`step '${stepId}' fanout input.branches expression ${expression.source} array schema must declare minItems >= 1`);
+    }
+    if (schema.uniqueItems !== true) {
+      fail(`step '${stepId}' fanout input.branches expression ${expression.source} array schema must declare uniqueItems: true`);
+    }
+    const itemAnalysis = assertClosedStringValueSchema(schema.items, `step '${stepId}' fanout input.branches expression ${expression.source} array item`);
+    for (const branchId of itemAnalysis.directValues) {
+      if (!allowed.has(branchId)) fail(`step '${stepId}' fanout input.branches expression ${expression.source} schema allows unknown branch '${branchId}'`);
+    }
+  }
+}
+
+function assertWorkflowFanoutPolicies(workflow, schemasByStep) {
+  for (const issue of fanoutBranchIdIssues(workflow)) fail(issue);
+
+  for (const [stepId, step] of Object.entries(workflow.steps)) {
+    if (!isFanoutStep(step)) continue;
+    const selection = step.input?.branches;
+    if (Array.isArray(selection)) {
+      const seen = new Set();
+      for (const branchId of selection) {
+        if (!Object.hasOwn(step.branches, branchId)) fail(`step '${stepId}' fanout input.branches references unknown branch '${branchId}'`);
+        if (seen.has(branchId)) fail(`step '${stepId}' fanout input.branches includes duplicate branch '${branchId}'`);
+        seen.add(branchId);
+      }
+    }
+    const selectionExpressions = fanoutSelectionExpressions(selection);
+    for (const expressionSource of selectionExpressions) {
+      assertFanoutSelectionSchema({
+        workflow,
+        schemasByStep,
+        stepId,
+        step,
+        expressionSource,
+        requirePath: false,
       });
     }
   }
@@ -801,6 +781,29 @@ function assertPromptExpressionSemantics(workflow, schemasByStep, { requireSchem
         });
       }
     }
+    if (isFanoutStep(step)) {
+      for (const [branchId, branch] of Object.entries(step.branches ?? {})) {
+        const branchPrompt = normalizePromptText(branch.input?.prompt, { fieldName: `steps.${stepId}.branches.${branchId}.input.prompt` });
+        let branchInterpolations;
+        try {
+          branchInterpolations = extractPromptInterpolations(branchPrompt);
+        } catch (error) {
+          if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' fanout branch '${branchId}' input.prompt ${error.message}`);
+          throw error;
+        }
+        for (const interpolation of branchInterpolations) {
+          assertExpressionSchemaAvailable({
+            workflow,
+            schemasByStep,
+            stepId: branchId,
+            step: branch,
+            expression: interpolation.expression,
+            field: `fanout branch '${branchId}' input.prompt`,
+            requireSchemaCoverage,
+          });
+        }
+      }
+    }
   }
 }
 
@@ -820,6 +823,7 @@ function validateWorkflowDocument(workflow, options = {}) {
     externalSchemas: options.externalSchemas ?? [],
   });
   assertWorkflowMatrixPolicies(workflow, schemasByStep);
+  assertWorkflowFanoutPolicies(workflow, schemasByStep);
   assertTransitionSemantics(workflow, schemasByStep, {
     requireSchemaCoverage: options.requireSchemaCoverage ?? true,
     requireExpressionRequiredPaths: options.requireExpressionRequiredPaths ?? true,

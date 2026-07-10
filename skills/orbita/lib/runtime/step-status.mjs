@@ -1,5 +1,6 @@
 const STEP_ACTIONS = Object.freeze({
   worker: 'run_worker',
+  fanout: 'run_worker',
   approval: 'wait_for_approval',
   done: 'stop_done',
 });

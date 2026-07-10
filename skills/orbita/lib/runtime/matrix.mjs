@@ -43,16 +43,16 @@ export function isMatrixStep(step) {
   return step?.kind === 'matrix';
 }
 
-export function normalizeMatrixSource(source, { stepId = '<unknown>' } = {}) {
-  if (!source || typeof source !== 'object' || Array.isArray(source)) fail(`step '${stepId}' matrix.source must be an object`);
-  if (Array.isArray(source.items)) {
-    if (source.items.length === 0) fail(`step '${stepId}' matrix.source.items must be a non-empty array`);
+export function normalizeMatrixInput(input, { stepId = '<unknown>' } = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) fail(`step '${stepId}' matrix.input must be an object`);
+  if (Array.isArray(input.items)) {
+    if (input.items.length === 0) fail(`step '${stepId}' matrix.input.items must be a non-empty array`);
     return {
       kind: 'static',
-      items: source.items.map((item, index) => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) fail(`step '${stepId}' matrix.source.items/${index} must be an object`);
+      items: input.items.map((item, index) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) fail(`step '${stepId}' matrix.input.items/${index} must be an object`);
         return {
-          id: assertSafeUnitId(item.id, `step '${stepId}' matrix.source.items/${index}/id`),
+          id: assertSafeUnitId(item.id, `step '${stepId}' matrix.input.items/${index}/id`),
           required: true,
           context: item.context === undefined ? {} : clone(item.context),
         };
@@ -60,18 +60,18 @@ export function normalizeMatrixSource(source, { stepId = '<unknown>' } = {}) {
     };
   }
 
-  if (typeof source.from === 'string') {
-    const contextFields = source.context_fields === undefined ? [] : source.context_fields;
-    if (!Array.isArray(contextFields)) fail(`step '${stepId}' matrix.source.context_fields must be an array`);
+  if (typeof input.items === 'string') {
+    const contextFields = input.context_fields === undefined ? [] : input.context_fields;
+    if (!Array.isArray(contextFields)) fail(`step '${stepId}' matrix.input.context_fields must be an array`);
     return {
       kind: 'dynamic',
-      from: source.from,
-      idField: assertSafeContextKey(source.id_field ?? 'id', `step '${stepId}' matrix.source.id_field`),
-      contextFields: contextFields.map((field, index) => assertSafeContextKey(field, `step '${stepId}' matrix.source.context_fields/${index}`)),
+      items: input.items,
+      idField: assertSafeContextKey(input.id_field ?? 'id', `step '${stepId}' matrix.input.id_field`),
+      contextFields: contextFields.map((field, index) => assertSafeContextKey(field, `step '${stepId}' matrix.input.context_fields/${index}`)),
     };
   }
 
-  fail(`step '${stepId}' matrix.source must declare static items or dynamic from`);
+  fail(`step '${stepId}' matrix.input.items must declare static items or a dynamic input expression`);
 }
 
 function unitRecordsForStaticSource(ownerStepId, source) {
@@ -97,14 +97,14 @@ function safeContextForItem(item, fields) {
 function unitRecordsForDynamicSource(ownerStepId, source, baton) {
   let items;
   try {
-    items = evaluatePathExpression(source.from, { input: baton?.state ?? {}, output: {} });
+    items = evaluatePathExpression(source.items, { input: baton?.state ?? {}, output: {} });
   } catch (error) {
-    throw new WorkflowRuntimeError(`workflow matrix validation failed: step '${ownerStepId}' source.from ${error.message}`);
+    throw new WorkflowRuntimeError(`workflow matrix validation failed: step '${ownerStepId}' input.items ${error.message}`);
   }
-  if (!Array.isArray(items) || items.length === 0) fail(`step '${ownerStepId}' matrix.source.from must resolve to a non-empty array`);
+  if (!Array.isArray(items) || items.length === 0) fail(`step '${ownerStepId}' matrix.input.items must resolve to a non-empty array`);
   return items.map((item, index) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) fail(`step '${ownerStepId}' matrix.source.from item ${index} must be an object`);
-    const unitId = assertSafeUnitId(item[source.idField], `step '${ownerStepId}' matrix.source.from item ${index}.${source.idField}`);
+    if (!item || typeof item !== 'object' || Array.isArray(item)) fail(`step '${ownerStepId}' matrix.input.items item ${index} must be an object`);
+    const unitId = assertSafeUnitId(item[source.idField], `step '${ownerStepId}' matrix.input.items item ${index}.${source.idField}`);
     return {
       unit_id: unitId,
       request_id: matrixRequestId(ownerStepId, unitId),
@@ -124,20 +124,20 @@ function assertUniqueUnits(ownerStepId, units) {
   }
 }
 
-function sourceFingerprint(source, units) {
+function inputFingerprint(input, units) {
   return JSON.stringify({
-    source,
+    input,
     units: units.map((unit) => ({ unit_id: unit.unit_id, required: unit.required, context: unit.context })),
   });
 }
 
 export function matrixUnitsForStep({ ownerStepId, ownerStep, baton }) {
-  const source = normalizeMatrixSource(ownerStep.source, { stepId: ownerStepId });
-  const units = source.kind === 'static'
-    ? unitRecordsForStaticSource(ownerStepId, source)
-    : unitRecordsForDynamicSource(ownerStepId, source, baton);
+  const input = normalizeMatrixInput(ownerStep.input, { stepId: ownerStepId });
+  const units = input.kind === 'static'
+    ? unitRecordsForStaticSource(ownerStepId, input)
+    : unitRecordsForDynamicSource(ownerStepId, input, baton);
   assertUniqueUnits(ownerStepId, units);
-  return { source, units, fingerprint: sourceFingerprint(source, units) };
+  return { input, units, fingerprint: inputFingerprint(input, units) };
 }
 
 export function createMatrixPlan({ ownerStepId, ownerStep, baton, previousPlan }) {
@@ -146,10 +146,10 @@ export function createMatrixPlan({ ownerStepId, ownerStep, baton, previousPlan }
   if (!Number.isInteger(maxParallel) || maxParallel < 1 || maxParallel > 16) fail(`step '${ownerStepId}' max_parallel must be an integer from 1 to 16`);
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) fail(`step '${ownerStepId}' max_attempts must be an integer from 1 to 10`);
 
-  const { source, units, fingerprint } = matrixUnitsForStep({ ownerStepId, ownerStep, baton });
+  const { input, units, fingerprint } = matrixUnitsForStep({ ownerStepId, ownerStep, baton });
   if (previousPlan) {
     if (previousPlan.source_fingerprint !== fingerprint) {
-      throw new WorkflowRuntimeError(`workflow matrix validation failed: step '${ownerStepId}' source fingerprint changed after initialization`);
+      throw new WorkflowRuntimeError(`workflow matrix validation failed: step '${ownerStepId}' input fingerprint changed after initialization`);
     }
     if (previousPlan.status === 'blocked' && baton?.recoverableWorkerBlockers?.[ownerStepId]?.resolution) {
       return {
@@ -168,7 +168,7 @@ export function createMatrixPlan({ ownerStepId, ownerStep, baton, previousPlan }
     plan_id: matrixPlanId(ownerStepId),
     owner_step_id: ownerStepId,
     status: 'dispatching',
-    source,
+    source: input,
     source_fingerprint: fingerprint,
     max_parallel: maxParallel,
     max_attempts: maxAttempts,

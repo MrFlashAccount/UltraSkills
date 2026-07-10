@@ -25,14 +25,14 @@ const workflowDoc = {
         kind: 'worker',
         input: { prompt: 'Prepare branch.' },
         output: { template: 'output.md' },
-        next: ['branch_a', 'branch_b'],
+        next: 'branch_a',
       },
       branch_a: {
         name: 'Branch A',
         kind: 'worker',
         input: { prompt: 'Run branch A.' },
         output: { template: 'output.md' },
-        next: 'join',
+        next: 'branch_b',
       },
       branch_b: {
         name: 'Branch B',
@@ -356,9 +356,11 @@ test('runner: stale older-response commands name the current request step ids', 
   await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next stale current request diagnostics');
   await expectRunner(['write-output', '--run-id', runId, '--step-id', 'prepare'], 'write prepare before stale diagnostics', { input: JSON.stringify(workerOutput('prepared')), debugSummary: true });
   let continued = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue to branch fanout');
-  assert.deepEqual(continued.requests.map((request) => request.stepId), ['branch_a', 'branch_b']);
+  assert.deepEqual(continued.requests.map((request) => request.stepId), ['branch_a']);
 
   await expectRunner(['write-output', '--run-id', runId, '--step-id', 'branch_a'], 'write branch_a before stale diagnostics', { input: JSON.stringify(workerOutput('branch a')), debugSummary: true });
+  continued = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue to branch b');
+  assert.deepEqual(continued.requests.map((request) => request.stepId), ['branch_b']);
   await expectRunner(['write-output', '--run-id', runId, '--step-id', 'branch_b'], 'write branch_b before stale diagnostics', { input: JSON.stringify(workerOutput('branch b')), debugSummary: true });
   continued = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue to join request');
   assert.deepEqual(continued.requests.map((request) => request.stepId), ['join']);
@@ -616,7 +618,7 @@ test('runner API propagates custom runsRoot through next, instructions, and cont
   assert.equal(continued.requests[0].loadInstructionsCommand.includes(`--lease-token '${leaseToken}'`), true);
   assert.equal(continued.requests[0].loadFollowupInstructionsCommand.includes(`--lease-token '${leaseToken}'`), true);
   assert.equal(continued.orchestratorInstruction.includes('--only-instructions'), true);
-  assert.deepEqual(continued.requests.map((request) => request.stepId).sort(), ['branch_a', 'branch_b']);
+  assert.deepEqual(continued.requests.map((request) => request.stepId), ['branch_a']);
   for (const request of continued.requests) {
     assert.equal(request.loadInstructionsCommand.includes(`--runs-root '${runsRoot}'`), true);
     assert.equal(request.loadFollowupInstructionsCommand.includes(`--runs-root '${runsRoot}'`), true);

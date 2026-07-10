@@ -12,9 +12,9 @@
       "status": "running",
       "lane": { "id": "waiting_for_user", "label": "Waiting for user" },
       "cursor": {
-        "kind": "parallel",
-        "steps": ["backend_implementation", "frontend_implementation"],
-        "display": "backend_implementation + frontend_implementation"
+        "kind": "single",
+        "steps": ["approve_plan"],
+        "display": "approve_plan"
       },
       "updatedAt": "2026-07-02T14:19:45.000Z",
       "artifacts": [
@@ -32,7 +32,7 @@
         ]
       },
       "miniMap": {
-        "currentSteps": ["backend_implementation", "frontend_implementation"],
+        "currentSteps": ["approve_plan"],
         "completedSteps": ["research"],
         "provenance": "baton.state step outputs and baton.cursor"
       }

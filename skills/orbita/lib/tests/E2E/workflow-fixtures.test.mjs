@@ -242,32 +242,32 @@ test('E2E fixture: match route covers retry loop and recoverable blocked output'
   assert.match(readHistory(blockedRun), /action=resolve_worker_blocker/);
 });
 
-test('E2E fixture: mixed static and match fanout requires named branch outputs and exposes join state', async () => {
-  const workflow = fixture('parallel-mixed.workflow.json');
-  const run = runDir('parallel-mixed');
+test('E2E fixture: fanout owner persists named branch outputs before owner completion', async () => {
+  const workflow = fixture('fanout-owner.workflow.json');
+  const run = runDir('fanout-owner');
 
   await next(run, workflow);
-  const branched = await continueWith(run, workflow, output('parallel-prepare-ready.json'), 'continue prepare fanout');
+  const branched = await continueWith(run, workflow, output('prepare-ready.json'), 'continue prepare fanout');
   assert.equal(branched.status, 'needs_host_actions');
-  assert.deepEqual(branched.baton.cursor, ['lint', 'build']);
-  assert.deepEqual(branched.requests.map((request) => request.id), ['lint', 'build']);
+  assert.equal(branched.baton.cursor, 'checks');
+  assert.deepEqual(branched.requests.map((request) => request.id), ['checks__fanout__1__lint', 'checks__fanout__1__build']);
   assert.equal(branched.baton.state.prepare.results[0].summary, 'fanout ready');
-  assert.match(await instructions(run, 'lint'), /fanout ready/);
+  assert.match(await instructions(run, 'checks__fanout__1__lint'), /fanout ready/);
 
   const joined = await continueWith(run, workflow, [
-    `lint=${output('lint-ready.json')}`,
-    `build=${output('build-ready.json')}`,
+    `checks__fanout__1__lint=${output('lint-ready.json')}`,
+    `checks__fanout__1__build=${output('build-ready.json')}`,
   ], 'continue named branches');
-  assert.equal(joined.baton.cursor, 'join');
+  assert.equal(joined.baton.cursor, 'checks');
   assert.equal(joined.baton.state.lint.results[0].summary, 'lint clean');
   assert.equal(joined.baton.state.build.results[0].summary, 'build green');
-  const joinInstructions = await instructions(run, 'join');
-  assert.match(joinInstructions, /lint clean/);
-  assert.match(joinInstructions, /build green/);
+  const ownerInstructions = await instructions(run, 'checks');
+  assert.match(ownerInstructions, /lint clean/);
+  assert.match(ownerInstructions, /build green/);
 
-  const done = await continueWith(run, workflow, output('join-ready.json'), 'continue join');
+  const done = await continueWith(run, workflow, output('owner-ready.json'), 'continue owner');
   assert.equal(done.status, 'done');
-  assert.match(readHistory(run), /output: accepted:lint, accepted:build/);
+  assert.match(readHistory(run), /accepted:checks__fanout__1__lint/);
 });
 
 test('E2E fixture: output schema rejects invalid write-output and valid output advances', async () => {
@@ -303,24 +303,24 @@ test('E2E fixture: approval-first workflow preserves startup prompt for first wo
   assert.match(prepareInstructions, /## User prompt/);
   assert.match(prepareInstructions, /Original startup request/);
 
-  const fanout = await continueWith(run, workflow, output('parallel-prepare-ready.json'), 'continue prepare to fanout');
+  const fanout = await continueWith(run, workflow, output('prepare-ready.json'), 'continue prepare to fanout');
   assert.equal(fanout.baton.user_prompt_injected, true);
-  assert.deepEqual(fanout.baton.cursor, ['branch_a', 'branch_b']);
-  assert.deepEqual(fanout.requests.map((request) => request.id), ['branch_a', 'branch_b']);
-  assert.doesNotMatch(await instructions(run, 'branch_a'), /Original startup request/);
-  assert.doesNotMatch(await instructions(run, 'branch_b'), /Original startup request/);
+  assert.equal(fanout.baton.cursor, 'implementation');
+  assert.deepEqual(fanout.requests.map((request) => request.id), ['implementation__fanout__1__branch_a', 'implementation__fanout__1__branch_b']);
+  assert.doesNotMatch(await instructions(run, 'implementation__fanout__1__branch_a'), /Original startup request/);
+  assert.doesNotMatch(await instructions(run, 'implementation__fanout__1__branch_b'), /Original startup request/);
 
   const joinedRequest = await continueWith(run, workflow, [
-    `branch_a=${output('lint-ready.json')}`,
-    `branch_b=${output('build-ready.json')}`,
+    `implementation__fanout__1__branch_a=${output('lint-ready.json')}`,
+    `implementation__fanout__1__branch_b=${output('build-ready.json')}`,
   ], 'continue approval-first branches');
-  assert.equal(joinedRequest.baton.cursor, 'join');
-  assert.doesNotMatch(await instructions(run, 'join'), /Original startup request/);
+  assert.equal(joinedRequest.baton.cursor, 'implementation');
+  assert.doesNotMatch(await instructions(run, 'implementation'), /Original startup request/);
 
-  const finalApproval = await continueWith(run, workflow, output('join-ready.json'), 'continue approval-first join');
+  const finalApproval = await continueWith(run, workflow, output('owner-ready.json'), 'continue approval-first owner');
   assert.equal(finalApproval.baton.cursor, 'final_approval');
   assert.equal(finalApproval.requests[0].action, 'wait_for_approval');
-  assert.match(await instructions(run, 'final_approval'), /joined cleanly/);
+  assert.match(await instructions(run, 'final_approval'), /owner completed cleanly/);
 
   const done = await continueWith(run, workflow, output('approval-approved.json'), 'continue final approval');
   assert.equal(done.status, 'done');

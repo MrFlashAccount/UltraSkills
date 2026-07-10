@@ -18,6 +18,9 @@
           "$ref": "#/$defs/matrixStep"
         },
         {
+          "$ref": "#/$defs/fanoutStep"
+        },
+        {
           "$ref": "#/$defs/doneStep"
         }
       ]
@@ -69,7 +72,7 @@
       "required": [
         "name",
         "kind",
-        "source",
+        "input",
         "worker",
         "next"
       ],
@@ -81,8 +84,8 @@
         "kind": {
           "const": "matrix"
         },
-        "source": {
-          "$ref": "#/$defs/matrixSource"
+        "input": {
+          "$ref": "#/$defs/matrixInput"
         },
         "max_parallel": {
           "type": "integer",
@@ -103,31 +106,43 @@
       },
       "additionalProperties": false
     },
-    "matrixSource": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/staticMatrixSource"
-        },
-        {
-          "$ref": "#/$defs/dynamicMatrixSource"
-        }
-      ]
-    },
-    "staticMatrixSource": {
+    "matrixInput": {
       "type": "object",
       "required": [
         "items"
       ],
       "properties": {
         "items": {
+          "$ref": "#/$defs/matrixItems"
+        },
+        "id_field": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+        },
+        "context_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "matrixItems": {
+      "oneOf": [
+        {
           "type": "array",
           "minItems": 1,
           "items": {
             "$ref": "#/$defs/staticMatrixUnit"
           }
+        },
+        {
+          "$ref": "#/$defs/inputArrayExpression"
         }
-      },
-      "additionalProperties": false
+      ]
     },
     "staticMatrixUnit": {
       "type": "object",
@@ -146,30 +161,149 @@
       },
       "additionalProperties": false
     },
-    "dynamicMatrixSource": {
+    "inputArrayExpression": {
+      "description": "A path-only input expression that resolves to a non-empty array when the control step activation starts.",
+      "type": "string",
+      "pattern": "^\\$\\{\\{\\s*input\\.[A-Za-z_][A-Za-z0-9_-]*(?:\\.[A-Za-z_][A-Za-z0-9_-]*)*\\s*\\}\\}$"
+    },
+    "fanoutStep": {
       "type": "object",
       "required": [
-        "from"
+        "name",
+        "kind",
+        "input",
+        "output",
+        "branches",
+        "next"
       ],
       "properties": {
-        "from": {
+        "name": {
           "type": "string",
           "minLength": 1
         },
-        "id_field": {
-          "type": "string",
-          "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+        "kind": {
+          "const": "fanout"
         },
-        "context_fields": {
+        "agent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent_runtime": {
+          "$ref": "#/$defs/agentRuntimeByHarness"
+        },
+        "input": {
+          "$ref": "#/$defs/fanoutInput"
+        },
+        "output": {
+          "$ref": "#/$defs/output"
+        },
+        "max_parallel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "branches": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/fanoutBranchTemplate"
+          }
+        },
+        "next": {
+          "$ref": "#/$defs/next"
+        }
+      },
+      "additionalProperties": false,
+      "dependentRequired": {
+        "agent_runtime": ["agent"]
+      }
+    },
+    "fanoutInput": {
+      "type": "object",
+      "required": [
+        "branches"
+      ],
+      "properties": {
+        "template": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt": {
+          "$ref": "#/$defs/prompt"
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branches": {
+          "$ref": "#/$defs/fanoutBranchSelection"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fanoutBranchSelection": {
+      "oneOf": [
+        {
           "type": "array",
+          "minItems": 1,
           "uniqueItems": true,
           "items": {
             "type": "string",
             "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
           }
+        },
+        {
+          "$ref": "#/$defs/inputArrayExpression"
+        },
+        {
+          "type": "object",
+          "required": ["first_of"],
+          "properties": {
+            "first_of": {
+              "type": "array",
+              "minItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/inputArrayExpression"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "fanoutBranchTemplate": {
+      "type": "object",
+      "required": [
+        "input",
+        "output"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent_runtime": {
+          "$ref": "#/$defs/agentRuntimeByHarness"
+        },
+        "input": {
+          "$ref": "#/$defs/workerInput"
+        },
+        "output": {
+          "$ref": "#/$defs/output"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "dependentRequired": {
+        "agent_runtime": ["agent"]
+      }
     },
     "matrixWorkerTemplate": {
       "type": "object",
@@ -326,27 +460,11 @@
       ]
     },
     "next": {
-      "description": "Next step target, top-level parallel transition items, a path-only dynamic next expression, or match/cases routing from a path-only expression to static targets. Top-level next arrays may contain static step ids, path-only expressions, or match/cases objects and are flattened one level after resolution. JSON schema may allow shapes that semantic validation rejects; parallel fanout branches must converge directly into one explicit non-terminal join step and cannot use dynamic or conditional branch next before that join.",
+      "description": "One next step target, a path-only dynamic next expression, or match/cases routing from a path-only expression to scalar static targets.",
       "oneOf": [
         {
           "type": "string",
           "minLength": 1
-        },
-        {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {
-            "oneOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/matchCasesNext"
-              }
-            ]
-          }
         },
         {
           "$ref": "#/$defs/matchCasesNext"
@@ -450,22 +568,9 @@
       "additionalProperties": false
     },
     "nextCaseTarget": {
-      "description": "Case target: one step id string or a non-empty unique flat array of step ids. Nested match/cases objects are not supported in cases.",
-      "oneOf": [
-        {
-          "type": "string",
-          "minLength": 1
-        },
-        {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      ]
+      "description": "One scalar workflow step target.",
+      "type": "string",
+      "minLength": 1
     },
     "matchCasesNext": {
       "type": "object",

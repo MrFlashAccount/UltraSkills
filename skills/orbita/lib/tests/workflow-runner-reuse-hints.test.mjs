@@ -24,14 +24,14 @@ const workflowDoc = {
       kind: 'worker',
       input: { prompt: 'Prepare branch.' },
       output: { template: 'output.md' },
-      next: ['branch_a', 'branch_b'],
+      next: 'branch_a',
     },
     branch_a: {
       name: 'Branch A',
       kind: 'worker',
       input: { prompt: 'Run branch A.' },
       output: { template: 'output.md' },
-      next: 'join',
+      next: 'branch_b',
     },
     branch_b: {
       name: 'Branch B',
@@ -115,7 +115,7 @@ function devHarnessImplementationSchema() {
   return path.basename(schemaPath);
 }
 
-function devHarnessImplementationWorkflow({ parallel = false } = {}) {
+function devHarnessImplementationWorkflow() {
   devHarnessImplementationSchema();
   const implementationOutput = { template: 'output.md', schema: 'schemas/implementation-output.json' };
   const steps = {
@@ -124,37 +124,21 @@ function devHarnessImplementationWorkflow({ parallel = false } = {}) {
       kind: 'worker',
       input: { prompt: 'Implement backend.' },
       output: implementationOutput,
-      next: 'implementation_join',
+      next: 'implementation_finalize',
     },
-    frontend_implementation: {
-      name: 'Frontend implementation',
+    implementation_finalize: {
+      name: 'Implementation finalization',
       kind: 'worker',
-      input: { prompt: 'Implement frontend.' },
-      output: implementationOutput,
-      next: 'implementation_join',
-    },
-    implementation_join: {
-      name: 'Implementation join',
-      kind: 'worker',
-      input: { prompt: 'Join implementation outputs.' },
+      input: { prompt: 'Finalize implementation output.' },
       output: { template: 'output.md' },
       next: 'done',
     },
     done: { name: 'Done', kind: 'done', input: { prompt: 'Finished.' } },
   };
-  if (parallel) {
-    steps.implementation_dispatch = {
-      name: 'Implementation dispatch',
-      kind: 'worker',
-      input: { prompt: 'Dispatch implementation.' },
-      output: { template: 'output.md' },
-      next: ['backend_implementation', 'frontend_implementation'],
-    };
-  }
   return {
     name: 'dev-harness',
     version: 1,
-    start: parallel ? 'implementation_dispatch' : 'backend_implementation',
+    start: 'backend_implementation',
     done: 'done',
     steps,
   };
@@ -375,48 +359,6 @@ test('runner reuse hints: continue bind-agent renews stale matching worker lease
   assert.equal(after.leaseExpiresAt, '2026-06-01T12:05:00.000Z');
 });
 
-test('runner reuse hints: continue bind-agent keeps parallel step bindings separated', async () => {
-  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('parallel-bindings');
-  await next({ runId, workflowPath, leaseToken, now });
-  await writeOutput({
-    runId,
-    workflowPath,
-    stepId: 'prepare',
-    json: JSON.stringify(workerOutput('prepared')),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'prepare'),
-    leaseToken,
-    now,
-  });
-  const parallel = await continueRun({ runId, workflowPath, leaseToken, now });
-  assert.deepEqual(parallel.requests.map((request) => [request.stepId, request.preferredAgentId]), [
-    ['branch_a', null],
-    ['branch_b', null],
-  ]);
-
-  await writeOutput({
-    runId,
-    workflowPath,
-    stepId: 'branch_a',
-    json: JSON.stringify(workerOutput('branch a')),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'branch_a'),
-    leaseToken,
-    now,
-  });
-  await writeOutput({
-    runId,
-    workflowPath,
-    stepId: 'branch_b',
-    json: JSON.stringify(workerOutput('branch b')),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'branch_b'),
-    leaseToken,
-    now,
-  });
-  await continueRun({ runId, workflowPath, bindAgents: ['branch_a=worker-a', 'branch_b=worker-b'], leaseToken, now });
-  assert.deepEqual(readBaton(runDir).workerBindings, {
-    branch_a: 'worker-a',
-    branch_b: 'worker-b',
-  });
-});
 
 test('runner reuse hints: recoverable implementation blocker keeps host work active with same-worker follow-up', async () => {
   const workflow = devHarnessImplementationWorkflow();
@@ -489,14 +431,14 @@ test('runner reuse hints: recoverable implementation blocker keeps host work act
   });
   const joined = await continueRun({ runId, workflowPath, leaseToken, now });
   assert.equal(joined.status, 'needs_host_actions');
-  assert.equal(joined.requests[0].stepId, 'implementation_join');
+  assert.equal(joined.requests[0].stepId, 'implementation_finalize');
 
   await writeOutput({
     runId,
     workflowPath,
-    stepId: 'implementation_join',
+    stepId: 'implementation_finalize',
     json: JSON.stringify(workerOutput('joined')),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'implementation_join'),
+    debugSummaryFile: debugSummaryFileFor(runDir, 'implementation_finalize'),
     leaseToken,
     now,
   });
@@ -581,90 +523,6 @@ test('runner reuse hints: recoverable implementation blocker has fresh-worker fa
   assert.match(freshInstructions, /Proceed with the smallest recovery question approved\./);
 });
 
-test('runner reuse hints: recoverable implementation blocker preserves accepted sibling outputs before join', async () => {
-  const workflow = devHarnessImplementationWorkflow({ parallel: true });
-  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('recoverable-blocker-parallel-preserves-sibling', workflow);
-
-  await next({ runId, workflowPath, leaseToken, now });
-  await writeOutput({
-    runId,
-    workflowPath,
-    stepId: 'implementation_dispatch',
-    json: JSON.stringify(workerOutput('dispatched')),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'implementation_dispatch'),
-    leaseToken,
-    now,
-  });
-  const branches = await continueRun({ runId, workflowPath, leaseToken, now });
-  assert.deepEqual(branches.requests.map((request) => request.stepId), ['backend_implementation', 'frontend_implementation']);
-
-  const frontendArtifactDir = path.join(runDir, 'frontend_implementation', 'artifacts');
-  mkdirSync(frontendArtifactDir, { recursive: true });
-  const frontendArtifactPath = path.join(frontendArtifactDir, 'handoff.md');
-  writeFileSync(frontendArtifactPath, 'frontend handoff\n');
-  await writeOutput({
-    runId,
-    workflowPath,
-    stepId: 'frontend_implementation',
-    json: JSON.stringify(implementedOutput('frontend complete', {
-      artifactPath: frontendArtifactPath,
-    })),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'frontend_implementation'),
-    leaseToken,
-    now,
-  });
-  await writeOutput({
-    runId,
-    workflowPath,
-    stepId: 'backend_implementation',
-    json: JSON.stringify(blockedOutput()),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'backend_implementation'),
-    leaseToken,
-    now,
-  });
-
-  const recovery = await continueRun({ runId, workflowPath, leaseToken, now });
-
-  assert.equal(recovery.status, 'needs_host_actions');
-  assert.equal(recovery.baton.cursor, 'backend_implementation');
-  assert.equal(recovery.requests.length, 1);
-  assert.equal(recovery.requests[0].stepId, 'backend_implementation');
-  assert.equal(recovery.requests[0].action, 'resolve_worker_blocker');
-  assert.equal(recovery.baton.state.backend_implementation, undefined);
-  assert.equal(recovery.baton.state.frontend_implementation.summary, 'frontend complete');
-  assert.equal(recovery.baton.state.artifacts.at(-1).producerStepId, 'frontend_implementation');
-  assert.equal(recovery.baton.state.artifacts.at(-1).artifact.id, 'implementation-handoff');
-
-  await writeOutput({
-    runId,
-    workflowPath,
-    stepId: 'backend_implementation',
-    json: JSON.stringify(resolutionOutput()),
-    leaseToken,
-    now,
-  });
-  const resolved = await continueRun({ runId, workflowPath, leaseToken, now });
-  assert.equal(resolved.requests[0].action, 'run_worker');
-  assert.equal(resolved.requests[0].stepId, 'backend_implementation');
-  assert.equal(resolved.baton.state.frontend_implementation.summary, 'frontend complete');
-  assert.equal(resolved.baton.state.artifacts.at(-1).producerStepId, 'frontend_implementation');
-
-  await writeOutput({
-    runId,
-    workflowPath,
-    stepId: 'backend_implementation',
-    json: JSON.stringify(implementedOutput('backend recovered after sibling', {
-      artifactPath: implementationArtifactPathFor(runDir, 'backend_implementation', 'backend recovered after sibling'),
-    })),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'backend_implementation', 'backend recovered after sibling\n'),
-    leaseToken,
-    now,
-  });
-  const joined = await continueRun({ runId, workflowPath, leaseToken, now });
-  assert.equal(joined.requests[0].stepId, 'implementation_join');
-  assert.equal(joined.baton.state.frontend_implementation.summary, 'frontend complete');
-  assert.ok(joined.baton.state.artifacts.some((entry) => entry.producerStepId === 'frontend_implementation'));
-});
 
 test('runner reuse hints: recoverable approval blocker waits for orchestrator resolution before approval resumes', async () => {
   const workflow = recoverableApprovalWorkflow();

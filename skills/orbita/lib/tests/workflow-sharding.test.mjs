@@ -449,7 +449,7 @@ test('sharding: workflow validation rejects duplicate ids, unsafe ids, unknown r
       },
     },
   });
-  assert.match(runInspect('sharded-parallel-target', parallelSharded, false).stderr, /cannot fan out to sharded step 'review_owner'/);
+  assert.match(runInspect('sharded-parallel-target', parallelSharded, false).stderr, /workflow failed schema validation: .*next must be string/);
 
   const unknownRole = shardedWorkflow();
   unknownRole.steps.review_owner.sharding.obligations[0].reviewer_role = 'missing-role';

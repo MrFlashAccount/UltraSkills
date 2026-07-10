@@ -61,7 +61,7 @@ function matrixWorkflow(overrides = {}) {
       fanout: {
         name: 'Fan out units',
         kind: 'matrix',
-        source: {
+        input: {
           items: [
             { id: 'unit_a', context: { title: 'A', secret: 'not projected unless authored safe' } },
             { id: 'unit_b', context: { title: 'B' } },
@@ -101,7 +101,7 @@ test('matrix validation accepts static matrix and rejects unsafe or duplicate un
 
   assert.throws(
     () => validateWorkflow({
-      workflowDTO: matrixWorkflow({ fanout: { source: { items: [{ id: 'bad/id' }] } } }),
+      workflowDTO: matrixWorkflow({ fanout: { input: { items: [{ id: 'bad/id' }] } } }),
       outputSchemas: resources.outputSchemas,
     }),
     /must match pattern/,
@@ -109,7 +109,7 @@ test('matrix validation accepts static matrix and rejects unsafe or duplicate un
 
   assert.throws(
     () => validateWorkflow({
-      workflowDTO: matrixWorkflow({ fanout: { source: { items: [{ id: 'api.v1' }] } } }),
+      workflowDTO: matrixWorkflow({ fanout: { input: { items: [{ id: 'api.v1' }] } } }),
       outputSchemas: resources.outputSchemas,
     }),
     /must match pattern/,
@@ -117,7 +117,7 @@ test('matrix validation accepts static matrix and rejects unsafe or duplicate un
 
   assert.throws(
     () => validateWorkflow({
-      workflowDTO: matrixWorkflow({ fanout: { source: { items: [{ id: 'same' }, { id: 'same' }] } } }),
+      workflowDTO: matrixWorkflow({ fanout: { input: { items: [{ id: 'same' }, { id: 'same' }] } } }),
       outputSchemas: resources.outputSchemas,
     }),
     /duplicate matrix unit id 'same'/,
@@ -125,7 +125,7 @@ test('matrix validation accepts static matrix and rejects unsafe or duplicate un
 
   assert.throws(
     () => validateWorkflow({
-      workflowDTO: matrixWorkflow({ fanout: { source: { items: [{ id: 'optional_unit', required: false }] } } }),
+      workflowDTO: matrixWorkflow({ fanout: { input: { items: [{ id: 'optional_unit', required: false }] } } }),
       outputSchemas: resources.outputSchemas,
     }),
     /must NOT have additional properties/,
@@ -133,12 +133,19 @@ test('matrix validation accepts static matrix and rejects unsafe or duplicate un
 });
 
 test('matrix semantic validation rejects unsupported v1 authoring shapes', () => {
+  const legacySource = matrixWorkflow();
+  legacySource.steps.fanout.source = { from: '${{ input.planning.units }}' };
+  assert.throws(
+    () => validateWorkflow({ workflowDTO: legacySource, outputSchemas: resources.outputSchemas }),
+    /must NOT have additional properties/,
+  );
+
   assert.throws(
     () => validateWorkflow({
-      workflowDTO: matrixWorkflow({ fanout: { source: { from: '${{ output.units }}' } } }),
+      workflowDTO: matrixWorkflow({ fanout: { input: { items: '${{ output.units }}' } } }),
       outputSchemas: resources.outputSchemas,
     }),
-    /matrix\.source\.from must use input\.\* selector/,
+    /input\/items must match pattern/,
   );
 
   assert.throws(
@@ -193,7 +200,7 @@ test('matrix semantic validation rejects unsupported v1 authoring shapes', () =>
       }),
       outputSchemas: resources.outputSchemas,
     }),
-    /cannot fan out to matrix step 'fanout'/,
+    /next must match exactly one schema in oneOf/,
   );
 });
 
@@ -244,11 +251,11 @@ test('matrix runtime keeps owner cursor and advances only after computed join pr
   assert.equal(Object.hasOwn(done.baton.state, 'fanout__matrix__unit_c'), false);
 });
 
-test('matrix dynamic source uses schema-covered input selector and safe context allowlist', () => {
+test('matrix dynamic input uses schema-covered input selector and safe context allowlist', () => {
   const workflowDoc = matrixWorkflow({
     fanout: {
-      source: {
-        from: '${{ input.producer.units }}',
+      input: {
+        items: '${{ input.producer.units }}',
         id_field: 'unit',
         context_fields: ['title'],
       },
@@ -282,11 +289,11 @@ test('matrix dynamic source uses schema-covered input selector and safe context 
   assert.equal(first.baton.state.matrix.fanout.source_fingerprint.includes('must stay private'), false);
 });
 
-test('matrix dynamic source rejects unsafe and duplicate runtime unit ids', () => {
+test('matrix dynamic input rejects unsafe and duplicate runtime unit ids', () => {
   const workflowDoc = matrixWorkflow({
     fanout: {
-      source: {
-        from: '${{ input.producer.units }}',
+      input: {
+        items: '${{ input.producer.units }}',
         id_field: 'unit',
         context_fields: ['title'],
       },
@@ -337,7 +344,7 @@ test('matrix dynamic source rejects unsafe and duplicate runtime unit ids', () =
 test('matrix retries invalid unit output and blocks after retry budget is exhausted', () => {
   const workflowDoc = matrixWorkflow({
     fanout: {
-      source: { items: [{ id: 'unit_a', context: { title: 'A' } }] },
+      input: { items: [{ id: 'unit_a', context: { title: 'A' } }] },
       max_attempts: 2,
     },
   });
@@ -369,7 +376,7 @@ test('matrix retries invalid unit output and blocks after retry budget is exhaus
 test('matrix accepted unit artifacts use synthetic request as producer without exposing full unit output', () => {
   const workflowDoc = matrixWorkflow({
     fanout: {
-      source: { items: [{ id: 'unit_a', context: { title: 'A' } }] },
+      input: { items: [{ id: 'unit_a', context: { title: 'A' } }] },
     },
   });
   const first = runNext({ workflowDoc, batonDoc: emptyBaton, resources });

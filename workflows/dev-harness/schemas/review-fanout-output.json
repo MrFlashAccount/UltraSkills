@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/review-fanout-output",
+  "title": "Review Fanout Owner Output",
+  "description": "Owner-worker decision after the selected review branches finish.",
+  "type": "object",
+  "required": ["outcome"],
+  "properties": {
+    "outcome": {
+      "enum": ["passed", "needs_changes", "blocked"],
+      "description": "Aggregate result for the current review activation.",
+      "x-usage": "Use needs_changes for any actionable current-scope must-fix or should-fix finding."
+    },
+    "next": {
+      "enum": ["implementation", "done"],
+      "description": "Scalar workflow transition target selected by the owner output.",
+      "x-usage": "Use implementation for needs_changes and done for passed; never encode implementation branch ids in next."
+    },
+    "implementation_branches": {
+      "$ref": "#/$defs/implementationBranches",
+      "description": "Exact implementation branches required for the next rework activation.",
+      "x-usage": "Use as the first implementation.input.branches candidate on re-entry."
+    },
+    "review_branches": {
+      "$ref": "#/$defs/reviewBranches",
+      "description": "Mandatory reviewer baseline after the prescribed rework.",
+      "x-usage": "The implementation owner may widen this baseline after actual changes but must not remove entries."
+    },
+    "implementer_handoffs": {
+      "$ref": "#/$defs/implementerHandoffs",
+      "description": "Actionable reviewer findings grouped by required implementation branch.",
+      "x-usage": "Each rerun implementation branch reads only its matching handoff and current approved contracts."
+    },
+    "verdict": {
+      "$ref": "#/$defs/verdict",
+      "description": "Compact aggregate review evidence.",
+      "x-usage": "Use as the final result on passed and as rework evidence on needs_changes."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact" },
+      "description": "Optional owner-produced artifact metadata.",
+      "x-usage": "Keep large review evidence file-backed and emit only central artifact metadata here."
+    },
+    "results": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "Optional compact owner result records.",
+      "x-usage": "Use only for bounded machine-readable summaries."
+    },
+    "blocker": {
+      "$ref": "#/$defs/blocker",
+      "description": "Recoverable owner blocker details.",
+      "x-usage": "Set source_step_id to review and ask one concrete approval or input question."
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "passed" } }, "required": ["outcome"] },
+      "then": {
+        "required": ["next", "verdict"],
+        "properties": { "next": { "const": "done" } },
+        "not": { "anyOf": [{ "required": ["implementation_branches"] }, { "required": ["review_branches"] }, { "required": ["implementer_handoffs"] }] }
+      }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "needs_changes" } }, "required": ["outcome"] },
+      "then": {
+        "required": ["next", "implementation_branches", "review_branches", "implementer_handoffs", "verdict"],
+        "properties": { "next": { "const": "implementation" } }
+      }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "blocked" } }, "required": ["outcome"] },
+      "then": { "required": ["blocker"], "not": { "required": ["next"] } },
+      "else": { "not": { "required": ["blocker"] } }
+    },
+    {
+      "if": { "properties": { "implementation_branches": { "type": "array", "contains": { "const": "backend_implementation" } } }, "required": ["implementation_branches"] },
+      "then": { "properties": { "implementer_handoffs": { "type": "object", "required": ["backend_implementation"] } } }
+    },
+    {
+      "if": { "properties": { "implementation_branches": { "type": "array", "contains": { "const": "frontend_implementation" } } }, "required": ["implementation_branches"] },
+      "then": { "properties": { "implementer_handoffs": { "type": "object", "required": ["frontend_implementation"] } } }
+    },
+    {
+      "if": { "properties": { "implementation_branches": { "type": "array", "contains": { "const": "architecture_artifact_update" } } }, "required": ["implementation_branches"] },
+      "then": { "properties": { "implementer_handoffs": { "type": "object", "required": ["architecture_artifact_update"] } } }
+    }
+  ],
+  "$defs": {
+    "implementationBranches": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["backend_implementation", "frontend_implementation", "architecture_artifact_update"] }
+    },
+    "reviewBranches": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["architect_review", "backend_review", "frontend_review", "frontend_taste_review", "security_review", "privacy_review", "qa_review"]
+      }
+    },
+    "implementerHandoffs": {
+      "type": "object",
+      "properties": {
+        "backend_implementation": { "$ref": "#/$defs/handoff" },
+        "frontend_implementation": { "$ref": "#/$defs/handoff" },
+        "architecture_artifact_update": { "$ref": "#/$defs/handoff" }
+      },
+      "additionalProperties": false
+    },
+    "handoff": { "type": "object", "minProperties": 1, "additionalProperties": true },
+    "verdict": {
+      "type": "object",
+      "required": ["summary", "reviewed_branches", "failed_review_branches"],
+      "properties": {
+        "summary": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "reviewed_branches": { "$ref": "#/$defs/reviewBranches" },
+        "failed_review_branches": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["architect_review", "backend_review", "frontend_review", "frontend_taste_review", "security_review", "privacy_review", "qa_review"] }
+        }
+      },
+      "additionalProperties": true
+    },
+    "blocker": {
+      "type": "object",
+      "required": ["summary", "source_step_id", "needed"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "source_step_id": { "const": "review" },
+        "needed": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "risk": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

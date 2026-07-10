@@ -10,20 +10,8 @@
   ],
   "properties": {
     "cursor": {
-      "oneOf": [
-        {
-          "type": "string",
-          "minLength": 1
-        },
-        {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      ]
+      "type": "string",
+      "minLength": 1
     },
     "status": {
       "enum": [
@@ -83,6 +71,16 @@
           "patternProperties": {
             "^[A-Za-z_][A-Za-z0-9_-]*$": {
               "$ref": "#/$defs/matrixPlan"
+            }
+          },
+          "additionalProperties": false
+        },
+        "fanouts": {
+          "description": "Runner-owned fanout activation progress keyed by owner workflow step id. The owner cursor remains stable while branches and the owner worker execute.",
+          "type": "object",
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_-]*$": {
+              "$ref": "#/$defs/fanoutActivation"
             }
           },
           "additionalProperties": false
@@ -341,6 +339,76 @@
             { "$ref": "#/$defs/matrixJoinProof" },
             { "type": "null" }
           ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "fanoutActivation": {
+      "type": "object",
+      "required": [
+        "owner_step_id",
+        "activation",
+        "phase",
+        "status",
+        "selected_branch_ids",
+        "max_parallel",
+        "current_requests",
+        "branch_records",
+        "accepted_outputs"
+      ],
+      "properties": {
+        "owner_step_id": { "type": "string", "minLength": 1 },
+        "activation": { "type": "integer", "minimum": 1 },
+        "phase": { "enum": ["branches", "owner", "completed"] },
+        "status": { "enum": ["awaiting_branches", "awaiting_owner", "completed"] },
+        "selected_branch_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "max_parallel": { "type": "integer", "minimum": 1, "maximum": 16 },
+        "current_requests": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "branch_records": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/fanoutBranchRecord" }
+        },
+        "accepted_outputs": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/fanoutAcceptedOutputRecord" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "fanoutBranchRecord": {
+      "type": "object",
+      "required": ["branch_id", "request_id", "status"],
+      "properties": {
+        "branch_id": { "type": "string", "minLength": 1 },
+        "request_id": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["pending", "accepted"] }
+      },
+      "additionalProperties": false
+    },
+    "fanoutAcceptedOutputRecord": {
+      "type": "object",
+      "required": ["branch_id", "request_id", "status", "output_ref"],
+      "properties": {
+        "branch_id": { "type": "string", "minLength": 1 },
+        "request_id": { "type": "string", "minLength": 1 },
+        "status": { "const": "accepted" },
+        "output_ref": {
+          "type": "object",
+          "required": ["step_id"],
+          "properties": {
+            "step_id": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

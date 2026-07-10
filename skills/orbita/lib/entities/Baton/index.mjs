@@ -102,20 +102,10 @@ export function validateBatonDataAgainstWorkflow(batonData, workflowInput) {
   }
   validateAggregateArtifacts(batonData.state);
   validateLoopProgress(batonData.state);
-  const cursorStepIds = normalizeCursor(batonData.cursor);
-  if (cursorStepIds.length > 1 && batonData.status !== 'running') {
-    throw new WorkflowRuntimeError(`baton status '${batonData.status}' is inconsistent with parallel cursor; expected 'running'`);
-  }
-  let expectedStatus = 'running';
-  for (const stepId of cursorStepIds) {
-    const cursorStep = workflow.steps?.[stepId];
-    if (!cursorStep) throw new WorkflowRuntimeError(`baton cursor not found in workflow: ${stepId}`);
-    const stepStatus = statusForStep(workflow, stepId, cursorStep);
-    if (cursorStepIds.length > 1 && stepStatus !== 'running') {
-      throw new WorkflowRuntimeError(`baton parallel cursor cannot include terminal step '${stepId}'`);
-    }
-    if (cursorStepIds.length === 1) expectedStatus = stepStatus;
-  }
+  const stepId = normalizeCursor(batonData.cursor);
+  const cursorStep = workflow.steps?.[stepId];
+  if (!cursorStep) throw new WorkflowRuntimeError(`baton cursor not found in workflow: ${stepId}`);
+  const expectedStatus = statusForStep(workflow, stepId, cursorStep);
   if (batonData.status !== expectedStatus) {
     throw new WorkflowRuntimeError(`baton status '${batonData.status}' is inconsistent with cursor '${batonData.cursor}'; expected '${expectedStatus}'`);
   }

@@ -1,6 +1,8 @@
 # Dev harness workflow
 
-This workflow is the heavy path for non-trivial implementation work. Use it when the task needs staged research, architecture review, implementation planning, explicit approval, implementation dispatch, and review before completion.
+This workflow is the heavy path for non-trivial implementation work. Use it when the task needs staged research, architecture review, implementation planning, explicit approval, selective implementation, and review before completion.
+
+Implementation and review are first-class fanout owner steps. Each activation runs the selected branch workers, returns to the same owner cursor, and then runs the owner worker to choose the next fanout branch set. There are no dispatch or join workers. Rework selection uses the review owner's output first and falls back to the approved plan only when review has not requested a narrower pass.
 
 Keep workflow mechanics in `workflow.toml` and schemas in `schemas/*.json`. Use this README for human workflow intent and EA-agent operating rules, not for runtime routing.
 

@@ -74,7 +74,7 @@
               "qa_review"
             ],
             "description": "Producer must name the reviewer step that was considered but not selected for fan-out.",
-            "x-usage": "Use this only as skipped-planning evidence. Do not dispatch this step unless a later dispatch explicitly selects it."
+            "x-usage": "Use this only as skipped-planning evidence. Do not run this branch unless a later fanout owner selection explicitly selects it."
           },
           "reason": {
             "type": "string",
@@ -95,7 +95,7 @@
         "additionalProperties": false
       },
       "description": "Producer may record reviewers considered but intentionally not selected for runtime fan-out.",
-      "x-usage": "Use this only as non-routing planning evidence. Do not run these reviewer steps unless a later approved plan or review_dispatch re-review selection explicitly selects them."
+      "x-usage": "Use this only as non-routing planning evidence. Do not run these reviewer branches unless the approved plan or review owner selection selects them."
     },
     "review_escalation": {
       "type": "object",
@@ -369,19 +369,6 @@
       "additionalProperties": false,
       "description": "Producer must populate this when outcome is blocked, naming the recoverable pause reason, owning step, and specific missing input or permission.",
       "x-usage": "Treat this as a recoverable pause. Surface the missing input or decision, then continue this same workflow step after it is resolved."
-    },
-    "implementation_route": {
-      "enum": [
-        "backend",
-        "frontend",
-        "architecture",
-        "backend_frontend",
-        "backend_architecture",
-        "frontend_architecture",
-        "all"
-      ],
-      "description": "Producer must set the compact route label that exactly corresponds to selected implementation branches.",
-      "x-usage": "Use this for route consistency checks. Treat selected_implementation_steps as the branch-level authority if prose is ambiguous."
     }
   },
   "additionalProperties": false,
@@ -403,7 +390,6 @@
         "required": [
           "summary",
           "selected_implementation_steps",
-          "implementation_route",
           "selected_review_steps",
           "review_plan",
           "artifacts"
@@ -443,307 +429,6 @@
         "required": [
           "blocker"
         ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "implementation_route": {
-            "const": "backend"
-          }
-        },
-        "required": [
-          "implementation_route"
-        ]
-      },
-      "then": {
-        "properties": {
-          "selected_implementation_steps": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 1,
-            "uniqueItems": true,
-            "allOf": [
-              {
-                "contains": {
-                  "const": "backend_implementation"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              }
-            ],
-            "items": {
-              "enum": [
-                "backend_implementation",
-                "frontend_implementation",
-                "architecture_artifact_update"
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "implementation_route": {
-            "const": "frontend"
-          }
-        },
-        "required": [
-          "implementation_route"
-        ]
-      },
-      "then": {
-        "properties": {
-          "selected_implementation_steps": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 1,
-            "uniqueItems": true,
-            "allOf": [
-              {
-                "contains": {
-                  "const": "frontend_implementation"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              }
-            ],
-            "items": {
-              "enum": [
-                "backend_implementation",
-                "frontend_implementation",
-                "architecture_artifact_update"
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "implementation_route": {
-            "const": "architecture"
-          }
-        },
-        "required": [
-          "implementation_route"
-        ]
-      },
-      "then": {
-        "properties": {
-          "selected_implementation_steps": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 1,
-            "uniqueItems": true,
-            "allOf": [
-              {
-                "contains": {
-                  "const": "architecture_artifact_update"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              }
-            ],
-            "items": {
-              "enum": [
-                "backend_implementation",
-                "frontend_implementation",
-                "architecture_artifact_update"
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "implementation_route": {
-            "const": "backend_frontend"
-          }
-        },
-        "required": [
-          "implementation_route"
-        ]
-      },
-      "then": {
-        "properties": {
-          "selected_implementation_steps": {
-            "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
-            "uniqueItems": true,
-            "allOf": [
-              {
-                "contains": {
-                  "const": "backend_implementation"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              },
-              {
-                "contains": {
-                  "const": "frontend_implementation"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              }
-            ],
-            "items": {
-              "enum": [
-                "backend_implementation",
-                "frontend_implementation",
-                "architecture_artifact_update"
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "implementation_route": {
-            "const": "backend_architecture"
-          }
-        },
-        "required": [
-          "implementation_route"
-        ]
-      },
-      "then": {
-        "properties": {
-          "selected_implementation_steps": {
-            "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
-            "uniqueItems": true,
-            "allOf": [
-              {
-                "contains": {
-                  "const": "backend_implementation"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              },
-              {
-                "contains": {
-                  "const": "architecture_artifact_update"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              }
-            ],
-            "items": {
-              "enum": [
-                "backend_implementation",
-                "frontend_implementation",
-                "architecture_artifact_update"
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "implementation_route": {
-            "const": "frontend_architecture"
-          }
-        },
-        "required": [
-          "implementation_route"
-        ]
-      },
-      "then": {
-        "properties": {
-          "selected_implementation_steps": {
-            "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
-            "uniqueItems": true,
-            "allOf": [
-              {
-                "contains": {
-                  "const": "frontend_implementation"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              },
-              {
-                "contains": {
-                  "const": "architecture_artifact_update"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              }
-            ],
-            "items": {
-              "enum": [
-                "backend_implementation",
-                "frontend_implementation",
-                "architecture_artifact_update"
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "implementation_route": {
-            "const": "all"
-          }
-        },
-        "required": [
-          "implementation_route"
-        ]
-      },
-      "then": {
-        "properties": {
-          "selected_implementation_steps": {
-            "type": "array",
-            "minItems": 3,
-            "maxItems": 3,
-            "uniqueItems": true,
-            "allOf": [
-              {
-                "contains": {
-                  "const": "backend_implementation"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              },
-              {
-                "contains": {
-                  "const": "frontend_implementation"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              },
-              {
-                "contains": {
-                  "const": "architecture_artifact_update"
-                },
-                "minContains": 1,
-                "maxContains": 1
-              }
-            ],
-            "items": {
-              "enum": [
-                "backend_implementation",
-                "frontend_implementation",
-                "architecture_artifact_update"
-              ]
-            }
-          }
-        }
       }
     }
   ]

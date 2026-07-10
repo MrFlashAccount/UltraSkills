@@ -40,7 +40,8 @@ markers, attempts, or existing history. The first supported slice is limited to
 one adjacent observed transition edge from the current pointer/status. Terminal
 single-cursor positions, including a completed `done` run, may move backward to
 an observed non-terminal step; terminal status must not by itself make pointer
-recovery unsupported. Parallel/array cursors remain explicitly unsupported.
+recovery unsupported. Array cursors are rejected by the baton schema and cannot
+enter pointer recovery.
 Targets with retained accepted output require visible retained-state disclosure
 and explicit acknowledgement before mutation.
 
@@ -367,6 +368,29 @@ validates the requested adjacent edge and retained-state acknowledgement, update
 cursor/status, validates persisted state, appends bounded pointer-move history,
 and renews the canonical per-run authority record.
 
+## Fanout Owner Step
+
+`kind: "fanout"` is the first-class control step for a fixed table of named
+worker branches. Authoring selects branches through `input.branches`: a static
+branch-id array, one schema-covered input expression, or `first_of` expressions
+for selective rework fallback. Each branch is a nested worker template under
+`branches.<branch-id>`; branch ids must be globally collision-safe because
+accepted branch outputs live at `baton.state[branchId]`.
+
+The top-level cursor remains the fanout owner for the whole activation. Durable
+phase and request membership live under `baton.state.fanouts[ownerStepId]` with
+the phases `branches`, `owner`, and `completed`. The runner first renders
+synthetic branch requests, applies only the current accepted branch outputs,
+then renders the genuine owner worker. The owner output is applied through the
+normal step output and `next` path. Phase recovery must use this durable record;
+request-id parsing, arbitrary state scanning, dispatch workers, and separate
+join workers are not valid control flow.
+
+Owner prompt projection includes accepted output only for branches selected in
+the current activation. Stale output for unselected branches may remain durable
+for audit/history purposes but must not enter the owner prompt. Fanout is a
+named workflow-branch primitive, not an adapter for matrix item sharding.
+
 ## Matrix Workflow Control Step
 
 Matrix v1 is a first-class workflow control step for repeated worker units. It
@@ -375,7 +399,7 @@ workflow cursor.
 
 The authoring shape is JSON only. A matrix step uses `kind: "matrix"` and owns:
 
-- one source, either a static array or an existing runner-supported selector;
+- `input.items`, either a static item array or one runner-supported selector;
 - one stable unit id rule;
 - optional bounded `max_parallel`;
 - optional `max_attempts`, defaulting to one attempt when omitted;
@@ -708,7 +732,7 @@ Architecture review must verify:
 - pointer recovery docs, API exports, CLI modes, tests, and source agree that
   `listPointerTransitions` and `movePointer` require active lease authority,
   preserve baton state, allow terminal single-cursor rollback along observed
-  non-terminal backward edges, reject parallel/array cursor scope, require
+  non-terminal backward edges, reject invalid legacy array cursor state, require
   retained-output acknowledgement where applicable, and expose only redacted
   bounded metadata
 - dashboard changes preserve the read-only observer boundary, safe projection
@@ -740,11 +764,11 @@ Backend review must verify:
 - imports obey the dependency rules above
 - custom workflow roots validate before run creation, retain source-qualified
   catalog identity, and do not widen resource access by duplicate workflow name
-- matrix source expansion initializes durable state once per owner/source
+- matrix `input.items` expansion initializes durable state once per owner/items
   fingerprint, restart rerenders eligible units from `state.matrix`, unit output
   updates only the matching durable record, and join proof gates normal `next`
   transition
-- existing sequential, approval, fixed parallel, review-shards, output schema,
+- existing sequential, approval, fanout owner, review-shards, output schema,
   lease, artifact/debug-summary, history, worker binding, recoverable blocker,
   and non-matrix workflow behavior remains compatible
 
@@ -754,7 +778,7 @@ QA/reliability review must verify:
 - boundary checks fail resolved forbidden imports and retired-surface exposure
 - retired legacy names are absent from supported command paths, exports, docs,
   and allow lists
-- matrix workflow tests cover valid matrix execution, invalid source shape,
+- matrix workflow tests cover valid matrix execution, invalid `input.items` shape,
   unsafe and duplicate unit ids for static and runtime-expanded sources, nested
   matrix rejection, unsupported optional/fail-fast/branch/subgraph forms,
   restart rerender, max_parallel, retry/block behavior, complete join, and
@@ -781,7 +805,7 @@ Security and privacy review must verify:
 - Add broad framework seams where a narrow colocated helper or named use-case
   API is enough.
 - Add brittle boundary rules for ownership questions that remain unresolved.
-- Use matrix v1 to migrate `state.shards`, redesign fixed parallel/array cursor
+- Use matrix v1 to migrate `state.shards`, restore removed array cursor/array
   semantics, add optional/fail-fast policy, branch tables, nested per-item
   subgraphs, recursive matrix, distributed child runs, dashboard mutation
   behavior, pointer-recovery matrix mutation, or PR #213 architecture adoption.

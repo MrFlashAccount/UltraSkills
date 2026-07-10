@@ -2,7 +2,7 @@
 import { assertResponseSchema } from '../runtime/output/response-schema.mjs';
 import { assertLoadedWorkflowAndBaton } from '../runtime/guards/workflow.mjs';
 import { responseForCursor } from '../runtime/output/response.mjs';
-import { renderStepPrompts } from '../runtime/parallel/render.mjs';
+import { renderStepPrompts } from '../runtime/render-step-prompts.mjs';
 
 export function runNext({ workflowDoc, batonDoc, resources, includeDiagnostics = false, followUp = false } = {}) {
   const { workflow, baton } = assertLoadedWorkflowAndBaton(workflowDoc, batonDoc, { allowedRoles: resources?.allowedRoles, outputSchemas: resources?.outputSchemas });

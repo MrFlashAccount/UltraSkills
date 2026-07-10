@@ -40,6 +40,7 @@ function requestInstructionBlock(request) {
     if (request.recoverableBlocker) lines.push(`  recoverable blocker: ${JSON.stringify(request.recoverableBlocker)}`);
     if (request.shard) lines.push(`  shard: ${JSON.stringify(request.shard)}`);
     if (request.matrix) lines.push(`  matrix: ${JSON.stringify(request.matrix)}`);
+    if (request.fanout) lines.push(`  fanout: ${JSON.stringify(request.fanout)}`);
     return lines.join("\n");
   }
 
@@ -174,6 +175,9 @@ function sourceWorkerForExecutableStep(workflow, step) {
   const source = workflow?.steps?.[workflowStepIdForExecutableStep(step)];
   if (source?.kind === "worker") return source;
   if (source?.kind === "matrix") return source.worker;
+  if (source?.kind === "fanout") {
+    return step.fanout?.branch_id ? source.branches?.[step.fanout.branch_id] : source;
+  }
   return undefined;
 }
 
@@ -233,6 +237,7 @@ export function buildHostRequests(
       };
       if (step.shard) request.shard = structuredClone(step.shard);
       if (step.matrix) request.matrix = structuredClone(step.matrix);
+      if (step.fanout) request.fanout = structuredClone(step.fanout);
       if (step.action === "run_worker") {
         const agentRuntime = agentRuntimeForExecutableStep(workflow, step, claimContext);
         if (agentRuntime) request.agentRuntime = agentRuntime;
