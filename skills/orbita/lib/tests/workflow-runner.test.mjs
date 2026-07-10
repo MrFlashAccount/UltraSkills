@@ -1028,4 +1028,4 @@ test('runner: repeated parallel fanout uses cursor branches and latest overwritt
   assert.match(joinInstructions.stdout, /frontend v2/);
   assert.doesNotMatch(joinInstructions.stdout, /backend v1/);
   assert.doesNotMatch(joinInstructions.stdout, /frontend v1/);
-}, 500);
+});
