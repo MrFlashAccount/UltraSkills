@@ -26,6 +26,12 @@
       "maxLength": 256,
       "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,255}$"
     },
+    "harnessIdentifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,127}$"
+    },
     "runIndexEntry": {
       "type": "object",
       "required": ["runId", "workflow", "status", "createdAt", "updatedAt", "workerLease"],
@@ -47,6 +53,14 @@
         "updatedAt": { "type": "string", "minLength": 1 },
         "taskKey": { "$ref": "#/$defs/safeTextMetadata" },
         "taskFingerprint": { "$ref": "#/$defs/safeTextMetadata" },
+        "claimContext": {
+          "type": "object",
+          "required": ["harness"],
+          "properties": {
+            "harness": { "$ref": "#/$defs/harnessIdentifier" }
+          },
+          "additionalProperties": false
+        },
         "workerLease": {
           "oneOf": [
             { "type": "null" },

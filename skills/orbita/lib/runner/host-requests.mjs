@@ -26,6 +26,9 @@ function requestInstructionBlock(request) {
   if (request.ownerStepId) lines.push(`  owner step: ${request.ownerStepId}`);
 
   if (request.action === "run_worker") {
+    if (request.agentRuntime) {
+      lines.push(`  For a fresh subagent, use model ${request.agentRuntime.model} with thinking level ${request.agentRuntime.thinkingLevel}.`);
+    }
     if (request.preferredAgentId) lines.push(`  preferred worker id: ${request.preferredAgentId}`);
     lines.push(`  fresh-worker instruction-loader command: ${request.loadInstructionsCommand}`);
     lines.push("  send that command to the worker bootstrap; do not run it in the orchestrator");
@@ -167,6 +170,27 @@ function workflowStepIdForExecutableStep(step) {
   return step.ownerStepId ?? step.id;
 }
 
+function sourceWorkerForExecutableStep(workflow, step) {
+  const source = workflow?.steps?.[workflowStepIdForExecutableStep(step)];
+  if (source?.kind === "worker") return source;
+  if (source?.kind === "matrix") return source.worker;
+  return undefined;
+}
+
+function agentRuntimeForExecutableStep(workflow, step, claimContext) {
+  const sourceWorker = sourceWorkerForExecutableStep(workflow, step);
+  if (typeof sourceWorker?.agent !== "string" || sourceWorker.agent.length === 0) return undefined;
+  const harness = claimContext?.harness;
+  if (typeof harness !== "string" || harness.length === 0) return undefined;
+  const profiles = sourceWorker.agent_runtime;
+  if (!profiles || typeof profiles !== "object" || Array.isArray(profiles)) return undefined;
+  const foldedHarness = harness.toLowerCase();
+  const profileKey = Object.keys(profiles).find((key) => key.toLowerCase() === foldedHarness);
+  if (profileKey === undefined) return undefined;
+  const profile = profiles[profileKey];
+  return { model: profile.model, thinkingLevel: profile.thinking_level };
+}
+
 function recoverableBlockerForStep(baton, stepId, options = {}) {
   const blocker = baton?.recoverableWorkerBlockers?.[stepId];
   if (!blocker || typeof blocker !== "object" || Array.isArray(blocker)) return undefined;
@@ -175,7 +199,7 @@ function recoverableBlockerForStep(baton, stepId, options = {}) {
 
 export function buildHostRequests(
   interpreterResponse,
-  { runId, workflow, workflowPath, repositoryRoot, runsRoot, leaseToken },
+  { runId, workflow, workflowPath, repositoryRoot, runsRoot, leaseToken, claimContext },
 ) {
   const status = responseStatusForInterpreterResponse(interpreterResponse);
   if (status !== "needs_host_actions") return [];
@@ -210,6 +234,8 @@ export function buildHostRequests(
       if (step.shard) request.shard = structuredClone(step.shard);
       if (step.matrix) request.matrix = structuredClone(step.matrix);
       if (step.action === "run_worker") {
+        const agentRuntime = agentRuntimeForExecutableStep(workflow, step, claimContext);
+        if (agentRuntime) request.agentRuntime = agentRuntime;
         request.preferredAgentId = preferredAgentIdForStep(
           interpreterResponse.baton,
           workflowStepIdForExecutableStep(step),

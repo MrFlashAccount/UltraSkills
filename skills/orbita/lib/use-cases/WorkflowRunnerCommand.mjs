@@ -85,6 +85,7 @@ export function createWorkflowRunnerCommand({
         repositoryRoot: paths.repositoryRoot,
         runsRoot: paths.runsRoot,
         leaseToken,
+        claimContext: paths.claimContext,
         includeInlineInstructions,
       }),
       runId: paths.runId,
@@ -139,9 +140,9 @@ export function createWorkflowRunnerCommand({
     });
   }
 
-  async function indexedWorkflowPathForRun(paths) {
+  async function indexedRunForPaths(paths) {
     const index = await readRunsIndex(runsIndexPathsForRoot(paths.runsRoot));
-    return index.runs[paths.runId]?.workflow?.path;
+    return index.runs[paths.runId];
   }
 
   async function persistNextHostResponse(paths, rendered, runState, { leaseToken } = {}) {
@@ -489,14 +490,15 @@ export function createWorkflowRunnerCommand({
   async function resolveIndexedRunPaths({ runId, workflowPath, runsRoot }) {
     workflowPath = assertAbsoluteWorkflowPath(workflowPath);
     const defaultPaths = resolveRunPaths({ runId, runsRoot });
-    const indexedWorkflowPath = await indexedWorkflowPathForRun(defaultPaths);
+    const indexedRun = await indexedRunForPaths(defaultPaths);
+    const indexedWorkflowPath = indexedRun?.workflow?.path;
     if (typeof indexedWorkflowPath === 'string' && indexedWorkflowPath.length > 0) {
       if (workflowPath && resolve(indexedWorkflowPath) !== resolve(workflowPath)) {
         throw new Error(`workflow run is already bound to a different workflow: ${runId}`);
       }
-      return resolveRunPaths({ runId, workflowPath: indexedWorkflowPath, runsRoot });
+      return { ...resolveRunPaths({ runId, workflowPath: indexedWorkflowPath, runsRoot }), claimContext: indexedRun.claimContext };
     }
-    return workflowPath ? resolveRunPaths({ runId, workflowPath, runsRoot }) : defaultPaths;
+    return { ...(workflowPath ? resolveRunPaths({ runId, workflowPath, runsRoot }) : defaultPaths), claimContext: indexedRun?.claimContext };
   }
 
   async function resolveContinueRunPaths({ runId, workflowPath, runsRoot }) {

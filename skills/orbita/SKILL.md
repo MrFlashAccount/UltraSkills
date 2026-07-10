@@ -71,7 +71,7 @@ Select an existing run only from public fields: `runId`, title, summary, workflo
 If no run fits, resolve the workflow, then create/register one run identity:
 
 ```bash
-bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" create --workflow <absolute-catalog-workflow-path> --title '<title>' --summary '<summary>' --owner <owner> --harness <harness> --session-id <session-id>
+bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" create --workflow <absolute-catalog-workflow-path> --title '<title>' --summary '<summary>'
 ```
 
 Never pass repo-relative workflow paths such as `workflows/.../workflow.json` into `workflow-runs create` or runner `--workflow` commands. If a relative workflow path error appears, rerun `workflow-catalog resolve`/`list` and use the returned absolute catalog `path`; do not guess cwd or repair the path manually.
@@ -122,6 +122,7 @@ Complete every current stdout request unless impossible; if a required request c
 
 For `run_worker`:
 
+- When a fresh-worker request includes `agentRuntime`, apply its model and thinking level through the harness worker-creation API. In `--only-instructions` output, the same preference appears as one short sentence before the loader command. Treat it as fresh-spawn configuration only: do not change an already restored `preferredAgentId`, and do not copy the sentence into the worker prompt.
 - Use `loadFollowupInstructionsCommand` only when the host can continue or restore the opaque `preferredAgentId`.
 - Otherwise use `loadInstructionsCommand` for a fresh worker.
 - Before dispatching to the worker, take the selected command. If it contains literal `<lease-token>`, replace only that placeholder with the exact current lease token. Do not otherwise rewrite, shorten, shell-normalize, quote-normalize, explain, or enrich it.

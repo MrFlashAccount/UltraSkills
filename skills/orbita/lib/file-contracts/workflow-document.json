@@ -43,6 +43,9 @@
           "type": "string",
           "minLength": 1
         },
+        "agent_runtime": {
+          "$ref": "#/$defs/agentRuntimeByHarness"
+        },
         "input": {
           "$ref": "#/$defs/workerInput"
         },
@@ -56,7 +59,10 @@
           "$ref": "#/$defs/next"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "dependentRequired": {
+        "agent_runtime": ["agent"]
+      }
     },
     "matrixStep": {
       "type": "object",
@@ -180,11 +186,50 @@
           "type": "string",
           "minLength": 1
         },
+        "agent_runtime": {
+          "$ref": "#/$defs/agentRuntimeByHarness"
+        },
         "input": {
           "$ref": "#/$defs/workerInput"
         },
         "output": {
           "$ref": "#/$defs/output"
+        }
+      },
+      "additionalProperties": false,
+      "dependentRequired": {
+        "agent_runtime": ["agent"]
+      }
+    },
+    "agentRuntimeByHarness": {
+      "description": "Optional fresh-worker runtime preferences keyed by case-insensitive ASCII host harness identity. TOML may author entries as agent_runtime.<harness> = { model = ..., thinking_level = ... }; keys differing only by case are semantically invalid.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,127}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/agentRuntimeProfile"
+      }
+    },
+    "agentRuntimeProfile": {
+      "type": "object",
+      "required": ["model", "thinking_level"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,127}$"
+        },
+        "thinking_level": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,127}$"
         }
       },
       "additionalProperties": false

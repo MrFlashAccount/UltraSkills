@@ -2,7 +2,7 @@
 
 TEST_FILES := $(shell find lib/tests lib/entities lib/use-cases -name '*.test.mjs' -type f ! -path 'lib/tests/E2E/*' | sort)
 WORKFLOW_E2E_TEST_FILES := lib/tests/E2E/*.test.mjs
-TEST_BUN := AGENT=1 bun test --timeout=30000
+TEST_BUN := AGENT=1 bun test --timeout=30000 --parallel
 DEFAULT_WORKFLOW_RUNS_ROOT := $(HOME)/.orbita/workflow-runs/v1
 
 # Cheap guard: tests must not leak workflow run artifacts into repository paths.

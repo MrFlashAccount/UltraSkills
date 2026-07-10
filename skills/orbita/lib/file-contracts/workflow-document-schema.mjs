@@ -38,12 +38,31 @@ function assertWorkflowNoNestedMatchCases(workflowDoc) {
   }
 }
 
+function assertUnambiguousAgentRuntimeHarnesses(workflowDoc) {
+  for (const [stepId, step] of Object.entries(workflowDoc.steps)) {
+    const sourceWorker = step.kind === 'worker' ? step : (step.kind === 'matrix' ? step.worker : undefined);
+    const profiles = sourceWorker?.agent_runtime;
+    if (!profiles) continue;
+    const seen = new Map();
+    for (const harness of Object.keys(profiles)) {
+      const folded = harness.toLowerCase();
+      const previous = seen.get(folded);
+      if (previous !== undefined) {
+        const field = step.kind === 'matrix' ? 'matrix.worker.agent_runtime' : 'agent_runtime';
+        throw new WorkflowSchemaError(`step '${stepId}' ${field} harness keys '${previous}' and '${harness}' differ only by ASCII case`);
+      }
+      seen.set(folded, harness);
+    }
+  }
+}
+
 export { workflowSchema };
 
 export function assertWorkflowSchema(workflowDoc, { externalSchemas = [] } = {}) {
   try {
     assertWorkflowNoNestedMatchCases(workflowDoc);
     assertJsonSchema(workflowSchema, workflowDoc, 'workflow', { schemas: [workflowSchema, ...externalSchemas] });
+    assertUnambiguousAgentRuntimeHarnesses(workflowDoc);
   } catch (error) {
     if (error instanceof WorkflowSchemaError) throw new WorkflowSchemaError(`workflow failed schema validation: ${error.message}`);
     if (error?.name === 'SchemaValidationError') throw new WorkflowSchemaError(error.message);

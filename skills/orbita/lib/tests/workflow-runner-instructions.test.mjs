@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { continueRun as runnerContinueRun, loadInstructions as runnerLoadInstructions, next as runnerNext, writeOutput as runnerWriteOutput } from './helpers/orbita-production-api.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
+import { claimWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-check-'));
 writeFileSync(path.join(tempDir, 'output.md'), '## Output contract\nReturn markdown.\n');
@@ -159,6 +160,96 @@ test('runner: next resolves external workflow package shared resources from repo
   assert.equal(result.status, 0, result.stderr);
   const response = JSON.parse(result.stdout);
   assert.equal(response.requests[0].stepId, 'prepare');
+});
+
+test('runner: claimed harness selects fresh-subagent model guidance without polluting worker instructions', async () => {
+  const workflowPath = path.join(tempDir, 'worker-runtime-guidance-workflow.json');
+  const configuredWorkflow = structuredClone(workflowDoc);
+  configuredWorkflow.steps.prepare.agent = 'architect';
+  configuredWorkflow.steps.prepare.agent_runtime = {
+    codex: { model: 'gpt-5.5', thinking_level: 'high' },
+    portable: { model: 'portable-model', thinking_level: 'extended' },
+  };
+  configuredWorkflow.steps.prepare.next = 'done';
+  writeJson(workflowPath, configuredWorkflow);
+
+  const { runId } = await runCase('worker-runtime-guidance', workflowPath);
+  const paths = resolveRunPaths({ runId, workflowPath });
+  const leaseToken = leaseTokensByRunId.get(runId);
+  const claim = await claimWorkflowRunAtRoot({
+    runId,
+    workflowPath,
+    runsRoot: paths.runsRoot,
+    leaseToken,
+    harness: 'CoDeX',
+  });
+  assert.equal(claim.ok, true);
+
+  const response = await runnerNext({ runId, workflowPath, leaseToken });
+  assert.deepEqual(response.requests[0].agentRuntime, { model: 'gpt-5.5', thinkingLevel: 'high' });
+  assert.match(response.orchestratorInstruction, /For a fresh subagent, use model gpt-5\.5 with thinking level high\./);
+
+  const instructions = await runnerLoadInstructions({ runId, workflowPath, stepId: 'prepare', leaseToken });
+  assert.doesNotMatch(instructions, /fresh subagent|thinking level high/);
+});
+
+test('runner: unknown claimed harness omits model guidance', async () => {
+  const workflowPath = path.join(tempDir, 'worker-runtime-guidance-unknown-workflow.json');
+  const configuredWorkflow = structuredClone(workflowDoc);
+  configuredWorkflow.steps.prepare.agent = 'architect';
+  configuredWorkflow.steps.prepare.agent_runtime = { codex: { model: 'gpt-5.5', thinking_level: 'high' } };
+  configuredWorkflow.steps.prepare.next = 'done';
+  writeJson(workflowPath, configuredWorkflow);
+
+  const { runId } = await runCase('worker-runtime-guidance-unknown', workflowPath);
+  const paths = resolveRunPaths({ runId, workflowPath });
+  const leaseToken = leaseTokensByRunId.get(runId);
+  await claimWorkflowRunAtRoot({ runId, workflowPath, runsRoot: paths.runsRoot, leaseToken, harness: 'portable' });
+
+  const response = await runnerNext({ runId, workflowPath, leaseToken });
+  assert.equal(Object.hasOwn(response.requests[0], 'agentRuntime'), false);
+  assert.doesNotMatch(response.orchestratorInstruction, /For a fresh subagent, use model/);
+});
+
+test('runner: agent runtime configuration without an explicit source agent is rejected', async () => {
+  const workflowPath = path.join(tempDir, 'worker-runtime-guidance-no-agent-workflow.json');
+  const configuredWorkflow = structuredClone(workflowDoc);
+  configuredWorkflow.steps.prepare.agent_runtime = { codex: { model: 'gpt-5.5', thinking_level: 'high' } };
+  configuredWorkflow.steps.prepare.next = 'done';
+  writeJson(workflowPath, configuredWorkflow);
+
+  const { runId } = await runCase('worker-runtime-guidance-no-agent', workflowPath);
+  const paths = resolveRunPaths({ runId, workflowPath });
+  const leaseToken = leaseTokensByRunId.get(runId);
+  await claimWorkflowRunAtRoot({ runId, workflowPath, runsRoot: paths.runsRoot, leaseToken, harness: 'codex' });
+
+  await assert.rejects(
+    () => runnerNext({ runId, workflowPath, leaseToken }),
+    /agent_runtime.*agent|agent.*required/i,
+  );
+});
+
+test('runner: resume schema validation rejects case-folded duplicate agent runtime harnesses after workflow drift', async () => {
+  const workflowPath = path.join(tempDir, 'worker-runtime-guidance-duplicate-resume-workflow.json');
+  const configuredWorkflow = structuredClone(workflowDoc);
+  configuredWorkflow.steps.prepare.agent = 'architect';
+  configuredWorkflow.steps.prepare.agent_runtime = { codex: { model: 'gpt-5.5', thinking_level: 'high' } };
+  configuredWorkflow.steps.prepare.next = 'done';
+  writeJson(workflowPath, configuredWorkflow);
+
+  const { runId } = await runCase('worker-runtime-guidance-duplicate-resume', workflowPath);
+  const paths = resolveRunPaths({ runId, workflowPath });
+  const leaseToken = leaseTokensByRunId.get(runId);
+  await claimWorkflowRunAtRoot({ runId, workflowPath, runsRoot: paths.runsRoot, leaseToken, harness: 'codex' });
+  await runnerNext({ runId, workflowPath, leaseToken });
+
+  configuredWorkflow.steps.prepare.agent_runtime.Codex = { model: 'gpt-5.5-mini', thinking_level: 'low' };
+  writeJson(workflowPath, configuredWorkflow);
+
+  await assert.rejects(
+    () => runnerNext({ runId, workflowPath, leaseToken }),
+    /agent_runtime harness keys 'codex' and 'Codex' differ only by ASCII case/,
+  );
 });
 
 test('runner: next uses semantic workflow validation and rejects schema-declared dynamic targets that are not workflow steps', async () => {

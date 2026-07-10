@@ -19,6 +19,16 @@
           "ownerStepId": { "type": "string", "minLength": 1 },
           "action": { "enum": ["run_worker", "wait_for_approval", "resolve_worker_blocker"] },
           "loadInstructionsCommand": { "type": "string", "minLength": 1 },
+          "agentRuntime": {
+            "description": "Advisory fresh-worker model and thinking level selected from the executable source worker's per-harness agent_runtime configuration.",
+            "type": "object",
+            "required": ["model", "thinkingLevel"],
+            "properties": {
+              "model": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,127}$" },
+              "thinkingLevel": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,127}$" }
+            },
+            "additionalProperties": false
+          },
           "shard": { "$ref": "#/$defs/shardWorkRequest" },
           "matrix": { "$ref": "#/$defs/matrixWorkRequest" },
           "preferredAgentId": {
@@ -76,7 +86,8 @@
                 "anyOf": [
                   { "required": ["preferredAgentId"] },
                   { "required": ["loadFollowupInstructionsCommand"] },
-                  { "required": ["recoverableBlocker"] }
+                  { "required": ["recoverableBlocker"] },
+                  { "required": ["agentRuntime"] }
                 ]
               }
             }
@@ -95,7 +106,8 @@
                 "anyOf": [
                   { "required": ["preferredAgentId"] },
                   { "required": ["loadFollowupInstructionsCommand"] },
-                  { "required": ["loadInstructionsCommand"] }
+                  { "required": ["loadInstructionsCommand"] },
+                  { "required": ["agentRuntime"] }
                 ]
               }
             }
