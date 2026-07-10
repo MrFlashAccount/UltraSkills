@@ -30,11 +30,11 @@ surfaces for repositioning only the current baton pointer along already observed
 history. Their shell-facing CLI modes are `list-pointer-transitions` and
 `move-pointer`. Both require an active run lease. `listPointerTransitions` is a
 logical read: it may use the run-state boundary for consistency, but it must not
-initialize missing run state, append history, update the run index, or mutate the
+initialize missing run state, append history, renew authority, or mutate the
 baton/current pointer. It is not an unleased public read because it exposes
 pointer/history and retained-output recovery metadata. `movePointer` mutates only
 baton cursor/status through the existing lease, lock, validation, durable writer,
-history, and run-index path. Neither surface rolls back, prunes, rewrites, or cleans
+history, and per-run authority path. Neither surface rolls back, prunes, rewrites, or cleans
 `baton.state`, accepted outputs, artifacts/results, worker bindings, prompt
 markers, attempts, or existing history. The first supported slice is limited to
 one adjacent observed transition edge from the current pointer/status. Terminal
@@ -211,7 +211,7 @@ Persistence owns filesystem and durable-state integration:
 - run-state records
 - locks and leases
 - durable commits
-- run indexes
+- per-run authority records and the global run-catalog projection
 - path safety facts
 - current migration behavior
 - schema loading for persisted/file records
@@ -307,15 +307,65 @@ values or contracts across the boundary.
 Entrypoints format current public output and errors. They do not reach into
 runtime helper internals to assemble behavior.
 
+Mutating runner commands may carry one command-scoped operation context after
+the pre-lock and under-lock authority checks. Its persisted-state snapshot must
+be read inside the active per-run lock scope, may be passed into the durable
+writer, and is replaced by the validated snapshot returned after each write.
+Snapshots are deeply frozen. After a same-scope commit, the writer builds the
+replacement from the already validated transition and exact target bytes rather
+than rereading and revalidating the complete aggregate. The snapshot is never
+cached across commands. A pending durable commit takes
+precedence over a supplied snapshot, and any direct history append invalidates
+the snapshot before a later aggregate write. This optimization does not change
+the split-file topology, recovery order, fsync/atomic-rename guarantees, lease
+revalidation, or path/symlink safety.
+
+Durable aggregate writes use the v2 append transaction for `history.md`. The
+atomically written pending record contains a unique transaction id, the base
+file existence and byte size, the bounded entry text and its SHA-256 hash, and
+the requested baton/current-request side effects. It must not embed or rewrite
+the complete history. Under the per-run lock, recovery accepts only an unchanged
+base, an exact byte prefix of the pending entry, or the complete pending entry;
+it completes and fsyncs a partial append, recognizes a complete append without
+duplicating it, and fails closed on any unrelated tail, truncation, or invalid
+hash. Baton and current-request files retain their atomic-write behavior. The
+legacy v1 full-history pending format remains recoverable for commits already in
+flight, but new commits must use v2.
+
+`history.md` remains the canonical human-facing projection. Commands that only
+need baton/current requests carry a file reference plus byte size and do not
+load the history body. Full history reads are reserved for behavior that
+actually projects history, such as pointer inspection/mutation and debug-note
+deduplication. No history body or file handle is cached across commands.
+
+`.workflow-runner/authority.json` is canonical for one run's absolute workflow
+binding, claim context, lifecycle/task projection, and token-hash lease record.
+Every runner command still validates authority once before taking the per-run
+lock and again from a fresh record while holding that lock. Matching-token
+renewal preserves the token epoch; a tokenless stale takeover rotates the hash
+and increments the epoch. Raw lease tokens are never persisted.
+
+`runs.json` is the global discovery/catalog projection, not an authority source
+once a per-run record exists. Warm `next`, `instructions`, `write-output`,
+`continue`, and pointer mutation read and atomically renew only the small per-run
+record; they do not parse, lock, or rewrite the global catalog. Registration,
+explicit claim/heartbeat, and deletion may synchronize the catalog projection.
+List and dashboard readers start from catalog ids and overlay canonical per-run
+records with bounded IO concurrency. A legacy run without `authority.json` may
+fall back to its validated v1 catalog entry; its first successful mutating
+runner/claim operation writes the per-run record. Once that file exists, a
+missing, conflicting, corrupt, or unsafe authority record must not silently fall
+back to the catalog.
+
 Pointer recovery follows the same runtime flow. `listPointerTransitions` checks
 the active lease, reads existing persisted run state, builds the shared pointer
 transition projection, and returns bounded transition and retained-state metadata
-without initializing missing run files, appending history, updating the run index,
+without initializing missing run files, appending history, renewing authority,
 or mutating baton/current pointer state. `movePointer` checks the active lease
 before and inside the run-state lock, rebuilds the projection while locked,
 validates the requested adjacent edge and retained-state acknowledgement, updates only baton
 cursor/status, validates persisted state, appends bounded pointer-move history,
-and updates run index through the durable writer path.
+and renews the canonical per-run authority record.
 
 ## Matrix Workflow Control Step
 
@@ -457,7 +507,7 @@ the backend/UI boundary that makes those design rules safe.
 Target shape:
 
 ```text
-run-state files -> observer reader -> safe projection -> dashboard API/events -> browser UI
+catalog ids + per-run authority/run-state -> observer reader -> safe projection -> dashboard API/events -> browser UI
 ```
 
 Intended source zones:

@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { applyWorkflowOutput } from '../../use-cases/ApplyWorkflowOutput.mjs';
 import { validateRunnerAcceptedOutput } from '../../use-cases/WorkflowRunnerOutputValidation.mjs';
@@ -22,7 +22,9 @@ import { assertFreshTokenAuthority, assertMatchingTokenAuthority, buildTokenLeas
 import { appendHistoryOnce, recoverDurableCommit } from '../../persistence/run-state/durable-commit.mjs';
 import { readPersistedRunState } from '../../persistence/run-state/PersistedRunStateReader.mjs';
 import { defaultWorkflowPath, ensureRunFiles, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../../persistence/run-state/paths.mjs';
-import { createRunIndexEntry, readRunsIndex, runsIndexPathsForRoot, upsertRunIndexEntry } from '../../persistence/run-state/run-index.mjs';
+import { createRunIndexEntry, upsertRunIndexEntry } from '../../persistence/run-state/run-index.mjs';
+import { readRunAuthorityWithLegacyFallback, runAuthorityFromIndexEntry, writeRunAuthority } from '../../persistence/run-state/run-authority.mjs';
+import { durableFileSignature } from '../../persistence/run-state/file-signature.mjs';
 import { withRunStateLock } from '../../persistence/run-state/lock.mjs';
 import { claimWorkflowRunAtRoot, deleteWorkflowRunAtRoot, heartbeatWorkflowRunAtRoot, listWorkflowRunsAtRoot, registerWorkflowRunAtRoot, summarizeWorkflowRuns as summarizeWorkflowRunsAtRoot } from '../../persistence/run-state/workflow-runs.mjs';
 import { publicErrorMessage } from '../../public-error.mjs';
@@ -48,7 +50,6 @@ const validateWorkflowStartup = createWorkflowStartupValidator({
 
 const workflowRunnerCommand = createWorkflowRunnerCommand({
   readFile,
-  stat,
   join,
   resolve,
   applyWorkflowOutput,
@@ -85,9 +86,11 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   pathExists,
   resolveRunPaths,
   createRunIndexEntry,
-  readRunsIndex,
-  runsIndexPathsForRoot,
   upsertRunIndexEntry,
+  readRunAuthorityWithLegacyFallback,
+  runAuthorityFromIndexEntry,
+  writeRunAuthority,
+  durableFileSignature,
   withRunStateLock,
   publicErrorMessage,
   assertAbsoluteWorkflowPath,

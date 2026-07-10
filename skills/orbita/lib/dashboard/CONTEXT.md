@@ -40,7 +40,9 @@ uses `../../DESIGN.md` as the board/drawer UI input.
   use cases.
 - `server/**` may perform read-only filesystem/API/static IO and response
   formatting. It must route all browser-visible run data through the safe
-  projection/contract boundary.
+  projection/contract boundary. It may read the validated per-run authority
+  record to overlay canonical status and occupancy, but must not import or call
+  its writer/update operations.
 - `ui/**` must depend only on browser APIs and dashboard DTO contracts. It must
   not import Node filesystem modules, persistence adapters, workflow-runner API
   shells, CLI modules, use cases, or entity internals.

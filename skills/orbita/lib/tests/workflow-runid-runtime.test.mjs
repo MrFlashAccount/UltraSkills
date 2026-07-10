@@ -38,10 +38,12 @@ test('workflow runner derives private run directory from public runId and indexe
     assert.equal(existsSync(path.join(paths.runDir, 'history.md')), true);
 
     const index = JSON.parse(readFileSync(path.join(defaultRunsRoot, 'runs.json'), 'utf8'));
+    const authority = JSON.parse(readFileSync(paths.authorityPath, 'utf8'));
     assert.equal(index.runs[id].runId, id);
-    assert.equal(index.runs[id].status, 'needs_host_actions');
-    assert.equal(index.runs[id].workflow.path, workflowPath);
+    assert.equal(authority.status, 'needs_host_actions');
+    assert.equal(authority.workflow.path, workflowPath);
     assert.equal(JSON.stringify(index).includes('sensitive raw prompt'), false);
+    assert.equal(JSON.stringify(authority).includes('sensitive raw prompt'), false);
   } finally {
     cleanup(id);
   }

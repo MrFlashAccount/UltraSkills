@@ -67,13 +67,17 @@ export async function withRunStateLock(paths, callback, options = {}) {
   });
   const stopHeartbeat = startLockHeartbeat(paths.continueLockPath, metadata);
 
-  const nextHeldLocks = new Set(heldLocks ?? []);
-  nextHeldLocks.add(paths.continueLockPath);
+  const nextHeldLocks = new Map(heldLocks ?? []);
+  nextHeldLocks.set(paths.continueLockPath, Symbol(paths.continueLockPath));
   try {
     return await runStateLockStorage.run(nextHeldLocks, callback);
   } finally {
     await stopHeartbeat();
   }
+}
+
+export function currentRunStateLockToken(paths) {
+  return runStateLockStorage.getStore()?.get(paths.continueLockPath);
 }
 
 export const withContinueRunLock = withRunStateLock;

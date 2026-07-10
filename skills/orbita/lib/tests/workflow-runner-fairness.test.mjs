@@ -7,7 +7,8 @@ import { afterAll, test } from 'bun:test';
 import { continueRun as runnerContinue, loadInstructions as runnerLoadInstructions, next as runnerNext, writeOutput as runnerWriteOutput } from './helpers/orbita-production-api.mjs';
 import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../runner/runner-command-builder.mjs';
 import { claimWorkflowRunAtRoot, registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
-import { hashLeaseToken } from '../persistence/run-state/lease-authority.mjs';
+import { buildTokenLease, hashLeaseToken } from '../persistence/run-state/lease-authority.mjs';
+import { createRunIndexEntry } from '../persistence/run-state/run-index.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-fairness-'));
@@ -47,6 +48,7 @@ function readIfExists(filePath) {
 
 function snapshotRunState(paths) {
   const indexContent = readIfExists(paths.runsIndexPath);
+  const authorityContent = readIfExists(paths.authorityPath);
   return {
     runDirExists: existsSync(paths.runDir),
     runnerDirExists: existsSync(paths.runnerDir),
@@ -54,6 +56,7 @@ function snapshotRunState(paths) {
     instructionsDirExists: existsSync(paths.instructionsDir),
     baton: readIfExists(paths.batonPath),
     history: readIfExists(paths.historyPath),
+    authority: authorityContent === undefined ? undefined : JSON.parse(authorityContent),
     indexEntry: indexContent === undefined ? undefined : JSON.parse(indexContent).runs[paths.runId],
   };
 }
@@ -154,20 +157,20 @@ test('runner fairness: stale tokenless claim does not rotate saved token before 
   const paths = resolveRunPaths({ runId, workflowPath });
   const claim = await registerWorkflowRunAtRoot({ runId, workflowPath, claim: true, owner: 'alice', harness: 'portable', sessionId: 'session-a', leaseMs: 1_000, now: new Date('2026-06-01T10:00:00.000Z') });
   await runnerNext({ runId, workflowPath, leaseToken: claim.leaseToken, now: new Date('2026-06-01T10:00:00.500Z') });
-  const beforeLease = snapshotRunState(paths).indexEntry.workerLease;
+  const beforeLease = snapshotRunState(paths).authority.workerLease;
 
   const staleClaim = await claimWorkflowRunAtRoot({ runId, workflowPath, owner: 'alice', harness: 'portable', sessionId: 'session-a', leaseMs: 60_000, now: new Date('2026-06-01T11:00:02.000Z') });
 
   assert.equal(staleClaim.ok, false);
   assert.equal(staleClaim.reason, 'stale');
-  assert.equal(snapshotRunState(paths).indexEntry.workerLease.tokenHash, beforeLease.tokenHash);
+  assert.equal(snapshotRunState(paths).authority.workerLease.tokenHash, beforeLease.tokenHash);
 
   await writeCurrentOutput({ runId, workflowPath, leaseToken: claim.leaseToken, summary: 'stale token continue output', now: new Date('2026-06-01T11:00:02.500Z') });
   const continued = await runnerContinue({ runId, workflowPath, leaseToken: claim.leaseToken, now: new Date('2026-06-01T11:00:03.000Z') });
 
   assert.equal(continued.status, 'done');
   assert.equal(continued.baton.cursor, 'done');
-  const afterLease = snapshotRunState(paths).indexEntry.workerLease;
+  const afterLease = snapshotRunState(paths).authority.workerLease;
   assert.equal(afterLease.tokenHash, beforeLease.tokenHash);
   assert.equal(afterLease.leaseExpiresAt, '2026-06-01T12:00:03.000Z');
 });
@@ -181,7 +184,7 @@ test('runner fairness: next renews matching lease authority on successful render
 
   await runnerNext({ runId, workflowPath, leaseToken: claim.leaseToken, now: new Date('2026-06-01T10:00:00.500Z') });
 
-  const lease = snapshotRunState(paths).indexEntry.workerLease;
+  const lease = snapshotRunState(paths).authority.workerLease;
   assert.equal(lease.tokenHash, hashLeaseToken(claim.leaseToken));
   assert.equal(lease.leaseExpiresAt, '2026-06-01T11:00:00.500Z');
 });
@@ -197,7 +200,7 @@ test('runner fairness: loadInstructions renews matching lease authority on succe
   const instructions = await runnerLoadInstructions({ runId, workflowPath, stepId: 'prepare', leaseToken: claim.leaseToken, now: new Date('2026-06-01T10:05:00.000Z') });
 
   assert.match(instructions, /Prepare\./);
-  const lease = snapshotRunState(paths).indexEntry.workerLease;
+  const lease = snapshotRunState(paths).authority.workerLease;
   assert.equal(lease.tokenHash, hashLeaseToken(claim.leaseToken));
   assert.equal(lease.leaseExpiresAt, '2026-06-01T11:05:00.000Z');
 });
@@ -212,7 +215,7 @@ test('runner fairness: writeOutput renews matching lease authority on accepted o
 
   await writeCurrentOutput({ runId, workflowPath, leaseToken: claim.leaseToken, summary: 'accepted output renews lease', now: new Date('2026-06-01T10:10:00.000Z') });
 
-  const lease = snapshotRunState(paths).indexEntry.workerLease;
+  const lease = snapshotRunState(paths).authority.workerLease;
   assert.equal(lease.tokenHash, hashLeaseToken(claim.leaseToken));
   assert.equal(lease.leaseExpiresAt, '2026-06-01T11:10:00.000Z');
 });
@@ -271,7 +274,7 @@ test('runner fairness: worker output cannot author or rotate lease authority', a
   const paths = resolveRunPaths({ runId, workflowPath });
   const claim = await registerWorkflowRunAtRoot({ runId, workflowPath, claim: true, owner: 'alice', harness: 'portable', sessionId: 'session-a', leaseMs: 60_000, now: new Date('2026-06-01T10:00:00.000Z') });
   await runnerNext({ runId, workflowPath, leaseToken: claim.leaseToken, now: new Date('2026-06-01T10:00:01.000Z') });
-  const beforeLease = snapshotRunState(paths).indexEntry.workerLease;
+  const beforeLease = snapshotRunState(paths).authority.workerLease;
   const inventedToken = `model-authored-replacement-token-${process.pid}`;
   await writeCurrentOutput({
     runId,
@@ -284,7 +287,7 @@ test('runner fairness: worker output cannot author or rotate lease authority', a
   const continued = await runnerContinue({ runId, workflowPath, leaseToken: claim.leaseToken, now: new Date('2026-06-01T10:00:02.500Z') });
 
   assert.equal(continued.status, 'done');
-  const afterLease = snapshotRunState(paths).indexEntry.workerLease;
+  const afterLease = snapshotRunState(paths).authority.workerLease;
   assert.equal(afterLease.tokenHash, beforeLease.tokenHash);
   assert.notEqual(afterLease.tokenHash, hashLeaseToken(inventedToken));
 });
@@ -315,4 +318,73 @@ test('runner fairness: missing host output does not mutate lifecycle status befo
   assert.match(failureEntry, /source: workflow-runner-failure/);
   assert.match(failureEntry, /public failure: command=continue/);
   assert.match(failureEntry, /missing accepted host output for workflow step prepare/);
+});
+
+test('runner fairness: canonical per-run authority keeps hot commands off a corrupt catalog', async () => {
+  const workflowPath = path.join(tempDir, 'per-run-authority-ignores-corrupt-catalog.json');
+  const runsRoot = path.join(tempDir, 'per-run-authority-runs');
+  writeJson(workflowPath, workflowDoc);
+  const runId = `workflow-runner-fairness-${process.pid}-per-run-authority-corrupt-catalog`;
+  const paths = resolveRunPaths({ runId, workflowPath, runsRoot });
+  const claim = await registerWorkflowRunAtRoot({
+    runId,
+    workflowPath,
+    runsRoot,
+    claim: true,
+    harness: 'portable',
+    leaseMs: 60_000,
+    now: new Date('2026-06-01T10:00:00.000Z'),
+  });
+  const options = { runId, workflowPath, runsRoot, leaseToken: claim.leaseToken };
+  await runnerNext({ ...options, now: new Date('2026-06-01T10:00:01.000Z') });
+  writeFileSync(paths.runsIndexPath, '{not-json\n');
+
+  const instructions = await runnerLoadInstructions({
+    ...options,
+    stepId: 'prepare',
+    now: new Date('2026-06-01T10:05:00.000Z'),
+  });
+  assert.match(instructions, /Prepare\./);
+  const debugSummaryFile = path.join(paths.runDir, 'prepare', 'debug-summary.md');
+  mkdirSync(path.dirname(debugSummaryFile), { recursive: true });
+  writeFileSync(debugSummaryFile, 'authority hot-path debug summary\n');
+  await runnerWriteOutput({
+    ...options,
+    stepId: 'prepare',
+    json: JSON.stringify(workerOutput('authority hot path')),
+    debugSummaryFile,
+    now: new Date('2026-06-01T10:10:00.000Z'),
+  });
+  const response = await runnerContinue({ ...options, now: new Date('2026-06-01T10:11:00.000Z') });
+
+  assert.equal(response.status, 'done');
+  assert.equal(readFileSync(paths.runsIndexPath, 'utf8'), '{not-json\n');
+  assert.equal(JSON.parse(readFileSync(paths.authorityPath, 'utf8')).status, 'done');
+});
+
+test('runner fairness: a successful legacy-index command materializes canonical per-run authority', async () => {
+  const workflowPath = path.join(tempDir, 'legacy-index-materializes-authority.json');
+  const runsRoot = path.join(tempDir, 'legacy-index-materializes-authority-runs');
+  const runId = `workflow-runner-fairness-${process.pid}-legacy-index-materializes-authority`;
+  const leaseToken = 'legacy-index-materialization-token';
+  writeJson(workflowPath, workflowDoc);
+  const paths = resolveRunPaths({ runId, workflowPath, runsRoot });
+  await createRunIndexEntry(paths, {
+    workflowPath,
+    workerLease: buildTokenLease({ token: leaseToken, leaseMs: 60_000, now: new Date('2026-06-01T10:00:00.000Z') }),
+  });
+  assert.equal(existsSync(paths.authorityPath), false);
+
+  const response = await runnerNext({
+    runId,
+    workflowPath,
+    runsRoot,
+    leaseToken,
+    now: new Date('2026-06-01T10:00:01.000Z'),
+  });
+
+  assert.equal(response.status, 'needs_host_actions');
+  const authority = JSON.parse(readFileSync(paths.authorityPath, 'utf8'));
+  assert.equal(authority.workflow.path, workflowPath);
+  assert.equal(authority.workerLease.tokenHash, hashLeaseToken(leaseToken));
 });

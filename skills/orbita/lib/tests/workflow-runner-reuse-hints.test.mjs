@@ -6,7 +6,7 @@ import { afterAll, test } from 'bun:test';
 import { continueRun, loadInstructions, next, writeOutput } from './helpers/orbita-production-api.mjs';
 import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../runner/runner-command-builder.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
-import { readRunsIndex } from '../persistence/run-state/run-index.mjs';
+import { readRunAuthority } from '../persistence/run-state/run-authority.mjs';
 import { registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-reuse-hints-'));
@@ -358,7 +358,7 @@ test('runner reuse hints: continue bind-agent renews stale matching worker lease
     leaseToken,
     now,
   });
-  const before = (await readRunsIndex(paths)).runs[runId].workerLease;
+  const before = (await readRunAuthority(paths)).workerLease;
   assert.equal(before.leaseExpiresAt, '2026-06-01T11:00:01.000Z');
 
   await continueRun({
@@ -369,7 +369,7 @@ test('runner reuse hints: continue bind-agent renews stale matching worker lease
     now: new Date('2026-06-01T11:05:00.000Z'),
   });
 
-  const after = (await readRunsIndex(paths)).runs[runId].workerLease;
+  const after = (await readRunAuthority(paths)).workerLease;
   assert.equal(after.tokenHash, before.tokenHash);
   assert.equal(after.tokenEpoch, before.tokenEpoch);
   assert.equal(after.leaseExpiresAt, '2026-06-01T12:05:00.000Z');

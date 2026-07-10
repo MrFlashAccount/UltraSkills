@@ -99,6 +99,7 @@ export async function withRunsIndexLock(paths, callback, { waitMs = RUNS_INDEX_L
 }
 
 function assertWorkflowBinding(paths, patch = {}, existing) {
+  if (patch.replaceWorkflowBinding === true) return;
   const existingWorkflowPath = existing?.workflow?.path;
   const requestedWorkflowPath = patch.workflowPath ?? paths.workflowPath;
   if (typeof existingWorkflowPath === 'string' && existingWorkflowPath.length > 0 && resolve(existingWorkflowPath) !== resolve(requestedWorkflowPath)) {
@@ -109,17 +110,22 @@ function assertWorkflowBinding(paths, patch = {}, existing) {
 function indexEntryForPaths(paths, patch = {}, existing) {
   assertWorkflowBinding(paths, patch, existing);
   const now = new Date().toISOString();
+  const replaceWorkflowBinding = patch.replaceWorkflowBinding === true;
   const entry = {
     runId: paths.runId,
     summary: existing?.summary,
     title: existing?.title,
     workflow: {
-      identity: patch.workflowIdentity ?? existing?.workflow?.identity,
-      path: existing?.workflow?.path ?? patch.workflowPath ?? paths.workflowPath,
+      identity: replaceWorkflowBinding
+        ? patch.workflowIdentity
+        : (patch.workflowIdentity ?? existing?.workflow?.identity),
+      path: replaceWorkflowBinding
+        ? (patch.workflowPath ?? paths.workflowPath)
+        : (existing?.workflow?.path ?? patch.workflowPath ?? paths.workflowPath),
     },
     status: patch.status ?? existing?.status ?? 'running',
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
+    createdAt: existing?.createdAt ?? patch.createdAt ?? now,
+    updatedAt: patch.updatedAt ?? now,
     taskKey: patch.taskKey ?? existing?.taskKey,
     taskFingerprint: patch.taskFingerprint ?? existing?.taskFingerprint,
     claimContext: Object.hasOwn(patch, 'claimContext') ? patch.claimContext : existing?.claimContext,

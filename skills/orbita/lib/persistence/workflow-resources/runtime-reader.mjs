@@ -9,6 +9,7 @@ import { assertWorkflowSchema } from '../../file-contracts/workflow-document-sch
 import { readWorkflowDocument } from './workflow-document-reader.mjs';
 import { assertBatonSchema, batonSchema } from '../../file-contracts/baton/baton-schema.mjs';
 import { compileWorkflowForRuntime } from '../../runtime/compiled-workflow.mjs';
+import { isValidatedPersistedBaton } from '../validated-baton.mjs';
 
 const compiledRuntimeCache = new Map();
 const COMPILED_RUNTIME_CACHE_MAX_ENTRIES = 64;
@@ -242,7 +243,7 @@ function loadCompiledWorkflowPackage({ workflowPath }) {
 
 export function loadWorkflowRuntime({ workflowPath, batonPath, baton }) {
   const batonDoc = baton ?? readJson(batonPath, 'baton');
-  assertBatonSchema(batonDoc);
+  if (!isValidatedPersistedBaton(batonDoc)) assertBatonSchema(batonDoc);
   const compiledPackage = loadCompiledWorkflowPackage({ workflowPath });
   const resources = {
     ...compiledPackage.staticResources,

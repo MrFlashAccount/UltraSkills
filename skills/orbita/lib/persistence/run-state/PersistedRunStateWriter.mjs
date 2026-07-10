@@ -1,18 +1,15 @@
-import { mkdir } from 'node:fs/promises';
-import { assertPersistedRunState } from './persisted-state-schema.mjs';
-import { readPersistedRunState } from './PersistedRunStateReader.mjs';
-import { commitDurableRunState, recoverDurableCommit } from './durable-commit.mjs';
-import { withRunStateLock } from './lock.mjs';
+import { persistedRunStateLockToken } from './PersistedRunStateReader.mjs';
+import { commitDurableRunState } from './durable-commit.mjs';
+import { currentRunStateLockToken, withRunStateLock } from './lock.mjs';
 
-export async function writePersistedRunStateUpdate(paths, patch) {
+export async function writePersistedRunStateUpdate(paths, patch, { currentState } = {}) {
+  if (currentState !== undefined) {
+    const currentLockToken = currentRunStateLockToken(paths);
+    if (currentLockToken === undefined || persistedRunStateLockToken(currentState) !== currentLockToken) {
+      throw new Error('current persisted run-state snapshot must be read within the active run-state lock scope');
+    }
+  }
   return withRunStateLock(paths, async () => {
-    await mkdir(paths.runnerDir, { recursive: true });
-    await mkdir(paths.instructionsDir, { recursive: true });
-    await recoverDurableCommit(paths);
-    await readPersistedRunState(paths);
-    const result = await commitDurableRunState(paths, patch);
-    const after = await readPersistedRunState(paths);
-    assertPersistedRunState(after, 'persisted run state after write');
-    return result;
+    return commitDurableRunState(paths, patch, { currentState });
   });
 }
