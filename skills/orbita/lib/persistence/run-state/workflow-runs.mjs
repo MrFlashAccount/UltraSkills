@@ -58,6 +58,10 @@ function workflowPathForCreate(workflowPath) {
   return workflowPath === undefined ? defaultWorkflowPath : resolveAbsoluteWorkflowPath(workflowPath);
 }
 
+function canonicalHarness(harness) {
+  return typeof harness === 'string' ? harness.toLowerCase() : harness;
+}
+
 function assertExistingWorkflowBinding(existing, paths, { requestedWorkflowPath } = {}) {
   const existingWorkflowPath = existing?.workflow?.path;
   if (requestedWorkflowPath === undefined || typeof existingWorkflowPath !== 'string' || existingWorkflowPath.length === 0) return;
@@ -81,6 +85,7 @@ export async function registerWorkflowRunAtRoot({ runId, title, summary, workflo
       status,
       taskKey,
       taskFingerprint,
+      ...(claim && harness !== undefined ? { claimContext: { harness: canonicalHarness(harness) } } : {}),
       workerLease,
     });
     const response = publicRun(entry, { now });
@@ -89,7 +94,7 @@ export async function registerWorkflowRunAtRoot({ runId, title, summary, workflo
   });
 }
 
-export async function claimWorkflowRunAtRoot({ runId, workflowPath, runsRoot = workflowRunsRoot, owner, harness, sessionId, workerId, leaseMs, leaseToken, takeover = false, now = new Date() } = {}) {
+async function claimWorkflowRunAtRootInternal({ runId, workflowPath, runsRoot = workflowRunsRoot, owner, harness, sessionId, workerId, leaseMs, leaseToken, takeover = false, now = new Date() } = {}, { preserveClaimContext = false } = {}) {
   await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
   const safeRunId = assertSafeRunId(runId);
   const paths = resolveRunPaths({ runId: safeRunId, workflowPath: workflowPathForCreate(workflowPath), runsRoot });
@@ -108,11 +113,16 @@ export async function claimWorkflowRunAtRoot({ runId, workflowPath, runsRoot = w
             conflict.run = publicRun(existing, { now });
             throw conflict;
           }
-          return {
+          const next = {
             ...existing,
             updatedAt: now.toISOString(),
             workerLease: renewTokenLease(existing.workerLease, { leaseMs, now }),
           };
+          if (!preserveClaimContext) {
+            if (harness === undefined) delete next.claimContext;
+            else next.claimContext = { harness: canonicalHarness(harness) };
+          }
+          return next;
         }
         if (occupancy.state === 'occupied') {
           const conflict = new Error(`workflow run is occupied: ${safeRunId}`);
@@ -127,11 +137,14 @@ export async function claimWorkflowRunAtRoot({ runId, workflowPath, runsRoot = w
           throw stale;
         }
         tokenWasIssued = true;
-        return {
+        const next = {
           ...existing,
           updatedAt: now.toISOString(),
           workerLease: buildTokenLease({ token: issuedLeaseToken, leaseMs, now }),
         };
+        if (harness === undefined) delete next.claimContext;
+        else next.claimContext = { harness: canonicalHarness(harness) };
+        return next;
       });
       const response = { ok: true, claimed: true, runId: safeRunId, run: publicRun(entry, { now }) };
       if (tokenWasIssued) response.leaseToken = issuedLeaseToken;
@@ -148,9 +161,13 @@ export async function claimWorkflowRunAtRoot({ runId, workflowPath, runsRoot = w
   }
 }
 
+export async function claimWorkflowRunAtRoot(options = {}) {
+  return claimWorkflowRunAtRootInternal(options);
+}
+
 export async function heartbeatWorkflowRunAtRoot({ leaseToken, ...options } = {}) {
   if (!leaseToken) throw new Error('workflow run token is required');
-  return claimWorkflowRunAtRoot({ ...options, leaseToken });
+  return claimWorkflowRunAtRootInternal({ ...options, leaseToken }, { preserveClaimContext: true });
 }
 
 async function renameRunDirForDeletion(paths) {

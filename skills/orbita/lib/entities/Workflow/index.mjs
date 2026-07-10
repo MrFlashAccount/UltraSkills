@@ -105,6 +105,24 @@ function assertWorkflowStepRoles(workflow, allowedRoleNames) {
   }
 }
 
+function assertUnambiguousAgentRuntimeHarnesses(workflow) {
+  for (const [stepId, step] of Object.entries(workflow.steps)) {
+    const sourceWorker = step.kind === 'worker' ? step : (step.kind === 'matrix' ? step.worker : undefined);
+    const profiles = sourceWorker?.agent_runtime;
+    if (!profiles) continue;
+    const seen = new Map();
+    for (const harness of Object.keys(profiles)) {
+      const folded = harness.toLowerCase();
+      const previous = seen.get(folded);
+      if (previous !== undefined) {
+        const field = step.kind === 'matrix' ? 'matrix.worker.agent_runtime' : 'agent_runtime';
+        fail(`step '${stepId}' ${field} harness keys '${previous}' and '${harness}' differ only by ASCII case`);
+      }
+      seen.set(folded, harness);
+    }
+  }
+}
+
 function isExternalWorkflowOutputSchema(_schemaRef, schema) {
   return typeof schema?.$id === 'string' && schema.$id.includes('/schemas/workflow/dev-harness/');
 }
@@ -809,6 +827,7 @@ function validateWorkflowDocument(workflow, options = {}) {
   assertWorkflowStepIds(workflow);
   assertWorkflowRootTargets(workflow);
   assertWorkflowStepRoles(workflow, options.allowedRoles);
+  assertUnambiguousAgentRuntimeHarnesses(workflow);
   assertWorkflowShardingPolicies(workflow, { allowedRoles: normalizeAllowedRoleCatalog(options.allowedRoles) });
   const warnings = [];
   const schemasByStep = normalizeStepOutputSchemas({
