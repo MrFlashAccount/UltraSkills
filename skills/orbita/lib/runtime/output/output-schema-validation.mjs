@@ -3,6 +3,13 @@ import { batonSchema } from '../../file-contracts/baton/baton-schema.mjs';
 
 export const OUTPUT_SCHEMA_MAX_ATTEMPTS = 3;
 
+const artifactArraySchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  $id: 'https://github.com/MrFlashAccount/Skills/schemas/workflow/output-artifact-array-contract-check',
+  type: 'array',
+  items: { $ref: 'https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact' },
+};
+
 function validateArtifactMetadataArray(output, artifactPathErrors = []) {
   if (!output || typeof output !== 'object' || Array.isArray(output) || !Object.hasOwn(output, 'artifacts') || !Array.isArray(output.artifacts)) return [];
 
@@ -15,15 +22,8 @@ function validateArtifactMetadataArray(output, artifactPathErrors = []) {
       }
     }
   }
-  const artifactSchema = {
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    $id: 'https://github.com/MrFlashAccount/Skills/schemas/workflow/output-artifact-contract-check',
-    $ref: 'https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact',
-  };
-  for (const [index, artifact] of output.artifacts.entries()) {
-    const validation = validateJsonSchema(artifactSchema, artifact, { schemas: [batonSchema] });
-    if (!validation.ok) errors.push(...formatSchemaErrors(validation.errors).split('; ').map((error) => `/artifacts/${index}${error.startsWith('/') ? error : ` ${error}`}`));
-  }
+  const validation = validateJsonSchema(artifactArraySchema, output.artifacts, { schemas: [batonSchema] });
+  if (!validation.ok) errors.push(...formatSchemaErrors(validation.errors).split('; ').map((error) => `/artifacts${error.startsWith('/') ? error : ` ${error}`}`));
   return errors;
 }
 

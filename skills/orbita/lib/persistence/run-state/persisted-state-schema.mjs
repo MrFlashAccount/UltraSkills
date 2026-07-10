@@ -14,11 +14,27 @@ function assertString(value, name) {
 function assertCommitSchema(commit) {
   if (commit === undefined) return;
   assertObject(commit, 'persisted run-state commit');
-  if (commit.version !== 1) throw new Error('persisted run-state commit has unsupported version');
+  if (![1, 2].includes(commit.version)) throw new Error('persisted run-state commit has unsupported version');
   assertString(commit.id, 'persisted run-state commit id');
   assertString(commit.createdAt, 'persisted run-state commit createdAt');
   if (!['pending', 'applying', 'applied'].includes(commit.status)) throw new Error('persisted run-state commit status is invalid');
   assertObject(commit.sideEffects, 'persisted run-state commit sideEffects');
+  if (commit.version === 2 && Object.hasOwn(commit, 'historyAppend')) {
+    assertObject(commit.historyAppend, 'persisted run-state commit historyAppend');
+    if (typeof commit.historyAppend.baseExists !== 'boolean') {
+      throw new Error('persisted run-state commit historyAppend.baseExists must be a boolean');
+    }
+    if (!Number.isSafeInteger(commit.historyAppend.baseSize) || commit.historyAppend.baseSize < 0) {
+      throw new Error('persisted run-state commit historyAppend.baseSize must be a non-negative safe integer');
+    }
+    if (!commit.historyAppend.baseExists && commit.historyAppend.baseSize !== 0) {
+      throw new Error('persisted run-state commit historyAppend.baseSize must be zero when the base file does not exist');
+    }
+    assertString(commit.historyAppend.transactionId, 'persisted run-state commit historyAppend.transactionId');
+    assertString(commit.historyAppend.entryText, 'persisted run-state commit historyAppend.entryText');
+    assertString(commit.historyAppend.entryHash, 'persisted run-state commit historyAppend.entryHash');
+    if (commit.historyAppend.transactionId !== commit.id) throw new Error('persisted run-state commit historyAppend.transactionId must match commit id');
+  }
 }
 
 function assertCurrentRequestsSchema(currentRequests, name = 'persisted run state currentRequests') {
@@ -68,11 +84,11 @@ export function commitMetadata(commit) {
   if (!commit) return undefined;
   const sideEffects = {
     baton: Object.hasOwn(commit, 'baton'),
-    history: typeof commit.historyText === 'string',
+    history: typeof commit.historyText === 'string' || commit?.historyAppend?.entryText !== undefined,
     currentRequests: Object.hasOwn(commit, 'currentRequests'),
   };
   return {
-    version: 1,
+    version: commit.version,
     id: commit.id,
     createdAt: commit.createdAt,
     status: commit.status ?? 'pending',

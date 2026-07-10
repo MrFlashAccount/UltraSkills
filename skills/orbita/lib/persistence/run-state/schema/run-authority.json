@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/run-authority",
+  "title": "Workflow Run Authority",
+  "description": "Canonical per-run workflow binding, claim context, lifecycle projection, and token-hash lease authority. Raw lease tokens are never persisted.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "topologyVersion",
+    "runId",
+    "workflow",
+    "status",
+    "createdAt",
+    "updatedAt",
+    "workerLease"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "topologyVersion": { "const": "run-authority-v1" },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "workflow": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "identity": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "status": { "enum": ["running", "needs_host_actions", "done", "failed"] },
+    "createdAt": { "type": "string", "minLength": 1 },
+    "updatedAt": { "type": "string", "minLength": 1 },
+    "taskKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,255}$"
+    },
+    "taskFingerprint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,255}$"
+    },
+    "claimContext": {
+      "type": "object",
+      "required": ["harness"],
+      "properties": {
+        "harness": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,127}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "workerLease": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["tokenHash", "tokenEpoch", "leaseExpiresAt"],
+          "properties": {
+            "tokenHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "tokenEpoch": { "type": "integer", "minimum": 1 },
+            "leaseExpiresAt": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

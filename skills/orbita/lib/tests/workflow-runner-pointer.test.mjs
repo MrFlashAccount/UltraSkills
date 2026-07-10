@@ -107,6 +107,7 @@ function snapshot(paths) {
   return {
     baton: JSON.parse(readFileSync(paths.batonPath, 'utf8')),
     history: readFileSync(paths.historyPath, 'utf8'),
+    authority: JSON.parse(readFileSync(paths.authorityPath, 'utf8')),
     index: JSON.parse(readFileSync(paths.runsIndexPath, 'utf8')).runs[paths.runId],
   };
 }
@@ -116,6 +117,7 @@ function rawRunFiles(paths) {
   return {
     baton: existsSync(paths.batonPath) ? readFileSync(paths.batonPath, 'utf8') : undefined,
     history: existsSync(paths.historyPath) ? readFileSync(paths.historyPath, 'utf8') : undefined,
+    authority: existsSync(paths.authorityPath) ? readFileSync(paths.authorityPath, 'utf8') : undefined,
     indexEntry: index.runs[paths.runId],
   };
 }
@@ -159,7 +161,7 @@ test('runner pointer API lists adjacent transitions and moves pointer with retai
   assert.match(afterMove.history.slice(beforeMove.history.length), /target position id:/);
   assert.match(afterMove.history.slice(beforeMove.history.length), /state preserved: true/);
   assert.match(afterMove.history.slice(beforeMove.history.length), /retained output acknowledgement: required/);
-  assert.equal(afterMove.index.status, 'needs_host_actions');
+  assert.equal(afterMove.authority.status, 'needs_host_actions');
 });
 
 test('runner pointer API list is read-only for claimed runs without persisted state', async () => {
@@ -281,7 +283,7 @@ test('runner pointer API allows rollback from terminal cursors and reports paral
   });
   assert.equal(terminalMoved.current.cursor, 'finalize');
   assert.equal(terminalMoved.current.status, 'running');
-  assert.equal(snapshot(terminalRun.paths).index.status, 'needs_host_actions');
+  assert.equal(snapshot(terminalRun.paths).authority.status, 'needs_host_actions');
 
   const parallelWorkflow = structuredClone(workflowDoc);
   parallelWorkflow.steps.prepare.next = ['branch_a', 'branch_b'];

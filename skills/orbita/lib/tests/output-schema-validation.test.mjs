@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -10,6 +9,8 @@ import { SchemaValidationError } from '../../../../shared/scripts/schema-validat
 import { validateAgainstOutputSchema as validateLoadedOutputSchema } from '../runtime/output/output-schema-validation.mjs';
 import { loadWorkflowResources } from '../persistence/workflow-resources/runtime-reader.mjs';
 import { artifactPathBoundaryErrors } from '../persistence/workflow-resources/artifact-path-boundaries.mjs';
+import { validateWorkflowFile } from './helpers/orbita-production-api.mjs';
+import { runWorkflowRuntimeApi } from './helpers/workflow-runtime-api-client.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-output-schema-check-'));
@@ -60,10 +61,6 @@ function baton(overrides = {}) {
   return { cursor: 'worker_step', status: 'running', state: { artifacts: [], results: [] }, ...overrides };
 }
 
-function runBun(args) {
-  return spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8' });
-}
-
 function renderPromptWithResources(context) {
   return renderWorkflowPrompt({
     ...context,
@@ -93,7 +90,7 @@ function assertMarkersInOrder(value, markers) {
   }
 }
 
-function expectCliResult(label, result, expectSuccess) {
+function expectRuntimeResult(label, result, expectSuccess) {
   const succeeded = result.status === 0;
   assert.equal(
     succeeded,
@@ -111,8 +108,8 @@ function workflowWithSchema(label, schema) {
   return doc;
 }
 
-function runWorkflowCommand(label, args, expectSuccess = true) {
-  const response = expectCliResult(label, runBun(args), expectSuccess);
+function runWorkflowCommand(label, options, expectSuccess = true) {
+  const response = expectRuntimeResult(label, runWorkflowRuntimeApi(options), expectSuccess);
   return response;
 }
 
@@ -122,7 +119,7 @@ function runApply(label, batonDoc, workerOutput, expectSuccess = true, doc = wor
   const outputPath = writeJson(`${prefix}-output.json`, workerOutput);
   const wfPath = writeJson(`${prefix}-workflow.json`, doc);
   const before = readFileSync(batonPath, 'utf8');
-  const response = runWorkflowCommand(label, ['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', wfPath, batonPath, outputPath], expectSuccess);
+  const response = runWorkflowCommand(label, { mode: 'apply', workflowPath: wfPath, batonPath, outputPath }, expectSuccess);
   assert.equal(readFileSync(batonPath, 'utf8'), before, `check '${label}' mutated baton file during apply`);
   return response;
 }
@@ -185,7 +182,7 @@ test('output.schema: workflow-package schema ref resolves consistently for valid
 });
 
 
-test('output.schema: CLI apply rejects workflow schema refs escaping repository root', () => {
+test('output.schema: runtime apply rejects workflow schema refs escaping repository root', () => {
   const repoDir = path.join(tempDir, 'cli-apply-schema-boundary-repo');
   const workflowDir = path.join(repoDir, 'workflows', 'demo');
   const outsideDir = path.join(tempDir, 'cli-apply-schema-boundary-outside');
@@ -213,14 +210,14 @@ test('output.schema: CLI apply rejects workflow schema refs escaping repository 
   writeFileSync(outputPath, `${JSON.stringify({ outcome: 'ready' }, null, 2)}
 `);
 
-  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', workflowPath, batonPath, outputPath]);
+  const result = runWorkflowRuntimeApi({ mode: 'apply', workflowPath, batonPath, outputPath });
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /output schema escapes repository root/);
 });
 
 
-test('output.schema: CLI apply allows workflow-relative traversal to repo shared resources', () => {
+test('output.schema: runtime apply allows workflow-relative traversal to repo shared resources', () => {
   const repoDir = path.join(tempDir, 'cli-apply-schema-shared-repo');
   const workflowDir = path.join(repoDir, 'workflows', 'demo');
   const sharedDir = path.join(repoDir, 'shared');
@@ -245,12 +242,12 @@ test('output.schema: CLI apply allows workflow-relative traversal to repo shared
   writeFileSync(batonPath, `${JSON.stringify(baton(), null, 2)}\n`);
   writeFileSync(outputPath, `${JSON.stringify({ outcome: 'ready' }, null, 2)}\n`);
 
-  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', workflowPath, batonPath, outputPath]);
+  const result = runWorkflowRuntimeApi({ mode: 'apply', workflowPath, batonPath, outputPath });
 
   assert.equal(result.status, 0, result.stderr);
 });
 
-test('output.schema: CLI apply rejects root-level workflow refs escaping workflow directory', () => {
+test('output.schema: runtime apply rejects root-level workflow refs escaping workflow directory', () => {
   const repoDir = path.join(tempDir, 'cli-apply-schema-root-boundary-repo');
   const outsideDir = path.join(tempDir, 'cli-apply-schema-root-boundary-outside');
   mkdirSync(repoDir, { recursive: true });
@@ -273,7 +270,7 @@ test('output.schema: CLI apply rejects root-level workflow refs escaping workflo
   writeFileSync(batonPath, `${JSON.stringify(baton(), null, 2)}\n`);
   writeFileSync(outputPath, `${JSON.stringify({ outcome: 'ready' }, null, 2)}\n`);
 
-  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', workflowPath, batonPath, outputPath]);
+  const result = runWorkflowRuntimeApi({ mode: 'apply', workflowPath, batonPath, outputPath });
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /output schema escapes repository root/);
@@ -299,10 +296,7 @@ test('output.schema: validate-workflow rejects schema refs escaping default repo
   const workflowPath = path.join(workflowDir, 'workflow.json');
   writeFileSync(workflowPath, `${JSON.stringify(doc, null, 2)}\n`);
 
-  const result = runBun(['skills/orbita/lib/entrypoints/cli/validate-workflow.mjs', workflowPath]);
-
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /output schema escapes repository root/);
+  assert.throws(() => validateWorkflowFile(workflowPath), /output schema escapes repository root/);
 });
 
 test('output.schema: invalid JSON Schema throws controlled workflow error', () => {
@@ -497,12 +491,11 @@ test('output.schema: structured step output is available by step id in downstrea
   writeFileSync(path.join(tempDir, 'worker_step', 'artifacts', 'packet.md'), 'Structured prompt input artifact body.\n');
   const batonPath = writeJson('output-schema-structured-project-baton.json', applyResponse.baton);
   const workflowPath = writeJson('output-schema-structured-project-workflow.json', doc);
-  const renderResponse = runWorkflowCommand('output-schema-structured-project-render', [
-    'skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs',
-    'render',
+  const renderResponse = runWorkflowCommand('output-schema-structured-project-render', {
+    mode: 'render',
     workflowPath,
     batonPath,
-  ]);
+  });
 
   assert.doesNotMatch(renderResponse.steps[0].compiledPrompt.prompt, /## Prompt input context/);
   assert.match(renderResponse.steps[0].compiledPrompt.prompt, /Use prior worker payload:/);
@@ -655,6 +648,32 @@ test('output.schema: central artifact contract accepts simplified shape and reje
   const relativePath = validateAgainstOutputSchema({ schema, output: { outcome: 'ready', artifacts: [{ id: 'packet', content_type: 'text/markdown', path: 'plan/artifacts/plan.md' }] } });
   assert.equal(relativePath.ok, false);
   assert.match(relativePath.errors, /path/);
+});
+
+test('output.schema: 100 warm artifact validations stay below the regression budget', () => {
+  const schema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome', 'artifacts'],
+    properties: {
+      outcome: { const: 'ready' },
+      artifacts: { type: 'array' },
+    },
+    additionalProperties: false,
+  };
+  const output = {
+    outcome: 'ready',
+    artifacts: [{ id: 'packet', content_type: 'text/markdown', path: '/runs/worker_step/artifacts/packet.md' }],
+  };
+
+  assert.equal(validateAgainstOutputSchema({ schema, output }).ok, true);
+  const startedAt = performance.now();
+  for (let index = 0; index < 100; index += 1) {
+    assert.equal(validateAgainstOutputSchema({ schema, output }).ok, true);
+  }
+  const elapsedMs = performance.now() - startedAt;
+
+  assert.ok(elapsedMs <= 150, `expected 100 warm artifact validations in at most 150ms, got ${elapsedMs.toFixed(1)}ms`);
 });
 
 test('output.schema: contextual artifact validation requires paths under the expected artifact output directory', () => {

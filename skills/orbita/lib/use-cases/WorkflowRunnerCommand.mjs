@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 
 export function createWorkflowRunnerCommand({
   readFile,
-  stat,
   join,
   resolve,
   applyWorkflowOutput,
@@ -39,9 +38,11 @@ export function createWorkflowRunnerCommand({
   pathExists,
   resolveRunPaths,
   createRunIndexEntry,
-  readRunsIndex,
-  runsIndexPathsForRoot,
   upsertRunIndexEntry,
+  readRunAuthorityWithLegacyFallback,
+  runAuthorityFromIndexEntry,
+  writeRunAuthority,
+  durableFileSignature,
   withRunStateLock,
   publicErrorMessage,
   assertAbsoluteWorkflowPath,
@@ -66,17 +67,12 @@ export function createWorkflowRunnerCommand({
     }
   }
 
-  async function workflowFileSignature(workflowPath) {
-    const stats = await stat(workflowPath);
-    return `${resolve(workflowPath)}:${stats.mtimeMs}:${stats.size}`;
-  }
-
   function contentSignature(value) {
     return createHash('sha256').update(JSON.stringify(value)).digest('hex');
   }
 
-  async function runnerResponseForRendered(paths, rendered, { initialized, resumed, leaseToken, includeInlineInstructions = false }) {
-    const workflowDoc = readWorkflowDocument(paths.workflowPath, 'workflow');
+  async function runnerResponseForRendered(paths, rendered, { initialized, resumed, leaseToken, includeInlineInstructions = false, workflowDoc }) {
+    workflowDoc ??= readWorkflowDocument(paths.workflowPath, 'workflow');
     return {
       ...toHostResponse(rendered, {
         runId: paths.runId,
@@ -94,66 +90,90 @@ export function createWorkflowRunnerCommand({
     };
   }
 
-  async function assertWorkerLeaseAuthority(paths, { leaseToken, now = new Date(), allowStale = false } = {}) {
-    const index = await readRunsIndex(runsIndexPathsForRoot(paths.runsRoot));
-    const run = index.runs[paths.runId];
-    if (allowStale) assertMatchingTokenAuthority(run?.workerLease, leaseToken, { runId: paths.runId });
-    else assertFreshTokenAuthority(run?.workerLease, leaseToken, { runId: paths.runId, now });
+  async function assertWorkerLeaseAuthority(paths, { authority = paths.runAuthority, leaseToken, now = new Date(), allowStale = false } = {}) {
+    const current = authority ?? await readRunAuthorityWithLegacyFallback(paths);
+    if (allowStale) assertMatchingTokenAuthority(current?.workerLease, leaseToken, { runId: paths.runId });
+    else assertFreshTokenAuthority(current?.workerLease, leaseToken, { runId: paths.runId, now });
+    return current;
   }
 
   async function assertPreLockWorkerLeaseAuthority(paths, { leaseToken, now = new Date(), allowUnclaimed = false, allowStale = false } = {}) {
     if (!leaseToken) throw new Error('workflow run token is required');
-    const index = await readRunsIndex(runsIndexPathsForRoot(paths.runsRoot));
-    const run = index.runs[paths.runId];
-    if (!run && allowUnclaimed) return;
-    if (allowStale) assertMatchingTokenAuthority(run?.workerLease, leaseToken, { runId: paths.runId });
-    else assertFreshTokenAuthority(run?.workerLease, leaseToken, { runId: paths.runId, now });
+    const authority = await readRunAuthorityWithLegacyFallback(paths);
+    if (!authority && allowUnclaimed) return undefined;
+    if (allowStale) assertMatchingTokenAuthority(authority?.workerLease, leaseToken, { runId: paths.runId });
+    else assertFreshTokenAuthority(authority?.workerLease, leaseToken, { runId: paths.runId, now });
+    return authority;
   }
 
-  async function renewedWorkerLeaseAuthority(paths, { leaseToken, now = new Date() } = {}) {
-    const index = await readRunsIndex(runsIndexPathsForRoot(paths.runsRoot));
-    const run = index.runs[paths.runId];
-    assertMatchingTokenAuthority(run?.workerLease, leaseToken, { runId: paths.runId });
-    return renewTokenLease(run.workerLease, { now });
+  async function persistRenewedRunAuthority(paths, authority, { leaseToken, now = new Date(), status, taskKey, taskFingerprint } = {}) {
+    assertMatchingTokenAuthority(authority?.workerLease, leaseToken, { runId: paths.runId });
+    const next = {
+      ...authority,
+      status: status ?? authority.status,
+      updatedAt: now.toISOString(),
+      workerLease: renewTokenLease(authority.workerLease, { now }),
+    };
+    if (taskKey !== undefined) next.taskKey = taskKey;
+    if (taskFingerprint !== undefined) next.taskFingerprint = taskFingerprint;
+    return writeRunAuthority(paths, next);
   }
 
   async function initializeMissingRunLease(paths, { leaseToken, now = new Date() } = {}) {
-    const index = await readRunsIndex(runsIndexPathsForRoot(paths.runsRoot));
-    if (index.runs[paths.runId]) return false;
+    const existing = paths.runAuthority ?? await readRunAuthorityWithLegacyFallback(paths);
+    if (existing) return { created: false, authority: existing };
     const hasExistingRunState = await pathExists(paths.batonPath) || await pathExists(paths.historyPath);
     if (hasExistingRunState) {
       throw new Error(`workflow run requires indexed lease authority: ${paths.runId}`);
     }
-    await createRunIndexEntry(paths, {
+    const entry = await createRunIndexEntry(paths, {
       status: 'running',
       workflowPath: paths.workflowPath,
       workerLease: buildTokenLease({ token: leaseToken, now }),
     });
-    return true;
+    const authority = runAuthorityFromIndexEntry(paths, entry);
+    try {
+      await writeRunAuthority(paths, authority, { createOnly: true });
+    } catch (error) {
+      await upsertRunIndexEntry(paths, { status: 'failed', workflowPath: paths.workflowPath, workerLease: null });
+      throw error;
+    }
+    return { created: true, authority };
   }
 
   async function markNewRunFailed(paths) {
+    const current = await readRunAuthorityWithLegacyFallback(paths);
+    const updatedAt = new Date().toISOString();
+    const authority = current && await writeRunAuthority(paths, {
+      ...current,
+      status: 'failed',
+      updatedAt,
+      workerLease: null,
+    });
     await upsertRunIndexEntry(paths, {
       status: 'failed',
-      workflowPath: paths.workflowPath,
+      workflowPath: authority?.workflow.path ?? paths.workflowPath,
+      workflowIdentity: authority?.workflow.identity,
+      replaceWorkflowBinding: authority !== undefined,
+      updatedAt,
+      claimContext: authority?.claimContext,
       workerLease: null,
     });
   }
 
-  async function indexedRunForPaths(paths) {
-    const index = await readRunsIndex(runsIndexPathsForRoot(paths.runsRoot));
-    return index.runs[paths.runId];
+  async function authorityForPaths(paths) {
+    return readRunAuthorityWithLegacyFallback(paths);
   }
 
-  async function persistNextHostResponse(paths, rendered, runState, { leaseToken } = {}) {
-    const persistedResponse = await runnerResponseForRendered(paths, rendered, runState);
+  async function persistNextHostResponse(paths, rendered, runState, { leaseToken, workflowDoc, currentState } = {}) {
+    const persistedResponse = await runnerResponseForRendered(paths, rendered, { ...runState, workflowDoc });
     await writePersistedRunStateUpdate(paths, {
       baton: persistedResponse.baton,
       currentRequests: persistedResponse.requests ?? [],
       history: { source: 'workflow-runner', baton: persistedResponse.baton, requests: persistedResponse.requests },
       writeBaton: runState.initialized,
-    });
-    return runnerResponseForRendered(paths, rendered, { ...runState, leaseToken, includeInlineInstructions: true });
+    }, { currentState });
+    return runnerResponseForRendered(paths, rendered, { ...runState, leaseToken, includeInlineInstructions: true, workflowDoc });
   }
 
   function publicApiError(error, options = {}) {
@@ -169,12 +189,12 @@ export function createWorkflowRunnerCommand({
       const lockPaths = resolveRunPaths({ runId, runsRoot });
       await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
       return await withRunStateLock(lockPaths, async () => {
-        const paths = await resolveIndexedRunPaths({ runId, workflowPath, runsRoot });
+        const paths = await resolveAuthorityBoundRunPaths({ runId, workflowPath, runsRoot });
         await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
         if (!(await pathExists(paths.historyPath)) || !(await pathExists(paths.batonPath))) return false;
         if (await pathExists(paths.durableCommitPath)) return false;
         await recoverDurableCommit(paths);
-        const current = await readPersistedRunState(paths);
+        const current = await readPersistedRunState(paths, { includeHistoryText: false });
         const details = publicFailureHistoryDetails({
           command,
           error: publicErrorMessage(error?.message ?? error, { runsRoot: paths.runsRoot }),
@@ -228,6 +248,7 @@ export function createWorkflowRunnerCommand({
       resumed: true,
       leaseToken,
       includeInlineInstructions,
+      workflowDoc: runtime.workflow,
     });
     return { runtime, rendered, response };
   }
@@ -237,12 +258,13 @@ export function createWorkflowRunnerCommand({
     const lockPaths = resolveRunPaths({ runId, runsRoot });
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowUnclaimed: true });
     return withRunStateLock(lockPaths, async () => {
-      const paths = await resolveIndexedRunPaths({ runId, workflowPath, runsRoot });
+      const paths = await resolveAuthorityBoundRunPaths({ runId, workflowPath, runsRoot });
       const hasExistingBaton = await pathExists(paths.batonPath);
       if (!hasExistingBaton) validateWorkflowStartup({ workflowPath: paths.workflowPath });
-      const createdIndexEntry = await initializeMissingRunLease(paths, { leaseToken, now });
+      const initialization = await initializeMissingRunLease(paths, { leaseToken, now });
+      const createdIndexEntry = initialization.created;
       try {
-        await assertWorkerLeaseAuthority(paths, { leaseToken, now });
+        const authority = await assertWorkerLeaseAuthority(paths, { authority: initialization.authority, leaseToken, now });
         if (!hasExistingBaton && userPromptFile !== undefined && String(userPromptFile).trim().length === 0) {
           throw new Error('--user-prompt-file path must not be empty or whitespace-only');
         }
@@ -254,16 +276,21 @@ export function createWorkflowRunnerCommand({
           : startupUserPromptTarget({ workflow: workflowDoc, start: workflowDoc?.start });
         const runState = await ensureRunFiles(paths, { userPrompt: startupUserPrompt, userPromptTarget: startupPromptTarget });
         await recoverDurableCommit(paths);
-        const persisted = await readPersistedRunState(paths);
+        const persisted = await readPersistedRunState(paths, { includeHistoryText: false });
         const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: persisted.baton });
         const renderResources = resourcesWithValidatingWriter(runtime.resources, paths, { leaseToken });
         const rendered = runNext({ workflowDoc: runtime.workflow, batonDoc: persisted.baton, resources: renderResources, includeDiagnostics });
         const response = await persistNextHostResponse(paths, rendered, {
           initialized: runState.initialized,
           resumed: runState.resumed,
-        }, { leaseToken });
-        const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
-        await upsertRunIndexEntry(paths, { status: response.status, workflowPath: paths.workflowPath, taskKey, taskFingerprint, workerLease });
+        }, { leaseToken, workflowDoc: runtime.workflow, currentState: persisted });
+        await persistRenewedRunAuthority(paths, authority, {
+          leaseToken,
+          now,
+          status: response.status,
+          taskKey,
+          taskFingerprint,
+        });
         return response;
       } catch (error) {
         if (createdIndexEntry) await markNewRunFailed(paths);
@@ -434,9 +461,12 @@ export function createWorkflowRunnerCommand({
     if (!Array.isArray(current.currentRequests)) return undefined;
     if (typeof current.currentRequestsWorkflowSignature !== 'string') return undefined;
     if (typeof current.currentRequestsBatonSignature !== 'string') return undefined;
-    const currentWorkflowSignature = await workflowFileSignature(paths.workflowPath);
+    const currentWorkflowSignature = await durableFileSignature(paths.workflowPath);
     if (current.currentRequestsWorkflowSignature !== currentWorkflowSignature) return undefined;
-    if (current.currentRequestsBatonSignature !== contentSignature(current.baton)) return undefined;
+    const currentBatonSignature = /^[0-9a-f]{64}$/.test(current.currentRequestsBatonSignature)
+      ? contentSignature(current.baton)
+      : await durableFileSignature(paths.batonPath);
+    if (current.currentRequestsBatonSignature !== currentBatonSignature) return undefined;
     const requests = structuredClone(current.currentRequests);
     return {
       status: requests.length > 0 ? 'needs_host_actions' : 'done',
@@ -465,44 +495,56 @@ export function createWorkflowRunnerCommand({
       resumed: true,
       leaseToken,
       includeInlineInstructions: false,
+      workflowDoc: runtime.workflow,
     });
     return { runtime, response };
   }
 
-  async function outputForCurrentState(paths) {
+  async function outputForCurrentState(paths, { includeHistoryText = false } = {}) {
     await recoverDurableCommit(paths);
-    const current = await readPersistedRunState(paths);
+    const current = await readPersistedRunState(paths, { includeHistoryText });
     const { runtime, response } = await currentRuntimeAndResponse(paths, current);
     if (response.status !== 'needs_host_actions') throw new Error(`current runner response is '${response.status}', not needs_host_actions`);
 
     const requests = response.requests ?? [];
     const isPreparedParallelContinuation = Array.isArray(current.baton?.cursor) || requests.some((request) => stepIdForRequest(request) !== current.baton?.cursor);
-    return outputOrRecoveryForAcceptedState(current.baton, requests, {
-      isPreparedParallelContinuation,
-      workflow: runtime.workflow,
-      runsRoot: paths.runsRoot,
-      runtime,
-      response,
-      currentHistoryText: current.history?.text,
-    });
+    return {
+      ...outputOrRecoveryForAcceptedState(current.baton, requests, {
+        isPreparedParallelContinuation,
+        workflow: runtime.workflow,
+        runsRoot: paths.runsRoot,
+        runtime,
+        response,
+        currentHistoryText: current.history?.text,
+      }),
+      currentState: current,
+    };
   }
 
-  async function resolveIndexedRunPaths({ runId, workflowPath, runsRoot }) {
+  async function resolveAuthorityBoundRunPaths({ runId, workflowPath, runsRoot }) {
     workflowPath = assertAbsoluteWorkflowPath(workflowPath);
     const defaultPaths = resolveRunPaths({ runId, runsRoot });
-    const indexedRun = await indexedRunForPaths(defaultPaths);
-    const indexedWorkflowPath = indexedRun?.workflow?.path;
-    if (typeof indexedWorkflowPath === 'string' && indexedWorkflowPath.length > 0) {
-      if (workflowPath && resolve(indexedWorkflowPath) !== resolve(workflowPath)) {
+    const authority = await authorityForPaths(defaultPaths);
+    const authorityWorkflowPath = authority?.workflow?.path;
+    if (typeof authorityWorkflowPath === 'string' && authorityWorkflowPath.length > 0) {
+      if (workflowPath && resolve(authorityWorkflowPath) !== resolve(workflowPath)) {
         throw new Error(`workflow run is already bound to a different workflow: ${runId}`);
       }
-      return { ...resolveRunPaths({ runId, workflowPath: indexedWorkflowPath, runsRoot }), claimContext: indexedRun.claimContext };
+      return {
+        ...resolveRunPaths({ runId, workflowPath: authorityWorkflowPath, runsRoot }),
+        claimContext: authority.claimContext,
+        runAuthority: authority,
+      };
     }
-    return { ...(workflowPath ? resolveRunPaths({ runId, workflowPath, runsRoot }) : defaultPaths), claimContext: indexedRun?.claimContext };
+    return {
+      ...(workflowPath ? resolveRunPaths({ runId, workflowPath, runsRoot }) : defaultPaths),
+      claimContext: authority?.claimContext,
+      runAuthority: authority,
+    };
   }
 
   async function resolveContinueRunPaths({ runId, workflowPath, runsRoot }) {
-    return resolveIndexedRunPaths({ runId, workflowPath, runsRoot });
+    return resolveAuthorityBoundRunPaths({ runId, workflowPath, runsRoot });
   }
 
   async function next(options = {}) {
@@ -564,10 +606,9 @@ export function createWorkflowRunnerCommand({
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
     return withRunStateLock(lockPaths, async () => {
       const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
-      await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
+      const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
       await ensureRunFiles(paths);
-      await recoverDurableCommit(paths);
-      const continuation = await outputForCurrentState(paths);
+      const continuation = await outputForCurrentState(paths, { includeHistoryText: debugNote !== undefined });
       const { outputValue, historyOutput, recoverableWorkerBlockers, acceptedOutputs, recoveryResolutions } = continuation;
       const preActions = applyWorkerBindingsForContinue({
         baton: continuation.currentBaton,
@@ -582,15 +623,15 @@ export function createWorkflowRunnerCommand({
         const recoveryRuntime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: recoveryBaton });
         const renderResources = resourcesWithValidatingWriter(recoveryRuntime.resources, paths, { leaseToken });
         const rendered = runNext({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
-        const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true });
-        const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
-        await writeContinuePreActionHistory(paths, {
+        const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true, workflowDoc: recoveryRuntime.workflow });
+        const currentState = await writeContinuePreActionHistory(paths, {
           bindingHistoryEntries: preActions.entries,
           debugNote,
           baton: currentBaton,
           response: continuation.response,
           currentHistoryText: continuation.currentHistoryText,
           leaseToken,
+          currentState: continuation.currentState,
         });
         await writePersistedRunStateUpdate(paths, {
           baton: response.baton,
@@ -602,8 +643,8 @@ export function createWorkflowRunnerCommand({
             requests: response.requests,
             details: transitionHistoryDetails({ before: runtime.baton, after: response.baton, output: historyOutput, requests: response.requests }),
           },
-        });
-        await upsertRunIndexEntry(paths, { status: response.status, workflowPath: paths.workflowPath, workerLease });
+        }, { currentState });
+        await persistRenewedRunAuthority(paths, authority, { leaseToken, now, status: response.status });
         return response;
       }
       if (recoverableWorkerBlockers) {
@@ -611,15 +652,15 @@ export function createWorkflowRunnerCommand({
         const recoveryRuntime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: recoveryBaton });
         const renderResources = resourcesWithValidatingWriter(recoveryRuntime.resources, paths, { leaseToken });
         const rendered = runNext({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
-        const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true });
-        const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
-        await writeContinuePreActionHistory(paths, {
+        const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true, workflowDoc: recoveryRuntime.workflow });
+        const currentState = await writeContinuePreActionHistory(paths, {
           bindingHistoryEntries: preActions.entries,
           debugNote,
           baton: currentBaton,
           response: continuation.response,
           currentHistoryText: continuation.currentHistoryText,
           leaseToken,
+          currentState: continuation.currentState,
         });
         await writePersistedRunStateUpdate(paths, {
           baton: response.baton,
@@ -631,23 +672,23 @@ export function createWorkflowRunnerCommand({
             requests: response.requests,
             details: transitionHistoryDetails({ before: runtime.baton, after: response.baton, output: historyOutput, requests: response.requests }),
           },
-        });
-        await upsertRunIndexEntry(paths, { status: response.status, workflowPath: paths.workflowPath, workerLease });
+        }, { currentState });
+        await persistRenewedRunAuthority(paths, authority, { leaseToken, now, status: response.status });
         return response;
       }
       const applied = applyWorkflowOutput({ workflowDoc: runtime.workflow, batonDoc: runtime.baton, outputValue, resources: runtime.resources });
       const renderResources = resourcesWithValidatingWriter(runtime.resources, paths, { leaseToken });
       const rendered = renderAppliedResponse({ workflowDoc: runtime.workflow, response: applied, resources: renderResources, includeDiagnostics });
 
-      const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true });
-      const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
-      await writeContinuePreActionHistory(paths, {
+      const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true, workflowDoc: runtime.workflow });
+      const currentState = await writeContinuePreActionHistory(paths, {
         bindingHistoryEntries: preActions.entries,
         debugNote,
         baton: currentBaton,
         response: continuation.response,
         currentHistoryText: continuation.currentHistoryText,
         leaseToken,
+        currentState: continuation.currentState,
       });
       await writePersistedRunStateUpdate(paths, {
         baton: applied.baton,
@@ -659,8 +700,8 @@ export function createWorkflowRunnerCommand({
           requests: response.requests,
           details: transitionHistoryDetails({ before: runtime.baton, after: applied.baton, output: historyOutput, requests: response.requests }),
         },
-      });
-      await upsertRunIndexEntry(paths, { status: response.status, workflowPath: paths.workflowPath, workerLease });
+      }, { currentState });
+      await persistRenewedRunAuthority(paths, authority, { leaseToken, now, status: response.status });
       return response;
     });
   }
@@ -697,7 +738,7 @@ export function createWorkflowRunnerCommand({
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
     return withRunStateLock(lockPaths, async () => {
       const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
-      await assertWorkerLeaseAuthority(paths, { leaseToken, now });
+      const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now });
       await recoverDurableCommit(paths);
       const current = await readPersistedRunState(paths);
       const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
@@ -718,9 +759,8 @@ export function createWorkflowRunnerCommand({
           output: `pointer:${resolved.transition.id}`,
           details: pointerMoveHistoryDetails({ transition: resolved.transition }),
         },
-      });
-      const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
-      await upsertRunIndexEntry(paths, { status: response.status, workflowPath: paths.workflowPath, workerLease });
+      }, { currentState: current });
+      await persistRenewedRunAuthority(paths, authority, { leaseToken, now, status: response.status });
       return {
         ok: true,
         runId: paths.runId,
@@ -886,14 +926,15 @@ export function createWorkflowRunnerCommand({
     return { baton: nextBaton, entries };
   }
 
-  async function writeContinuePreActionHistory(paths, { bindingHistoryEntries, debugNote, baton, response, currentHistoryText, leaseToken }) {
+  async function writeContinuePreActionHistory(paths, { bindingHistoryEntries, debugNote, baton, response, currentHistoryText, leaseToken, currentState }) {
+    let nextState = currentState;
     for (const entry of bindingHistoryEntries) {
-      await writePersistedRunStateUpdate(paths, {
+      nextState = await writePersistedRunStateUpdate(paths, {
         baton: entry.baton,
         history: { source: 'workflow-runner-continue-bind-agent', baton: entry.baton, output: `bound-agent:${entry.acceptedStepId}`, requests: entry.requests },
-      });
+      }, { currentState: nextState });
     }
-    if (debugNote === undefined) return;
+    if (debugNote === undefined) return nextState;
     const details = orchestratorDebugHistoryDetails({ note: debugNote, leaseToken });
     const historyScope = latestNonOrchestratorHistoryScope(currentHistoryText);
     await appendHistoryOnce(
@@ -901,6 +942,7 @@ export function createWorkflowRunnerCommand({
       { source: 'workflow-runner-continue-orchestrator', baton, requests: response.requests ?? [], details },
       { dedupeKey: `workflow-runner-continue-orchestrator:${historyScope}:${details.join('\n')}` },
     );
+    return undefined;
   }
 
   function latestNonOrchestratorHistoryScope(historyText) {
@@ -923,10 +965,10 @@ export function createWorkflowRunnerCommand({
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
     return withRunStateLock(lockPaths, async () => {
       const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
-      await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
+      const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
       await ensureRunFiles(paths);
       await recoverDurableCommit(paths);
-      const current = await readPersistedRunState(paths);
+      const current = await readPersistedRunState(paths, { includeHistoryText: false });
       const { runtime, response } = await currentRuntimeAndResponse(paths, current, { leaseToken });
       if (response.status !== 'needs_host_actions') throw staleWorkflowCommandError(stepId, response);
       const request = currentRequestForStep(response, stepId);
@@ -969,9 +1011,8 @@ export function createWorkflowRunnerCommand({
         baton,
         currentRequests: response.requests ?? [],
         history: { source: 'workflow-runner-write-output', baton, output: `accepted:${acceptedStepId}`, requests: response.requests ?? [], details },
-      });
-      const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
-      await upsertRunIndexEntry(paths, { workflowPath: paths.workflowPath, workerLease });
+      }, { currentState: current });
+      await persistRenewedRunAuthority(paths, authority, { leaseToken, now });
       return {
         ok: true,
         runId: paths.runId,
@@ -992,10 +1033,10 @@ export function createWorkflowRunnerCommand({
     const lockPaths = resolveRunPaths({ runId, runsRoot });
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
     return withRunStateLock(lockPaths, async () => {
-      const paths = await resolveIndexedRunPaths({ runId, workflowPath, runsRoot });
-      await assertWorkerLeaseAuthority(paths, { leaseToken, now });
+      const paths = await resolveAuthorityBoundRunPaths({ runId, workflowPath, runsRoot });
+      const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now });
       await recoverDurableCommit(paths);
-      const current = await readPersistedRunState(paths);
+      const current = await readPersistedRunState(paths, { includeHistoryText: false });
       const { rendered, response } = await renderCurrentHostResponse(paths, current.baton, { leaseToken, followUp });
       if (response.status !== 'needs_host_actions') throw staleWorkflowCommandError(stepId, response);
       const request = currentRequestForStep(response, stepId);
@@ -1005,8 +1046,7 @@ export function createWorkflowRunnerCommand({
       if (typeof prompt !== 'string' || prompt.trim().length === 0) {
         throw new Error(`missing compiled instructions for workflow step '${stepIdForRequest(request)}'`);
       }
-      const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
-      await upsertRunIndexEntry(paths, { workflowPath: paths.workflowPath, workerLease });
+      await persistRenewedRunAuthority(paths, authority, { leaseToken, now });
       return prompt;
     });
   }

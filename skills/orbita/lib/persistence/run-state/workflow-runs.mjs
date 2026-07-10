@@ -2,10 +2,33 @@ import { randomUUID } from 'node:crypto';
 import { rename, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { assertSafeRunId, defaultWorkflowPath, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths, workflowRunsRoot } from './paths.mjs';
-import { createRunIndexEntry, deleteRunIndexEntry, readRunsIndex, runsIndexPathsForRoot, updateRunIndexEntry } from './run-index.mjs';
+import { createRunIndexEntry, deleteRunIndexEntry, readRunsIndex, runsIndexPathsForRoot, upsertRunIndexEntry } from './run-index.mjs';
 import { assertMatchingTokenAuthority, buildTokenLease, generateLeaseToken, occupancyForLease, renewTokenLease } from './lease-authority.mjs';
 import { withRunStateLock } from './lock.mjs';
+import {
+  mergeRunAuthorityIntoIndexEntry,
+  readRunAuthority,
+  readRunAuthorityWithLegacyFallback,
+  runAuthorityFromIndexEntry,
+  writeRunAuthority,
+} from './run-authority.mjs';
 import { resolveAbsoluteWorkflowPath } from '../../workflow-path-boundary.mjs';
+
+const AUTHORITY_READ_CONCURRENCY = 32;
+
+async function mapWithConcurrency(values, limit, mapper) {
+  const results = new Array(values.length);
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(values[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, () => worker()));
+  return results;
+}
 
 function publicRun(entry, { now = new Date() } = {}) {
   const workflow = {
@@ -35,7 +58,12 @@ function sortByUpdatedAtDesc(left, right) {
 export async function listWorkflowRunsAtRoot({ runsRoot = workflowRunsRoot, now = new Date() } = {}) {
   await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
   const index = await readRunsIndex(runsIndexPathsForRoot(runsRoot));
-  return Object.values(index.runs).map((entry) => publicRun(entry, { now })).sort(sortByUpdatedAtDesc);
+  const entries = await mapWithConcurrency(Object.values(index.runs), AUTHORITY_READ_CONCURRENCY, async (entry) => {
+    const paths = resolveRunPaths({ runId: entry.runId, workflowPath: entry.workflow.path, runsRoot });
+    const authority = await readRunAuthority(paths) ?? runAuthorityFromIndexEntry(paths, entry);
+    return mergeRunAuthorityIntoIndexEntry(entry, authority);
+  });
+  return entries.map((entry) => publicRun(entry, { now })).sort(sortByUpdatedAtDesc);
 }
 
 export function summarizeWorkflowRuns(runs) {
@@ -62,6 +90,21 @@ function canonicalHarness(harness) {
   return typeof harness === 'string' ? harness.toLowerCase() : harness;
 }
 
+function indexProjectionPatch(authority) {
+  return {
+    workflowPath: authority.workflow.path,
+    workflowIdentity: authority.workflow.identity,
+    replaceWorkflowBinding: true,
+    status: authority.status,
+    createdAt: authority.createdAt,
+    updatedAt: authority.updatedAt,
+    taskKey: authority.taskKey,
+    taskFingerprint: authority.taskFingerprint,
+    claimContext: authority.claimContext,
+    workerLease: authority.workerLease,
+  };
+}
+
 function assertExistingWorkflowBinding(existing, paths, { requestedWorkflowPath } = {}) {
   const existingWorkflowPath = existing?.workflow?.path;
   if (requestedWorkflowPath === undefined || typeof existingWorkflowPath !== 'string' || existingWorkflowPath.length === 0) return;
@@ -77,6 +120,7 @@ export async function registerWorkflowRunAtRoot({ runId, title, summary, workflo
   const leaseToken = claim ? generateLeaseToken() : undefined;
   const workerLease = claim ? buildTokenLease({ token: leaseToken, leaseMs, now }) : null;
   return withRunStateLock(paths, async () => {
+    if (await readRunAuthorityWithLegacyFallback(paths)) throw new Error(`workflow run already exists: ${paths.runId}`);
     const entry = await createRunIndexEntry(paths, {
       title,
       summary,
@@ -88,7 +132,14 @@ export async function registerWorkflowRunAtRoot({ runId, title, summary, workflo
       ...(claim && harness !== undefined ? { claimContext: { harness: canonicalHarness(harness) } } : {}),
       workerLease,
     });
-    const response = publicRun(entry, { now });
+    const authority = runAuthorityFromIndexEntry(paths, entry);
+    try {
+      await writeRunAuthority(paths, authority, { createOnly: true });
+    } catch (error) {
+      await deleteRunIndexEntry(paths);
+      throw error;
+    }
+    const response = publicRun(mergeRunAuthorityIntoIndexEntry(entry, authority), { now });
     if (leaseToken) response.leaseToken = leaseToken;
     return response;
   });
@@ -102,28 +153,29 @@ async function claimWorkflowRunAtRootInternal({ runId, workflowPath, runsRoot = 
   try {
     return await withRunStateLock(paths, async () => {
       let tokenWasIssued = false;
-      const entry = await updateRunIndexEntry(paths, (existing) => {
-        assertExistingWorkflowBinding(existing, paths, { requestedWorkflowPath: workflowPath });
-        const occupancy = occupancyForLease(existing.workerLease, now);
-        if (leaseToken) {
-          try { assertMatchingTokenAuthority(existing.workerLease, leaseToken, { runId: safeRunId }); }
-          catch (error) {
-            const conflict = new Error(error.message);
-            conflict.code = 'WORKFLOW_RUN_OCCUPIED';
-            conflict.run = publicRun(existing, { now });
-            throw conflict;
-          }
-          const next = {
-            ...existing,
-            updatedAt: now.toISOString(),
-            workerLease: renewTokenLease(existing.workerLease, { leaseMs, now }),
-          };
-          if (!preserveClaimContext) {
-            if (harness === undefined) delete next.claimContext;
-            else next.claimContext = { harness: canonicalHarness(harness) };
-          }
-          return next;
+      const existing = await readRunAuthorityWithLegacyFallback(paths);
+      if (!existing) throw new Error(`unknown workflow run: ${safeRunId}`);
+      assertExistingWorkflowBinding(existing, paths, { requestedWorkflowPath: workflowPath });
+      const occupancy = occupancyForLease(existing.workerLease, now);
+      let next;
+      if (leaseToken) {
+        try { assertMatchingTokenAuthority(existing.workerLease, leaseToken, { runId: safeRunId }); }
+        catch (error) {
+          const conflict = new Error(error.message);
+          conflict.code = 'WORKFLOW_RUN_OCCUPIED';
+          conflict.run = publicRun(existing, { now });
+          throw conflict;
         }
+        next = {
+          ...existing,
+          updatedAt: now.toISOString(),
+          workerLease: renewTokenLease(existing.workerLease, { leaseMs, now }),
+        };
+        if (!preserveClaimContext) {
+          if (harness === undefined) delete next.claimContext;
+          else next.claimContext = { harness: canonicalHarness(harness) };
+        }
+      } else {
         if (occupancy.state === 'occupied') {
           const conflict = new Error(`workflow run is occupied: ${safeRunId}`);
           conflict.code = 'WORKFLOW_RUN_OCCUPIED';
@@ -137,16 +189,27 @@ async function claimWorkflowRunAtRootInternal({ runId, workflowPath, runsRoot = 
           throw stale;
         }
         tokenWasIssued = true;
-        const next = {
+        next = {
           ...existing,
           updatedAt: now.toISOString(),
-          workerLease: buildTokenLease({ token: issuedLeaseToken, leaseMs, now }),
+          workerLease: buildTokenLease({
+            token: issuedLeaseToken,
+            leaseMs,
+            now,
+            tokenEpoch: (existing.workerLease?.tokenEpoch ?? 0) + 1,
+          }),
         };
         if (harness === undefined) delete next.claimContext;
         else next.claimContext = { harness: canonicalHarness(harness) };
-        return next;
-      });
-      const response = { ok: true, claimed: true, runId: safeRunId, run: publicRun(entry, { now }) };
+      }
+      const entry = await upsertRunIndexEntry(paths, indexProjectionPatch(next));
+      try {
+        await writeRunAuthority(paths, next);
+      } catch (error) {
+        await upsertRunIndexEntry(paths, indexProjectionPatch(existing));
+        throw error;
+      }
+      const response = { ok: true, claimed: true, runId: safeRunId, run: publicRun(mergeRunAuthorityIntoIndexEntry(entry, next), { now }) };
       if (tokenWasIssued) response.leaseToken = issuedLeaseToken;
       return response;
     });
@@ -191,10 +254,12 @@ export async function deleteWorkflowRunAtRoot({ runId, runsRoot = workflowRunsRo
   await withRunStateLock(paths, async () => {
     const index = await readRunsIndex(runsIndexPathsForRoot(runsRoot));
     existing = index.runs[safeRunId] ?? null;
-    if (occupancyForLease(existing?.workerLease, now).state === 'occupied') {
+    const authority = await readRunAuthority(paths) ?? runAuthorityFromIndexEntry(paths, existing);
+    const canonical = mergeRunAuthorityIntoIndexEntry(existing ?? { runId: safeRunId }, authority);
+    if (occupancyForLease(authority?.workerLease, now).state === 'occupied') {
       const conflict = new Error(`workflow run is occupied: ${safeRunId}`);
       conflict.code = 'WORKFLOW_RUN_OCCUPIED';
-      conflict.run = publicRun(existing, { now });
+      conflict.run = publicRun(canonical, { now });
       throw conflict;
     }
     existing = await deleteRunIndexEntry(paths);
