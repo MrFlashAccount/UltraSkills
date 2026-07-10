@@ -229,6 +229,29 @@ test('runner: agent runtime configuration without an explicit source agent is re
   );
 });
 
+test('runner: resume schema validation rejects case-folded duplicate agent runtime harnesses after workflow drift', async () => {
+  const workflowPath = path.join(tempDir, 'worker-runtime-guidance-duplicate-resume-workflow.json');
+  const configuredWorkflow = structuredClone(workflowDoc);
+  configuredWorkflow.steps.prepare.agent = 'architect';
+  configuredWorkflow.steps.prepare.agent_runtime = { codex: { model: 'gpt-5.5', thinking_level: 'high' } };
+  configuredWorkflow.steps.prepare.next = 'done';
+  writeJson(workflowPath, configuredWorkflow);
+
+  const { runId } = await runCase('worker-runtime-guidance-duplicate-resume', workflowPath);
+  const paths = resolveRunPaths({ runId, workflowPath });
+  const leaseToken = leaseTokensByRunId.get(runId);
+  await claimWorkflowRunAtRoot({ runId, workflowPath, runsRoot: paths.runsRoot, leaseToken, harness: 'codex' });
+  await runnerNext({ runId, workflowPath, leaseToken });
+
+  configuredWorkflow.steps.prepare.agent_runtime.Codex = { model: 'gpt-5.5-mini', thinking_level: 'low' };
+  writeJson(workflowPath, configuredWorkflow);
+
+  await assert.rejects(
+    () => runnerNext({ runId, workflowPath, leaseToken }),
+    /agent_runtime harness keys 'codex' and 'Codex' differ only by ASCII case/,
+  );
+});
+
 test('runner: next uses semantic workflow validation and rejects schema-declared dynamic targets that are not workflow steps', async () => {
   const { runId, runDir } = await runCase('runtime-semantic-dynamic-target');
   const workflowPath = path.join(tempDir, 'runtime-semantic-dynamic-target-workflow.json');

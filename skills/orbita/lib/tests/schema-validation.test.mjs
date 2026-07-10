@@ -5,7 +5,6 @@ import reviewJoinOutputSchema from '../../../../workflows/dev-harness/schemas/re
 import reviewerSelectionOutputSchema from '../../../../workflows/dev-harness/schemas/reviewer-selection-output.json' with { type: 'json' };
 import { assertBatonSchema, batonSchema } from '../file-contracts/baton/baton-schema.mjs';
 import { assertWorkflowSchema, workflowSchema } from '../file-contracts/workflow-document-schema.mjs';
-import { Workflow } from '../entities/Workflow/index.mjs';
 import runnerHostResponseSchema from '../persistence/run-state/schema/runner-host-response.json' with { type: 'json' };
 
 const runtimeSchemas = [workflowSchema, batonSchema, reviewerSelectionOutputSchema, reviewJoinOutputSchema, runnerHostResponseSchema];
@@ -190,22 +189,15 @@ test('workflow schema applies the same agent runtime contract to matrix worker t
   assert.throws(() => assertWorkflowSchema(workflow), /agent.*required|agent_runtime/i);
 });
 
-test('workflow semantic validation rejects case-folded duplicate harness profiles for worker and matrix sources', () => {
-  const validationOptions = {
-    requireSchemaPresence: false,
-    requireWorkerOutcomeContract: false,
-    requireSchemaCoverage: false,
-    requireExpressionRequiredPaths: false,
-  };
+test('workflow schema validation rejects case-folded duplicate harness profiles for worker and matrix sources', () => {
   const worker = minimalWorkflowDoc();
   worker.steps.worker_step.agent = 'architect';
   worker.steps.worker_step.agent_runtime = {
     codex: { model: 'gpt-5.5', thinking_level: 'high' },
     Codex: { model: 'gpt-5.5-mini', thinking_level: 'low' },
   };
-  assert.doesNotThrow(() => assertWorkflowSchema(worker));
   assert.throws(
-    () => new Workflow(worker).validate(validationOptions),
+    () => assertWorkflowSchema(worker),
     /agent_runtime harness keys 'codex' and 'Codex' differ only by ASCII case/,
   );
 
@@ -230,9 +222,8 @@ test('workflow semantic validation rejects case-folded duplicate harness profile
       done: { name: 'Done', kind: 'done' },
     },
   });
-  assert.doesNotThrow(() => assertWorkflowSchema(matrix));
   assert.throws(
-    () => new Workflow(matrix).validate(validationOptions),
+    () => assertWorkflowSchema(matrix),
     /matrix\.worker\.agent_runtime harness keys 'CODEX' and 'codex' differ only by ASCII case/,
   );
 });
