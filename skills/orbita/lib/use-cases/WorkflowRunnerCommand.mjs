@@ -75,8 +75,8 @@ export function createWorkflowRunnerCommand({
     return createHash('sha256').update(JSON.stringify(value)).digest('hex');
   }
 
-  async function runnerResponseForRendered(paths, rendered, { initialized, resumed, leaseToken, includeInlineInstructions = false }) {
-    const workflowDoc = readWorkflowDocument(paths.workflowPath, 'workflow');
+  async function runnerResponseForRendered(paths, rendered, { initialized, resumed, leaseToken, includeInlineInstructions = false, workflowDoc }) {
+    workflowDoc ??= readWorkflowDocument(paths.workflowPath, 'workflow');
     return {
       ...toHostResponse(rendered, {
         runId: paths.runId,
@@ -145,15 +145,15 @@ export function createWorkflowRunnerCommand({
     return index.runs[paths.runId];
   }
 
-  async function persistNextHostResponse(paths, rendered, runState, { leaseToken } = {}) {
-    const persistedResponse = await runnerResponseForRendered(paths, rendered, runState);
+  async function persistNextHostResponse(paths, rendered, runState, { leaseToken, workflowDoc } = {}) {
+    const persistedResponse = await runnerResponseForRendered(paths, rendered, { ...runState, workflowDoc });
     await writePersistedRunStateUpdate(paths, {
       baton: persistedResponse.baton,
       currentRequests: persistedResponse.requests ?? [],
       history: { source: 'workflow-runner', baton: persistedResponse.baton, requests: persistedResponse.requests },
       writeBaton: runState.initialized,
     });
-    return runnerResponseForRendered(paths, rendered, { ...runState, leaseToken, includeInlineInstructions: true });
+    return runnerResponseForRendered(paths, rendered, { ...runState, leaseToken, includeInlineInstructions: true, workflowDoc });
   }
 
   function publicApiError(error, options = {}) {
@@ -228,6 +228,7 @@ export function createWorkflowRunnerCommand({
       resumed: true,
       leaseToken,
       includeInlineInstructions,
+      workflowDoc: runtime.workflow,
     });
     return { runtime, rendered, response };
   }
@@ -261,7 +262,7 @@ export function createWorkflowRunnerCommand({
         const response = await persistNextHostResponse(paths, rendered, {
           initialized: runState.initialized,
           resumed: runState.resumed,
-        }, { leaseToken });
+        }, { leaseToken, workflowDoc: runtime.workflow });
         const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
         await upsertRunIndexEntry(paths, { status: response.status, workflowPath: paths.workflowPath, taskKey, taskFingerprint, workerLease });
         return response;
@@ -465,6 +466,7 @@ export function createWorkflowRunnerCommand({
       resumed: true,
       leaseToken,
       includeInlineInstructions: false,
+      workflowDoc: runtime.workflow,
     });
     return { runtime, response };
   }
@@ -582,7 +584,7 @@ export function createWorkflowRunnerCommand({
         const recoveryRuntime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: recoveryBaton });
         const renderResources = resourcesWithValidatingWriter(recoveryRuntime.resources, paths, { leaseToken });
         const rendered = runNext({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
-        const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true });
+        const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true, workflowDoc: recoveryRuntime.workflow });
         const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
         await writeContinuePreActionHistory(paths, {
           bindingHistoryEntries: preActions.entries,
@@ -611,7 +613,7 @@ export function createWorkflowRunnerCommand({
         const recoveryRuntime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: recoveryBaton });
         const renderResources = resourcesWithValidatingWriter(recoveryRuntime.resources, paths, { leaseToken });
         const rendered = runNext({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
-        const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true });
+        const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true, workflowDoc: recoveryRuntime.workflow });
         const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
         await writeContinuePreActionHistory(paths, {
           bindingHistoryEntries: preActions.entries,
@@ -639,7 +641,7 @@ export function createWorkflowRunnerCommand({
       const renderResources = resourcesWithValidatingWriter(runtime.resources, paths, { leaseToken });
       const rendered = renderAppliedResponse({ workflowDoc: runtime.workflow, response: applied, resources: renderResources, includeDiagnostics });
 
-      const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true });
+      const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true, workflowDoc: runtime.workflow });
       const workerLease = await renewedWorkerLeaseAuthority(paths, { leaseToken, now });
       await writeContinuePreActionHistory(paths, {
         bindingHistoryEntries: preActions.entries,

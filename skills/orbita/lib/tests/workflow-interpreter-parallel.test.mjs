@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
-import { fileURLToPath } from 'node:url';
+import { runWorkflowRuntimeApi } from './helpers/workflow-runtime-api-client.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-parallel-check-'));
 writeFileSync(path.join(tempDir, 'output.md'), '## Output contract\nReturn markdown.\n');
 writeFileSync(path.join(tempDir, 'loop-output.schema.json'), `${JSON.stringify({
@@ -96,11 +94,7 @@ function writeReadableArtifact(artifactPath = 'worker_step/artifacts/packet.md',
   writeFileSync(fullPath, content);
 }
 
-function runBun(args, cwd = root) {
-  return spawnSync(process.execPath, args, { cwd, encoding: 'utf8' });
-}
-
-function expectCliResult(label, result, expectSuccess) {
+function expectRuntimeResult(label, result, expectSuccess) {
   const succeeded = result.status === 0;
   assert.equal(
     succeeded,
@@ -122,8 +116,8 @@ function runInspect(label, batonDoc, expectSuccess = true, workflowDoc = paralle
   const wfPath = writeJson(`${prefix}-workflow.json`, workflowDoc);
   const before = readFileSync(batonPath, 'utf8');
 
-  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'inspect', wfPath, batonPath]);
-  const response = expectCliResult(label, result, expectSuccess);
+  const result = runWorkflowRuntimeApi({ mode: 'inspect', workflowPath: wfPath, batonPath });
+  const response = expectRuntimeResult(label, result, expectSuccess);
   assert.equal(readFileSync(batonPath, 'utf8'), before, `check '${label}' mutated baton file during inspect`);
   return response;
 }
@@ -135,8 +129,8 @@ function runApply(label, batonDoc, workerOutput, expectSuccess = true, workflowD
   const wfPath = writeJson(`${prefix}-workflow.json`, workflowDoc);
   const before = readFileSync(batonPath, 'utf8');
 
-  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', wfPath, batonPath, outputPath]);
-  const response = expectCliResult(label, result, expectSuccess);
+  const result = runWorkflowRuntimeApi({ mode: 'apply', workflowPath: wfPath, batonPath, outputPath });
+  const response = expectRuntimeResult(label, result, expectSuccess);
   assert.equal(readFileSync(batonPath, 'utf8'), before, `check '${label}' mutated baton file during apply`);
   return response;
 }
@@ -147,8 +141,8 @@ function runRender(label, batonDoc, expectSuccess = true, workflowDoc = parallel
   const wfPath = writeJson(`${prefix}-workflow.json`, workflowDoc);
   const before = readFileSync(batonPath, 'utf8');
 
-  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', wfPath, batonPath]);
-  const response = expectCliResult(label, result, expectSuccess);
+  const result = runWorkflowRuntimeApi({ mode: 'render', workflowPath: wfPath, batonPath });
+  const response = expectRuntimeResult(label, result, expectSuccess);
   assert.equal(readFileSync(batonPath, 'utf8'), before, `check '${label}' mutated baton file during render`);
   return response;
 }

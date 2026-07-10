@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,6 +10,7 @@ import { assertRunnerHostResponseSchema } from '../persistence/run-state/schema/
 import { loadWorkflowRuntime } from '../persistence/workflow-resources/runtime-reader.mjs';
 import { runNext } from '../use-cases/RunNext.mjs';
 import { loadInstructions as validateLoadInstructions } from '../use-cases/LoadInstructions.mjs';
+import { runWorkflowRuntimeApi } from './helpers/workflow-runtime-api-client.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-sharding-check-'));
@@ -98,11 +98,7 @@ function writeJson(fileName, value) {
   return filePath;
 }
 
-function runNode(args, cwd = root) {
-  return spawnSync(process.execPath, args, { cwd, encoding: 'utf8' });
-}
-
-function expectCliResult(label, result, expectSuccess) {
+function expectRuntimeResult(label, result, expectSuccess) {
   const succeeded = result.status === 0;
   assert.equal(
     succeeded,
@@ -117,14 +113,14 @@ function runInspect(label, workflowDoc, expectSuccess = true) {
   const prefix = safeName(label);
   const batonPath = writeJson(`${prefix}-baton.json`, baton());
   const wfPath = writeJson(`${prefix}-workflow.json`, workflowDoc);
-  return expectCliResult(label, runNode(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'inspect', wfPath, batonPath]), expectSuccess);
+  return expectRuntimeResult(label, runWorkflowRuntimeApi({ mode: 'inspect', workflowPath: wfPath, batonPath }), expectSuccess);
 }
 
 function runRender(label, workflowDoc = shardedWorkflow()) {
   const prefix = safeName(label);
   const batonPath = writeJson(`${prefix}-baton.json`, baton());
   const wfPath = writeJson(`${prefix}-workflow.json`, workflowDoc);
-  return expectCliResult(label, runNode(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', wfPath, batonPath]), true);
+  return expectRuntimeResult(label, runWorkflowRuntimeApi({ mode: 'render', workflowPath: wfPath, batonPath }), true);
 }
 
 function runApply(label, workerOutput, workflowDoc = shardedWorkflow(), expectSuccess = true) {
@@ -132,7 +128,7 @@ function runApply(label, workerOutput, workflowDoc = shardedWorkflow(), expectSu
   const batonPath = writeJson(`${prefix}-baton.json`, baton());
   const wfPath = writeJson(`${prefix}-workflow.json`, workflowDoc);
   const outputPath = writeJson(`${prefix}-output.json`, workerOutput);
-  return expectCliResult(label, runNode(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', wfPath, batonPath, outputPath]), expectSuccess);
+  return expectRuntimeResult(label, runWorkflowRuntimeApi({ mode: 'apply', workflowPath: wfPath, batonPath, outputPath }), expectSuccess);
 }
 
 function runApplyFromBaton(label, batonDoc, workerOutput, workflowDoc = shardedWorkflow(), expectSuccess = true) {
@@ -140,7 +136,7 @@ function runApplyFromBaton(label, batonDoc, workerOutput, workflowDoc = shardedW
   const batonPath = writeJson(`${prefix}-baton.json`, batonDoc);
   const wfPath = writeJson(`${prefix}-workflow.json`, workflowDoc);
   const outputPath = writeJson(`${prefix}-output.json`, workerOutput);
-  return expectCliResult(label, runNode(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', wfPath, batonPath, outputPath]), expectSuccess);
+  return expectRuntimeResult(label, runWorkflowRuntimeApi({ mode: 'apply', workflowPath: wfPath, batonPath, outputPath }), expectSuccess);
 }
 
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));

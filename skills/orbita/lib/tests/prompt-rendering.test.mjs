@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,6 +10,7 @@ import { renderWorkflowPrompt } from '../entities/Template/index.mjs';
 import { validateAgainstOutputSchema } from '../runtime/output/output-schema-validation.mjs';
 import { loadWorkflowResources } from '../persistence/workflow-resources/runtime-reader.mjs';
 import { loadOutputSchema } from '../persistence/workflow-resources/output-schema-loader.mjs';
+import { runWorkflowRuntimeApi } from './helpers/workflow-runtime-api-client.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), 'prompt-rendering-check-')));
@@ -133,10 +133,6 @@ function baton(overrides = {}) {
   };
 }
 
-function runBun(args, cwd = root) {
-  return spawnSync(process.execPath, args, { cwd, encoding: 'utf8' });
-}
-
 function resourcesForRender({ workflow, workflowPath, repositoryRoot }) {
   return loadWorkflowResources({ workflow, workflowPath, repositoryRoot });
 }
@@ -165,7 +161,7 @@ function assertMarkersInOrder(value, markers) {
   }
 }
 
-function expectCliResult(label, result, expectSuccess) {
+function expectRuntimeResult(label, result, expectSuccess) {
   const succeeded = result.status === 0;
   assert.equal(
     succeeded,
@@ -1348,26 +1344,26 @@ test('prompt renderer: validation feedback appends to prompt arrays', () => {
   const batonPath = writeJson('prompt-array-feedback-baton.json', baton());
   const outputPath = writeJson('prompt-array-feedback-output.json', { outcome: 'invalid' });
 
-  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'apply', workflowPath, batonPath, outputPath]);
-  const response = expectCliResult('prompt-array-feedback', result, true);
+  const result = runWorkflowRuntimeApi({ mode: 'apply', workflowPath, batonPath, outputPath });
+  const response = expectRuntimeResult('prompt-array-feedback', result, true);
 
   assert.equal(response.steps[0].step.input.prompt.includes('Run worker.\n\nUse strict output.'), true);
   assert.match(response.steps[0].step.input.prompt, /Previous output failed output\.schema validation/);
 });
 
-test('CLI render: prompt input expressions cannot read aggregate runtime state', () => {
+test('runtime render: prompt input expressions cannot read aggregate runtime state', () => {
   const workflowDoc = structuredClone(schemaWorkflowDoc);
   workflowDoc.steps.approval_step.input.prompt = 'Bad aggregate:\n${{ input.artifacts }}';
   const workflowPath = writeJson('runtime-reserved-render-workflow.json', workflowDoc);
   const batonPath = writeJson('runtime-reserved-render-baton.json', baton({ cursor: 'approval_step', status: 'running', state: { artifacts: [{ producerStepId: 'worker_step', artifact: { id: 'packet', content_type: 'text/markdown', path: '/runs/worker_step/artifacts/packet.md', summary: 'leaked' } }], results: [] } }));
 
-  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]);
-  const response = expectCliResult('runtime-reserved-render', result, false);
+  const result = runWorkflowRuntimeApi({ mode: 'render', workflowPath, batonPath });
+  const response = expectRuntimeResult('runtime-reserved-render', result, false);
 
   assert.match(response.stderr, /input step 'artifacts' is not a declared workflow step/);
 });
 
-test('CLI render: fixture returns compiledPrompt and does not mutate baton', () => {
+test('runtime render: fixture returns compiledPrompt and does not mutate baton', () => {
   const outputTemplateRef = `${path.basename(tempDir)}-worker-output.md`;
   writeFileSync(path.join(tempDir, 'worker.md'), '# Worker template\n');
   writeFileSync(path.join(tempDir, outputTemplateRef), '## Required return\nUse this contract.\n');
@@ -1378,8 +1374,8 @@ test('CLI render: fixture returns compiledPrompt and does not mutate baton', () 
   const batonPath = writeJson('fixture-render-baton.json', baton({ state: { artifacts: [], results: [], worker_step: { outcome: 'ready', summary: 'ready' } } }));
   const before = readFileSync(batonPath, 'utf8');
 
-  const result = runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]);
-  const response = expectCliResult('fixture-render', result, true);
+  const result = runWorkflowRuntimeApi({ mode: 'render', workflowPath, batonPath });
+  const response = expectRuntimeResult('fixture-render', result, true);
 
   assert.equal(readFileSync(batonPath, 'utf8'), before, 'render mutated baton file');
   assert.equal(response.steps[0].id, 'worker_step');
@@ -1403,20 +1399,20 @@ test('CLI render: fixture returns compiledPrompt and does not mutate baton', () 
   assert.doesNotMatch(response.steps[0].compiledPrompt.prompt, /## Prompt input context/);
 });
 
-test('CLI render: diagnostics are included only when explicitly requested', () => {
+test('runtime render: diagnostics are included only when explicitly requested', () => {
   const workflowPath = writeJson('render-diagnostics-workflow.json', schemaWorkflowDoc);
   const batonPath = writeJson('render-diagnostics-baton.json', baton({ cursor: 'approval_step' }));
 
-  const defaultResponse = expectCliResult(
+  const defaultResponse = expectRuntimeResult(
     'render-diagnostics-default',
-    runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', workflowPath, batonPath]),
+    runWorkflowRuntimeApi({ mode: 'render', workflowPath, batonPath }),
     true,
   );
   assert.equal(Object.hasOwn(defaultResponse.steps[0].compiledPrompt, 'diagnostics'), false);
 
-  const diagnosticsResponse = expectCliResult(
+  const diagnosticsResponse = expectRuntimeResult(
     'render-diagnostics-opt-in',
-    runBun(['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', 'render', '--diagnostics', workflowPath, batonPath]),
+    runWorkflowRuntimeApi({ mode: 'render', workflowPath, batonPath, includeDiagnostics: true }),
     true,
   );
   assert.deepEqual(diagnosticsResponse.steps[0].compiledPrompt.diagnostics.map((diagnostic) => diagnostic.code), ['default_prompt_used']);

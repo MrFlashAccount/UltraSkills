@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
-import { fileURLToPath } from 'node:url';
+import { runWorkflowRuntimeApi } from './helpers/workflow-runtime-api-client.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-dynamic-next-'));
 writeFileSync(path.join(tempDir, 'output.md'), '## Output contract\nReturn markdown.\n');
 
@@ -127,12 +125,11 @@ function writeJson(fileName, value) {
   return filePath;
 }
 
-function runCli(label, mode, batonDoc, expectSuccess = true, workflowDoc = workflow(), workerOutput) {
+function runRuntime(label, mode, batonDoc, expectSuccess = true, workflowDoc = workflow(), workerOutput) {
   const batonPath = writeJson(`${label}-baton.json`, batonDoc);
   const workflowPath = writeJson(`${label}-workflow.json`, workflowDoc);
-  const args = ['skills/orbita/lib/tests/helpers/workflow-runtime-harness.mjs', mode, workflowPath, batonPath];
-  if (workerOutput !== undefined) args.push(writeJson(`${label}-output.json`, workerOutput));
-  const result = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8' });
+  const outputPath = workerOutput === undefined ? undefined : writeJson(`${label}-output.json`, workerOutput);
+  const result = runWorkflowRuntimeApi({ mode, workflowPath, batonPath, outputPath });
   assert.equal(
     result.status === 0,
     expectSuccess,
@@ -142,11 +139,11 @@ function runCli(label, mode, batonDoc, expectSuccess = true, workflowDoc = workf
 }
 
 function runApply(label, batonDoc, workerOutput, expectSuccess = true, workflowDoc = workflow()) {
-  return runCli(label, 'apply', batonDoc, expectSuccess, workflowDoc, workerOutput);
+  return runRuntime(label, 'apply', batonDoc, expectSuccess, workflowDoc, workerOutput);
 }
 
 function runInspect(label, batonDoc, expectSuccess = true, workflowDoc = workflow()) {
-  return runCli(label, 'inspect', batonDoc, expectSuccess, workflowDoc);
+  return runRuntime(label, 'inspect', batonDoc, expectSuccess, workflowDoc);
 }
 
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
