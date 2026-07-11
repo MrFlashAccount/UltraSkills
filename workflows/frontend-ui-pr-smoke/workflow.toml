@@ -47,7 +47,8 @@ ready_for_approval = "approve_design"
 [steps.design_attack]
 name = "Hostile design attack"
 kind = "worker"
-agent = "frontend-taste"
+agent = "design_critic"
+agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.design_attack.input]
 role = "frontend-taste"

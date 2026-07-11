@@ -87,8 +87,12 @@ test('frontend design gates preserve approved HTML and proof context through imp
 
   assert.equal(devDraft.agent, 'frontend-taste');
   assert.equal(devDraft.input.role, 'frontend-taste');
-  assert.equal(devAttack.agent, 'frontend-taste');
+  assert.equal(devAttack.agent, 'ui_intent_critic');
+  assert.notEqual(devAttack.agent, devDraft.agent, 'Dev Harness hostile attack must request a fresh worker instead of reusing the proposal author');
   assert.equal(devAttack.input.role, 'frontend-taste');
+  assert.equal(smokeAttack.agent, 'design_critic');
+  assert.notEqual(smokeAttack.agent, frontendUiPrSmoke.steps.design_draft.agent, 'smoke hostile attack must request a fresh worker instead of reusing the proposal author');
+  assert.equal(smokeAttack.input.role, 'frontend-taste');
   assert.match(devAttack.input.prompt, /typography or rhythm/);
   assert.match(devAttack.input.prompt, /Do not invent `DESIGN\.md`/);
   for (const attack of [devAttack, smokeAttack]) {

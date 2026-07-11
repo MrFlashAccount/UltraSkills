@@ -149,7 +149,8 @@ ready_for_approval = "approve_ui_intent"
 [steps.ui_intent_attack]
 name = "UI design proposal attack"
 kind = "worker"
-agent = "frontend-taste"
+agent = "ui_intent_critic"
+agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.ui_intent_attack.input]
 role = "frontend-taste"
