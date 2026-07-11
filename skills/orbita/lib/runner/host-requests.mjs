@@ -108,8 +108,9 @@ function inlineInstructionForStep(step, { runId, runsRoot, leaseToken } = {}) {
     "",
     "The orchestrator must execute this approval instruction itself.",
     "Use the following compiled approval prompt as the complete source for the user-facing approval message.",
-    "When the compiled approval prompt lists required-read files or prompt input artifact paths, attach those files through the host/platform approval mechanism before asking for a decision.",
+    "When the compiled approval prompt lists approval attachments or prompt input artifact paths, attach those files through the host/platform approval mechanism before asking for a decision.",
     "In Codex/Codex Desktop, attaching means rendering each listed local artifact as a Markdown file link with an absolute target, for example: [reasons-canvas-research.md](/absolute/path/reasons-canvas-research.md). A plain text path, artifact id, or summary is not an attachment.",
+    "Attaching an artifact does not require opening or reading its contents. Read only files explicitly listed under Required reads, unless the user later asks a content question about an attachment.",
     "Do not replace artifact attachments with summaries, plain paths, or inline full artifact bodies. If the host cannot attach or render a file link for a listed artifact, state that capability gap explicitly in the approval message and include the path/reference that could not be attached.",
     "Do not inspect workflow source, runner internals, schema files, or CLI help to reconstruct approval output.",
     writeOutputCommand

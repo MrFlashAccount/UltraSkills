@@ -27,6 +27,23 @@ function requiredReadsBlock(items = []) {
   return lines.join('\n');
 }
 
+function approvalAttachmentsBlock(items = []) {
+  if (items.length === 0) return '';
+  const lines = [
+    'Attach these files to the user-facing approval request without opening or reading their contents:',
+    '',
+  ];
+  items.forEach((item, index) => {
+    const suffix = item.contentType ? ` (${item.contentType})` : '';
+    lines.push(`${index + 1}. ${item.label}${suffix}: \`${item.path}\``);
+  });
+  lines.push(
+    '',
+    'These files are approval attachments, not required reads. Open one only if the user explicitly asks a content question after the gate is presented.',
+  );
+  return lines.join('\n');
+}
+
 function requiredReadsForRender(items, { followUp = false } = {}) {
   if (followUp !== true) return items;
   return items.filter((item) => item?.source !== 'role-material');
@@ -70,12 +87,13 @@ function recoverableBlockerBlock({ baton, stepId }) {
   return lines.join('\n');
 }
 
-function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlock, requiredReads, recoverableBlocker, inlinePrompt, outputContract, userPrompt, finalReminder }) {
+function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlock, requiredReads, approvalAttachments, recoverableBlocker, inlinePrompt, outputContract, userPrompt, finalReminder }) {
   assertNoUnsupportedPlaceholders(promptLayer, templatePath);
   const parts = [trimStable(promptLayer)];
 
   if (workflowInstructionBlock) parts.push(section('Workflow instruction', workflowInstructionBlock).trimEnd());
   if (requiredReads) parts.push(section('Required reads', requiredReads).trimEnd());
+  if (approvalAttachments) parts.push(section('Approval attachments', approvalAttachments).trimEnd());
   if (recoverableBlocker) parts.push(section('Recoverable blocker', recoverableBlocker).trimEnd());
   if (outputContract) parts.push(outputContract.trimEnd());
   if (inlinePrompt) parts.push(section('Workflow step prompt', inlinePrompt.trim()));
@@ -85,7 +103,7 @@ function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlo
   return `${parts.filter(Boolean).join('\n\n')}\n`;
 }
 
-export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources, promptInput = { value: {}, keys: [] }, shard, requiredReads = [], roleMetadataPaths = [], includeDiagnostics = false, userPrompt, userPromptInjected = false, followUp = false } = {}) {
+export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources, promptInput = { value: {}, keys: [] }, shard, requiredReads = [], approvalAttachments = [], roleMetadataPaths = [], includeDiagnostics = false, userPrompt, userPromptInjected = false, followUp = false } = {}) {
   const input = step.input ?? {};
   const inputTemplate = readInputTemplate({ input, resources });
   const outputTemplate = readOutputTemplate({ step, resources });
@@ -103,11 +121,13 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
   const usesDefaultPrompt = inputTemplate.content === undefined;
   const promptLayer = usesDefaultPrompt ? defaultPrompt({ step, input }) : inputTemplate.content;
   const requiredReadsSection = requiredReadsBlock(requiredReadsForRender(requiredReads, { followUp }));
+  const approvalAttachmentsSection = approvalAttachmentsBlock(approvalAttachments);
   const prompt = assembleFixedPrompt({
     promptLayer,
     templatePath: inputTemplate.metadataPath,
     workflowInstructionBlock,
     requiredReads: requiredReadsSection,
+    approvalAttachments: approvalAttachmentsSection,
     recoverableBlocker: recoverableBlockerBlock({ baton, stepId }),
     inlinePrompt: interpolatePromptExpressions(normalizePromptText(input.prompt), { input: promptInput.value, ...(shard ? { shard } : {}) }),
     outputContract,

@@ -159,7 +159,8 @@ test('E2E fixture: long happy path loops through review revision and preserves l
   assert.equal(planned.requests[0].action, 'wait_for_approval');
   assert.equal(planned.baton.state.plan.artifacts[0].summary, 'plan v1');
   const approvalInstructions = await instructions(run, 'approval_gate');
-  assert.match(approvalInstructions, /## Required reads/);
+  assert.doesNotMatch(approvalInstructions, /## Required reads/);
+  assert.match(approvalInstructions, /## Approval attachments/);
   assert.match(approvalInstructions, /Prompt input artifact 'plan' from 'plan' \(text\/markdown\):/);
   assert.match(approvalInstructions, /plan\/artifacts\/plan\.md/);
   assert.doesNotMatch(approvalInstructions, /Plan artifact content for approval\./);

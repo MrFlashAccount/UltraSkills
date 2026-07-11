@@ -64,7 +64,7 @@ function resolvedArtifactPath({ artifactPath, resources }) {
   throw new Error(`workflow prompt render failed: prompt input artifact path must be absolute before template compilation: ${artifactPath}`);
 }
 
-function promptInputArtifactReadItems(promptInput, resources, artifactSelectors) {
+function promptInputArtifactItems(promptInput, resources, artifactSelectors) {
   return promptInputArtifactRecords(promptInput, artifactSelectors).map(({ stepId, artifact }) => ({
     label: `Prompt input artifact '${artifact.id}' from '${stepId}'`,
     path: resolvedArtifactPath({ artifactPath: artifact.path, resources }),
@@ -78,12 +78,16 @@ export function prepareWorkflowPromptContext({ baton, stepId, step, resources } 
   const selectedState = selectState({ batonState: baton?.state ?? {}, selectors, stepId });
   const promptInput = { value: selectedState.value, keys: selectedState.selectedKeys };
   const inputRole = readInputRole({ input, resources });
+  const promptInputArtifacts = promptInputArtifactItems(promptInput, resources, artifactSelectors);
+  const approvalAttachments = step?.kind === 'approval' ? promptInputArtifacts : [];
+  const artifactRequiredReads = step?.kind === 'approval' ? [] : promptInputArtifacts;
   return {
     promptInput,
     requiredReads: [
       ...inputRole.readItems,
-      ...promptInputArtifactReadItems(promptInput, resources, artifactSelectors),
+      ...artifactRequiredReads,
     ],
+    approvalAttachments,
     roleMetadataPaths: inputRole.metadataPaths,
   };
 }

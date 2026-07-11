@@ -224,7 +224,7 @@ test('runner: next returns a single host action request with load command only',
   assert.equal(existsSync(path.join(runDir, 'baton.json')), true);
 });
 
-test('runner: approval host instruction lists prompt input artifact content as required read', async () => {
+test('runner: approval host instruction lists prompt input artifacts as attachment-only', async () => {
   const { runId, runDir } = await runCase('approval-inline-instructions');
   const workflowPath = path.join(tempDir, 'approval-inline-instructions-workflow.json');
   const schemaPath = path.join(tempDir, 'approval-inline-instructions.schema.json');
@@ -291,10 +291,12 @@ test('runner: approval host instruction lists prompt input artifact content as r
   assert.match(response.orchestratorInstruction, /Approval request: approve/);
   assert.match(response.orchestratorInstruction, /The orchestrator must execute this approval instruction itself\./);
   assert.match(response.orchestratorInstruction, /Use the following compiled approval prompt as the complete source/);
-  assert.match(response.orchestratorInstruction, /When the compiled approval prompt lists required-read files or prompt input artifact paths, attach those files through the host\/platform approval mechanism before asking for a decision\./);
+  assert.match(response.orchestratorInstruction, /When the compiled approval prompt lists approval attachments or prompt input artifact paths, attach those files through the host\/platform approval mechanism before asking for a decision\./);
   assert.match(response.orchestratorInstruction, /In Codex\/Codex Desktop, attaching means rendering each listed local artifact as a Markdown file link with an absolute target/);
   assert.match(response.orchestratorInstruction, /\[reasons-canvas-research\.md\]\(\/absolute\/path\/reasons-canvas-research\.md\)/);
   assert.match(response.orchestratorInstruction, /A plain text path, artifact id, or summary is not an attachment\./);
+  assert.match(response.orchestratorInstruction, /Attaching an artifact does not require opening or reading its contents\./);
+  assert.match(response.orchestratorInstruction, /Read only files explicitly listed under Required reads, unless the user later asks a content question about an attachment\./);
   assert.match(response.orchestratorInstruction, /Do not replace artifact attachments with summaries, plain paths, or inline full artifact bodies\./);
   assert.match(response.orchestratorInstruction, /If the host cannot attach or render a file link for a listed artifact, state that capability gap explicitly in the approval message and include the path\/reference that could not be attached\./);
   assert.match(response.orchestratorInstruction, /Do not inspect workflow source, runner internals, schema files, or CLI help to reconstruct approval output\./);
@@ -302,7 +304,8 @@ test('runner: approval host instruction lists prompt input artifact content as r
   assert.match(response.orchestratorInstruction, new RegExp(`workflow-runner\\.mjs' write-output --run-id '${runId}' --step-id 'approve' --runs-root '${resolveRunPaths({ runId }).runsRoot}' --lease-token '${leaseToken}' <<'JSON'`));
   assert.match(response.orchestratorInstruction, /<paste strict JSON here>/);
   assert.match(response.orchestratorInstruction, /# Approve research/);
-  assert.match(response.orchestratorInstruction, /## Required reads/);
+  assert.doesNotMatch(response.orchestratorInstruction, /## Required reads/);
+  assert.match(response.orchestratorInstruction, /## Approval attachments/);
   assert.match(response.orchestratorInstruction, /Prompt input artifact 'reasons-canvas-research' from 'prepare' \(text\/markdown\):/);
   assert.match(response.orchestratorInstruction, /prepare\/artifacts\/reasons-canvas-research\.md/);
   assert.match(response.orchestratorInstruction, /## Output contract/);

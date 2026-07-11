@@ -77,7 +77,7 @@ name = "Approve research"
 kind = "approval"
 
 [steps.approve_research.input]
-prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+prompt = '''This is a non-implementation approval phase. Do not inspect code, diffs, docs, or attached artifact bodies merely to prepare this gate; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read research_draft.summary as the human-facing research proposal state. Present that summary, attach the `reasons-canvas-research` artifact from `research_draft`, and include research_attack.verdict for human approval.
 Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
 If the user asks for a packet/proposal file, retrieve/export the existing artifact referenced by baton/output artifacts; do not ask a worker to recreate it in a temp path.
@@ -170,7 +170,7 @@ name = "Approve architecture"
 kind = "approval"
 
 [steps.approve_architecture.input]
-prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+prompt = '''This is a non-implementation approval phase. Do not inspect code, diffs, docs, or attached artifact bodies merely to prepare this gate; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read architecture_draft.summary as the human-facing architecture proposal state. Present that summary, attach the `reasons-canvas-architecture` artifact, and include architecture_attack.verdict for human approval.
 Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
 If the user asks for an architecture file, retrieve/export the existing artifact referenced by baton/output artifacts, limited to `reasons-canvas-architecture`. Do not ask a worker to recreate it in a temp path.
@@ -264,7 +264,7 @@ name = "Approve implementation plan"
 kind = "approval"
 
 [steps.approve_plan.input]
-prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+prompt = '''This is a non-implementation approval phase. Do not inspect code, diffs, docs, or attached artifact bodies merely to prepare this gate; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read planning_draft.summary as the human-facing plan proposal state. Present that summary, attach the `implementation-plan` artifact from planning_draft, and include planning_attack.verdict for human approval.
 Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
 If the user asks for a plan/proposal file, retrieve/export the existing artifact referenced by baton/output artifacts; do not ask a worker to recreate it in a temp path.
