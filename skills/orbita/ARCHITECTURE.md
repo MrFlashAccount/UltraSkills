@@ -115,6 +115,10 @@ Entrypoints are transport shells. They parse CLI/API input, coordinate IO with
 persistence adapters, acquire or pass through leases where needed, call named
 use-case APIs, and format public output.
 
+CLI parsing owns transport syntax only. Raw command/application policy is
+validated once at the named use-case entry boundary; entrypoint shells must not
+duplicate that policy.
+
 Pointer recovery entrypoints must keep API and CLI behavior aligned: both
 `listPointerTransitions` and `movePointer` require active lease authority, return
 only bounded DTOs/errors, and redact lease tokens, token hashes, raw private
@@ -139,6 +143,13 @@ Owner: `lib/use-cases/**`
 Use cases own application flow over DTOs and plain values. They call entity
 owners and IO-free runtime helpers, then return DTOs, projections, or command
 results to entrypoints.
+
+Use-case entry validates raw command input and authorization. After persistence
+has structurally validated a durable read, runtime assembly validates the
+Workflow+Baton semantic pair once for the immutable command snapshot. Internal
+transitions consume that trusted snapshot and retain only narrow
+impossible-state assertions and postconditions; they do not wholly revalidate
+workflow or baton policy on every hop.
 
 Top-level use cases must not import other top-level use cases as a stable
 pattern. Shared application policy belongs in a colocated helper or an internal
@@ -218,6 +229,11 @@ Persistence owns filesystem and durable-state integration:
 
 Persistence may depend on DTOs, records, and file contracts. Persistence must
 not import use cases.
+
+Persistence readers validate durable record structure at ingress. Persistence
+writers validate durable envelopes/schema, managed paths, lock-scoped snapshot
+provenance, and WAL preconditions only. They do not import workflow semantic
+policy or repeat runtime validation.
 
 Persistence must not import entity-owned Baton schema after the schema has a
 neutral or narrowly colocated file-contract owner.
@@ -328,6 +344,16 @@ hash. Baton and current-request files retain their atomic-write behavior. The
 legacy v1 full-history pending format remains recoverable for commits already in
 flight, but new commits must use v2.
 
+The pending journal is authoritative for crash recovery. For exact retriable
+`continue` and `move-pointer` input, recovery completes the durable order
+`journal -> history/baton/current requests -> operation receipt -> journal
+unlink`, with required fsyncs, before live post-crash baton state is judged.
+The receipt commit id, operation, fingerprint, and post-baton signature are the
+replay proof. A stale matching token may use only that exact pending/completed
+proof, or an exact accepted-output signature for idempotent `write-output`.
+After a miss, a fresh lease must be reasserted under the per-run lock before any
+new mutation.
+
 `history.md` remains the canonical human-facing projection. Commands that only
 need baton/current requests carry a file reference plus byte size and do not
 load the history body. Full history reads are reserved for behavior that
@@ -340,6 +366,12 @@ Every runner command still validates authority once before taking the per-run
 lock and again from a fresh record while holding that lock. Matching-token
 renewal preserves the token epoch; a tokenless stale takeover rotates the hash
 and increments the epoch. Raw lease tokens are never persisted.
+
+`authority.json` and `runs.json` are intentionally outside the run-state WAL.
+Authority may lag after process death and converges through exact replay or the
+next fresh authorized mutation; the catalog remains a discovery projection.
+Accepted output is redacted at the use-case/persistence ingress using the exact
+active token before it can reach baton/history/receipts or dashboard readers.
 
 `runs.json` is the global discovery/catalog projection, not an authority source
 once a per-run record exists. Warm `next`, `instructions`, `write-output`,

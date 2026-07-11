@@ -95,9 +95,6 @@ function writeHostResponse(response, { onlyInstructions }) {
 try {
   const { mode, values } = parseCliArgs(process.argv.slice(2));
   activeLeaseToken = values['lease-token'];
-  if (mode === 'next' && (values.owner !== undefined || values['session-id'] !== undefined || values['worker-id'] !== undefined)) {
-    fail('workflow-runner next supports implicit claim metadata only through --harness; claim first to use owner/session/worker metadata');
-  }
   if (mode === 'instructions') {
     const instructions = await loadInstructions({
       runId: values['run-id'],

@@ -12,6 +12,7 @@ import {
   next,
   writeOutput,
 } from './helpers/orbita-production-api.mjs';
+import { getDashboardRun } from '../dashboard/api.mjs';
 import { registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
@@ -120,6 +121,16 @@ function rawRunFiles(paths) {
     authority: existsSync(paths.authorityPath) ? readFileSync(paths.authorityPath, 'utf8') : undefined,
     indexEntry: index.runs[paths.runId],
   };
+}
+
+function durableAggregateBytes(paths) {
+  return Object.fromEntries([
+    ['journal', paths.durableCommitPath],
+    ['baton', paths.batonPath],
+    ['history', paths.historyPath],
+    ['currentRequests', paths.currentRequestsPath],
+    ['authority', paths.authorityPath],
+  ].map(([key, pathname]) => [key, existsSync(pathname) ? readFileSync(pathname, 'utf8') : undefined]));
 }
 
 test('runner pointer API lists adjacent transitions and moves pointer with retained-state acknowledgement', async () => {
@@ -284,6 +295,119 @@ test('runner pointer API replays exact duplicate moves and rejects wrong leases 
   );
 
   assert.deepEqual(snapshot(run.paths), afterStaleRejected);
+});
+
+test('expired matching leases cannot start fresh continue, pointer, or write-output mutations', async () => {
+  const expiredAt = new Date('2026-06-01T12:05:00.000Z');
+
+  const continueRunState = await createClaimedRun('api-expired-fresh-continue');
+  await next({ ...continueRunState, now: new Date('2026-06-01T10:00:01.000Z') });
+  await acceptCurrentWorkerOutput({ ...continueRunState, stepId: 'prepare', summary: 'prepared before expiry' });
+  const continueBefore = snapshot(continueRunState.paths);
+  await assert.rejects(
+    () => continueRun({ ...continueRunState, now: expiredAt }),
+    /workflow run lease is stale/,
+  );
+  assert.deepEqual(snapshot(continueRunState.paths), continueBefore);
+
+  const pointerRunState = await createClaimedRun('api-expired-fresh-pointer');
+  await next({ ...pointerRunState, now: new Date('2026-06-01T10:00:01.000Z') });
+  await acceptCurrentWorkerOutput({ ...pointerRunState, stepId: 'prepare', summary: 'prepared for expired pointer' });
+  await continueRun({ ...pointerRunState, now: new Date('2026-06-01T10:02:00.000Z') });
+  const listed = await listPointerTransitions({ ...pointerRunState, now: new Date('2026-06-01T10:03:00.000Z') });
+  const pointerBefore = snapshot(pointerRunState.paths);
+  await assert.rejects(
+    () => movePointer({
+      ...pointerRunState,
+      transitionId: listed.transitions[0].id,
+      acknowledgeRetainedState: true,
+      now: expiredAt,
+    }),
+    /workflow run lease is stale/,
+  );
+  assert.deepEqual(snapshot(pointerRunState.paths), pointerBefore);
+
+  const outputRunState = await createClaimedRun('api-expired-fresh-write-output');
+  await next({ ...outputRunState, now: new Date('2026-06-01T10:00:01.000Z') });
+  const outputBefore = snapshot(outputRunState.paths);
+  await assert.rejects(
+    () => acceptCurrentWorkerOutput({
+      ...outputRunState,
+      stepId: 'prepare',
+      summary: 'must not be accepted after expiry',
+      now: expiredAt,
+    }),
+    /workflow run lease is stale/,
+  );
+  assert.deepEqual(snapshot(outputRunState.paths), outputBefore);
+});
+
+test('accepted output redacts the exact active lease token before persistence', async () => {
+  const run = await createClaimedRun('api-accepted-output-token-redaction');
+  await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
+  await acceptCurrentWorkerOutput({
+    ...run,
+    stepId: 'prepare',
+    summary: `worker accidentally returned bare token ${run.leaseToken}`,
+  });
+
+  const persisted = readFileSync(run.paths.batonPath, 'utf8');
+  assert.equal(persisted.includes(run.leaseToken), false);
+  assert.match(persisted, /\[redacted-lease-token\]/);
+  assert.equal(JSON.stringify(snapshot(run.paths)).includes(run.leaseToken), false);
+  const dashboardRun = await getDashboardRun({ runId: run.runId, runsRoot: run.paths.runsRoot });
+  assert.equal(JSON.stringify(dashboardRun).includes(run.leaseToken), false);
+  assert.match(JSON.stringify(dashboardRun), /redacted-lease-token/);
+});
+
+test('expired matching lease may replay exact accepted output without duplicate mutation', async () => {
+  const run = await createClaimedRun('api-expired-exact-write-output');
+  await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
+  const first = await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'accepted before expiry' });
+  assert.equal(first.idempotent, undefined);
+  const before = rawRunFiles(run.paths);
+
+  const replay = await acceptCurrentWorkerOutput({
+    ...run,
+    stepId: 'prepare',
+    summary: 'accepted before expiry',
+    now: new Date('2026-06-01T12:05:00.000Z'),
+  });
+  assert.equal(replay.idempotent, true);
+  const after = rawRunFiles(run.paths);
+  assert.equal(after.baton, before.baton);
+  assert.equal(after.history, before.history);
+  assert.deepEqual(after.indexEntry, before.indexEntry);
+  const authority = JSON.parse(after.authority);
+  assert.equal(authority.updatedAt, '2026-06-01T12:05:00.000Z');
+  assert.equal(authority.workerLease.leaseExpiresAt, '2026-06-01T13:05:00.000Z');
+});
+
+test('expired matching write-output does not recover an unrelated pending journal', async () => {
+  const run = await createClaimedRun('api-expired-write-output-pending-journal');
+  await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
+  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'accepted before pending continue' });
+  process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER = 'pending';
+  try {
+    await assert.rejects(
+      () => continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') }),
+      /injected durable commit failure after pending/,
+    );
+  } finally {
+    delete process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER;
+  }
+  const before = durableAggregateBytes(run.paths);
+
+  await assert.rejects(
+    () => acceptCurrentWorkerOutput({
+      ...run,
+      stepId: 'prepare',
+      summary: 'accepted before pending continue',
+      now: new Date('2026-06-01T12:05:00.000Z'),
+    }),
+    /workflow run lease is stale/,
+  );
+  assert.deepEqual(durableAggregateBytes(run.paths), before);
 });
 
 test('runner pointer API rejects mismatched pending retry and replays matching retry once recovered', async () => {

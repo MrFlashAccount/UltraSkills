@@ -7,6 +7,14 @@ Binding rules:
 - No compatibility facades outside this folder are approved for run-state read/write.
 - API and CLI callers import `PersistedRunStateReader.mjs`, `PersistedRunStateWriter.mjs`, `paths.mjs`, and `lock.mjs` directly.
 - This folder must not import DTOs or runtime use-cases. Projection belongs at the entrypoint/use-case boundary.
+- Validation is concentrated at named trust boundaries. Command/use-case entry
+  validates raw application input; run-state reads validate durable record
+  structure; runtime assembly validates Workflow+Baton semantics once for the
+  command snapshot. The persistence writer validates only the durable envelope,
+  paths, lock-scoped snapshot provenance, and WAL preconditions. It must not
+  import or repeat workflow semantic policy. Trusted command-local snapshots
+  use narrow assertions and transition postconditions rather than whole-record
+  revalidation inside every runtime transition.
 - A persisted-state snapshot is a validated command-local record, not a cache.
   Snapshot reuse is allowed only when the reader captured it inside the same
   active per-run lock scope; the writer returns the replacement snapshot after
@@ -48,10 +56,14 @@ Binding rules:
   history entry.
 - Retriable `continue` and `move-pointer` commits persist a canonical input
   fingerprint, pre-commit baton signature, and original public result in the
-  pending transaction. Recovery publishes `operation-receipt.json` before
-  unlinking the journal. A matching retry replays the receipt only while its
-  post-commit baton signature is still current; a later baton mutation
-  supersedes it. Mismatched pending retries fail closed. Legacy v1 and
+  pending transaction. The journal is the sole recovery authority: an exact
+  pending retry completes recovery before comparing live post-crash state, then
+  verifies the published `operation-receipt.json` against the commit id,
+  operation, fingerprint, and current post-commit baton signature. Recovery
+  publishes that receipt before unlinking and fsyncing the journal. A completed
+  retry replays the receipt only while its post-commit baton signature is still
+  current; a later baton mutation supersedes it. Mismatched pending retries fail
+  closed without recovering as the requested command. Legacy v1 and
   pre-replay-v2 journals omit this metadata and remain recoverable.
   Replay results replace the active lease token with a private placeholder on
   disk and restore it only in the authenticated command response.
@@ -81,6 +93,12 @@ Binding rules:
 - Durable workflow state is baton plus history; per-run authority is separate
   durable control-plane state. Current host responses, request lists, and
   compiled prompts are projections of baton plus the authority-bound workflow.
+- `authority.json` and `runs.json` remain outside the aggregate WAL. Authority is
+  a control-plane projection and may temporarily lag after process death. Exact
+  pending/completed replay, or the next fresh authorized mutation, converges it.
+  A stale matching token may only finish an exact pending/completed replay or an
+  exact idempotent `write-output`; after any replay/idempotency miss the command
+  must reassert a fresh lease under the lock before creating or mutating state.
 - API `next`, `continue`, `write-output`, and `instructions` read persisted baton before rendering; `continue` and `write-output` validate accepted outputs against the freshly rendered current requests, and `instructions` returns the freshly rendered prompt for the current step.
 - Pointer recovery API functions `listPointerTransitions` and `movePointer` use
   CLI modes `list-pointer-transitions` and `move-pointer`. They read persisted
@@ -103,7 +121,7 @@ Binding rules:
 - Heartbeat age alone never makes a lock stale when its owner PID is verifiably
   alive on the same host. Host-tagged metadata prevents treating an unrelated
   local PID as a remote owner's liveness proof.
-- `write-output` owns accepted-output history entries after output schema validation, artifact path validation, and worker debug-summary side-channel validation. For `run_worker`, accepted-output projection requires the exact generated `--debug-summary-file` path, validates a non-empty regular file, and reads only a bounded prefix; the debug summary is not part of baton/state. Rich debug-summary body ingestion is suppressible and is bounded after normalization to 4 KiB or 80 lines with a truncation marker.
+- `write-output` owns accepted-output history entries after output schema validation, artifact path validation, and worker debug-summary side-channel validation. Before accepted output crosses the persistence boundary, the use case replaces every exact occurrence of the active lease token in accepted scalar values with a stable redaction placeholder; raw tokens must not survive into baton, history, receipts, or browser-visible projections. For `run_worker`, accepted-output projection requires the exact generated `--debug-summary-file` path, validates a non-empty regular file, and reads only a bounded prefix; the debug summary is not part of baton/state. Rich debug-summary body ingestion is suppressible and is bounded after normalization to 4 KiB or 80 lines with a truncation marker.
 - `continue` owns transition and terminal history, and those history writes must stay atomic with baton transition durability. Retry/recovery must not duplicate, corrupt, or advance misleading history entries ahead of baton state.
 - `movePointer` owns pointer-recovery history entries. They must be append-only
   and atomic with the cursor/status update, recording bounded before/after

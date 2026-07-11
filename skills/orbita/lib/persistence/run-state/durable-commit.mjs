@@ -50,6 +50,10 @@ function maybeFailDurableCommitAfter(action) {
   if (process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER === action) throw new Error(`injected durable commit failure after ${action}`);
 }
 
+function maybeCrashDurableCommitAfter(action) {
+  if (process.env.WORKFLOW_RUNNER_ENABLE_TEST_CRASH_HOOKS === '1' && process.env.WORKFLOW_RUNNER_CRASH_DURABLE_COMMIT_AFTER === action) process.exit(86);
+}
+
 function maybeFailHistoryOnceAfter(action) {
   if (process.env.WORKFLOW_RUNNER_FAIL_HISTORY_ONCE_AFTER === action) throw new Error(`injected history-once failure after ${action}`);
 }
@@ -206,6 +210,7 @@ async function recoverDurableCommitState(paths, { before: suppliedBefore, includ
       targetsTouched = true;
       await writeJsonAtomic(paths.batonPath, commit.baton);
     }
+    maybeCrashDurableCommitAfter('baton');
     maybeFailDurableCommitAfter('baton');
     if (Object.hasOwn(commit, 'currentRequests')) {
       targetsTouched = true;
@@ -233,6 +238,7 @@ async function recoverDurableCommitState(paths, { before: suppliedBefore, includ
         postBatonSignature: await durableFileSignature(paths.batonPath),
         completedAt: new Date().toISOString(),
       });
+      maybeCrashDurableCommitAfter('receipt');
     }
     await rm(paths.durableCommitPath, { force: true });
     journalRemoved = true;
@@ -395,7 +401,7 @@ export async function readOperationReceipt(paths) {
   if (!paths.operationReceiptPath || !(await exists(paths.operationReceiptPath))) return undefined;
   await assertManagedRunStateFile(paths.operationReceiptPath, 'workflow operation receipt');
   const receipt = await readJson(paths.operationReceiptPath, 'workflow operation receipt');
-  if (receipt?.version !== 1 || typeof receipt.operation !== 'string' || typeof receipt.fingerprint !== 'string' || typeof receipt.postBatonSignature !== 'string' || !Object.hasOwn(receipt, 'result')) {
+  if (receipt?.version !== 1 || typeof receipt.commitId !== 'string' || receipt.commitId.length === 0 || typeof receipt.operation !== 'string' || typeof receipt.fingerprint !== 'string' || typeof receipt.postBatonSignature !== 'string' || !Object.hasOwn(receipt, 'result')) {
     throw new Error('workflow operation receipt is invalid');
   }
   return receipt;

@@ -8,7 +8,6 @@ import { assertBatonSchema } from '../file-contracts/baton/baton-schema.mjs';
 import { assertWorkflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import { applyOutputToBatonState } from '../runtime/baton-state.mjs';
 import { compileWorkflowForRuntime } from '../runtime/compiled-workflow.mjs';
-import { applyLoopPolicyTransition } from '../runtime/loop-policies.mjs';
 
 function workflowDoc(overrides = {}) {
   return {
@@ -100,7 +99,7 @@ test('entities deep-freeze owned snapshots and nested accessors return defensive
   assert.equal(baton.pendingRequests()[0].metadata.value, 1);
 });
 
-test('loop limits and counters reject unsafe, unknown, and stale values at every boundary', () => {
+test('loop limits and counters reject unsafe, unknown, and stale values at named trust boundaries', () => {
   const workflow = workflowDoc({
     steps: {
       worker: { name: 'Worker', kind: 'worker', next: 'worker' },
@@ -112,10 +111,6 @@ test('loop limits and counters reject unsafe, unknown, and stale values at every
   assert.throws(() => assertBatonSchema(batonDoc({ state: { artifacts: [], results: [], $loopProgress: { retry: Number.MAX_SAFE_INTEGER + 1 } } })), /baton/);
   assert.throws(() => new Baton(batonDoc({ state: { artifacts: [], results: [], $loopProgress: { stale: 1 } } })).validateAgainst(workflow), /does not identify a workflow loop policy/);
   assert.throws(() => new Baton(batonDoc({ state: { artifacts: [], results: [], $loopProgress: { retry: 3 } } })).validateAgainst(workflow), /must not exceed loopPolicy maxIterations 2/);
-  assert.throws(
-    () => applyLoopPolicyTransition({ workflow, baton: batonDoc({ state: { artifacts: [], results: [], $loopProgress: { stale: 1 } } }), stepId: 'worker', transition: { targetStepId: 'worker' } }),
-    /unknown policy 'stale'/,
-  );
 });
 
 test('inline Template userPrompt interpolation preserves replacement dollar sequences literally', () => {

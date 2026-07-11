@@ -546,7 +546,7 @@ test('runner reuse hints: write-output replay is canonical-idempotent and confli
   assert.equal(readBaton(runDir).acceptedHostOutputSignatures, undefined);
 });
 
-test('runner reuse hints: continue bind-agent renews stale matching worker lease', async () => {
+test('runner reuse hints: continue bind-agent requires a fresh matching worker lease', async () => {
   const workflow = structuredClone(workflowDoc);
   workflow.steps.prepare.next = 'done';
   const { runId, workflowPath, leaseToken, now } = await runCase('bind-agent-renews-lease', workflow);
@@ -564,18 +564,11 @@ test('runner reuse hints: continue bind-agent renews stale matching worker lease
   const before = (await readRunAuthority(paths)).workerLease;
   assert.equal(before.leaseExpiresAt, '2026-06-01T11:00:01.000Z');
 
-  await continueRun({
-    runId,
-    workflowPath,
-    bindAgents: ['prepare=worker-after-expiry'],
-    leaseToken,
+  await assert.rejects(() => continueRun({
+    runId, workflowPath, bindAgents: ['prepare=worker-after-expiry'], leaseToken,
     now: new Date('2026-06-01T11:05:00.000Z'),
-  });
-
-  const after = (await readRunAuthority(paths)).workerLease;
-  assert.equal(after.tokenHash, before.tokenHash);
-  assert.equal(after.tokenEpoch, before.tokenEpoch);
-  assert.equal(after.leaseExpiresAt, '2026-06-01T12:05:00.000Z');
+  }), /workflow run lease is stale/);
+  assert.deepEqual((await readRunAuthority(paths)).workerLease, before);
 });
 
 

@@ -90,46 +90,38 @@ export function createWorkflowRunnerCommand({
 
   const REPLAY_LEASE_TOKEN_PLACEHOLDER = '<workflow-runner-replay-lease-token>';
 
-  function replaySafeValue(value, leaseToken) {
-    if (typeof value === 'string') return leaseToken ? value.split(leaseToken).join(REPLAY_LEASE_TOKEN_PLACEHOLDER) : value;
-    if (Array.isArray(value)) return value.map((item) => replaySafeValue(item, leaseToken));
+  function replaceExactStringValue(value, match, replacement) {
+    if (typeof value === 'string') return match ? value.split(match).join(replacement) : value;
+    if (Array.isArray(value)) return value.map((item) => replaceExactStringValue(item, match, replacement));
     if (!value || typeof value !== 'object') return value;
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, replaySafeValue(item, leaseToken)]));
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, replaceExactStringValue(item, match, replacement)]));
   }
 
-  function restoreReplayValue(value, leaseToken) {
-    if (typeof value === 'string') return value.split(REPLAY_LEASE_TOKEN_PLACEHOLDER).join(leaseToken);
-    if (Array.isArray(value)) return value.map((item) => restoreReplayValue(item, leaseToken));
-    if (!value || typeof value !== 'object') return value;
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, restoreReplayValue(item, leaseToken)]));
-  }
-
+  const replaySafeValue = (value, leaseToken) => replaceExactStringValue(value, leaseToken, REPLAY_LEASE_TOKEN_PLACEHOLDER);
+  const restoreReplayValue = (value, leaseToken) => replaceExactStringValue(value, REPLAY_LEASE_TOKEN_PLACEHOLDER, leaseToken);
+  const redactAcceptedOutputLeaseToken = (value, leaseToken) => replaceExactStringValue(value, leaseToken, '[redacted-lease-token]');
   async function replayCompletedOperation(paths, operation, fingerprint, leaseToken) {
     const receipt = await readOperationReceipt(paths);
     if (!receipt || receipt.operation !== operation || receipt.fingerprint !== fingerprint) return undefined;
     if (receipt.postBatonSignature !== await durableFileSignature(paths.batonPath)) return undefined;
     return restoreReplayValue(receipt.result, leaseToken);
   }
-
   async function recoverMatchingPendingOperation(paths, current, operation, fingerprint, leaseToken) {
-    if (!current.commit) return undefined;
+    if (!current?.commit) return undefined;
     const replay = current.commit.replay;
     if (replay !== undefined) {
-      const currentBatonSignature = await durableFileSignature(paths.batonPath);
-      if (current.commit.operation !== operation || replay.fingerprint !== fingerprint || replay.preBatonSignature !== currentBatonSignature) {
+      if (current.commit.operation !== operation || replay.fingerprint !== fingerprint) {
         throw new Error(`cannot retry interrupted ${current.commit.operation ?? 'workflow'} operation with different input`);
       }
       await recoverDurableCommit(paths);
       const receipt = await readOperationReceipt(paths);
-      if (!receipt || receipt.commitId !== current.commit.id) throw new Error('recovered workflow operation receipt is missing');
+      if (receipt?.commitId !== current.commit.id || receipt.operation !== operation || receipt.fingerprint !== fingerprint
+        || receipt.postBatonSignature !== await durableFileSignature(paths.batonPath)) throw new Error('recovered workflow operation receipt is missing or does not match durable state');
       return restoreReplayValue(receipt.result, leaseToken);
     }
-    // Legacy v1 and pre-replay v2 journals remain recoverable. The caller must
-    // return the recovered current projection instead of executing stale input.
     await recoverDurableCommit(paths);
     return { legacyRecovered: true, operation: current.commit.operation };
   }
-
   async function renewReplayedOperationAuthority(paths, authority, { operation, result, leaseToken, now }) {
     let status = result?.status;
     if (operation === 'workflow-runner-move-pointer' || status === undefined) {
@@ -162,17 +154,16 @@ export function createWorkflowRunnerCommand({
 
   async function assertWorkerLeaseAuthority(paths, { authority = paths.runAuthority, leaseToken, now = new Date(), allowStale = false } = {}) {
     const current = authority ?? await readRunAuthorityWithLegacyFallback(paths);
-    if (allowStale) assertMatchingTokenAuthority(current?.workerLease, leaseToken, { runId: paths.runId });
-    else assertFreshTokenAuthority(current?.workerLease, leaseToken, { runId: paths.runId, now });
+    const assertAuthority = allowStale ? assertMatchingTokenAuthority : assertFreshTokenAuthority;
+    assertAuthority(current?.workerLease, leaseToken, { runId: paths.runId, now });
     return current;
   }
-
   async function assertPreLockWorkerLeaseAuthority(paths, { leaseToken, now = new Date(), allowUnclaimed = false, allowStale = false } = {}) {
     if (!leaseToken) throw new Error('workflow run token is required');
     const authority = await readRunAuthorityWithLegacyFallback(paths);
     if (!authority && allowUnclaimed) return undefined;
-    if (allowStale) assertMatchingTokenAuthority(authority?.workerLease, leaseToken, { runId: paths.runId });
-    else assertFreshTokenAuthority(authority?.workerLease, leaseToken, { runId: paths.runId, now });
+    const assertAuthority = allowStale ? assertMatchingTokenAuthority : assertFreshTokenAuthority;
+    assertAuthority(authority?.workerLease, leaseToken, { runId: paths.runId, now });
     return authority;
   }
 
@@ -186,6 +177,7 @@ export function createWorkflowRunnerCommand({
     };
     if (taskKey !== undefined) next.taskKey = taskKey;
     if (taskFingerprint !== undefined) next.taskFingerprint = taskFingerprint;
+    if (process.env.WORKFLOW_RUNNER_ENABLE_TEST_CRASH_HOOKS === '1' && process.env.WORKFLOW_RUNNER_CRASH_BEFORE_AUTHORITY_RENEWAL === '1') process.exit(86);
     return writeRunAuthority(paths, next);
   }
 
@@ -258,10 +250,10 @@ export function createWorkflowRunnerCommand({
     if (!runId || !leaseToken) return false;
     try {
       const lockPaths = resolveRunPaths({ runId, runsRoot });
-      await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
+      await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
       return await withRunStateLock(lockPaths, async () => {
         const paths = await resolveAuthorityBoundRunPaths({ runId, workflowPath, runsRoot });
-        await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
+        await assertWorkerLeaseAuthority(paths, { leaseToken, now });
         if (!(await pathExists(paths.historyPath)) || !(await pathExists(paths.batonPath))) return false;
         if (await pathExists(paths.durableCommitPath)) return false;
         await recoverDurableCommit(paths);
@@ -690,8 +682,8 @@ export function createWorkflowRunnerCommand({
     return withRunStateLock(lockPaths, async () => {
       const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
       const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
-      await ensureRunFiles(paths);
-      const beforeRecovery = await readPersistedRunState(paths, { includeHistoryText: false });
+      const beforeRecovery = await pathExists(paths.durableCommitPath) ? await readPersistedRunState(paths, { includeHistoryText: false }) : undefined;
+      if (beforeRecovery?.commit && beforeRecovery.commit.replay === undefined) await assertWorkerLeaseAuthority(paths, { authority, leaseToken, now });
       const pendingReplay = await recoverMatchingPendingOperation(paths, beforeRecovery, 'workflow-runner-continue', replayFingerprint, leaseToken);
       if (pendingReplay !== undefined) {
         if (!pendingReplay.legacyRecovered) {
@@ -722,6 +714,8 @@ export function createWorkflowRunnerCommand({
           now,
         });
       }
+      await assertWorkerLeaseAuthority(paths, { authority, leaseToken, now });
+      await ensureRunFiles(paths);
       const continuation = await outputForCurrentState(paths, { includeHistoryText: debugNote !== undefined });
       const { outputValue, historyOutput, recoverableWorkerBlockers, acceptedOutputs, recoveryResolutions } = continuation;
       const preActions = applyWorkerBindingsForContinue({
@@ -875,6 +869,7 @@ export function createWorkflowRunnerCommand({
       const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
       const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
       let current = await readPersistedRunState(paths);
+      if (current.commit && current.commit.replay === undefined) await assertWorkerLeaseAuthority(paths, { authority, leaseToken, now });
       const pendingReplay = await recoverMatchingPendingOperation(paths, current, 'workflow-runner-move-pointer', replayFingerprint, leaseToken);
       if (pendingReplay !== undefined) {
         if (!pendingReplay.legacyRecovered) {
@@ -896,6 +891,7 @@ export function createWorkflowRunnerCommand({
           now,
         });
       }
+      await assertWorkerLeaseAuthority(paths, { authority, leaseToken, now });
       const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
       const resolved = resolvePointerMove({
         workflow: runtime.workflow,
@@ -1164,8 +1160,11 @@ export function createWorkflowRunnerCommand({
     return withRunStateLock(lockPaths, async () => {
       const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
       const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
-      await ensureRunFiles(paths);
-      await recoverDurableCommit(paths);
+      const hasPendingCommit = await pathExists(paths.durableCommitPath);
+      const needsInitialization = !hasPendingCommit && (!(await pathExists(paths.batonPath)) || !(await pathExists(paths.historyPath)));
+      if (hasPendingCommit || needsInitialization) await assertWorkerLeaseAuthority(paths, { authority, leaseToken, now });
+      if (hasPendingCommit) await recoverDurableCommit(paths);
+      else if (needsInitialization) await ensureRunFiles(paths);
       const current = await readPersistedRunState(paths, { includeHistoryText: false });
       const { runtime, response } = await currentRuntimeAndResponse(paths, current, { leaseToken });
       if (response.status !== 'needs_host_actions') throw staleWorkflowCommandError(stepId, response);
@@ -1193,7 +1192,7 @@ export function createWorkflowRunnerCommand({
         workflow: runtime.workflow,
         request,
         step,
-        output: accepted,
+        output: redactAcceptedOutputLeaseToken(accepted, leaseToken),
         runsRoot: paths.runsRoot,
       });
       const expectedDebugSummaryPath = request.action === 'run_worker'
@@ -1222,6 +1221,7 @@ export function createWorkflowRunnerCommand({
           idempotent: true,
         };
       }
+      await assertWorkerLeaseAuthority(paths, { authority, leaseToken, now });
       const baton = batonWithAcceptedOutput(current.baton, acceptedStepId, durableAccepted, {
         clearRecoverableBlocker: request.action !== 'resolve_worker_blocker',
       });

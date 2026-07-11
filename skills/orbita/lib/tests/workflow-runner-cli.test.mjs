@@ -446,6 +446,6 @@ test('runner CLI rejects unsupported implicit next claim metadata explicitly', (
       'next', '--run-id', `unsupported-next-${flag.slice(2)}-${process.pid}`, '--lease-token', 'unused-token', flag, value,
     ], { cwd: root, encoding: 'utf8', env: process.env });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /supports implicit claim metadata only through --harness/);
+    assert.match(result.stderr, /supports implicit claim metadata only through harness/);
   }
 });
