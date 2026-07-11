@@ -9,7 +9,12 @@ import { readWorkflowDocument } from '../persistence/workflow-resources/workflow
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const WORKFLOWS_ROOT = path.join(REPO_ROOT, 'workflows');
 const devHarness = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml'));
+const frontendUiPrSmoke = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/frontend-ui-pr-smoke/workflow.toml'));
+const researchCritic = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/research-critic/workflow.toml'));
 const workflowAuthoring = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/workflow-authoring/workflow.json'));
+const uiProposalTemplate = readFileSync(path.join(REPO_ROOT, 'shared/templates/ui-design-proposal-template.html'), 'utf8');
+const sharedTemplatesReadme = readFileSync(path.join(REPO_ROOT, 'shared/templates/README.md'), 'utf8');
+const devUiDraftSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/dev-harness/schemas/ui-intent-draft-output.json'), 'utf8'));
 
 const catalogWorkflows = readdirSync(WORKFLOWS_ROOT, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -48,6 +53,14 @@ const revisionGates = [
     schemaPath: 'workflows/dev-harness/schemas/planning-draft-output.json',
   },
   {
+    label: 'frontend-ui-pr-smoke design',
+    workflow: frontendUiPrSmoke,
+    draftId: 'design_draft',
+    attackId: 'design_attack',
+    approvalId: 'approve_design',
+    schemaPath: 'workflows/frontend-ui-pr-smoke/schemas/design-draft-output.json',
+  },
+  {
     label: 'workflow-authoring design',
     workflow: workflowAuthoring,
     draftId: 'workflow_design_draft',
@@ -60,6 +73,79 @@ const revisionGates = [
 function applyStep(workflow, baton, stepId, output) {
   return new Step({ id: stepId, step: workflow.steps[stepId] }).applyOutput({ workflow, baton, output }).baton;
 }
+
+test('frontend design gates preserve approved HTML and proof context through implementation and taste review', () => {
+  const devDraft = devHarness.steps.ui_intent_draft;
+  const devAttack = devHarness.steps.ui_intent_attack;
+  const devImplementation = devHarness.steps.implementation.branches.frontend_implementation;
+  const devTasteReview = devHarness.steps.review.branches.frontend_taste_review;
+  const smokeAttack = frontendUiPrSmoke.steps.design_attack;
+  const smokeImplementation = frontendUiPrSmoke.steps.implementation.branches.frontend_implementation;
+  const smokeTasteReview = frontendUiPrSmoke.steps.review.branches.frontend_taste_review;
+  const prompts = [devImplementation, devTasteReview, smokeImplementation, smokeTasteReview]
+    .map((step) => Array.isArray(step.input.prompt) ? step.input.prompt.join('\n') : step.input.prompt ?? '');
+
+  assert.equal(devDraft.agent, 'frontend-taste');
+  assert.equal(devDraft.input.role, 'frontend-taste');
+  assert.equal(devAttack.agent, 'frontend-taste');
+  assert.equal(devAttack.input.role, 'frontend-taste');
+  assert.match(devAttack.input.prompt, /typography or rhythm/);
+  assert.match(devAttack.input.prompt, /Do not invent `DESIGN\.md`/);
+  for (const attack of [devAttack, smokeAttack]) {
+    const attackPrompt = Array.isArray(attack.input.prompt) ? attack.input.prompt.join('\n') : attack.input.prompt;
+    assert.match(attackPrompt, /3-4 viable directions/);
+    assert.match(attackPrompt, /each direction to have its own inspectable rendered composition frame/);
+    assert.match(attackPrompt, /product-relevant structural\/composition difference/);
+    assert.match(attackPrompt, /visible demonstration of typography\/rhythm, spacing\/composition, emphasis\/contrast, focus-visible\/target affordance, and motion\/reduced-motion/);
+    assert.match(attackPrompt, /Reject prose-only direction comparison/);
+    assert.match(attackPrompt, /identical or near-identical frames merely relabeled or recolored/);
+    assert.match(attackPrompt, /filled contract tables or checklists unsupported by (the )?rendered frames/);
+    assert.match(attackPrompt, /exact existing pattern and evidence being preserved/);
+  }
+  assert.match(frontendUiPrSmoke.steps.design_draft.input.prompt, /3-4 viable visual\/composition directions/);
+  assert.match(devHarness.steps.planning_draft.input.prompt, /both frontend_review and frontend_taste_review/);
+  assert.match(devHarness.steps.planning_attack.input.prompt, /both frontend_review and frontend_taste_review/);
+  assert.equal(frontendUiPrSmoke.steps.approve_design.next.cases.rejected, 'design_draft');
+
+  for (const prompt of prompts) {
+    assert.match(prompt, /ui-design-proposal/);
+    assert.match(prompt, /approval evidence|approve_design|approve_ui_intent/);
+  }
+  assert.match(prompts[0], /rendered proof/);
+  assert.match(prompts[1], /compare rendered implementation proof/);
+  assert.match(prompts[3], /rendered-proof fidelity/);
+});
+
+test('UI proposal contract rejects generic card-drawer routing and requires comparable visual directions plus taste fields', () => {
+  const draftPrompt = Array.isArray(devHarness.steps.ui_intent_draft.input.prompt)
+    ? devHarness.steps.ui_intent_draft.input.prompt.join('\n')
+    : devHarness.steps.ui_intent_draft.input.prompt;
+  const directionFrames = [...uiProposalTemplate.matchAll(/class="frame direction-frame"/g)];
+  const directionIds = [...uiProposalTemplate.matchAll(/data-direction="([A-D])"/g)].map((match) => match[1]);
+  const artifactDescription = devUiDraftSchema.properties.artifacts.description;
+  const artifactUsage = devUiDraftSchema.properties.artifacts['x-usage'];
+
+  assert.doesNotMatch(draftPrompt, /product-level data hierarchy, card anatomy\/content model, card visual rules, drawer\/sidebar placement and states/);
+  assert.match(draftPrompt, /Include card\/list anatomy and visual rules only when that pattern is selected/);
+  assert.doesNotMatch(uiProposalTemplate, /facts hidden until detail\/drawer/);
+  assert.doesNotMatch(uiProposalTemplate, /buttons, icon buttons, chips, badges, cards, drawers, tables/);
+  assert.deepEqual(directionIds, ['A', 'B', 'C', 'D']);
+  assert.equal(directionFrames.length, 4);
+  assert.match(uiProposalTemplate, /Each direction needs its own rendered composition frame/);
+  for (const field of [
+    'Typography scale / rhythm',
+    'Spacing / composition',
+    'Color / emphasis / contrast',
+    'Focus-visible / target affordance',
+    'Motion / reduced-motion',
+  ]) {
+    assert.match(uiProposalTemplate, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  assert.match(sharedTemplatesReadme, /product\/surface routing, design-basis preflight, user decisions/);
+  assert.match(sharedTemplatesReadme, /conditional selected-pattern contracts/);
+  assert.match(artifactDescription, /ready_for_attack or ready_for_approval/);
+  assert.match(artifactUsage, /both ready_for_attack and ready_for_approval/);
+});
 
 for (const gate of revisionGates) {
   test(`${gate.label}: first draft is attacked but a user-rejected revision returns directly to approval`, () => {

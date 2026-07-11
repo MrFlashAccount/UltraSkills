@@ -26,8 +26,8 @@
       "items": {
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
       },
-      "description": "Producer must emit artifact metadata for the required immutable ui-design-proposal HTML artifact when outcome is ready_for_attack.",
-      "x-usage": "Emit only the required immutable ui-design-proposal artifact with content_type text/html. Exact artifact field semantics come from the shared baton artifact schema.",
+      "description": "Producer must emit artifact metadata for the required immutable ui-design-proposal HTML artifact when outcome is ready_for_attack or ready_for_approval.",
+      "x-usage": "For both ready_for_attack and ready_for_approval, emit only the required immutable ui-design-proposal artifact with content_type text/html. Exact artifact field semantics come from the shared baton artifact schema.",
       "minItems": 1,
       "maxItems": 1,
       "contains": {

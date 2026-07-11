@@ -38,6 +38,10 @@
     .proposal-header { padding: 20px; }
     .grid { display: grid; gap: 16px; }
     .grid.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .direction-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .direction-option { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 16px; }
+    .direction-option .frame { min-height: 260px; margin: 12px 0; }
+    .direction-option .surface-placeholder { min-height: 220px; }
     .frame { min-height: 360px; padding: 16px; overflow: hidden; }
     .frame.mobile { max-width: 420px; }
     .surface-placeholder {
@@ -80,7 +84,7 @@
     .forbidden { color: var(--danger); }
     @media (max-width: 760px) {
       main { padding: 16px; }
-      .grid.two { grid-template-columns: 1fr; }
+      .grid.two, .direction-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -88,19 +92,104 @@
   <main>
     <header class="proposal-header">
       <h1>&lt;Project/Issue&gt; UI Design Proposal - &lt;Surface&gt;</h1>
-      <p>This HTML artifact is the first-class design proposal. Text contract details, product-level data hierarchy, card anatomy, detail drawer behavior, component rules, visual states, annotations, and flow sketches live inside this file.</p>
+      <p>This HTML artifact is the first-class design proposal. It records the routed product surface, design basis, decisions, visual direction, selected UI patterns, states, evidence, and proof expectations that implementation and review must inspect directly.</p>
       <div class="grid two">
         <div><strong>Owner:</strong> &lt;name&gt;</div>
         <div><strong>Date:</strong> &lt;date&gt;</div>
         <div><strong>Source artifacts:</strong> &lt;links/paths&gt;</div>
-        <div><strong>UI gate decision:</strong> Applicable | Not applicable</div>
+        <div><strong>UI applicability:</strong> Applicable | Trivial / preserve existing UI | Not applicable</div>
       </div>
     </header>
 
     <section>
-      <h2>Decision Summary</h2>
+      <h2>UI Applicability And Product / Surface Route</h2>
       <div class="spec">
-        <p>&lt;Summarize the user task, surface type, design basis, open decisions, and the reason this proposal is ready or blocked.&gt;</p>
+        <table>
+          <thead><tr><th>Decision</th><th>Route / evidence</th><th>Consequence</th></tr></thead>
+          <tbody>
+            <tr><td>UI applicability</td><td>&lt;why this needs a proposal, preserves existing UI, or is not applicable&gt;</td><td>&lt;proposal/review depth required&gt;</td></tr>
+            <tr><td>Product / surface route</td><td>&lt;application workflow, admin, form, table, document, navigation, marketing, mixed, etc. + repo evidence&gt;</td><td>&lt;which existing conventions apply&gt;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Design-Basis Preflight</h2>
+      <div class="spec">
+        <table>
+          <thead><tr><th>Basis</th><th>Status / evidence</th><th>Allowed inference</th><th>Must not be invented</th></tr></thead>
+          <tbody>
+            <tr><td>DESIGN.md / design memory</td><td>&lt;present, absent, or not applicable; cite path if present&gt;</td><td>&lt;approved visual law that can be used&gt;</td><td>&lt;law unavailable from evidence&gt;</td></tr>
+            <tr><td>Existing UI / screenshots / references</td><td>&lt;paths, captures, approved references&gt;</td><td>&lt;patterns and qualities they prove&gt;</td><td>&lt;unsupported extrapolations&gt;</td></tr>
+            <tr><td>Fallback basis</td><td>&lt;only for small conservative work&gt;</td><td>&lt;portable guidance allowed&gt;</td><td>&lt;new durable direction requiring user/create-design approval&gt;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>User, Task, And Actions</h2>
+      <div class="grid two">
+        <div class="spec"><h3>User / Task</h3><p>&lt;Who is acting, what they are trying to decide or complete, and the success signal.&gt;</p></div>
+        <div class="spec"><h3>Primary / Secondary Actions</h3><p>&lt;Name the primary action, secondary actions, destructive or deferred actions, and their priority.&gt;</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>User Questions / Decisions</h2>
+      <div class="spec">
+        <table>
+          <thead><tr><th>Question / decision</th><th>Status</th><th>Answer / assumption</th><th>Layout or risk impact</th></tr></thead>
+          <tbody><tr><td>&lt;concrete user-facing decision&gt;</td><td>Answered | Assumed | Needs user approval</td><td>&lt;current answer&gt;</td><td>&lt;what changes if wrong&gt;</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>First-Read Hierarchy And Screen Zones</h2>
+      <div class="grid two">
+        <div class="spec"><h3>First Read</h3><p>&lt;What must be understood first, second, and only on demand. Include the primary action and critical status/emphasis.&gt;</p></div>
+        <div class="spec"><h3>Screen / Zones</h3><p>&lt;Semantic zones needed for this surface: header, toolbar, form, table, document body, navigation, list, details, feedback, etc. Do not choose code files here.&gt;</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Direction Comparison — When Taste-Sensitive Or Materially New</h2>
+      <p>Compare 3-4 materially distinct, viable directions inside the available design basis. Each direction needs its own rendered composition frame and trade-off notes; four labels in one prose row are not a comparison. For conservative or trivial UI, mark this section not applicable and name the existing pattern being preserved.</p>
+      <div class="direction-grid">
+        <article class="direction-option" data-direction="A">
+          <h3>Direction A — &lt;name&gt;</h3>
+          <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
+          <div class="frame direction-frame"><div class="surface-placeholder">Build Direction A as a real-ish visual/composition frame.</div></div>
+          <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
+          <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
+          <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
+        </article>
+        <article class="direction-option" data-direction="B">
+          <h3>Direction B — &lt;name&gt;</h3>
+          <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
+          <div class="frame direction-frame"><div class="surface-placeholder">Build Direction B as a real-ish visual/composition frame.</div></div>
+          <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
+          <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
+          <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
+        </article>
+        <article class="direction-option" data-direction="C">
+          <h3>Direction C — &lt;name&gt;</h3>
+          <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
+          <div class="frame direction-frame"><div class="surface-placeholder">Build Direction C as a real-ish visual/composition frame.</div></div>
+          <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
+          <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
+          <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
+        </article>
+        <article class="direction-option" data-direction="D">
+          <h3>Direction D — &lt;name&gt;</h3>
+          <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
+          <div class="frame direction-frame"><div class="surface-placeholder">Build Direction D as a real-ish visual/composition frame.</div></div>
+          <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
+          <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
+          <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
+        </article>
       </div>
     </section>
 
@@ -122,7 +211,7 @@
       <h2>States And Pathological Data</h2>
       <div class="grid two">
         <div class="frame"><div class="surface-placeholder">Loading / empty / error / degraded state</div></div>
-        <div class="frame"><div class="surface-placeholder">Long ids, long labels, dense data, selected detail/drawer</div></div>
+        <div class="frame"><div class="surface-placeholder">Long ids, long labels, dense data, selection or expanded detail when applicable</div></div>
       </div>
     </section>
 
@@ -134,17 +223,18 @@
             <tr><th>Product concept</th><th>User question answered</th><th>Primary facts</th><th>Secondary facts</th><th>Debug / detail-only facts</th></tr>
           </thead>
           <tbody>
-            <tr><td>&lt;Run / item / object / account / task&gt;</td><td>&lt;what the user needs to decide&gt;</td><td>&lt;facts visible first&gt;</td><td>&lt;facts visible after scan&gt;</td><td>&lt;facts hidden until detail/drawer&gt;</td></tr>
+            <tr><td>&lt;Run / item / object / account / task&gt;</td><td>&lt;what the user needs to decide&gt;</td><td>&lt;facts visible first&gt;</td><td>&lt;facts visible after scan&gt;</td><td>&lt;facts deferred to an applicable expanded-detail pattern or otherwise hidden&gt;</td></tr>
           </tbody>
         </table>
       </div>
     </section>
 
     <section>
-      <h2>Card Anatomy / Content Model</h2>
+      <h2>Conditional Pattern: Card / List Anatomy</h2>
       <div class="grid two">
         <div class="spec">
-          <h3>Card Structure</h3>
+          <h3>Applicability And Structure</h3>
+          <p><strong>Pattern status:</strong> Selected | Not selected. Complete the contract below only when cards or list rows are part of the approved direction; otherwise state why another pattern fits better.</p>
           <table>
             <thead>
               <tr><th>Zone</th><th>Content</th><th>Visual rule</th><th>Interaction</th></tr>
@@ -165,17 +255,18 @@
     </section>
 
     <section>
-      <h2>Detail Drawer / Sidebar</h2>
+      <h2>Conditional Pattern: Drawer / Sidebar / Bottom Sheet</h2>
       <div class="spec">
+        <p><strong>Pattern status:</strong> Selected | Not selected. Complete the state contract below only when an overlay or persistent detail surface is part of the approved direction. Placement follows the design basis; desktop-right/mobile-bottom is not a universal default.</p>
         <table>
           <thead>
             <tr><th>Breakpoint / state</th><th>Placement</th><th>Size / containment</th><th>Behavior</th><th>Animation</th></tr>
           </thead>
           <tbody>
-            <tr><td>Desktop selected</td><td>Right side panel unless design states otherwise</td><td>&lt;width, max-width, scroll zone&gt;</td><td>&lt;selected item details, close affordance, focus behavior&gt;</td><td>&lt;duration/easing/transform/opacity + reduced-motion fallback&gt;</td></tr>
-            <tr><td>Mobile selected</td><td>Bottom sheet unless design states otherwise</td><td>&lt;height cap, safe-area, inner scrolling&gt;</td><td>&lt;sheet handle/header, dismiss behavior&gt;</td><td>&lt;slide-up, reduced-motion fallback&gt;</td></tr>
+            <tr><td>Desktop selected</td><td>&lt;approved placement from design basis&gt;</td><td>&lt;width, max-width, scroll zone&gt;</td><td>&lt;selected item details, close affordance, focus behavior&gt;</td><td>&lt;duration/easing/transform/opacity + reduced-motion fallback&gt;</td></tr>
+            <tr><td>Mobile selected</td><td>&lt;approved narrow-screen placement&gt;</td><td>&lt;height/width cap, safe-area, inner scrolling&gt;</td><td>&lt;header/handle if applicable, dismiss behavior&gt;</td><td>&lt;approved transition + reduced-motion fallback&gt;</td></tr>
             <tr><td>No selection</td><td>&lt;hidden, empty panel, or instructional placeholder&gt;</td><td>&lt;reserved or collapsed space&gt;</td><td>&lt;what users see before selecting an item&gt;</td><td>&lt;no jarring layout shift&gt;</td></tr>
-            <tr><td>Deselection / close</td><td>&lt;where panel goes&gt;</td><td>&lt;list/card state after close&gt;</td><td>&lt;focus returns to selected trigger or sensible origin&gt;</td><td>&lt;exit animation and reduced-motion behavior&gt;</td></tr>
+            <tr><td>Deselection / close</td><td>&lt;where panel goes&gt;</td><td>&lt;initiating surface state after close&gt;</td><td>&lt;focus returns to selected trigger or sensible origin&gt;</td><td>&lt;exit animation and reduced-motion behavior&gt;</td></tr>
           </tbody>
         </table>
       </div>
@@ -191,8 +282,24 @@
           <tbody>
             <tr><td>Buttons / tabs / segmented controls</td><td>Forbidden to wrap</td><td>Short label, icon, menu, or approved truncation</td><td>No accidental multi-line controls.</td></tr>
             <tr><td>Chips / badges / pills / status labels</td><td>Forbidden to wrap</td><td>Ellipsis or move full value to detail</td><td>No one-letter line breaks.</td></tr>
-            <tr><td>Cards / rows</td><td>Controlled wrapping only</td><td>Clamp/truncate raw tokens</td><td>Cards must not become debug dumps.</td></tr>
-            <tr><td>Drawer / detail panels</td><td>Allowed for prose/diagnostics</td><td>Contain long ids/tokens</td><td>Keep label/value hierarchy.</td></tr>
+            <tr><td>Selected content pattern</td><td>&lt;controlled policy by pattern&gt;</td><td>Clamp, truncate, scroll, or move detail deliberately</td><td>No debug dumps or accidental growth.</td></tr>
+            <tr><td>Expanded detail, only when selected as a pattern</td><td>Allowed for prose/diagnostics</td><td>Contain long ids/tokens</td><td>Keep label/value hierarchy.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Cross-Pattern Visual And Interaction Contract</h2>
+      <div class="spec">
+        <table>
+          <thead><tr><th>Quality dimension</th><th>Approved contract</th><th>Evidence / token source</th><th>Rendered proof</th></tr></thead>
+          <tbody>
+            <tr><td>Typography scale / rhythm</td><td>&lt;type roles, sizes, weights, line heights, measure, heading/body/meta rhythm&gt;</td><td>&lt;existing type tokens or reference&gt;</td><td>&lt;where hierarchy and dense/long text are shown&gt;</td></tr>
+            <tr><td>Spacing / composition</td><td>&lt;spacing scale, grid/alignment, zone relationships, density, whitespace intent&gt;</td><td>&lt;layout tokens or existing surface&gt;</td><td>&lt;desktop/narrow frame showing containment&gt;</td></tr>
+            <tr><td>Color / emphasis / contrast</td><td>&lt;surface levels, action/status emphasis, non-color cues, target contrast&gt;</td><td>&lt;semantic color tokens or approved reference&gt;</td><td>&lt;normal, selected, error, disabled, high-emphasis states&gt;</td></tr>
+            <tr><td>Focus-visible / target affordance</td><td>&lt;focus indicator, hover/press distinction, target size/spacing, keyboard reading order&gt;</td><td>&lt;control primitives or accessibility basis&gt;</td><td>&lt;focused primary/secondary/destructive controls and dense targets&gt;</td></tr>
+            <tr><td>Motion / reduced-motion</td><td>&lt;purpose, trigger, properties, direction, duration/easing; reduced-motion equivalent&gt;</td><td>&lt;existing motion tokens/pattern or conservative fallback&gt;</td><td>&lt;transition states and reduced-motion behavior&gt;</td></tr>
           </tbody>
         </table>
       </div>
@@ -201,7 +308,7 @@
     <section>
       <h2>Components, Icons, Colors, Copy</h2>
       <div class="grid two">
-        <div class="spec"><h3>Component Inventory</h3><p>&lt;buttons, icon buttons, chips, badges, cards, drawers, tables, inputs, empty/error states&gt;</p></div>
+        <div class="spec"><h3>Component Inventory</h3><p>&lt;selected controls, layout, forms, tables, navigation, state surfaces; include card/list or overlay components only when those patterns are selected&gt;</p></div>
         <div class="spec"><h3>Color / Token Map</h3><p>&lt;status colors, accents, selected state, danger/warning/neutral, surfaces, borders&gt;</p></div>
         <div class="spec"><h3>Icon Map</h3><p>&lt;icon names and where they appear&gt;</p></div>
         <div class="spec"><h3>Copy Map</h3><p>&lt;labels, headings, empty/error messages, button text&gt;</p></div>
@@ -211,7 +318,7 @@
     <section>
       <h2>Flow / Microinteractions</h2>
       <div class="flow">
-        Draw or describe compact transitions: card -> drawer, no selection -> selected detail, selected -> deselected, filter -> result, error -> recovery, loading -> ready.
+        Draw or describe applicable transitions: primary action, navigation, selection/detail when selected, form submit, filter/result, error/recovery, loading/ready.
         Specify interaction triggers, focus target, keyboard/escape behavior where applicable, animation properties, direction, duration/easing, and reduced-motion behavior.
       </div>
     </section>
@@ -219,14 +326,33 @@
     <section>
       <h2>Responsive Containment</h2>
       <div class="annotation">
-        <p>Specify desktop, tablet, and mobile containment for the work surface, drawer/sidebar, cards/rows, toolbar, filters, chips, buttons, tabs, segmented controls, and status labels. No page-level horizontal overflow. Compact controls must stay single-line; move controls into menus, stacks, or secondary rows instead of wrapping labels.</p>
+        <p>Specify desktop, tablet, and mobile containment for the selected work-surface patterns, toolbar, forms, tables, navigation, controls, chips, buttons, tabs, segmented controls, and status labels. Include cards/rows or drawer/sidebar only when selected. No page-level horizontal overflow. Compact controls must stay single-line; move controls into menus, stacks, or secondary rows instead of wrapping labels.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Evidence And Rendered-Proof Expectations</h2>
+      <div class="spec">
+        <table>
+          <thead><tr><th>Evidence / proof</th><th>What it proves</th><th>Implementation capture required</th><th>Fidelity comparison</th></tr></thead>
+          <tbody>
+            <tr><td>&lt;screenshot/reference/current UI/proof page&gt;</td><td>&lt;hierarchy, composition, typography, behavior, tone, etc.&gt;</td><td>&lt;viewport, state, interaction, pathological data&gt;</td><td>&lt;qualities that must match and permitted differences&gt;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Open Tensions</h2>
+      <div class="annotation">
+        <p>&lt;List unresolved but non-blocking tensions that architecture and implementation must preserve. If a tension materially changes layout, primary action, risk, density, or visual direction, move it to User Questions / Decisions and request approval instead of guessing.&gt;</p>
       </div>
     </section>
 
     <section>
       <h2>Review Checklist</h2>
       <div class="annotation">
-        <p>No wrapped chips/buttons/pills/tabs/segmented controls/status labels. No one-letter wraps. No raw debug dumps in cards. Product-level data hierarchy is explicit. Card anatomy and card visual rules are specified. Drawer/sidebar desktop-right/mobile-bottom defaults, open/closed/no-selection states, animation, reduced-motion behavior, focus, and responsive containment are specified. Selected/unselected item behavior is visible. No page-level horizontal overflow. Desktop and mobile frames are inspectable. Pathological data is represented. Content priority is visible. Typography and spacing are stable.</p>
+        <p>UI applicability, product/surface route, design basis, user/task/actions, user decisions, first-read hierarchy, screen zones, evidence/proof expectations, and open tensions are explicit. No wrapped compact controls or one-letter wraps. No raw debug dumps. Selected pattern contracts are complete; card/list and drawer/sidebar requirements apply only when those patterns are selected. No page-level horizontal overflow. Desktop and mobile frames are inspectable. Pathological data is represented. Content priority, typography/rhythm, spacing/composition, emphasis/contrast, focus affordance, motion/reduced-motion, and fidelity are reviewable.</p>
       </div>
     </section>
   </main>

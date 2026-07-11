@@ -9,13 +9,13 @@
     "next": { "enum": ["implementation", "pull_request"] },
     "implementation_branches": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 1,
       "uniqueItems": true,
       "items": { "const": "frontend_implementation" }
     },
     "review_branches": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 2,
       "uniqueItems": true,
       "items": { "enum": ["frontend_review", "frontend_taste_review"] }
     },

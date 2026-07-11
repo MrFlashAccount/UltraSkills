@@ -55,14 +55,14 @@ Complete this section when an approved `ui-design-proposal` is applicable. If th
 | Topic | Approved UI design proposal | Implementation planning consequence |
 | --- | --- | --- |
 | User / task | <who and what job> | <what the plan must preserve> |
-| Product / surface route | <dashboard/admin/marketing/docs/app shell/mixed/etc. + evidence> | <which UI rules/review expectations apply> |
+| Product / surface route | <application workflow/admin/form/table/docs/navigation/marketing/mixed/etc. + evidence> | <which UI rules/review expectations apply> |
 | Primary / secondary actions | <actions> | <workstream / DoD coverage> |
 | First read / hierarchy | <what should be understood first> | <screen/component planning implication> |
 | Screen / zones | <semantic zones> | <component/file-zone planning implication> |
 | Product-level data hierarchy | <product concepts, primary facts, secondary facts, debug/detail-only facts> | <data shaping and rendering implication> |
-| Card anatomy / content model | <header/body/footer, primary/secondary facts, hidden/deferred fields> | <component/state/proof implication> |
-| Card visual rules / selection | <selected/unselected/hover/focus states, spacing, containment, visual emphasis> | <style/state/proof implication> |
-| Drawer / sidebar behavior | <desktop right/mobile bottom placement unless overridden, open/closed/no-selection states, selected sync, animation properties, focus, reduced motion> | <overlay/state/responsive/proof implication> |
+| Selected content patterns | <form/table/document/navigation/list/card/etc. and why selected> | <component/state/proof implication> |
+| Card / list rules, if selected | <anatomy, primary/secondary facts, hidden fields, selected/unselected/hover/focus states, spacing, containment> | <style/state/proof implication, or not applicable> |
+| Detail overlay / panel rules, if selected | <approved placement by breakpoint, open/closed/no-selection states, selected sync, animation properties, focus, reduced motion> | <overlay/state/responsive/proof implication, or not applicable> |
 | Responsive containment / wrapping | <containment rules and forbidden wrapping for chips/buttons/pills/tabs/segmented controls/status labels> | <layout/control/proof implication> |
 | Required states | <loading/empty/error/success/disabled/etc.> | <state/component/test implication> |
 | Interaction expectations | <forms/dialogs/drawers/navigation/focus/responsive/motion> | <implementation/review implication> |
@@ -71,8 +71,10 @@ Complete this section when an approved `ui-design-proposal` is applicable. If th
 
 UI design proposal gates:
 - Preserve the approved UI design proposal; do not rewrite visual hierarchy, density, tone, or screen semantics in implementation planning.
+- Card/list and drawer/sidebar/bottom-sheet details are required only when those patterns are selected by the approved HTML artifact. Do not introduce them as generic composition defaults.
 - If architecture or implementation reality conflicts with approved UI design proposal, return blocked or request plan revision instead of silently changing the interface.
 - Keep file/component architecture in the Frontend composition plan, not in this section.
+- The plan is a routing translation, not a substitute for the approved `ui-design-proposal` HTML artifact or its human approval evidence. Frontend implementation and frontend-taste review must inspect both directly and compare rendered proof for fidelity.
 
 ## Frontend composition plan
 
