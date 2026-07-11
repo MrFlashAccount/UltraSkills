@@ -1,0 +1,40 @@
+{
+  "name": "fixture-fanout-owner",
+  "version": 1,
+  "start": "prepare",
+  "done": "done",
+  "steps": {
+    "prepare": {
+      "name": "Prepare",
+      "kind": "worker",
+      "input": { "prompt": "Prepare branch inputs." },
+      "output": { "template": "output.md", "schema": "schemas/routing-ready.schema.json" },
+      "next": "checks"
+    },
+    "checks": {
+      "name": "Checks owner",
+      "kind": "fanout",
+      "input": {
+        "branches": ["lint", "build"],
+        "prompt": [
+          "Synthesize current check outputs.",
+          "Lint result: ${{ input.lint.results | default: \"lint not selected\" }}",
+          "Build result: ${{ input.build.results | default: \"build not selected\" }}"
+        ]
+      },
+      "output": { "template": "output.md", "schema": "schemas/routing-ready.schema.json" },
+      "branches": {
+        "lint": {
+          "input": { "prompt": "Run lint branch.\nPrepare result:\n${{ input.prepare.results }}" },
+          "output": { "template": "output.md", "schema": "schemas/routing-ready.schema.json" }
+        },
+        "build": {
+          "input": { "prompt": "Run build branch.\nPrepare result:\n${{ input.prepare.results }}" },
+          "output": { "template": "output.md", "schema": "schemas/routing-ready.schema.json" }
+        }
+      },
+      "next": "done"
+    },
+    "done": { "name": "Done", "kind": "done", "input": { "prompt": "Finished." } }
+  }
+}

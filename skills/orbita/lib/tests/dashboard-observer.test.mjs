@@ -66,7 +66,7 @@ function jsonDoesNotContainForbiddenValues(value) {
   assert.doesNotMatch(json, /\/private\/artifact\.md/);
 }
 
-test('dashboard projection exposes safe DTOs with lanes, parallel cursor, minimap, and redacted history', async () => {
+test('dashboard projection exposes safe DTOs with lanes, scalar cursor, minimap, and redacted history', async () => {
   const runsRoot = await makeRunsRoot('projection');
   const runId = `dashboard-projection-${process.pid}`;
   await writeIndex(runsRoot, {
@@ -80,7 +80,7 @@ test('dashboard projection exposes safe DTOs with lanes, parallel cursor, minima
     }),
   });
   await writeRunState(runsRoot, runId, {
-    cursor: ['backend_implementation', 'frontend_implementation'],
+    cursor: 'backend_implementation',
     status: 'running',
     workerBindings: { backend: 'preferred-agent-1' },
     user_prompt: 'private prompt must not leave state',
@@ -112,15 +112,15 @@ test('dashboard projection exposes safe DTOs with lanes, parallel cursor, minima
 
   assert.equal(run.runId, runId);
   assert.deepEqual(run.cursor, {
-    kind: 'parallel',
-    steps: ['backend_implementation', 'frontend_implementation'],
-    display: 'backend_implementation + frontend_implementation',
+    kind: 'single',
+    steps: ['backend_implementation'],
+    display: 'backend_implementation',
   });
   assert.equal(run.lane.id, 'worker_running');
   assert.equal(run.occupancy.state, 'occupied');
   assert.equal(run.artifacts[0].id, 'backend-handoff');
   assert.equal('path' in run.artifacts[0], false);
-  assert.deepEqual(run.miniMap.currentSteps, ['backend_implementation', 'frontend_implementation']);
+  assert.deepEqual(run.miniMap.currentSteps, ['backend_implementation']);
   assert.deepEqual(run.miniMap.completedSteps, ['backend_implementation']);
   assert.deepEqual(run.historyExcerpt.lines, ['visible line', 'kept line']);
   jsonDoesNotContainForbiddenValues(run);

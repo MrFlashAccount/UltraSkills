@@ -9,15 +9,14 @@ function fail(message) {
 
 function transitionTargetsForDescriptor(descriptor) {
   if (descriptor.kind === NEXT_KIND.STATIC_TARGET) return { targetSets: [[descriptor.target]], fanout: false };
-  if (descriptor.kind === NEXT_KIND.STATIC_PARALLEL) return { targetSets: [descriptor.targets], fanout: descriptor.targets.length > 1 };
   if (descriptor.kind === NEXT_KIND.MATCH_CASES) {
     return {
-      targetSets: Object.values(descriptor.cases).map((target) => (typeof target === 'string' ? [target] : [...target])),
-      fanout: Object.values(descriptor.cases).some((target) => Array.isArray(target) && target.length > 1),
+      targetSets: Object.values(descriptor.cases).map((target) => [target]),
+      fanout: false,
     };
   }
 
-  return { targetSets: [], fanout: descriptor.kind === NEXT_KIND.PARALLEL_ITEMS };
+  return { targetSets: [], fanout: false };
 }
 
 function collectStaticEdges(workflow) {
@@ -108,14 +107,11 @@ function reachesAny(adjacency, start, targets) {
 }
 
 function singleTransitionTarget(transition) {
-  if (transition.targetStepId) return transition.targetStepId;
-  if (transition.targetStepIds?.length === 1) return transition.targetStepIds[0];
-  return undefined;
+  return transition.targetStepId;
 }
 
 function retargetSingleTransition(transition, targetStepId) {
-  const { targetStepIds, ...rest } = transition;
-  return { ...rest, targetStepId };
+  return { ...transition, targetStepId };
 }
 
 export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow)) {

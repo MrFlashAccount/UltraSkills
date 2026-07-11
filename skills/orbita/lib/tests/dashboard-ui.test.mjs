@@ -30,12 +30,11 @@ test('dashboard UI normalizes actual backend projection DTOs', () => {
   assert.equal(run.id, 'run-waiting-1234567890');
   assert.equal(run.laneId, 'waiting_for_user');
   assert.equal(run.workflowName, 'dev-harness');
-  assert.equal(run.stepId, 'backend_implementation + frontend_implementation');
-  assert.deepEqual(run.cursorBranches, ['backend_implementation', 'frontend_implementation']);
+  assert.equal(run.stepId, 'approve_plan');
+  assert.deepEqual(run.cursorBranches, ['approve_plan']);
   assert.deepEqual(run.miniMap.map((step) => [step.id, step.state]), [
     ['research', 'completed'],
-    ['backend_implementation', 'active'],
-    ['frontend_implementation', 'active'],
+    ['approve_plan', 'active'],
   ]);
   assert.deepEqual(run.historyExcerpt.map((entry) => entry.summary), [
     'Runner requested host approval.',
@@ -43,12 +42,11 @@ test('dashboard UI normalizes actual backend projection DTOs', () => {
   ]);
 });
 
-test('dashboard UI shows parallel cursor chips on cards and drawer details', () => {
+test('dashboard UI shows the scalar cursor on cards and drawer details', () => {
   const html = renderDashboard(fixture);
 
   assert.match(html, /aria-label="Active cursor branches"/);
-  assert.match(html, /<code>backend_implementation<\/code>/);
-  assert.match(html, /<code>frontend_implementation<\/code>/);
+  assert.match(html, /<code>approve_plan<\/code>/);
   assert.match(html, /Workflow mini-map/);
   assert.match(html, /data-secondary-surface="mini-map"/);
 });
@@ -139,10 +137,10 @@ test('dashboard style follows the DESIGN token baseline', () => {
 });
 
 test('dashboard run normalization degrades unknown lanes instead of crashing', () => {
-  const [run] = normalizeRuns([{ id: 'unsafe-lane', laneId: 'unexpected', cursor: [{ stepId: 'parallel_a' }] }]);
+  const [run] = normalizeRuns([{ id: 'unsafe-lane', laneId: 'unexpected', cursor: { stepId: 'worker_a' } }]);
 
   assert.equal(run.laneId, 'degraded');
-  assert.deepEqual(run.cursorBranches, ['parallel_a']);
+  assert.deepEqual(run.cursorBranches, ['worker_a']);
 });
 
 test('dashboard server root loads the implemented UI assets', async () => {

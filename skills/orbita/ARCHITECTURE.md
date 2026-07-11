@@ -4,7 +4,7 @@
 
 This document is the architecture contract for the Orbita workflow-runner
 runtime. It records layer ownership, dependency direction, retired surfaces,
-conditional helper/schema zones, matrix v1, and review gates for issue #194.
+conditional helper/schema zones, shard/fanout control steps, and review gates.
 
 This contract covers `skills/orbita/**`. It does not define the dashboard visual
 design; that remains in `DESIGN.md`.
@@ -40,7 +40,8 @@ markers, attempts, or existing history. The first supported slice is limited to
 one adjacent observed transition edge from the current pointer/status. Terminal
 single-cursor positions, including a completed `done` run, may move backward to
 an observed non-terminal step; terminal status must not by itself make pointer
-recovery unsupported. Parallel/array cursors remain explicitly unsupported.
+recovery unsupported. Array cursors are rejected by the baton schema and cannot
+enter pointer recovery.
 Targets with retained accepted output require visible retained-state disclosure
 and explicit acknowledgement before mutation.
 
@@ -194,8 +195,7 @@ Recoverable blocker helpers under `lib/runtime/**` own public shaping and
 redaction of blocker/resolution records. They must receive path facts from the
 caller and must not discover workflow-run storage through persistence imports.
 
-Matrix runtime helpers own IO-free matrix request projection, unit output
-application, retry/block accounting, and owner join readiness. They may consume
+Shard runtime helpers own IO-free activation projection, shard output application, bounded batching, and final-worker readiness. They may consume
 Workflow, Step, Baton, file contracts, loaded output schemas, and supplied path
 facts. They must not import persistence, entrypoints, dashboard code, filesystem
 APIs, workflow-resource loaders, host sessions, transcripts, private paths, or
@@ -235,15 +235,12 @@ owner.
 A file-contract/schema zone must own real contracts, not act as a dumping ground
 for constants or pass-through wrappers.
 
-Matrix v1 adds two durable file-contract surfaces:
+Shard execution adds two durable file-contract surfaces:
 
-- `workflow-document.json` owns the JSON authoring contract for a first-class
-  matrix control step.
-- Baton schema owns `state.matrix` durable progress records.
+- `workflow-document.json` owns the first-class `kind: "shard"` authoring contract.
+- Baton schema owns `state.shards` activation snapshots and bounded output references.
 
-These contracts are shared across validation, runtime, persistence validation,
-tests, and documentation. They must stay narrow and must not become a generic
-schema dumping ground.
+These contracts are shared across validation, runtime, persistence validation, tests, and documentation.
 
 ### Boundary Checks
 
@@ -275,8 +272,7 @@ Checks should cover:
 - persistence importing entity-owned Baton schema after migration
 - run-state persistence importing startup validation
 - runner runtime importing catalog/config discovery
-- concrete matrix runtime/helper imports that violate the matrix dependency
-  rules below, once those source surfaces exist
+- concrete shard runtime/helper imports that violate the dependency rules below
 
 ## Conditional Zones
 
@@ -367,108 +363,69 @@ validates the requested adjacent edge and retained-state acknowledgement, update
 cursor/status, validates persisted state, appends bounded pointer-move history,
 and renews the canonical per-run authority record.
 
-## Matrix Workflow Control Step
+## Fanout Owner Step
 
-Matrix v1 is a first-class workflow control step for repeated worker units. It
-exists to fan out bounded worker work while preserving a simple top-level
-workflow cursor.
+`kind: "fanout"` is the first-class control step for a fixed table of named
+worker branches. Authoring selects branches through `input.branches`: a static
+branch-id array, one schema-covered input expression, or `first_of` expressions
+for selective rework fallback. Each branch is a nested worker template under
+`branches.<branch-id>`; branch ids must be globally collision-safe because
+accepted branch outputs live at `baton.state[branchId]`.
 
-The authoring shape is JSON only. A matrix step uses `kind: "matrix"` and owns:
+The top-level cursor remains the fanout owner for the whole activation. Durable
+phase and request membership live under `baton.state.fanouts[ownerStepId]` with
+the phases `branches`, `owner`, and `completed`. The runner first renders
+synthetic branch requests, applies only the current accepted branch outputs,
+then renders the genuine owner worker. The owner output is applied through the
+normal step output and `next` path. Phase recovery must use this durable record;
+request-id parsing, arbitrary state scanning, dispatch workers, and separate
+join workers are not valid control flow.
 
-- one source, either a static array or an existing runner-supported selector;
-- one stable unit id rule;
-- optional bounded `max_parallel`;
-- optional `max_attempts`, defaulting to one attempt when omitted;
-- one worker template with normal role, input, and output contract behavior;
-- one normal `next` transition used only after join.
+Owner prompt projection includes accepted output only for branches selected in
+the current activation. Stale output for unselected branches may remain durable
+for audit/history purposes but must not enter the owner prompt. Fanout is a
+named workflow-branch primitive; shard is the homogeneous value-partition primitive.
 
-Matrix v1 must reject optional units, fail-fast/cancel-in-flight policy, branch
-tables, arbitrary per-item subgraphs, nested matrix, recursive matrix, generated
-workflow step ids, and distributed child runs. TOML examples from planning are
-discussion-only and are not an implementation format.
+## Shard Workflow Step
 
-### Matrix Cursor And State
+`kind: "shard"` is the first-class generic control step for applying one worker
+template to a non-empty array of values in parallel. The top-level `input` and
+`output` belong to the genuine final worker represented by the shard step;
+`worker` is the nested template for parallel shard requests.
 
-While matrix units are active, `baton.cursor` remains exactly the owner matrix
-workflow step id. Synthetic unit ids are host request addresses only. They must
-not be written into `workflow.steps`, top-level cursor arrays, pointer recovery
-targets, or history as independent workflow positions.
+`input.shards` accepts either a non-empty literal JSON array or one
+schema-covered `input.*` expression that resolves to a non-empty array.
+Elements may be arbitrary JSON values. Numeric shard-count shorthand, authored
+element ids, branch tables, nested subgraphs, and compatibility aliases are not
+part of the contract.
 
-Matrix durable progress lives under `baton.state.matrix`, keyed by owner
-workflow step id. A matrix owner record owns:
+During one activation, the runtime resolves `input.shards` exactly once and
+stores the values in order under `baton.state.shards[parentStepId]`.
+`baton.cursor` remains the shard step throughout the `shards`, `worker`, and
+`completed` phases. Synthetic request ids are activation/index addresses only;
+they never become workflow step ids or pointer-recovery targets.
 
-- owner step id;
-- source identity or fingerprint;
-- aggregate status;
-- unit records;
-- accepted output references;
-- blocker or retry-exhaustion records;
-- recomputable join proof.
+`max_parallel` bounds each current request batch. Accepted worker output remains
+once under its synthetic request id. Shard control state stores only a bounded
+`output_ref`, request id, index, and status; it never duplicates full output,
+prompt, transcript, session, path, token, or host lifecycle data.
 
-Unit records own:
+Each shard worker receives the normal prompt interpolation context:
 
-- safe unique unit id;
-- index or stable order when needed for rendering;
-- synthetic request id;
-- status;
-- attempt count and retry budget;
-- bounded safe item context;
-- accepted output reference;
-- blocker or retry reason.
+- `${{ shard.value }}`
+- `${{ shard.index }}`
+- `${{ shard.total }}`
+- nested paths such as `${{ shard.value.name }}`
 
-Source expansion is immutable after durable initialization for the owner/source
-fingerprint. Later source re-evaluation must not erase or rewrite in-flight
-progress. Restart and `continue --only-instructions` must rerender current unit
-requests from durable matrix state, not by reconstructing progress from workflow
-source, generated filenames, host memory, worker prose, or artifact directories.
+These expressions use the same interpolation rendering rules as `input.*`.
+The runtime does not append shard values, JSON context, request metadata, or
+control instructions to the worker prompt. Only explicitly authored
+interpolation reveals a value.
 
-`baton.state.shards` remains the existing review-sharding compatibility surface.
-Matrix v1 must not silently reinterpret, rename, migrate, or import
-review-sharding policy as the general matrix source of truth. Any unification or
-deletion of `state.shards` requires a separate architecture decision.
-
-### Matrix Current Requests
-
-Runtime response projection renders `run_worker` requests for eligible matrix
-units only while the owner matrix step is the current cursor. Current requests
-must include a synthetic request id, `ownerStepId`, generated runner commands,
-and bounded public matrix context. They must not expose raw item payloads by
-default, hidden prompts, transcripts, private paths, output paths, session
-registries, lifecycle internals, standalone lease/token fields, or token-bearing
-internals outside generated commands.
-
-`max_parallel` bounds how many pending/retryable units are current at once when
-configured. Accepted, blocked, and retry-exhausted units are not rendered as
-normal current work.
-
-`instructions --step-id <synthetic-unit-id>` and `write-output --step-id
-<synthetic-unit-id>` are valid only when the synthetic id is present in the
-current durable request set for the current owner cursor. Stale owner, stale
-unit, wrong owner/unit, and unsafe request ids must fail with the existing
-stale-current-request posture.
-
-### Matrix Output And Join
-
-`write-output` remains the only accepted-output path. Unit output is validated
-through current request membership, the matrix worker template output schema,
-artifact path rules, debug-summary path rules, and retry/block accounting.
-
-Matrix v1 uses runner-owned accepted-output metadata as the unit identity proof:
-owner step id, unit id, request id, worker output, artifact/result metadata, and
-attempt information. It must not require every worker output schema to add
-matrix identity fields.
-
-The owner matrix step transitions only after runner-computed join proof shows
-complete required-unit coverage and no required missing, blocked, retry-exhausted,
-unsafe, or mismatched unit. Join proof must be recomputable from durable matrix
-records and accepted output references. Worker prose, output filenames, hidden
-host sessions, raw transcripts, and artifact directory scans are not completion
-proof.
-
-The owner aggregate output may expose join proof plus accepted output references
-or bounded summaries. Full unit outputs must not be injected into downstream
-prompts by default; large or sensitive output should stay behind artifact
-references or explicit summaries.
+After every shard request is accepted, the runtime renders the genuine worker
+represented by the shard step itself. Its schema-valid output follows the normal
+`next` transition. There is no dispatch step, aggregation section, deterministic
+completion output, or separate completion worker.
 
 ## Recoverable Worker Blockers
 
@@ -553,13 +510,20 @@ drag/drop movement, or show controls that resemble `next`, `continue`,
 
 ```mermaid
 flowchart LR
-  runs[(Durable run state\n~/.orbita/workflow-runs/v1)]
-  observer[Dashboard observer reader\nread-only adapter]
-  projection[Safe dashboard projection\nallowlisted DTOs]
-  api[Dashboard daemon API\nlist, detail, events, static UI]
-  sse[SSE-first event surface\nlossy updates]
-  ui[Browser dashboard UI\nboard, drawer, mini-map]
-  design[DESIGN.md\nboard/drawer input]
+  runs[(Durable run state
+~/.orbita/workflow-runs/v1)]
+  observer[Dashboard observer reader
+read-only adapter]
+  projection[Safe dashboard projection
+allowlisted DTOs]
+  api[Dashboard daemon API
+list, detail, events, static UI]
+  sse[SSE-first event surface
+lossy updates]
+  ui[Browser dashboard UI
+board, drawer, mini-map]
+  design[DESIGN.md
+board/drawer input]
 
   runs -->|read only| observer
   observer --> projection
@@ -682,14 +646,12 @@ Forbidden:
 - `persistence -> use-cases`
 - run-state persistence -> startup validation
 - `persistence -> entities/Baton/schema/**` after schema ownership migration
-- matrix runtime/entity helpers -> `node:fs`
-- matrix runtime/entity helpers -> `node:path`
-- matrix runtime/entity helpers -> persistence
-- matrix runtime/entity helpers -> entrypoints
-- matrix runtime/entity helpers -> dashboard
-- persistence -> matrix runtime/use-case helpers
-- general matrix modules -> review-sharding modules as the policy source,
-  unless a later migration contract approves an adapter
+- shard runtime/entity helpers -> `node:fs`
+- shard runtime/entity helpers -> `node:path`
+- shard runtime/entity helpers -> persistence
+- shard runtime/entity helpers -> entrypoints
+- shard runtime/entity helpers -> dashboard
+- persistence -> shard runtime/use-case helpers
 - supported command paths or exports for retired legacy surfaces
 - dashboard code mutating run state, acquiring leases, invoking runner
   navigation/output/pointer-recovery commands, or exposing private runner
@@ -708,7 +670,7 @@ Architecture review must verify:
 - pointer recovery docs, API exports, CLI modes, tests, and source agree that
   `listPointerTransitions` and `movePointer` require active lease authority,
   preserve baton state, allow terminal single-cursor rollback along observed
-  non-terminal backward edges, reject parallel/array cursor scope, require
+  non-terminal backward edges, reject invalid legacy array cursor state, require
   retained-output acknowledgement where applicable, and expose only redacted
   bounded metadata
 - dashboard changes preserve the read-only observer boundary, safe projection
@@ -717,19 +679,9 @@ Architecture review must verify:
 - dashboard tests or boundary checks prove browser DTOs exclude private
   runner/control fields and dashboard code does not import or call runner
   mutation/control surfaces
-- matrix docs, workflow schema, Baton schema, runtime behavior, tests, and
-  boundary checks agree on the first-class `kind: "matrix"` contract,
-  `state.matrix` ownership, and `state.shards` compatibility
-- matrix implementation keeps `baton.cursor` as the owner workflow step id and
-  proves synthetic unit ids never become workflow steps, cursor branches, or
-  pointer recovery targets
-- matrix current request tests prove stale owner, stale unit, wrong owner/unit,
-  unsafe unit id, duplicate unit id, retry exhaustion, blocked required unit, and
-  missing required coverage do not advance the owner
-- matrix DTO/redaction tests prove host requests and downstream owner output do
-  not expose raw item payloads, hidden prompts, transcripts, private paths,
-  standalone lease/token fields, token-bearing internals outside generated
-  commands, or unbounded full unit outputs
+- shard docs, workflow schema, Baton schema, runtime behavior, tests, and boundary checks agree on the first-class `kind: "shard"` contract and `state.shards` ownership
+- shard execution keeps `baton.cursor` on the parent step, snapshots values once, batches by activation/index, stores bounded output references, and runs the genuine final step worker
+- shard DTO and prompt tests prove values appear only through explicitly authored interpolation and public request context excludes raw values, prompts, transcripts, private paths, and standalone token fields
 
 Backend review must verify:
 
@@ -740,13 +692,8 @@ Backend review must verify:
 - imports obey the dependency rules above
 - custom workflow roots validate before run creation, retain source-qualified
   catalog identity, and do not widen resource access by duplicate workflow name
-- matrix source expansion initializes durable state once per owner/source
-  fingerprint, restart rerenders eligible units from `state.matrix`, unit output
-  updates only the matching durable record, and join proof gates normal `next`
-  transition
-- existing sequential, approval, fixed parallel, review-shards, output schema,
-  lease, artifact/debug-summary, history, worker binding, recoverable blocker,
-  and non-matrix workflow behavior remains compatible
+- shard `input.shards` expansion snapshots arbitrary JSON values once, restart rerenders the durable current batch, accepted outputs remain single primary records, and final worker output follows normal `next`
+- existing sequential, approval, fanout, output schema, lease, artifact/debug-summary, history, worker binding, and recoverable blocker behavior remains compatible
 
 QA/reliability review must verify:
 
@@ -754,11 +701,7 @@ QA/reliability review must verify:
 - boundary checks fail resolved forbidden imports and retired-surface exposure
 - retired legacy names are absent from supported command paths, exports, docs,
   and allow lists
-- matrix workflow tests cover valid matrix execution, invalid source shape,
-  unsafe and duplicate unit ids for static and runtime-expanded sources, nested
-  matrix rejection, unsupported optional/fail-fast/branch/subgraph forms,
-  restart rerender, max_parallel, retry/block behavior, complete join, and
-  non-matrix regressions
+- shard workflow tests cover literal and dynamic arrays, arbitrary JSON values, explicit value/index/total interpolation, absent implicit JSON injection, batching, durable resume, bounded output references, genuine final worker execution, invalid empty/non-array inputs, and fanout regressions
 
 Security and privacy review must verify:
 
@@ -766,8 +709,7 @@ Security and privacy review must verify:
   directories
 - run-state, lease, history, and output records do not expose new private data
   surfaces while ownership moves
-- matrix safe item context is allowlisted or otherwise bounded before storage or
-  rendering, and raw item payloads/full unit outputs are not exposed by default
+- shard values are durably snapshotted only as required for resume, omitted from public request DTOs, and rendered into prompts only through explicit interpolation
 
 ## Non-Goals
 
@@ -781,7 +723,4 @@ Security and privacy review must verify:
 - Add broad framework seams where a narrow colocated helper or named use-case
   API is enough.
 - Add brittle boundary rules for ownership questions that remain unresolved.
-- Use matrix v1 to migrate `state.shards`, redesign fixed parallel/array cursor
-  semantics, add optional/fail-fast policy, branch tables, nested per-item
-  subgraphs, recursive matrix, distributed child runs, dashboard mutation
-  behavior, pointer-recovery matrix mutation, or PR #213 architecture adoption.
+- Add numeric shard-count shorthand, compatibility aliases, optional/fail-fast policy, branch tables, nested per-value subgraphs, distributed child runs, dashboard mutation behavior, or pointer-recovery mutation for synthetic shard requests.

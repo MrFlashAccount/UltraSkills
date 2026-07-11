@@ -65,7 +65,3 @@ export function assertOutputSchemaIfDeclared({ baton, stepId, step, workerOutput
     retryResponse: responseForOutputSchemaRetry({ baton, stepId, step, errors: validation.errors, attempt }),
   };
 }
-
-export function isParallelOutputEnvelope(value) {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value) && value.steps && typeof value.steps === 'object' && !Array.isArray(value.steps));
-}

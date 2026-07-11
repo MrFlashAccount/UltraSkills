@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
-import { renderStepPrompts } from '../runtime/parallel/render.mjs';
+import { renderStepPrompts } from '../runtime/render-step-prompts.mjs';
 import { selectState } from '../runtime/state-selection.mjs';
 import { renderWorkflowPrompt } from '../entities/Template/index.mjs';
 import { validateAgainstOutputSchema } from '../runtime/output/output-schema-validation.mjs';
@@ -442,7 +442,7 @@ test('prompt renderer: keeps prompt interpolation scoped to prompt input paths',
 
   assert.throws(
     () => renderFixture({ label: 'render-prompt-interpolation-output-root', stepId: 'draft_step', step }),
-    /workflow prompt render failed: prompt expression '\$\{\{ output\.outcome \| default: "ready" \}\}' is invalid: root 'input' is required in input\.prompt interpolation/,
+    /workflow expression.*root 'output' is not allowed; use input or shard/,
   );
 });
 
@@ -1360,7 +1360,7 @@ test('runtime render: prompt input expressions cannot read aggregate runtime sta
   const result = runWorkflowRuntimeApi({ mode: 'render', workflowPath, batonPath });
   const response = expectRuntimeResult('runtime-reserved-render', result, false);
 
-  assert.match(response.stderr, /input step 'artifacts' is not a declared workflow step/);
+  assert.match(response.stderr, /input step or fanout branch 'artifacts' is not declared/);
 });
 
 test('runtime render: fixture returns compiledPrompt and does not mutate baton', () => {

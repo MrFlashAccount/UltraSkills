@@ -36,12 +36,16 @@ function templateRefs(workflow) {
   const refs = [];
   const seen = new Set();
   for (const step of Object.values(workflow?.steps ?? {})) {
-    for (const [fieldName, ref] of [
+    const refsForStep = [
       ['input', step?.input?.template],
       ['output', step?.output?.template],
       ['input', step?.worker?.input?.template],
       ['output', step?.worker?.output?.template],
-    ]) {
+    ];
+    for (const branch of Object.values(step?.branches ?? {})) {
+      refsForStep.push(['input', branch?.input?.template], ['output', branch?.output?.template]);
+    }
+    for (const [fieldName, ref] of refsForStep) {
       if (!ref || seen.has(`${fieldName}:${ref}`)) continue;
       seen.add(`${fieldName}:${ref}`);
       refs.push({ ref, fieldName });
@@ -55,6 +59,9 @@ function schemaRefs(workflow) {
   for (const step of Object.values(workflow?.steps ?? {})) {
     if (step?.output?.schema) refs.add(step.output.schema);
     if (step?.worker?.output?.schema) refs.add(step.worker.output.schema);
+    for (const branch of Object.values(step?.branches ?? {})) {
+      if (branch?.output?.schema) refs.add(branch.output.schema);
+    }
   }
   return refs;
 }
@@ -64,8 +71,8 @@ function roleNames(workflow) {
   for (const step of Object.values(workflow?.steps ?? {})) {
     if (step?.input?.role) roles.add(step.input.role);
     if (step?.worker?.input?.role) roles.add(step.worker.input.role);
-    for (const obligation of step?.sharding?.obligations ?? []) {
-      if (typeof obligation?.reviewer_role === 'string' && obligation.reviewer_role.length > 0) roles.add(obligation.reviewer_role);
+    for (const branch of Object.values(step?.branches ?? {})) {
+      if (branch?.input?.role) roles.add(branch.input.role);
     }
   }
   return roles;

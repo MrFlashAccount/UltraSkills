@@ -261,7 +261,7 @@ test('runner pointer API rejects stale transition ids and wrong leases without m
   assert.deepEqual(snapshot(run.paths), afterStaleRejected);
 });
 
-test('runner pointer API allows rollback from terminal cursors and reports parallel cursors as unsupported', async () => {
+test('runner pointer API allows rollback from terminal cursors', async () => {
   const terminalRun = await createClaimedRun('api-terminal');
   await next({ ...terminalRun, now: new Date('2026-06-01T10:00:01.000Z') });
   await acceptCurrentWorkerOutput({ ...terminalRun, stepId: 'prepare', summary: 'prepared terminal' });
@@ -285,29 +285,6 @@ test('runner pointer API allows rollback from terminal cursors and reports paral
   assert.equal(terminalMoved.current.status, 'running');
   assert.equal(snapshot(terminalRun.paths).authority.status, 'needs_host_actions');
 
-  const parallelWorkflow = structuredClone(workflowDoc);
-  parallelWorkflow.steps.prepare.next = ['branch_a', 'branch_b'];
-  parallelWorkflow.steps.branch_a = {
-    name: 'Branch A',
-    kind: 'worker',
-    input: { prompt: 'Branch A.' },
-    output: { template: 'output.md' },
-    next: 'review',
-  };
-  parallelWorkflow.steps.branch_b = {
-    name: 'Branch B',
-    kind: 'worker',
-    input: { prompt: 'Branch B.' },
-    output: { template: 'output.md' },
-    next: 'review',
-  };
-  const parallelRun = await createClaimedRun('api-parallel', parallelWorkflow);
-  await next({ ...parallelRun, now: new Date('2026-06-01T10:00:01.000Z') });
-  await acceptCurrentWorkerOutput({ ...parallelRun, stepId: 'prepare', summary: 'prepared parallel' });
-  await continueRun({ ...parallelRun, now: new Date('2026-06-01T10:02:00.000Z') });
-  const parallel = await listPointerTransitions({ ...parallelRun, now: new Date('2026-06-01T10:03:00.000Z') });
-  assert.equal(parallel.unsupported.reason, 'parallel_cursor_unsupported');
-  assert.deepEqual(parallel.transitions, []);
 });
 
 

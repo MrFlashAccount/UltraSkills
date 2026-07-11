@@ -46,6 +46,7 @@ function assertCurrentRequestsSchema(currentRequests, name = 'persisted run stat
     assertString(request.action, `${name}[${index}].action`);
     if ('stepId' in request && typeof request.stepId !== 'string') throw new Error(`${name}[${index}].stepId must be a string`);
     if ('ownerStepId' in request && typeof request.ownerStepId !== 'string') throw new Error(`${name}[${index}].ownerStepId must be a string`);
+    if ('parentStepId' in request && typeof request.parentStepId !== 'string') throw new Error(`${name}[${index}].parentStepId must be a string`);
   }
 }
 

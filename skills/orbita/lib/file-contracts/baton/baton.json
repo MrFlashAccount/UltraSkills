@@ -10,20 +10,8 @@
   ],
   "properties": {
     "cursor": {
-      "oneOf": [
-        {
-          "type": "string",
-          "minLength": 1
-        },
-        {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      ]
+      "type": "string",
+      "minLength": 1
     },
     "status": {
       "enum": [
@@ -68,21 +56,21 @@
           }
         },
         "shards": {
-          "description": "Runner-owned native sharding records keyed by owner workflow step id. Shards are not workflow step ids and do not store private host lifecycle metadata.",
+          "description": "Runner-owned shard activations keyed by their parent workflow step id. Resolved values are snapshotted once and accepted outputs are retained only as bounded references.",
           "type": "object",
           "patternProperties": {
             "^[A-Za-z_][A-Za-z0-9_-]*$": {
-              "$ref": "#/$defs/shardPlan"
+              "$ref": "#/$defs/shardActivation"
             }
           },
           "additionalProperties": false
         },
-        "matrix": {
-          "description": "Runner-owned matrix v1 unit progress keyed by owner workflow step id. Matrix records preserve owner cursor state and bounded synthetic request metadata.",
+        "fanouts": {
+          "description": "Runner-owned fanout activation progress keyed by owner workflow step id. The owner cursor remains stable while branches and the owner worker execute.",
           "type": "object",
           "patternProperties": {
             "^[A-Za-z_][A-Za-z0-9_-]*$": {
-              "$ref": "#/$defs/matrixPlan"
+              "$ref": "#/$defs/fanoutActivation"
             }
           },
           "additionalProperties": false
@@ -295,194 +283,65 @@
       },
       "additionalProperties": false
     },
-    "matrixPlan": {
+    "shardActivation": {
       "type": "object",
       "required": [
-        "plan_id",
-        "owner_step_id",
+        "parent_step_id",
+        "activation",
+        "phase",
         "status",
-        "source",
-        "source_fingerprint",
+        "values",
         "max_parallel",
-        "max_attempts",
         "current_requests",
-        "units",
-        "accepted_outputs",
-        "blocked",
-        "join_proof"
+        "shard_records",
+        "accepted_outputs"
       ],
       "properties": {
-        "plan_id": { "type": "string", "minLength": 1 },
-        "owner_step_id": { "type": "string", "minLength": 1 },
-        "status": { "enum": ["dispatching", "joined", "blocked"] },
-        "source": { "type": "object", "additionalProperties": true },
-        "source_fingerprint": { "type": "string", "minLength": 1 },
-        "max_parallel": { "type": "integer", "minimum": 1, "maximum": 16 },
-        "max_attempts": { "type": "integer", "minimum": 1, "maximum": 10 },
-        "current_requests": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 }
+        "parent_step_id": {
+          "type": "string",
+          "minLength": 1
         },
-        "units": {
+        "activation": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "phase": {
+          "enum": [
+            "shards",
+            "worker",
+            "completed"
+          ]
+        },
+        "status": {
+          "enum": [
+            "awaiting_shards",
+            "awaiting_worker",
+            "completed"
+          ]
+        },
+        "values": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/matrixUnitRecord" }
+          "items": true
         },
-        "accepted_outputs": {
-          "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/matrixAcceptedOutputRecord" }
+        "max_parallel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
         },
-        "blocked": {
-          "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/matrixBlockedRecord" }
-        },
-        "join_proof": {
-          "oneOf": [
-            { "$ref": "#/$defs/matrixJoinProof" },
-            { "type": "null" }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "matrixUnitRecord": {
-      "type": "object",
-      "required": [
-        "unit_id",
-        "request_id",
-        "status",
-        "required",
-        "attempts",
-        "context"
-      ],
-      "properties": {
-        "unit_id": { "type": "string", "minLength": 1 },
-        "request_id": { "type": "string", "minLength": 1 },
-        "status": { "enum": ["pending", "accepted", "blocked"] },
-        "required": { "type": "boolean" },
-        "attempts": { "type": "integer", "minimum": 0 },
-        "max_attempts": { "type": "integer", "minimum": 1 },
-        "context": { "type": "object", "additionalProperties": true },
-        "reason": { "type": "string", "minLength": 1 }
-      },
-      "additionalProperties": false
-    },
-    "matrixAcceptedOutputRecord": {
-      "type": "object",
-      "required": ["unit_id", "request_id", "status", "output_ref"],
-      "properties": {
-        "unit_id": { "type": "string", "minLength": 1 },
-        "request_id": { "type": "string", "minLength": 1 },
-        "status": { "const": "accepted" },
-        "output_ref": {
-          "type": "object",
-          "required": ["step_id"],
-          "properties": {
-            "step_id": { "type": "string", "minLength": 1 }
-          },
-          "additionalProperties": false
-        },
-        "artifact_ids": {
+        "current_requests": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 }
-        },
-        "result_count": { "type": "integer", "minimum": 0 }
-      },
-      "additionalProperties": false
-    },
-    "matrixBlockedRecord": {
-      "type": "object",
-      "required": ["unit_id", "request_id", "reason"],
-      "properties": {
-        "unit_id": { "type": "string", "minLength": 1 },
-        "request_id": { "type": "string", "minLength": 1 },
-        "reason": { "type": "string", "minLength": 1 }
-      },
-      "additionalProperties": false
-    },
-    "matrixJoinProof": {
-      "type": "object",
-      "required": [
-        "owner_step_id",
-        "plan_id",
-        "required_unit_ids",
-        "optional_unit_ids",
-        "accepted_unit_ids",
-        "blocked_unit_ids",
-        "missing_required_unit_ids",
-        "coverage_complete",
-        "outcome",
-        "reason"
-      ],
-      "properties": {
-        "owner_step_id": { "type": "string", "minLength": 1 },
-        "plan_id": { "type": "string", "minLength": 1 },
-        "required_unit_ids": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 }
-        },
-        "optional_unit_ids": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 }
-        },
-        "accepted_unit_ids": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 }
-        },
-        "blocked_unit_ids": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 }
-        },
-        "missing_required_unit_ids": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 }
-        },
-        "coverage_complete": { "type": "boolean" },
-        "outcome": { "enum": ["pass", "block"] },
-        "reason": { "type": "string", "minLength": 1 }
-      },
-      "additionalProperties": false
-    },
-    "shardPlan": {
-      "type": "object",
-      "required": [
-        "plan_id",
-        "owner_step_id",
-        "source_evidence",
-        "status",
-        "obligations",
-        "accepted_outputs",
-        "blocked",
-        "join_proof"
-      ],
-      "properties": {
-        "plan_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "owner_step_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "source_evidence": {
-          "type": "array",
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
           }
         },
-        "status": {
-          "enum": [
-            "dispatching",
-            "joined",
-            "blocked"
-          ]
-        },
-        "obligations": {
+        "shard_records": {
           "type": "array",
           "minItems": 1,
           "items": {
-            "$ref": "#/$defs/shardObligationRecord"
+            "$ref": "#/$defs/shardRecord"
           }
         },
         "accepted_outputs": {
@@ -490,69 +349,95 @@
           "additionalProperties": {
             "$ref": "#/$defs/shardAcceptedOutputRecord"
           }
-        },
-        "blocked": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/shardBlockedRecord"
-          }
-        },
-        "join_proof": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/shardJoinProof"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "additionalProperties": false
     },
-    "shardObligationRecord": {
+    "fanoutActivation": {
       "type": "object",
       "required": [
-        "obligation_id",
-        "shard_id",
-        "reviewer_role",
-        "required",
-        "privacy_route",
-        "max_attempts",
-        "source_evidence",
-        "request_id",
+        "owner_step_id",
+        "activation",
+        "phase",
         "status",
-        "attempts"
+        "selected_branch_ids",
+        "max_parallel",
+        "current_requests",
+        "branch_records",
+        "accepted_outputs"
       ],
       "properties": {
-        "obligation_id": {
+        "owner_step_id": {
           "type": "string",
           "minLength": 1
         },
-        "shard_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "reviewer_role": {
-          "type": "string",
-          "minLength": 1
-        },
-        "required": {
-          "type": "boolean"
-        },
-        "privacy_route": {
-          "const": "safe_context"
-        },
-        "max_attempts": {
+        "activation": {
           "type": "integer",
           "minimum": 1
         },
-        "source_evidence": {
+        "phase": {
+          "enum": [
+            "branches",
+            "owner",
+            "completed"
+          ]
+        },
+        "status": {
+          "enum": [
+            "awaiting_branches",
+            "awaiting_owner",
+            "completed"
+          ]
+        },
+        "selected_branch_ids": {
           "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
           }
+        },
+        "max_parallel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "current_requests": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "branch_records": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/fanoutBranchRecord"
+          }
+        },
+        "accepted_outputs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/fanoutAcceptedOutputRecord"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "fanoutBranchRecord": {
+      "type": "object",
+      "required": [
+        "branch_id",
+        "request_id",
+        "status"
+      ],
+      "properties": {
+        "branch_id": {
+          "type": "string",
+          "minLength": 1
         },
         "request_id": {
           "type": "string",
@@ -561,41 +446,22 @@
         "status": {
           "enum": [
             "pending",
-            "accepted",
-            "blocked"
+            "accepted"
           ]
-        },
-        "attempts": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 1
         }
       },
       "additionalProperties": false
     },
-    "shardAcceptedOutputRecord": {
+    "fanoutAcceptedOutputRecord": {
       "type": "object",
       "required": [
-        "obligation_id",
-        "shard_id",
-        "reviewer_role",
+        "branch_id",
         "request_id",
         "status",
-        "output"
+        "output_ref"
       ],
       "properties": {
-        "obligation_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "shard_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "reviewer_role": {
+        "branch_id": {
           "type": "string",
           "minLength": 1
         },
@@ -606,151 +472,79 @@
         "status": {
           "const": "accepted"
         },
-        "output": {
-          "type": "object"
+        "output_ref": {
+          "type": "object",
+          "required": [
+            "step_id"
+          ],
+          "properties": {
+            "step_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
     },
-    "shardBlockedRecord": {
+    "shardRecord": {
       "type": "object",
       "required": [
-        "obligation_id",
-        "shard_id",
-        "reviewer_role",
+        "index",
         "request_id",
-        "reason",
-        "output"
+        "status"
       ],
       "properties": {
-        "obligation_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "shard_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "reviewer_role": {
-          "type": "string",
-          "minLength": 1
+        "index": {
+          "type": "integer",
+          "minimum": 0
         },
         "request_id": {
           "type": "string",
           "minLength": 1
         },
-        "reason": {
-          "type": "string",
-          "minLength": 1
-        },
-        "output": {
-          "type": "object"
+        "status": {
+          "enum": [
+            "pending",
+            "accepted"
+          ]
         }
       },
       "additionalProperties": false
     },
-    "shardJoinProof": {
+    "shardAcceptedOutputRecord": {
       "type": "object",
       "required": [
-        "owner_step_id",
-        "plan_id",
-        "required_shards",
-        "optional_shards",
-        "accepted_shards",
-        "blocked_shards",
-        "required_obligation_ids",
-        "optional_obligation_ids",
-        "accepted_obligation_ids",
-        "blocked_obligation_ids",
-        "missing_required_obligation_ids",
-        "coverage_complete",
-        "outcome",
-        "reason"
+        "index",
+        "request_id",
+        "status",
+        "output_ref"
       ],
       "properties": {
-        "owner_step_id": {
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "request_id": {
           "type": "string",
           "minLength": 1
         },
-        "plan_id": {
-          "type": "string",
-          "minLength": 1
+        "status": {
+          "const": "accepted"
         },
-        "required_shards": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "optional_shards": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "accepted_shards": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "blocked_shards": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "required_obligation_ids": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "optional_obligation_ids": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "accepted_obligation_ids": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "blocked_obligation_ids": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "missing_required_obligation_ids": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "coverage_complete": {
-          "type": "boolean"
-        },
-        "outcome": {
-          "enum": [
-            "pass",
-            "block"
-          ]
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 1
+        "output_ref": {
+          "type": "object",
+          "required": [
+            "step_id"
+          ],
+          "properties": {
+            "step_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

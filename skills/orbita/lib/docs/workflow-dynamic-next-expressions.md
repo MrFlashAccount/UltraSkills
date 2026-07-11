@@ -3,7 +3,7 @@
 Workflow steps can set `next` to one whole-string expression:
 
 ```json
-"next": "${{ output.selected_steps }}"
+"next": "${{ output.selected_step }}"
 ```
 
 V1 expressions are path selectors only. They can read:
@@ -18,12 +18,10 @@ Examples:
 ```
 
 ```json
-"next": "${{ input.planning_draft.selected_reviewers }}"
+"next": "${{ input.planning_draft.selected_step }}"
 ```
 
-The resolved value is handled like static `next`: a string routes to one step, and an array routes to parallel steps. Target ids must already exist in the workflow. V1 does not support operators, functions, brackets, array indexes, partial template strings, or access to full baton state.
-
-Semantic validation is stricter for parallel fanout: all branches must converge directly into one explicit non-terminal join step. Branch-local `next` before that join must be a static step id; dynamic expressions and conditional match/cases are rejected before the join, even if the JSON schema shape allows them. Transitive branch chains are also rejected.
+The resolved value must be one string step id. Arrays are rejected at the workflow schema and output-schema semantic boundary. Target ids must already exist in the workflow. Use a first-class `kind: "fanout"` step with `input.branches` for named branch work. V1 expressions do not support operators, functions, brackets, array indexes, partial template strings, or access to full baton state.
 
 ## Enumerability for loop policies
 
@@ -40,7 +38,6 @@ rules; only the dependent policy fails.
 Loop policy validation must not infer targets from previous run history,
 backward jumps, repeated cursors, worker prompt text, or observed outputs.
 
-The parallel fanout restriction above is also a loop policy boundary. A policy
-must not depend on branch-local dynamic routing, conditional branch routing,
-cross-branch cycles, or non-convergent fanout. Unsupported fanout participation
-fails validation instead of being interpreted at runtime.
+Fanout owner activations are not expanded into loop-policy graph edges. A loop
+policy must operate on scalar top-level transitions; unsupported fanout
+participation fails validation instead of being inferred from branch requests.

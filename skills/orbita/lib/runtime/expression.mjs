@@ -2,7 +2,7 @@ import { WorkflowRuntimeError } from '../errors.mjs';
 
 const EXPRESSION_PATTERN = /^\$\{\{\s*([A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*)\s*\}\}$/;
 const SEGMENT_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
-const ALLOWED_ROOTS = new Set(['output', 'input']);
+const DEFAULT_ALLOWED_ROOTS = Object.freeze(['output', 'input']);
 const DANGEROUS_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 function expressionError(source, reason) {
@@ -13,7 +13,7 @@ export function isExpressionString(value) {
   return typeof value === 'string' && value.includes('${{');
 }
 
-export function parsePathExpression(source) {
+export function parsePathExpression(source, { allowedRoots = DEFAULT_ALLOWED_ROOTS } = {}) {
   if (typeof source !== 'string') throw new WorkflowRuntimeError('workflow expression source must be a string');
 
   const match = source.match(EXPRESSION_PATTERN);
@@ -26,7 +26,8 @@ export function parsePathExpression(source) {
 
   const segments = match[1].split('.');
   const [root, ...path] = segments;
-  if (!ALLOWED_ROOTS.has(root)) throw expressionError(source, `root '${root}' is not allowed; use output or input`);
+  const allowed = new Set(allowedRoots);
+  if (!allowed.has(root)) throw expressionError(source, `root '${root}' is not allowed; use ${[...allowed].join(' or ')}`);
   if (path.length === 0) throw expressionError(source, 'path must include at least one field after the root');
 
   for (const segment of path) {

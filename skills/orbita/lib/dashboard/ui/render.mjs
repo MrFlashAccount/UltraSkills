@@ -213,7 +213,6 @@ function filterRuns(runs, searchQuery = '') {
 }
 
 function normalizeCursorBranches(cursor) {
-  if (Array.isArray(cursor)) return cursor.map((item) => String(item.stepId ?? item.id ?? item)).filter(Boolean);
   if (Array.isArray(cursor?.steps)) return cursor.steps.map((step) => String(step)).filter(Boolean);
   if (cursor && typeof cursor === 'object') return [String(cursor.stepId ?? cursor.id ?? '')].filter(Boolean);
   if (typeof cursor === 'string') return [cursor];

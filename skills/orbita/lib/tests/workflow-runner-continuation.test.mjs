@@ -34,14 +34,14 @@ const workflowDoc = {
         kind: 'worker',
         input: { prompt: 'Prepare branch.' },
         output: { template: 'output.md', schema: 'output.schema.json' },
-        next: ['branch_a', 'branch_b'],
+        next: 'branch_a',
       },
       branch_a: {
         name: 'Branch A',
         kind: 'worker',
         input: { prompt: 'Run branch A.' },
         output: { template: 'output.md', schema: 'output.schema.json' },
-        next: 'join',
+        next: 'branch_b',
       },
       branch_b: {
         name: 'Branch B',
@@ -174,71 +174,7 @@ function workerOutput(summary) {
 
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
-test('runner: dynamic parallel with one branch still applies branch output as parallel envelope', async () => {
-  const { runId, runDir } = await runCase('dynamic-single-branch-parallel');
-  const workflowPath = path.join(tempDir, 'dynamic-single-branch-parallel-workflow.json');
-  const schemaPath = path.join(tempDir, 'dynamic-single-branch-output.schema.json');
-  writeJson(schemaPath, {
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    type: 'object',
-    required: ['outcome', 'selected_steps'],
-    properties: {
-      outcome: { enum: ['ready'] },
-      selected_steps: { type: 'array', minItems: 1, uniqueItems: true, items: { enum: ['branch_a'] } },
-      results: { type: 'array' },
-      artifacts: { type: 'array' },
-    },
-    additionalProperties: false,
-  });
-  const dynamicWorkflow = structuredClone(workflowDoc);
-  dynamicWorkflow.steps.prepare.output.schema = path.basename(schemaPath);
-  dynamicWorkflow.steps.prepare.next = '${{ output.selected_steps }}';
-  delete dynamicWorkflow.steps.branch_b;
-  writeJson(workflowPath, dynamicWorkflow);
 
-  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next dynamic single branch setup');
-  const prepareOutput = path.join(runDir, 'prepare-output.json');
-  writeJson(prepareOutput, { outcome: 'ready', selected_steps: ['branch_a'] });
-  const branch = await continueWithOutputs({ runId, runDir, workflowPath, refs: prepareOutput, label: 'continue dynamic prepare to one branch' });
-  assert.deepEqual(branch.requests.map((request) => request.id), ['branch_a']);
-  assert.equal(branch.baton.cursor, 'branch_a');
-
-  const branchOutput = path.join(runDir, 'branch-a-output.json');
-  writeJson(branchOutput, workerOutput('single branch complete'));
-  const response = await continueWithOutputs({ runId, runDir, workflowPath, refs: `branch_a=${branchOutput}`, label: 'continue dynamic single branch to join' });
-
-  assert.equal(response.status, 'needs_host_actions');
-  assert.deepEqual(response.requests.map((request) => request.id), ['join']);
-  assert.equal(response.baton.cursor, 'join');
-  assert.equal(response.baton.state.branch_a.results[0].summary, 'single branch complete');
-  assert.equal(Object.hasOwn(response.baton.state, 'attempts'), false);
-});
-
-test('runner: static parallel with one branch still applies branch output as parallel envelope', async () => {
-  const { runId, runDir } = await runCase('static-single-branch-parallel');
-  const workflowPath = path.join(tempDir, 'static-single-branch-parallel-workflow.json');
-  const staticWorkflow = structuredClone(workflowDoc);
-  staticWorkflow.steps.prepare.next = ['branch_a'];
-  delete staticWorkflow.steps.branch_b;
-  writeJson(workflowPath, staticWorkflow);
-
-  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next static single branch setup');
-  const prepareOutput = path.join(runDir, 'prepare-output.json');
-  writeJson(prepareOutput, workerOutput('prepared'));
-  const branch = await continueWithOutputs({ runId, runDir, workflowPath, refs: prepareOutput, label: 'continue static prepare to one branch' });
-  assert.deepEqual(branch.requests.map((request) => request.id), ['branch_a']);
-  assert.equal(branch.baton.cursor, 'branch_a');
-
-  const branchOutput = path.join(runDir, 'branch-a-output.json');
-  writeJson(branchOutput, workerOutput('static single branch complete'));
-  const response = await continueWithOutputs({ runId, runDir, workflowPath, refs: `branch_a=${branchOutput}`, label: 'continue static single branch to join' });
-
-  assert.equal(response.status, 'needs_host_actions');
-  assert.deepEqual(response.requests.map((request) => request.id), ['join']);
-  assert.equal(response.baton.cursor, 'join');
-  assert.equal(response.baton.state.branch_a.results[0].summary, 'static single branch complete');
-  assert.equal(Object.hasOwn(response.baton.state, 'attempts'), false);
-});
 
 test('runner: continue reports missing requested output as an error', async () => {
   const { runId, runDir } = await runCase('missing-output');
@@ -296,39 +232,6 @@ test('runner: continue does not persist applied output when next render fails', 
   assert.equal(baton.state.prepare.results[0].summary, 'prepared but should not persist');
 });
 
-test('runner: parallel continue does not create durable envelope when next render fails', async () => {
-  const { runId, runDir } = await runCase('parallel-render-failure-no-envelope');
-  const workflowPath = path.join(tempDir, 'parallel-render-failure-no-envelope-workflow.json');
-  const renderFailureWorkflow = structuredClone(workflowDoc);
-  renderFailureWorkflow.steps.join.input.template = 'missing-join-template.md';
-  writeJson(workflowPath, renderFailureWorkflow);
-
-  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next parallel render failure setup');
-  const prepareOutput = path.join(runDir, 'prepare-output.json');
-  writeJson(prepareOutput, workerOutput('prepared'));
-  await continueWithOutputs({ runId, runDir, workflowPath, refs: prepareOutput, label: 'continue prepare to branches' });
-  const branchA = path.join(runDir, 'branch-a-output.json');
-  const branchB = path.join(runDir, 'branch-b-output.json');
-  writeJson(branchA, workerOutput('branch a complete'));
-  writeJson(branchB, workerOutput('branch b complete'));
-  await writeOutputFile({ runId, runDir, workflowPath, stepId: 'branch_a', filePath: branchA, label: 'write branch a render failure output' });
-  await writeOutputFile({ runId, runDir, workflowPath, stepId: 'branch_b', filePath: branchB, label: 'write branch b render failure output' });
-  const batonBefore = readFileSync(path.join(runDir, 'baton.json'), 'utf8');
-  const historyBefore = readFileSync(path.join(runDir, 'history.md'), 'utf8');
-
-  const result = await runRunner(['continue', '--run-id', runId, '--workflow', workflowPath]);
-
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /workflow prompt render failed/);
-  assert.equal(readFileSync(path.join(runDir, 'baton.json'), 'utf8'), batonBefore);
-  const failureHistory = readFileSync(path.join(runDir, 'history.md'), 'utf8');
-  const failureEntry = failureHistory.slice(historyBefore.length);
-  assert.match(failureEntry, /source: workflow-runner-failure/);
-  assert.match(failureEntry, /public failure: command=continue/);
-  assert.match(failureEntry, /workflow prompt render failed: missing input template 'missing-join-template.md'/);
-  assert.doesNotMatch(failureEntry, /source: workflow-runner-continue/);
-  assert.equal(existsSync(path.join(runDir, '.workflow-runner', 'parallel-output.json')), false);
-});
 
 test('runner: continue recovers from post-render durable commit failure without mismatched next state', async () => {
   for (const failurePoint of ['pending', 'history', 'baton']) {

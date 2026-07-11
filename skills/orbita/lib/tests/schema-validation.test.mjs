@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 import { validateJsonSchema } from '../../../../shared/scripts/schema-validation/schema-validation.mjs';
-import reviewJoinOutputSchema from '../../../../workflows/dev-harness/schemas/review-join-output.json' with { type: 'json' };
+import implementationFanoutOutputSchema from '../../../../workflows/dev-harness/schemas/implementation-fanout-output.json' with { type: 'json' };
+import reviewFanoutOutputSchema from '../../../../workflows/dev-harness/schemas/review-fanout-output.json' with { type: 'json' };
 import reviewerSelectionOutputSchema from '../../../../workflows/dev-harness/schemas/reviewer-selection-output.json' with { type: 'json' };
 import { assertBatonSchema, batonSchema } from '../file-contracts/baton/baton-schema.mjs';
 import { assertWorkflowSchema, workflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import runnerHostResponseSchema from '../persistence/run-state/schema/runner-host-response.json' with { type: 'json' };
 
-const runtimeSchemas = [workflowSchema, batonSchema, reviewerSelectionOutputSchema, reviewJoinOutputSchema, runnerHostResponseSchema];
+const runtimeSchemas = [workflowSchema, batonSchema, reviewerSelectionOutputSchema, implementationFanoutOutputSchema, reviewFanoutOutputSchema, runnerHostResponseSchema];
 
 function minimalWorkflowDoc(overrides = {}) {
   return {
@@ -55,30 +56,53 @@ test('generic JSON Schema helper validates workflow schema documents at runtime'
 });
 
 
-test('review join output schema rejects mismatched needs_changes rework routing targets', () => {
+test('review fanout owner schema keeps scalar next separate from rework branch selection', () => {
   const valid = {
     outcome: 'needs_changes',
     verdict: {
       summary: ['Backend contract needs a fix.'],
-      selected_review_steps: ['backend_review'],
-      failed_review_steps: ['backend_review'],
-      required_implementation_steps: ['backend_implementation'],
+      reviewed_branches: ['backend_review'],
+      failed_review_branches: ['backend_review'],
     },
-    next: ['backend_implementation'],
+    next: 'implementation',
+    implementation_branches: ['backend_implementation'],
+    review_branches: ['backend_review'],
+    implementer_handoffs: {
+      backend_implementation: { summary: 'Fix the backend contract.' },
+    },
   };
 
-  assert.equal(validateJsonSchema(reviewJoinOutputSchema, valid, { schemas: runtimeSchemas }).ok, true);
-  assert.equal(validateJsonSchema(reviewJoinOutputSchema, {
+  assert.equal(validateJsonSchema(reviewFanoutOutputSchema, valid, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(reviewFanoutOutputSchema, {
     ...valid,
-    next: ['frontend_implementation'],
+    next: ['backend_implementation'],
   }, { schemas: runtimeSchemas }).ok, false);
-  assert.equal(validateJsonSchema(reviewJoinOutputSchema, {
+  assert.equal(validateJsonSchema(reviewFanoutOutputSchema, {
     ...valid,
-    verdict: {
-      ...valid.verdict,
-      required_implementation_steps: ['backend_implementation', 'frontend_implementation'],
+    next: 'done',
+  }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(reviewFanoutOutputSchema, {
+    ...valid,
+    implementer_handoffs: {},
+  }, { schemas: runtimeSchemas }).ok, false);
+});
+
+test('implementation fanout owner schema selects review branches without a routing wrapper', () => {
+  const valid = {
+    outcome: 'ready_for_review',
+    review_branches: ['backend_review', 'qa_review'],
+    reviewer_handoffs: {
+      backend_review: { summary: 'Review backend contracts.' },
+      qa_review: { summary: 'Review verification evidence.' },
     },
+  };
+  assert.equal(validateJsonSchema(implementationFanoutOutputSchema, valid, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(implementationFanoutOutputSchema, { ...valid, review_branches: [] }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(implementationFanoutOutputSchema, {
+    ...valid,
+    reviewer_handoffs: { backend_review: valid.reviewer_handoffs.backend_review },
   }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(implementationFanoutOutputSchema, { outcome: 'blocked' }, { schemas: runtimeSchemas }).ok, false);
 });
 
 
@@ -95,6 +119,17 @@ test('baton schema rejects empty or whitespace-only user_prompt outside CLI', ()
     () => assertBatonSchema({ ...validBaton, user_prompt: '  \n\t' }),
     /baton failed schema validation: .*user_prompt.*must match pattern|baton failed schema validation: .*must match pattern/,
   );
+  assert.throws(() => assertBatonSchema({ ...validBaton, cursor: ['worker_step'] }), /cursor.*must be string|must be string/);
+});
+
+test('workflow schema rejects array next and array match-case targets', () => {
+  const arrayNext = minimalWorkflowDoc();
+  arrayNext.steps.worker_step.next = ['done'];
+  assert.throws(() => assertWorkflowSchema(arrayNext), /next.*match exactly one schema|must match exactly one schema/);
+
+  const arrayCase = minimalWorkflowDoc();
+  arrayCase.steps.worker_step.next = { match: '${{ output.route }}', cases: { done: ['done'] } };
+  assert.throws(() => assertWorkflowSchema(arrayCase), /cases.*must be string|must be string/);
 });
 
 test('workflow schema accepts workflow documents without workflow-level instruction', () => {
@@ -165,14 +200,15 @@ test('workflow schema accepts exact per-harness agent runtime profiles only with
   assert.throws(() => assertWorkflowSchema(invalidHarnessGrammar), /property name.*pattern|must match pattern/i);
 });
 
-test('workflow schema applies the same agent runtime contract to matrix worker templates', () => {
+test('workflow schema applies the same agent runtime contract to shard worker templates', () => {
   const workflow = minimalWorkflowDoc({
     start: 'fanout',
     steps: {
       fanout: {
         name: 'Fanout',
-        kind: 'matrix',
-        source: { items: [{ id: 'a' }] },
+        kind: 'shard',
+        input: { shards: ['a'], prompt: 'Finalize.' },
+        output: { template: 'output.md' },
         worker: {
           agent: 'reviewer',
           agent_runtime: { codex: { model: 'gpt-5.5', thinking_level: 'high' } },
@@ -189,7 +225,7 @@ test('workflow schema applies the same agent runtime contract to matrix worker t
   assert.throws(() => assertWorkflowSchema(workflow), /agent.*required|agent_runtime/i);
 });
 
-test('workflow schema validation rejects case-folded duplicate harness profiles for worker and matrix sources', () => {
+test('workflow schema validation rejects case-folded duplicate harness profiles for worker and shard sources', () => {
   const worker = minimalWorkflowDoc();
   worker.steps.worker_step.agent = 'architect';
   worker.steps.worker_step.agent_runtime = {
@@ -201,13 +237,14 @@ test('workflow schema validation rejects case-folded duplicate harness profiles 
     /agent_runtime harness keys 'codex' and 'Codex' differ only by ASCII case/,
   );
 
-  const matrix = minimalWorkflowDoc({
+  const shard = minimalWorkflowDoc({
     start: 'fanout',
     steps: {
       fanout: {
         name: 'Fanout',
-        kind: 'matrix',
-        source: { items: [{ id: 'a' }] },
+        kind: 'shard',
+        input: { shards: ['a'], prompt: 'Finalize.' },
+        output: { template: 'output.md' },
         worker: {
           agent: 'reviewer',
           agent_runtime: {
@@ -223,8 +260,8 @@ test('workflow schema validation rejects case-folded duplicate harness profiles 
     },
   });
   assert.throws(
-    () => assertWorkflowSchema(matrix),
-    /matrix\.worker\.agent_runtime harness keys 'CODEX' and 'codex' differ only by ASCII case/,
+    () => assertWorkflowSchema(shard),
+    /shard\.worker\.agent_runtime harness keys 'CODEX' and 'codex' differ only by ASCII case/,
   );
 });
 
@@ -299,22 +336,21 @@ test('runner host response schema enforces action-conditional reuse hint fields'
       },
     ],
   };
-  const validMatrixRunWorker = {
+  const validShardRunWorker = {
     ...validRunWorker,
     requests: [
       {
         ...validRunWorker.requests[0],
-        id: 'review_matrix__matrix__api',
-        stepId: 'review_matrix__matrix__api',
-        ownerStepId: 'review_matrix',
-        matrix: {
-          owner_step_id: 'review_matrix',
-          unit_id: 'api',
-          request_id: 'review_matrix__matrix__api',
-          required: true,
-          attempts: 0,
-          max_attempts: 1,
-          context: { path: 'src/api' },
+        id: 'review__shard__1__0',
+        stepId: 'review__shard__1__0',
+        parentStepId: 'review',
+        shard: {
+          parent_step_id: 'review',
+          activation: 1,
+          phase: 'shards',
+          index: 0,
+          total: 1,
+          request_id: 'review__shard__1__0',
         },
       },
     ],
@@ -324,7 +360,7 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validRecoverableRunWorker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validApproval, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validResolveWorkerBlocker, { schemas: runtimeSchemas }).ok, true);
-  assert.equal(validateJsonSchema(runnerHostResponseSchema, validMatrixRunWorker, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, validShardRunWorker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validRunWorker,
     requests: [{ ...validRunWorker.requests[0], preferredAgentId: undefined }],

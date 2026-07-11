@@ -54,7 +54,7 @@
       },
       "additionalProperties": false,
       "description": "Producer must declare or draft the review contract describing selected reviewers, reasons, surfaces, and required status.",
-      "x-usage": "Use this as selection state only. Do not fan out work unless a dispatch step provides an approved selected_review_steps list."
+      "x-usage": "Use this as selection state only. The review fanout owner consumes the approved selected_review_steps list."
     }
   },
   "additionalProperties": false,

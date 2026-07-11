@@ -30,21 +30,6 @@ function uniqueWorkerTargets(targets) {
   return [...new Set(targets)];
 }
 
-function firstRenderableStaticParallelWorkerTarget({ workflow, stepId, targets }) {
-  const workerTargets = [];
-  for (const target of targets) {
-    const targetStep = workflow?.steps?.[target];
-    if (!targetStep) throw new Error(`cannot determine stable startup user prompt target: transition target not found in workflow: ${target}`);
-    if (targetStep.kind === 'worker') workerTargets.push(target);
-  }
-  if (workerTargets.length > 0) return workerTargets[0];
-  throw new Error(`cannot determine stable startup user prompt target: workflow step '${stepId}' static parallel next has no worker target renderable in the first fanout response`);
-}
-
-function firstStaticWorkerTargetForParallelCase({ workflow, stepId, targets }) {
-  return firstRenderableStaticParallelWorkerTarget({ workflow, stepId, targets });
-}
-
 function firstStaticWorkerTarget({ workflow, stepId, visited = new Set() }) {
   if (visited.has(stepId)) throw new Error(`cannot determine stable startup user prompt target: static transition cycle includes '${stepId}'`);
   visited.add(stepId);
@@ -57,13 +42,10 @@ function firstStaticWorkerTarget({ workflow, stepId, visited = new Set() }) {
 
   const descriptor = normalizeTransitionNext(step.next);
   if (descriptor.kind === 'static-target') return firstStaticWorkerTarget({ workflow, stepId: descriptor.target, visited });
-  if (descriptor.kind === 'static-parallel') return firstRenderableStaticParallelWorkerTarget({ workflow, stepId, targets: descriptor.targets });
   if (descriptor.kind === 'match-cases') {
     const targets = [];
     for (const target of Object.values(descriptor.cases)) {
-      const workerTarget = typeof target === 'string'
-        ? firstStaticWorkerTarget({ workflow, stepId: target, visited: new Set(visited) })
-        : firstStaticWorkerTargetForParallelCase({ workflow, stepId, targets: target });
+      const workerTarget = firstStaticWorkerTarget({ workflow, stepId: target, visited: new Set(visited) });
       if (!workerTarget) throw new Error(`cannot determine stable startup user prompt target: workflow step '${stepId}' has a match/cases branch with no worker target`);
       targets.push(workerTarget);
     }

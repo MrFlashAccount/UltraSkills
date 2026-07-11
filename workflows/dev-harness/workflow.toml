@@ -1,6 +1,6 @@
 name = "dev-harness"
 version = 1
-description = "End-to-end planning and execution workflow for non-trivial code work: research attack, architecture gate, implementation plan, approval, implementation dispatch, and review. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
+description = "End-to-end planning and execution workflow for non-trivial code work: research attack, architecture gate, implementation plan, approval, implementation fanout, and review fanout. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
 start = "research_draft"
 done = "done"
 
@@ -202,9 +202,9 @@ prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artif
 Produce the implementation plan contract for approval from the approved `reasons-canvas-architecture` artifact. Treat `reasons-canvas-architecture` as an immutable source contract: do not edit it, complete missing Canvas sections, or read earlier research artifacts separately. Convert the approved architecture artifact into workstreams, owners, verification, rollback, and reviewer selection in one file-backed artifact.
 Create exactly one first-class human-facing implementation plan artifact named `implementation-plan` and emit its artifact metadata in artifacts[]. Do not embed the readable plan/proposal body in JSON; keep JSON close to research/architecture draft outputs: outcome, compact summary, artifact metadata, routing fields, selected reviewer fields, and blockers only.
 Emit a compact output.summary as the human-facing plan proposal state for approval gates. Summarize the artifact's current plan state, selected implementation route, selected reviewers, main risks, and verification/rollback shape without embedding the full plan body.
-The step id remains planning_draft for compatibility, but once approve_plan approves this output, downstream steps must treat it as the final approved plan contract. selected_implementation_steps must contain only unique canonical implementation step ids needed for the plan: backend_implementation, frontend_implementation, architecture_artifact_update. implementation_route must be the normalized route for exactly that unique selected set: backend, frontend, architecture, backend_frontend, backend_architecture, frontend_architecture, or all.
+The step id remains planning_draft for compatibility, but once approve_plan approves this output, downstream steps must treat it as the final approved plan contract. selected_implementation_steps must contain only unique canonical implementation branch ids needed for the plan: backend_implementation, frontend_implementation, architecture_artifact_update.
 Collapse overlapping same-role work into one canonical task; do not create duplicate backend/frontend/architecture workers.
-If duplicate same-role work cannot be safely collapsed, return blocked with blocker.source_step_id = planning_draft. selected_review_steps must explicitly contain the unique reviewers that must run after implementation; implementation_join must not invent or recompute reviewers.
+If duplicate same-role work cannot be safely collapsed, return blocked with blocker.source_step_id = planning_draft. selected_review_steps must explicitly contain the unique reviewers that must run after implementation; implementation must not invent or recompute reviewers.
 Keep review_plan.reviewers aligned with selected_review_steps.
 Reviewer fan-out budget: default to one independent reviewer, use two when two independent material risk classes are touched, use three for structural/runtime plus verification-heavy work, and select more than three only with review_escalation explaining the independent risk classes. selected_review_steps means "run these reviewers"; do not include optional, informational, or absence-confirmation reviewers. Record considered-but-skipped reviewers in skipped_review_steps with an evidence-backed reason instead.
 Return ready_for_attack or blocked with blocker.source_step_id = planning_draft.
@@ -236,14 +236,13 @@ kind = "worker"
 [steps.planning_attack.input]
 role = "critic"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Read artifact `implementation-plan` from `planning_draft` and challenge it plus selected_implementation_steps, implementation_route, selected_review_steps, review_plan, skipped_review_steps, and review_escalation for faithful conversion from approved architecture artifacts and immutable `reasons-canvas-architecture` when present into workstreams, unique canonical task selection, route/selection consistency, explicit final reviewer selection, no duplicate same-role workers, entity coverage, one-owner-per-file-zone, project baseline, architecture artifact manifest, verification/rollback surfaces, sensitive surfaces, request-path/contract touchpoints, and max-detail leaks. Treat a missing `implementation-plan` artifact as a blocking planning failure.
+Read artifact `implementation-plan` from `planning_draft` and challenge it plus selected_implementation_steps, selected_review_steps, review_plan, skipped_review_steps, and review_escalation for faithful conversion from approved architecture artifacts and immutable `reasons-canvas-architecture` when present into workstreams, unique canonical task selection, explicit final reviewer selection, no duplicate same-role workers, entity coverage, one-owner-per-file-zone, project baseline, architecture artifact manifest, verification/rollback surfaces, sensitive surfaces, request-path/contract touchpoints, and max-detail leaks. Treat a missing `implementation-plan` artifact as a blocking planning failure.
 Return approved, needs_revision, or blocked.
 If selected tasks contain duplicate/overlapping same-role work that cannot collapse to one canonical step, if selected_review_steps includes reviewers only to confirm absence of a surface, if optional reviewers are selected instead of recorded in skipped_review_steps, if selected_review_steps has more than three entries without strong review_escalation, or if reviewers are missing/recomputed outside planning, return blocked with blocker.source_step_id = planning_attack.
 
 Input context:
 - Implementation plan artifacts under review: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
-- Implementation route: ${{ input.planning_draft.implementation_route }}
 - Selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Review plan: ${{ input.planning_draft.review_plan }}
 - Skipped review steps: ${{ input.planning_draft.skipped_review_steps | default: "No skipped reviewers recorded." }}
@@ -271,13 +270,12 @@ Do not recreate a summary by reading/paraphrasing the artifact body in the orche
 If the user asks for a plan/proposal file, retrieve/export the existing artifact referenced by baton/output artifacts; do not ask a worker to recreate it in a temp path.
 Return approval approved only for explicit approval, rejected for requested plan changes, or blocked with a blocker.
 After approval, planning_draft is the final approved plan contract.
-Do not encode selected implementation roles or reviewers in approval; selected work and reviewers are planning_draft.selected_implementation_steps, planning_draft.implementation_route, and planning_draft.selected_review_steps. skipped_review_steps are planning evidence only and must not be dispatched.
+Do not encode selected implementation roles or reviewers in approval; selected work and reviewers are planning_draft.selected_implementation_steps and planning_draft.selected_review_steps. skipped_review_steps are planning evidence only and must not be selected without later material surface evidence.
 
 Input context:
 - Implementation plan summary for approval: ${{ input.planning_draft.summary }}
 - Implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
-- Implementation route: ${{ input.planning_draft.implementation_route }}
 - Selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Review plan: ${{ input.planning_draft.review_plan }}
 - Skipped review steps: ${{ input.planning_draft.skipped_review_steps | default: "No skipped reviewers recorded." }}
@@ -290,47 +288,42 @@ schema = "schemas/approval-output.json"
 match = "${{ output.approval }}"
 
 [steps.approve_plan.next.cases]
-approved = "implementation_dispatch"
+approved = "implementation"
 rejected = "planning_draft"
 
-[steps.implementation_dispatch]
-name = "Implementation dispatch"
-kind = "worker"
+[steps.implementation]
+name = "Implementation"
+kind = "fanout"
+max_parallel = 3
+next = "review"
 
-[steps.implementation_dispatch.input]
-prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Validate that the approved plan contract planning_draft.implementation_route exactly matches the unique canonical planning_draft.selected_implementation_steps and that no duplicate same-role implementation worker is requested.
-If valid, return outcome equal to planning_draft.implementation_route.
-If invalid or impossible to collapse safely, return outcome blocked with blocker.source_step_id = implementation_dispatch.
+[steps.implementation.input]
+branches = { first_of = ["${{ input.review.implementation_branches }}", "${{ input.planning_draft.selected_implementation_steps }}"] }
+prompt = '''This is the implementation fanout owner phase. Inspect only outputs from implementation branches selected for the current activation.
+Use the `implementation-plan` artifact from `planning_draft` as the approved execution contract.
+Confirm every selected branch completed, supplied verification evidence, and stayed within scope.
+On the first pass, planning_draft.selected_review_steps is the mandatory review baseline. After rework, review.review_branches is the mandatory re-review baseline.
+You may widen that baseline when actual changed files or touched surfaces require another planned or previously skipped reviewer. Never remove a mandatory reviewer.
+Return outcome ready_for_review with review_branches as the exact next review fanout and one reviewer_handoffs.<review_branch_id> entry per selected reviewer.
+If incomplete, return blocked with blocker.source_step_id = implementation.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
-- Approved implementation route: ${{ input.planning_draft.implementation_route }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}'''
+- Initial implementation branches: ${{ input.planning_draft.selected_implementation_steps }}
+- Initial review baseline: ${{ input.planning_draft.selected_review_steps }}
+- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No prior re-review baseline." }}
+- Backend implementation: ${{ input.backend_implementation | default: "backend_implementation was not selected in this activation." }}
+- Frontend implementation: ${{ input.frontend_implementation | default: "frontend_implementation was not selected in this activation." }}
+- Architecture artifact update: ${{ input.architecture_artifact_update | default: "architecture_artifact_update was not selected in this activation." }}'''
 
-[steps.implementation_dispatch.output]
-template = "../../shared/templates/review-verdict-template.md"
-schema = "schemas/implementation-dispatch-output.json"
+[steps.implementation.output]
+template = "../../shared/templates/reviewer-handoff-template.md"
+schema = "schemas/implementation-fanout-output.json"
 
-[steps.implementation_dispatch.next]
-match = "${{ output.outcome }}"
-
-[steps.implementation_dispatch.next.cases]
-backend = ["backend_implementation"]
-frontend = ["frontend_implementation"]
-architecture = ["architecture_artifact_update"]
-backend_frontend = ["backend_implementation", "frontend_implementation"]
-backend_architecture = ["backend_implementation", "architecture_artifact_update"]
-frontend_architecture = ["frontend_implementation", "architecture_artifact_update"]
-all = ["backend_implementation", "frontend_implementation", "architecture_artifact_update"]
-
-[steps.backend_implementation]
+[steps.implementation.branches.backend_implementation]
 name = "Backend implementation"
-kind = "worker"
-next = "implementation_join"
 
-[steps.backend_implementation.input]
+[steps.implementation.branches.backend_implementation.input]
 role = "backend"
 prompt = '''Implement only the backend slice selected in the approved plan contract planning_draft.selected_implementation_steps.
 Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this implementation slice. Treat a missing `implementation-plan` artifact as a blocker.
@@ -344,7 +337,7 @@ If a required source row cannot be satisfied in the assigned backend scope, or i
 Treat the approved implementation plan as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the plan, return blocked or request an approved plan revision.
 Return implemented or blocked with blocker.source_step_id = backend_implementation.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
-When rerun from review_join needs_changes, read input.review_join and reviewer outputs, apply only the required changes for this step, and preserve all approved contracts.
+When rerun from review needs_changes, consume only input.review.implementer_handoffs.backend_implementation as actionable rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
 If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = backend_implementation and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
@@ -352,27 +345,19 @@ Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Dispatch route outcome: ${{ input.implementation_dispatch.outcome }}
 - Previous backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "No previous backend_implementation artifacts in input context." }}
-- Joined review decision requiring rework: ${{ input.review_join.verdict | default: "No review_join rework decision in input context." }}
-- Architect review feedback: ${{ input.architect_review.verdict | default: "No architect_review feedback in input context." }}
-- Backend review feedback: ${{ input.backend_review.verdict | default: "No backend_review feedback in input context." }}
-- Frontend review feedback: ${{ input.frontend_review.verdict | default: "No frontend_review feedback in input context." }}
-- Frontend taste review feedback: ${{ input.frontend_taste_review.verdict | default: "No frontend_taste_review feedback in input context." }}
-- Security review feedback: ${{ input.security_review.verdict | default: "No security_review feedback in input context." }}
-- Privacy review feedback: ${{ input.privacy_review.verdict | default: "No privacy_review feedback in input context." }}
-- QA review feedback: ${{ input.qa_review.verdict | default: "No qa_review feedback in input context." }}'''
+- Branch-specific review rework handoff: ${{ input.review.implementer_handoffs.backend_implementation | default: "No backend rework handoff; this is the first implementation pass." }}
+- Aggregate review verdict: ${{ input.review.verdict | default: "No aggregate review verdict; this is the first implementation pass." }}
+- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved planning baseline." }}'''
 
-[steps.backend_implementation.output]
+[steps.implementation.branches.backend_implementation.output]
 template = "../../shared/templates/implementer-handoff-template.md"
 schema = "schemas/implementation-output.json"
 
-[steps.frontend_implementation]
+[steps.implementation.branches.frontend_implementation]
 name = "Frontend implementation"
-kind = "worker"
-next = "implementation_join"
 
-[steps.frontend_implementation.input]
+[steps.implementation.branches.frontend_implementation.input]
 role = "frontend"
 prompt = '''Implement only the frontend slice selected in the approved plan contract planning_draft.selected_implementation_steps.
 Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this implementation slice. Treat a missing `implementation-plan` artifact as a blocker.
@@ -391,7 +376,7 @@ If a required source row cannot be satisfied in the assigned frontend scope, or 
 Treat the approved implementation plan as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the plan, return blocked or request an approved plan revision.
 Return implemented or blocked with blocker.source_step_id = frontend_implementation.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
-When rerun from review_join needs_changes, read input.review_join and reviewer outputs, apply only the required changes for this step, and preserve all approved contracts.
+When rerun from review needs_changes, consume only input.review.implementer_handoffs.frontend_implementation as actionable rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
 Treat `must_fix` and `should_fix` review findings routed to frontend_implementation as mandatory rework. Do not leave actionable current-scope `should_fix` items unresolved in the next handoff.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
 If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = frontend_implementation and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
@@ -400,28 +385,20 @@ Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Dispatch route outcome: ${{ input.implementation_dispatch.outcome }}
 - Previous frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "No previous frontend_implementation artifacts in input context." }}
-- Joined review decision requiring rework: ${{ input.review_join.verdict | default: "No review_join rework decision in input context." }}
-- Architect review feedback: ${{ input.architect_review.verdict | default: "No architect_review feedback in input context." }}
-- Backend review feedback: ${{ input.backend_review.verdict | default: "No backend_review feedback in input context." }}
-- Frontend review feedback: ${{ input.frontend_review.verdict | default: "No frontend_review feedback in input context." }}
-- Frontend taste review feedback: ${{ input.frontend_taste_review.verdict | default: "No frontend_taste_review feedback in input context." }}
-- Security review feedback: ${{ input.security_review.verdict | default: "No security_review feedback in input context." }}
-- Privacy review feedback: ${{ input.privacy_review.verdict | default: "No privacy_review feedback in input context." }}
-- QA review feedback: ${{ input.qa_review.verdict | default: "No qa_review feedback in input context." }}'''
+- Branch-specific review rework handoff: ${{ input.review.implementer_handoffs.frontend_implementation | default: "No frontend rework handoff; this is the first implementation pass." }}
+- Aggregate review verdict: ${{ input.review.verdict | default: "No aggregate review verdict; this is the first implementation pass." }}
+- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved planning baseline." }}'''
 
-[steps.frontend_implementation.output]
+[steps.implementation.branches.frontend_implementation.output]
 template = "../../shared/templates/implementer-handoff-template.md"
 schema = "schemas/implementation-output.json"
 
-[steps.architecture_artifact_update]
+[steps.implementation.branches.architecture_artifact_update]
 name = "Architecture artifact update"
-kind = "worker"
 agent = "architect"
-next = "implementation_join"
 
-[steps.architecture_artifact_update.input]
+[steps.implementation.branches.architecture_artifact_update.input]
 role = "architect"
 prompt = '''Update only approved architecture artifacts selected in the approved plan contract planning_draft.selected_implementation_steps.
 Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this architecture artifact update slice. Treat a missing `implementation-plan` artifact as a blocker.
@@ -431,7 +408,7 @@ Do not edit, complete, or reinterpret REASONS artifacts unless the approved impl
 Read prior step outputs from input.<step_id> fields only.
 Return implemented or blocked with blocker.source_step_id = architecture_artifact_update.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
-When rerun from review_join needs_changes, read input.review_join and reviewer outputs, apply only the required changes for this step, and preserve all approved contracts.
+When rerun from review needs_changes, consume only input.review.implementer_handoffs.architecture_artifact_update as actionable rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
 If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = architecture_artifact_update and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
@@ -439,91 +416,50 @@ Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Dispatch route outcome: ${{ input.implementation_dispatch.outcome }}
 - Previous architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "No previous architecture_artifact_update artifacts in input context." }}
-- Joined review decision requiring rework: ${{ input.review_join.verdict | default: "No review_join rework decision in input context." }}
-- Architect review feedback: ${{ input.architect_review.verdict | default: "No architect_review feedback in input context." }}
-- Backend review feedback: ${{ input.backend_review.verdict | default: "No backend_review feedback in input context." }}
-- Frontend review feedback: ${{ input.frontend_review.verdict | default: "No frontend_review feedback in input context." }}
-- Frontend taste review feedback: ${{ input.frontend_taste_review.verdict | default: "No frontend_taste_review feedback in input context." }}
-- Security review feedback: ${{ input.security_review.verdict | default: "No security_review feedback in input context." }}
-- Privacy review feedback: ${{ input.privacy_review.verdict | default: "No privacy_review feedback in input context." }}
-- QA review feedback: ${{ input.qa_review.verdict | default: "No qa_review feedback in input context." }}'''
+- Branch-specific review rework handoff: ${{ input.review.implementer_handoffs.architecture_artifact_update | default: "No architecture artifact rework handoff; this is the first implementation pass." }}
+- Aggregate review verdict: ${{ input.review.verdict | default: "No aggregate review verdict; this is the first implementation pass." }}
+- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved planning baseline." }}'''
 
-[steps.architecture_artifact_update.output]
+[steps.implementation.branches.architecture_artifact_update.output]
 template = "../../shared/templates/implementer-handoff-template.md"
 schema = "schemas/implementation-output.json"
 
-[steps.implementation_join]
-name = "Implementation join"
-kind = "worker"
+[steps.review]
+name = "Review"
+kind = "fanout"
+max_parallel = 7
+next = "${{ output.next }}"
 
-[steps.implementation_join.input]
-prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Join exactly the implementation outputs named by the approved plan contract planning_draft.selected_implementation_steps from input.<step_id> fields.
-Use the `implementation-plan` artifact from `planning_draft` as the approved plan contract when checking branch completeness and scope.
-Confirm each selected branch completed, verification evidence exists, and no branch widened scope.
-Do not choose, invent, or recompute reviewers; reviewers are fixed by planning_draft.selected_review_steps.
-If complete, return outcome ready_for_review with reviewer_handoffs keyed by each id in planning_draft.selected_review_steps.
-Set reviewer_handoffs.selected_review_steps to exactly planning_draft.selected_review_steps; every id in that array must have a matching reviewer_handoffs.<review_step_id> entry.
-Each reviewer_handoffs.<review_step_id> value must contain only the implementation evidence relevant to that reviewer. Keep the legacy reviewer_handoff field optional and concise when you need an aggregate human summary; downstream reviewer prompts use reviewer_handoffs instead.
-If incomplete, return outcome blocked with blocker.source_step_id = implementation_join.
-
-Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
-- Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
-- Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}'''
-
-[steps.implementation_join.output]
-template = "../../shared/templates/reviewer-handoff-template.md"
-schema = "schemas/implementation-join-output.json"
-
-[steps.implementation_join.next]
-match = "${{ output.outcome }}"
-
-[steps.implementation_join.next.cases]
-ready_for_review = "review_dispatch"
-
-[steps.review_dispatch]
-name = "Review dispatch"
-kind = "worker"
-next = "${{ output.verdict.selected_review_steps }}"
-
-[steps.review_dispatch.input]
-prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Dispatch reviewers for the current review pass.
-Use the `implementation-plan` artifact from `planning_draft` as the approved plan contract when deciding review fan-out and re-review scope.
-On the first review pass, copy planning_draft.selected_review_steps into verdict.selected_review_steps.
-On a re-review pass after review_join.needs_changes, select only review_join.verdict.failed_review_steps plus reviewers whose selected surfaces were materially changed by the latest implementation rerun evidence. Do not rerun reviewers that previously passed when their selected surfaces were not changed by the fix. Do not dispatch skipped_review_steps unless a newer approved plan or the current rework evidence makes their surface materially affected.
-Return outcome ready_for_review with verdict.selected_review_steps as the exact fan-out target; next is resolved from output.verdict.selected_review_steps.
+[steps.review.input]
+branches = "${{ input.implementation.review_branches }}"
+prompt = '''This is the review fanout owner phase. Aggregate only review branches selected for the current activation.
+Use the `implementation-plan` artifact from `planning_draft` and reviewer outputs as the approved review evidence.
+If every selected reviewer passed with no actionable current-scope must-fix or should-fix findings, return outcome passed and next done.
+If changes are required, return outcome needs_changes, next implementation, exact implementation_branches, one implementer_handoffs.<implementation_branch_id> per branch, and review_branches as the mandatory re-review baseline.
+The re-review baseline must include failed reviewers and reviewers whose owned surfaces must be touched by the prescribed rework. The next implementation owner may widen this baseline after actual changes but may not narrow it.
+If review cannot finish safely, return blocked with blocker.source_step_id = review and omit next.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Skipped review steps: ${{ input.planning_draft.skipped_review_steps | default: "No skipped reviewers recorded." }}
-- Review plan: ${{ input.planning_draft.review_plan }}
-- Previous review join verdict: ${{ input.review_join.verdict | default: "No prior review_join verdict." }}
-- Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
-- Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
-- Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
-- Frontend changed files: ${{ input.frontend_implementation.changed_files | default: "frontend_implementation changed files are not available in input context." }}
-- Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
-- Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
+- Current review branches: ${{ input.implementation.review_branches }}
+- Architect review: ${{ input.architect_review | default: "architect_review was not selected in this activation." }}
+- Backend review: ${{ input.backend_review | default: "backend_review was not selected in this activation." }}
+- Frontend review: ${{ input.frontend_review | default: "frontend_review was not selected in this activation." }}
+- Frontend taste review: ${{ input.frontend_taste_review | default: "frontend_taste_review was not selected in this activation." }}
+- Security review: ${{ input.security_review | default: "security_review was not selected in this activation." }}
+- Privacy review: ${{ input.privacy_review | default: "privacy_review was not selected in this activation." }}
+- QA review: ${{ input.qa_review | default: "qa_review was not selected in this activation." }}'''
 
-[steps.review_dispatch.output]
+[steps.review.output]
 template = "../../shared/templates/review-verdict-template.md"
-schema = "schemas/review-dispatch-output.json"
+schema = "schemas/review-fanout-output.json"
 
-[steps.architect_review]
+[steps.review.branches.architect_review]
 name = "Architect review"
-kind = "worker"
 agent = "architect"
-next = "review_join"
 
-[steps.architect_review.input]
+[steps.review.branches.architect_review.input]
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review implementation against approved architecture decision, ownership seams, dependency direction, compatibility surfaces, and artifact obligations.
@@ -538,8 +474,7 @@ Input context:
 - Human architecture approval: ${{ input.approve_architecture }}
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Architect reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.architect_review | default: "No architect-specific reviewer handoff was produced." }}
-- Review dispatch selection: ${{ input.review_dispatch.verdict }}
+- Architect reviewer handoff: ${{ input.implementation.reviewer_handoffs.architect_review | default: "No architect-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
 - Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
@@ -547,16 +482,14 @@ Input context:
 - Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
-[steps.architect_review.output]
+[steps.review.branches.architect_review.output]
 template = "../../shared/templates/review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
-[steps.backend_review]
+[steps.review.branches.backend_review]
 name = "Backend review"
-kind = "worker"
-next = "review_join"
 
-[steps.backend_review.input]
+[steps.review.branches.backend_review.input]
 role = "backend"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review backend correctness, contracts, data flow, validation, failure handling, permissions, rollout safety, observability, and tests for the slice selected by the approved plan contract.
@@ -566,8 +499,7 @@ Return passed, needs_changes with required_implementation_steps, or blocked with
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Backend reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.backend_review | default: "No backend-specific reviewer handoff was produced." }}
-- Review dispatch selection: ${{ input.review_dispatch.verdict }}
+- Backend reviewer handoff: ${{ input.implementation.reviewer_handoffs.backend_review | default: "No backend-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
 - Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
@@ -575,16 +507,14 @@ Input context:
 - Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
-[steps.backend_review.output]
+[steps.review.branches.backend_review.output]
 template = "../../shared/templates/review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
-[steps.frontend_review]
+[steps.review.branches.frontend_review]
 name = "Frontend review"
-kind = "worker"
-next = "review_join"
 
-[steps.frontend_review.input]
+[steps.review.branches.frontend_review.input]
 role = "frontend"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review frontend correctness, data flow, state handling, accessibility-relevant behavior, and tests for the slice selected by the approved plan contract.
@@ -597,8 +527,7 @@ Return passed, needs_changes with required_implementation_steps, or blocked with
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Frontend reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.frontend_review | default: "No frontend-specific reviewer handoff was produced." }}
-- Review dispatch selection: ${{ input.review_dispatch.verdict }}
+- Frontend reviewer handoff: ${{ input.implementation.reviewer_handoffs.frontend_review | default: "No frontend-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
 - Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
@@ -606,16 +535,14 @@ Input context:
 - Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
-[steps.frontend_review.output]
+[steps.review.branches.frontend_review.output]
 template = "../../shared/templates/review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
-[steps.frontend_taste_review]
+[steps.review.branches.frontend_taste_review]
 name = "Frontend taste review"
-kind = "worker"
-next = "review_join"
 
-[steps.frontend_taste_review.input]
+[steps.review.branches.frontend_taste_review.input]
 role = "frontend-taste"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review visual/product taste, copy fit, interaction polish, and user-facing coherence for frontend-relevant changes.
@@ -625,8 +552,7 @@ Return passed, needs_changes with required_implementation_steps, or blocked with
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Frontend taste reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.frontend_taste_review | default: "No frontend-taste-specific reviewer handoff was produced." }}
-- Review dispatch selection: ${{ input.review_dispatch.verdict }}
+- Frontend taste reviewer handoff: ${{ input.implementation.reviewer_handoffs.frontend_taste_review | default: "No frontend-taste-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
 - Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
@@ -634,16 +560,14 @@ Input context:
 - Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
-[steps.frontend_taste_review.output]
+[steps.review.branches.frontend_taste_review.output]
 template = "../../shared/templates/review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
-[steps.security_review]
+[steps.review.branches.security_review]
 name = "Security review"
-kind = "worker"
-next = "review_join"
 
-[steps.security_review.input]
+[steps.review.branches.security_review.input]
 role = "security"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review trust boundaries, injection surfaces, secret handling, permission assumptions, and unsafe automation paths for the slice selected by the approved plan contract.
@@ -653,8 +577,7 @@ Return passed, needs_changes with required_implementation_steps, or blocked with
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Security reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.security_review | default: "No security-specific reviewer handoff was produced." }}
-- Review dispatch selection: ${{ input.review_dispatch.verdict }}
+- Security reviewer handoff: ${{ input.implementation.reviewer_handoffs.security_review | default: "No security-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
 - Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
@@ -662,16 +585,14 @@ Input context:
 - Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
-[steps.security_review.output]
+[steps.review.branches.security_review.output]
 template = "../../shared/templates/review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
-[steps.privacy_review]
+[steps.review.branches.privacy_review]
 name = "Privacy review"
-kind = "worker"
-next = "review_join"
 
-[steps.privacy_review.input]
+[steps.review.branches.privacy_review.input]
 role = "privacy-data-safety"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review data minimization, sensitive content exposure, durable memory/logging risk, and user-context handling for the slice selected by the approved plan contract.
@@ -681,8 +602,7 @@ Return passed, needs_changes with required_implementation_steps, or blocked with
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Privacy reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.privacy_review | default: "No privacy-specific reviewer handoff was produced." }}
-- Review dispatch selection: ${{ input.review_dispatch.verdict }}
+- Privacy reviewer handoff: ${{ input.implementation.reviewer_handoffs.privacy_review | default: "No privacy-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
 - Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
@@ -690,16 +610,14 @@ Input context:
 - Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
-[steps.privacy_review.output]
+[steps.review.branches.privacy_review.output]
 template = "../../shared/templates/review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
-[steps.qa_review]
+[steps.review.branches.qa_review]
 name = "QA review"
-kind = "worker"
-next = "review_join"
 
-[steps.qa_review.input]
+[steps.review.branches.qa_review.input]
 role = "qa-reliability"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review verification depth, regression risk, edge cases, deterministic runtime behavior, and handoff quality for the slice selected by the approved plan contract.
@@ -709,8 +627,7 @@ Return passed, needs_changes with required_implementation_steps, or blocked with
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- QA reviewer handoff: ${{ input.implementation_join.reviewer_handoffs.qa_review | default: "No QA-specific reviewer handoff was produced." }}
-- Review dispatch selection: ${{ input.review_dispatch.verdict }}
+- QA reviewer handoff: ${{ input.implementation.reviewer_handoffs.qa_review | default: "No QA-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
 - Frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "frontend_implementation artifacts are not available in input context." }}
@@ -718,39 +635,9 @@ Input context:
 - Architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "architecture_artifact_update artifacts are not available in input context." }}
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
-[steps.qa_review.output]
+[steps.review.branches.qa_review.output]
 template = "../../shared/templates/review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
-
-[steps.review_join]
-name = "Review join"
-kind = "worker"
-next = "${{ output.next }}"
-
-[steps.review_join.input]
-prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Aggregate exactly the review outputs named by review_dispatch.verdict.selected_review_steps from input.<step_id> fields.
-This is a join/decision step, not a critique pass.
-If every selected reviewer passed and no selected review verdict contains actionable current-scope `must_fix` or `should_fix` findings, return outcome passed and next done.
-If any selected review verdict contains actionable current-scope `must_fix` or `should_fix` findings, return outcome needs_changes even if that reviewer mislabeled its top-level outcome as passed; route next to the owning required implementation step ids. Treat only explicit `can_delay` notes as allowed to pass.
-If changes are needed, return outcome needs_changes and next equal to the relevant implementation step ids from reviewer required_implementation_steps, not every implementation branch.
-If review cannot finish safely, return outcome blocked with blocker.source_step_id = review_join; do not set next for blocked outputs because the runner keeps the same step recoverable.
-
-Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Review dispatch selection: ${{ input.review_dispatch.verdict }}
-- Architect review verdict: ${{ input.architect_review.verdict | default: "architect_review was not selected or has not produced output." }}
-- Backend review verdict: ${{ input.backend_review.verdict | default: "backend_review was not selected or has not produced output." }}
-- Frontend review verdict: ${{ input.frontend_review.verdict | default: "frontend_review was not selected or has not produced output." }}
-- Frontend taste review verdict: ${{ input.frontend_taste_review.verdict | default: "frontend_taste_review was not selected or has not produced output." }}
-- Security review verdict: ${{ input.security_review.verdict | default: "security_review was not selected or has not produced output." }}
-- Privacy review verdict: ${{ input.privacy_review.verdict | default: "privacy_review was not selected or has not produced output." }}
-- QA review verdict: ${{ input.qa_review.verdict | default: "qa_review was not selected or has not produced output." }}'''
-
-[steps.review_join.output]
-template = "../../shared/templates/review-verdict-template.md"
-schema = "schemas/review-join-output.json"
 
 [steps.done]
 name = "Done"
@@ -759,8 +646,8 @@ kind = "done"
 [steps.done.input]
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Workflow completed.
-Project review_join.verdict as the final result; do not summarize artifacts/results globals.
+Project review.verdict as the final result; do not summarize artifacts/results globals.
 
 Input context:
-- Final review join verdict: ${{ input.review_join.verdict }}
-- Final next target: ${{ input.review_join.next }}'''
+- Final review verdict: ${{ input.review.verdict }}
+- Final next target: ${{ input.review.next }}'''

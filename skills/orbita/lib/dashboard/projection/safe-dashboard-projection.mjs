@@ -8,11 +8,11 @@ function pruneUndefined(value) {
 }
 
 function cursorProjection(cursor) {
-  const steps = Array.isArray(cursor) ? [...new Set(cursor)] : (typeof cursor === 'string' ? [cursor] : []);
+  const steps = typeof cursor === 'string' ? [cursor] : [];
   return {
-    kind: steps.length > 1 ? 'parallel' : 'single',
+    kind: 'single',
     steps,
-    display: steps.join(' + '),
+    display: steps.join(''),
   };
 }
 

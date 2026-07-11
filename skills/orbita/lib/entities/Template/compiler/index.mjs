@@ -85,7 +85,7 @@ function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlo
   return `${parts.filter(Boolean).join('\n\n')}\n`;
 }
 
-export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources, promptInput = { value: {}, keys: [] }, requiredReads = [], roleMetadataPaths = [], includeDiagnostics = false, userPrompt, userPromptInjected = false, followUp = false } = {}) {
+export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources, promptInput = { value: {}, keys: [] }, shard, requiredReads = [], roleMetadataPaths = [], includeDiagnostics = false, userPrompt, userPromptInjected = false, followUp = false } = {}) {
   const input = step.input ?? {};
   const inputTemplate = readInputTemplate({ input, resources });
   const outputTemplate = readOutputTemplate({ step, resources });
@@ -109,9 +109,9 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
     workflowInstructionBlock,
     requiredReads: requiredReadsSection,
     recoverableBlocker: recoverableBlockerBlock({ baton, stepId }),
-    inlinePrompt: interpolatePromptExpressions(normalizePromptText(input.prompt), { input: promptInput.value }),
+    inlinePrompt: interpolatePromptExpressions(normalizePromptText(input.prompt), { input: promptInput.value, ...(shard ? { shard } : {}) }),
     outputContract,
-    userPrompt: step.kind === 'worker' && userPromptInjected !== true ? userPrompt : undefined,
+    userPrompt: ['worker', 'fanout', 'shard'].includes(step.kind) && userPromptInjected !== true ? userPrompt : undefined,
     finalReminder,
   });
   const diagnostics = usesDefaultPrompt

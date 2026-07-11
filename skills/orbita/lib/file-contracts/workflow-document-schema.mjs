@@ -14,11 +14,6 @@ function hasMatchCasesShape(value) {
 
 function assertNoNestedMatchCasesTarget(target, fieldPath) {
   if (hasMatchCasesShape(target)) throw new WorkflowSchemaError(`nested match/cases transitions are not supported at ${fieldPath}`);
-
-  if (!Array.isArray(target)) return;
-  for (const [index, item] of target.entries()) {
-    if (hasMatchCasesShape(item)) throw new WorkflowSchemaError(`nested match/cases transitions are not supported at ${fieldPath}.${index}`);
-  }
 }
 
 function assertWorkflowNoNestedMatchCases(workflowDoc) {
@@ -27,31 +22,35 @@ function assertWorkflowNoNestedMatchCases(workflowDoc) {
 
   for (const [stepId, step] of Object.entries(steps)) {
     const next = step?.next;
-    const items = Array.isArray(next) ? next : [next];
-    for (const [index, item] of items.entries()) {
-      if (!hasMatchCasesShape(item) || !item.cases || typeof item.cases !== 'object' || Array.isArray(item.cases)) continue;
-      const basePath = Array.isArray(next) ? `steps.${stepId}.next.${index}` : `steps.${stepId}.next`;
-      for (const [caseKey, target] of Object.entries(item.cases)) {
-        assertNoNestedMatchCasesTarget(target, `${basePath}.cases.${caseKey}`);
-      }
+    if (!hasMatchCasesShape(next) || !next.cases || typeof next.cases !== 'object' || Array.isArray(next.cases)) continue;
+    for (const [caseKey, target] of Object.entries(next.cases)) {
+      assertNoNestedMatchCasesTarget(target, `steps.${stepId}.next.cases.${caseKey}`);
     }
   }
 }
 
 function assertUnambiguousAgentRuntimeHarnesses(workflowDoc) {
   for (const [stepId, step] of Object.entries(workflowDoc.steps)) {
-    const sourceWorker = step.kind === 'worker' ? step : (step.kind === 'matrix' ? step.worker : undefined);
-    const profiles = sourceWorker?.agent_runtime;
-    if (!profiles) continue;
-    const seen = new Map();
-    for (const harness of Object.keys(profiles)) {
-      const folded = harness.toLowerCase();
-      const previous = seen.get(folded);
-      if (previous !== undefined) {
-        const field = step.kind === 'matrix' ? 'matrix.worker.agent_runtime' : 'agent_runtime';
-        throw new WorkflowSchemaError(`step '${stepId}' ${field} harness keys '${previous}' and '${harness}' differ only by ASCII case`);
+    const sources = [];
+    if (step.kind === 'worker' || step.kind === 'fanout' || step.kind === 'shard') sources.push({ worker: step, field: 'agent_runtime' });
+    if (step.kind === 'shard') sources.push({ worker: step.worker, field: 'shard.worker.agent_runtime' });
+    if (step.kind === 'fanout') {
+      for (const [branchId, branch] of Object.entries(step.branches ?? {})) {
+        sources.push({ worker: branch, field: `fanout branch '${branchId}' agent_runtime` });
       }
-      seen.set(folded, harness);
+    }
+    for (const source of sources) {
+      const profiles = source.worker?.agent_runtime;
+      if (!profiles) continue;
+      const seen = new Map();
+      for (const harness of Object.keys(profiles)) {
+        const folded = harness.toLowerCase();
+        const previous = seen.get(folded);
+        if (previous !== undefined) {
+          throw new WorkflowSchemaError(`step '${stepId}' ${source.field} harness keys '${previous}' and '${harness}' differ only by ASCII case`);
+        }
+        seen.set(folded, harness);
+      }
     }
   }
 }

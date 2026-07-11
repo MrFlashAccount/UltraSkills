@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'bun:test';
-import { assertNoNestedMatchCasesTarget, isDynamicTransitionNext, isStaticParallelNext, normalizeTransitionNext } from '../../../runtime/transition-next.mjs';
-import { joinForParallelTargets } from '../../../runtime/transition-targets.mjs';
+import { assertNoNestedMatchCasesTarget, isDynamicTransitionNext, normalizeTransitionNext } from '../../../runtime/transition-next.mjs';
 import { Step, resolveTransition } from '../index.mjs';
 
 const workflow = {
@@ -15,10 +14,9 @@ const workflow = {
       kind: 'worker',
       input: {},
       output: { schema: 'producer.schema.json' },
-      next: { match: '${{ output.route }}', cases: { direct: 'done', split: ['branch_a', 'branch_b'] } },
+      next: { match: '${{ output.route }}', cases: { direct: 'done', split: 'branch_a' } },
     },
     dynamic: { name: 'Dynamic', kind: 'worker', input: {}, next: '${{ input.seed.next }}' },
-    mixed_parallel: { name: 'Mixed', kind: 'worker', next: ['branch_a', '${{ output.extra }}'] },
     approval: { name: 'Approval', kind: 'approval', next: 'done' },
     branch_a: { name: 'Branch A', kind: 'worker', next: 'join' },
     branch_b: { name: 'Branch B', kind: 'worker', next: 'join' },
@@ -33,15 +31,12 @@ const baton = {
   state: { seed: { next: 'done' }, artifacts: [], results: [] },
 };
 
-test('transition descriptors classify static, dynamic, match, and mixed parallel next values', () => {
+test('transition descriptors classify static, dynamic, and match next values', () => {
   assert.equal(normalizeTransitionNext('done').kind, 'static-target');
-  assert.equal(normalizeTransitionNext(['branch_a', 'branch_b']).kind, 'static-parallel');
   assert.equal(normalizeTransitionNext('${{ output.next }}').kind, 'dynamic-target');
   assert.equal(normalizeTransitionNext({ match: '${{ output.route }}', cases: { ok: 'done' } }).kind, 'match-cases');
-  assert.equal(normalizeTransitionNext(['branch_a', '${{ output.extra }}']).kind, 'parallel-items');
-
-  assert.equal(isStaticParallelNext(['branch_a', 'branch_b']), true);
   assert.equal(isDynamicTransitionNext({ match: '${{ output.route }}', cases: { ok: 'done' } }), true);
+  assert.throws(() => normalizeTransitionNext(['branch_a', 'branch_b']), /must be one scalar transition/);
 });
 
 test('resolveTransition resolves match/cases targets and validates worker output shape', () => {
@@ -49,7 +44,7 @@ test('resolveTransition resolves match/cases targets and validates worker output
     targetStepId: 'done',
   });
   assert.deepEqual(resolveTransition({ workflow, baton, stepId: 'producer', step: workflow.steps.producer, output: { outcome: 'ok', route: 'split' } }), {
-    targetStepIds: ['branch_a', 'branch_b'],
+    targetStepId: 'branch_a',
   });
 
   assert.throws(
@@ -76,20 +71,9 @@ test('Step.applyOutput updates cursor/status and stores step output by step id',
   assert.deepEqual(result.baton.state.attempts, { producer: 1 });
 });
 
-test('Step validates prepared parallel instruction requests from a stored cursor output', () => {
-  const step = new Step({ id: 'producer', step: workflow.steps.producer });
-  const preparedBaton = { ...baton, state: { ...baton.state, producer: { outcome: 'ok', route: 'split' } } };
-
-  assert.deepEqual(step.validateInstructionRequest({ workflow, baton: preparedBaton, runState: { requests: [{ stepId: 'branch_b' }] }, stepId: 'branch_b' }), {
-    ok: true,
-    stepId: 'branch_b',
-  });
-});
-
-test('parallel target helpers reject nested match/cases and expose the shared join step', () => {
+test('transition helpers reject nested match/cases', () => {
   assert.throws(
     () => assertNoNestedMatchCasesTarget({ match: '${{ output.route }}', cases: { ok: 'done' } }, 'next.cases.ok'),
     /nested match\/cases transitions are not supported at next\.cases\.ok/,
   );
-  assert.equal(joinForParallelTargets(workflow, ['branch_a', 'branch_b']), 'join');
 });

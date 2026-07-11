@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft host-adapter shape plus approved native sharding contract for implementation drift review.
+Host-adapter shape plus first-class shard and fanout runtime contracts.
 
 ## Boundary
 
@@ -73,8 +73,8 @@ and mutates only baton cursor/status through the existing lease, lock,
 validation, durable writer, history append, and run-index path. It
 must not roll back, prune, rewrite, or clean `baton.state`, accepted outputs,
 artifacts/results, worker bindings, prompt markers, attempts, or existing
-history. Terminal `done`/`blocked` runs and parallel/array cursors are
-unsupported in the first pointer-recovery slice. If the target has retained
+history. Terminal `done`/`blocked` runs are unsupported in the first
+pointer-recovery slice; array cursors are invalid persisted state. If the target has retained
 accepted output that a later `continue` may reuse, the command requires explicit
 `--acknowledge-retained-state`.
 
@@ -86,66 +86,54 @@ The default runs root is `~/.orbita/workflow-runs/v1`, or `$ORBITA_HOME/workflow
 
 When starting a new run, `next` may receive the raw startup user prompt with `--user-prompt` or `--user-prompt-file`. The runner stores it once as top-level `baton.user_prompt`. Existing runs are resumed as-is: later `next` calls do not overwrite `baton.user_prompt`, and `continue` preserves it while advancing the baton.
 
-At run initialization, the runner deterministically selects and persists `baton.user_prompt_target` from the static startup topology. A target is stable only when all possible startup paths that can be chosen before the first worker guarantee the same worker target; static fanout may pin one rendered worker branch, but ambiguous dynamic transitions, divergent `match/cases`, and terminal/no-worker `match/cases` branches fail loudly instead of accepting a prompt that might be unused.
+At run initialization, the runner deterministically selects and persists `baton.user_prompt_target` from the startup topology. A target is stable only when all possible startup paths that can be chosen before the first worker guarantee the same worker target; ambiguous dynamic transitions, divergent `match/cases`, and terminal/no-worker `match/cases` branches fail loudly instead of accepting a prompt that might be unused.
 
 The runner/interpreter injects the startup prompt only into the render context for the persisted `baton.user_prompt_target` until that selected worker's output is applied. Rendering validates that the saved target is still defined, is still a worker, and is present whenever the current response renders workers or reaches a terminal step; otherwise the runner fails rather than silently dropping `baton.user_prompt`. It persists `baton.user_prompt_injected: true` only when applying that selected worker output, so a crash or repeated `next` before completion keeps the prompt in that same worker's instructions, while resume or workflow-shape drift after completion cannot reinject it into a later worker. The template compiler only renders a `## User prompt` section for worker steps when that render-time value is passed; it does not decide eligibility itself. `workflow.start` may be a control step; approval/user-gate answers are separate host interactions, not startup `user_prompt`, and later workers do not receive this section unless the workflow explicitly carries derived context through normal state/output paths.
 
-## Native workflow sharding
+## Workflow shards
 
-Native sharding is an opt-in workflow-runner capability for large review runs. The approved model is owner-step sharding: the workflow declares one review-capable owner step, and the runner stores arbitrary shard count as baton/state-compatible records under that owner step. Shards are not dynamic workflow step ids, hidden subagent branches, private host sessions, or code-review v1 objects.
+A `kind = "shard"` step applies one nested worker template to a non-empty
+array of values in bounded parallel batches, then runs the genuine final worker
+represented by the shard step. It is a generic execution pattern, not a review,
+validation, coverage, or role-specific policy.
 
-Approved source manifest for this contract:
+The authoring contract is:
 
-- `ARCH-CONTRACT`: final structural contract from the `reasons-canvas-architecture` artifact emitted by `architecture_draft`, authoritative for entities, boundaries, invariants, non-goals, and artifact decision.
-- `REASONS`: immutable `reasons-canvas-architecture` artifact from the approved source manifest, authoritative for workstream conversion and drift review context.
-- `ARCH-ATTACK`: architecture attack verdict, authoritative for approval evidence: no findings; confirms `update_existing` document decision and the command-only lease/token exception.
-- `RUNTIME-DOC`: this file, `skills/orbita/lib/docs/workflow-runtime-adapter.md`, is the durable runtime contract and final drift-check target.
+- normal top-level `input` and `output` for the final worker;
+- `input.shards` as a non-empty literal JSON array or schema-covered
+  `input.*` expression resolving to a non-empty array;
+- one nested `worker` template for every shard request;
+- optional `max_parallel` from 1 through 16;
+- normal `next` after the final worker succeeds.
 
-Runner-owned shard records:
+Array elements may be any JSON values. The runner does not accept numeric
+shard-count shorthand and does not require author-provided ids. It creates
+synthetic request ids from parent step, activation, and array index.
 
-- `ShardPlan`: plan id, owner step id, status, and source evidence for a sharded review step.
-- `ShardDescriptor`: stable shard id, safe path/subsystem/sensitivity metadata, and source evidence scoped to the owner step.
-- `CoverageObligation`: obligation id, shard id, reviewer role, required/optional flag, privacy route, known-debt policy, and retry budget.
-- `ShardOutputRecord`: accepted output bound to one obligation id, exact shard id, reviewer role, verdict, artifacts, and findings.
-- `ShardJoinProof`: plan id, coverage status, covered/missing/blocked obligation ids, and the reason pass routing is allowed or blocked.
+The resolved array is snapshotted once under `baton.state.shards`. Partial
+completion and resume reuse the same values and order. Accepted output remains
+once under its synthetic request id; shard control state stores only index,
+request id, status, and `output_ref`.
 
-These records belong to the runner domain/runtime and baton schema. Persistence may serialize them, but host adapters and workers do not own their lifecycle. Workflow validation owns the author-facing sharding policy shape and rejects malformed policies before runtime dispatch. Runner use-cases own plan validation, dispatch eligibility, output acceptance, retry/block accounting, and join proof computation.
+Shard worker prompts may explicitly interpolate `${{ shard.value }}`,
+`${{ shard.index }}`, `${{ shard.total }}`, and nested value paths. These
+expressions use normal prompt interpolation rendering. The runner never appends
+the shard value, JSON context, or shard metadata to a worker prompt implicitly.
 
-The public shard host request remains a `run_worker` request for one shard-role obligation. It may expose only safe fields needed by the host:
+Public shard host requests expose only parent step id, activation, phase, index,
+total, and request id. They do not expose the raw value, hidden prompt,
+transcript, private paths, output paths, session/lifecycle internals, or
+standalone lease/token fields. Protocol tokens remain confined to generated
+command strings.
 
-- owner step id;
-- shard id;
-- reviewer role;
-- required flag;
-- bounded safe shard context and source evidence;
-- existing validating instruction/write-output command strings.
+The cursor remains the shard step during parallel batches and the final worker.
+After all shard outputs are accepted, the next response requests the shard step
+itself. Its accepted output follows normal output validation and `next`
+transition behavior. There is no separate dispatch step, aggregation section,
+or runtime-generated completion output.
 
-It must not expose hidden transcripts, private prompts outside rendered worker instructions, instruction storage paths, session registries, agent lifecycle internals, output paths, worker control-plane metadata, or standalone lease/token fields. Lease/token material is a command-only compatibility exception: protocol-required token material may appear inside existing runner-generated command strings, and nowhere else in shard DTO fields, shard records, artifact metadata, human-facing shard metadata, or join proof.
-
-Coverage and join invariants:
-
-- A required obligation is covered only after `write-output` accepts a schema-valid shard output for the exact obligation id, shard id, and reviewer role, or after the runner records an explicit blocker for that obligation.
-- A passing join is illegal while any required obligation is missing, failed, blocked, role-mismatched, retry-exhausted, unsafe, or unvalidated.
-- Optional obligations may add evidence, but cannot compensate for missing required coverage.
-- Worker prose, artifacts, hidden transcripts, private sessions, or host claims are not join proof by themselves.
-- Duplicate shard ids, duplicate obligation ids, unknown roles, missing required obligations, impossible privacy routes, unsafe public request fields, and malformed shard outputs block before pass routing.
-
-Retry and blocked policy is runner-owned. Retry budgets are recorded on obligations, retry exhaustion becomes an explicit blocked obligation, and unsliceable, unsafe, ambiguous, or privacy-incompatible shard plans become blocked workflow outputs instead of best-effort joins. Known-debt policy travels with each obligation but does not waive a finding unless the accepted shard output includes evidence that the current slice neither worsens nor depends on that debt.
-
-Compatibility rules:
-
-- Workflows without a sharding policy keep current sequential, approval, fixed parallel fanout/join, output validation, persistence, host request, and instruction-rendering behavior.
-- Existing fixed parallel fanout/join remains separate from native sharding; sharding adds owner-step coverage records, not a replacement for current array cursor behavior.
-- Code-review v1 integration is explicitly out of scope for this slice. The code-review orchestrator may later consume native runner sharding, but this runtime contract must not depend on that integration.
-
-Implementation and final drift review must compare this contract against:
-
-- workflow document schema and semantic validation for opt-in sharding policy;
-- baton schema and shard record helpers for plan, descriptor, obligation, output, retry/privacy, and join proof;
-- runtime transition/use-case behavior for plan validation, dispatch, accepted output matching, retry/block accounting, and join routing;
-- public host request DTO rendering and negative tests for private fields and standalone token fields;
-- compatibility tests for non-sharded sequential, approval, fixed parallel fanout/join, output validation, persistence, and existing host request behavior;
-- focused sharding tests for complete coverage pass, missing required output block, role mismatch block, duplicate shard id rejection, retry exhaustion block, unsafe privacy route block, optional obligation behavior, and public DTO privacy/token negative cases.
+Fanout remains the fixed named-branch pattern. Shard is the homogeneous
+value-partition pattern. Neither is a compatibility wrapper for the other.
 
 ## Host request response
 
@@ -159,7 +147,7 @@ agent = "architect"
 agent_runtime.codex = { model = "gpt-5.5", thinking_level = "high" }
 ```
 
-Matrix workflows put the same fields under `steps.<id>.worker`; generated matrix units and shards inherit their source worker/template configuration. `agent_runtime` is invalid without an explicit source `agent`, and each harness profile contains exactly `model` and `thinking_level`.
+Shard workflows put parallel-worker fields under `steps.<id>.worker`; generated shard requests inherit that source worker/template configuration. `agent_runtime` is invalid without an explicit source `agent`, and each harness profile contains exactly `model` and `thinking_level`.
 
 The current harness is private claim control-plane state in the runs index as `claimContext: { harness }`, next to the lease. Plain create stores no claim context. Create-with-claim and every successful claim replace it with the supplied harness; a successful claim without a harness clears it, while heartbeat preserves it. It is not exposed in the baton or public run list.
 
@@ -265,7 +253,7 @@ After every current request has accepted output, continue without `--output`:
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" continue --lease-token "$WORKFLOW_RUN_TOKEN" --run-id "$RUN_ID" --workflow "$WORKFLOW" --only-instructions
 ```
 
-For parallel branch requests, call `write-output` once per requested `stepId`; `continue` collects the accepted values from baton/state into the existing portable `{ "steps": { ... } }` envelope internally before applying workflow state.
+For fanout branch requests, call `write-output` once per requested synthetic `stepId`; `continue` collects accepted values from baton/state into the internal `{ "steps": { ... } }` envelope before applying the current fanout batch.
 
 ## History ownership
 

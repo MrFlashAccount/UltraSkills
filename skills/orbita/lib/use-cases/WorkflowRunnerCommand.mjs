@@ -220,6 +220,7 @@ export function createWorkflowRunnerCommand({
   }
 
   function resourcesWithValidatingWriter(resources, paths, { leaseToken } = {}) {
+    const requiresWorkerDebugSummary = (step) => step?.kind === 'worker' || step?.kind === 'fanout' || step?.kind === 'shard';
     const debugSummaryPathForStep = (stepId) => {
       assertSafeStepId(stepId);
       return join(paths.runDir, stepId, 'debug-summary.md');
@@ -229,13 +230,13 @@ export function createWorkflowRunnerCommand({
       validatingWriterCommandForStep: (stepId, step) => writeOutputCommandForStep(paths.runId, stepId, {
         runsRoot: paths.runsRoot,
         leaseToken,
-        debugSummaryFile: step?.kind === 'worker' ? debugSummaryPathForStep(stepId) : undefined,
+        debugSummaryFile: requiresWorkerDebugSummary(step) ? debugSummaryPathForStep(stepId) : undefined,
       }),
       artifactOutputDirForStep: (stepId) => {
         assertSafeStepId(stepId);
         return join(paths.runDir, stepId, 'artifacts');
       },
-      debugSummaryPathForStep: (stepId, step) => step?.kind === 'worker' ? debugSummaryPathForStep(stepId) : undefined,
+      debugSummaryPathForStep: (stepId, step) => requiresWorkerDebugSummary(step) ? debugSummaryPathForStep(stepId) : undefined,
     };
   }
 
@@ -308,11 +309,11 @@ export function createWorkflowRunnerCommand({
   }
 
   function workflowStepIdForRequest(request) {
-    return request.ownerStepId ?? stepIdForRequest(request);
+    return request.parentStepId ?? request.ownerStepId ?? stepIdForRequest(request);
   }
 
-  function isSyntheticOwnerRequest(request) {
-    return typeof request.ownerStepId === 'string' && request.ownerStepId.length > 0;
+  function isSyntheticChildRequest(request) {
+    return [request.parentStepId, request.ownerStepId].some((value) => typeof value === 'string' && value.length > 0);
   }
 
   function acceptedOutputForRequest(baton, request) {
@@ -350,14 +351,14 @@ export function createWorkflowRunnerCommand({
     }
   }
 
-  function outputForAcceptedState(currentBaton, requests, { isPreparedParallelContinuation }) {
+  function outputForAcceptedState(currentBaton, requests, { hasSyntheticRequests }) {
     const parsedOutputRefs = parsedOutputRefsForAcceptedState(currentBaton, requests);
     assertNamedOutputRefsMatchRequests(parsedOutputRefs, requests);
     const { valuesByRequestId, missing } = acceptedOutputsForRequests(currentBaton, requests);
     if (missing.length > 0) {
       throw new Error(`missing accepted host output for workflow step ${missing.join(', ')}; run workflow-runner write-output first`);
     }
-    if (requests.length === 1 && !isPreparedParallelContinuation) {
+    if (requests.length === 1 && !hasSyntheticRequests) {
       const request = requests[0];
       return { outputValue: valuesByRequestId.get(request.id), historyOutput: `accepted:${stepIdForRequest(request)}`, currentBaton };
     }
@@ -375,7 +376,7 @@ export function createWorkflowRunnerCommand({
   function recoverableWorkerBlockersForAcceptedState({ workflow, requests, valuesByRequestId, runsRoot }) {
     const blockers = {};
     for (const request of requests) {
-      if (isSyntheticOwnerRequest(request)) continue;
+      if (isSyntheticChildRequest(request)) continue;
       const stepId = workflowStepIdForRequest(request);
       const step = workflow.steps?.[stepId];
       const output = valuesByRequestId.get(request.id);
@@ -411,7 +412,7 @@ export function createWorkflowRunnerCommand({
     return { ...value, ...context };
   }
 
-  function outputOrRecoveryForAcceptedState(currentBaton, requests, { isPreparedParallelContinuation, workflow, runsRoot, runtime, response, currentHistoryText }) {
+  function outputOrRecoveryForAcceptedState(currentBaton, requests, { hasSyntheticRequests, workflow, runsRoot, runtime, response, currentHistoryText }) {
     const context = { runtime, response, currentHistoryText };
     const parsedOutputRefs = parsedOutputRefsForAcceptedState(currentBaton, requests);
     assertNamedOutputRefsMatchRequests(parsedOutputRefs, requests);
@@ -452,7 +453,7 @@ export function createWorkflowRunnerCommand({
     }
 
     return withContinuationContext(
-      outputForAcceptedState(currentBaton, requests, { isPreparedParallelContinuation }),
+      outputForAcceptedState(currentBaton, requests, { hasSyntheticRequests }),
       context,
     );
   }
@@ -507,10 +508,10 @@ export function createWorkflowRunnerCommand({
     if (response.status !== 'needs_host_actions') throw new Error(`current runner response is '${response.status}', not needs_host_actions`);
 
     const requests = response.requests ?? [];
-    const isPreparedParallelContinuation = Array.isArray(current.baton?.cursor) || requests.some((request) => stepIdForRequest(request) !== current.baton?.cursor);
+    const hasSyntheticRequests = requests.some((request) => stepIdForRequest(request) !== current.baton?.cursor);
     return {
       ...outputOrRecoveryForAcceptedState(current.baton, requests, {
-        isPreparedParallelContinuation,
+        hasSyntheticRequests,
         workflow: runtime.workflow,
         runsRoot: paths.runsRoot,
         runtime,
@@ -553,7 +554,8 @@ export function createWorkflowRunnerCommand({
 
   function cursorForRecoverableWorkerBlockers(recoverableWorkerBlockers) {
     const stepIds = Object.keys(recoverableWorkerBlockers);
-    return stepIds.length === 1 ? stepIds[0] : stepIds;
+    if (stepIds.length !== 1) throw new Error('recoverable worker blocker state must have exactly one owner workflow step');
+    return stepIds[0];
   }
 
   function batonWithRecoverableWorkerBlockers(baton, recoverableWorkerBlockers, acceptedOutputs = {}) {
@@ -807,7 +809,11 @@ export function createWorkflowRunnerCommand({
     const requestStepId = stepIdForRequest(request);
     const workflowStepId = workflowStepIdForRequest(request);
     const workflowStep = workflow.steps?.[workflowStepId];
-    const step = request.matrix ? { kind: 'worker', output: workflowStep?.worker?.output } : workflowStep;
+    const step = Number.isInteger(request.shard?.index)
+      ? { kind: 'worker', output: workflowStep?.worker?.output }
+      : request.fanout?.branch_id
+        ? { kind: 'worker', output: workflowStep?.branches?.[request.fanout.branch_id]?.output }
+        : workflowStep;
     const artifactOutputDir = typeof resources?.artifactOutputDirForStep === 'function' ? resources.artifactOutputDirForStep(requestStepId) : undefined;
     return validateRunnerAcceptedOutput({
       requestStepId,
@@ -839,9 +845,10 @@ export function createWorkflowRunnerCommand({
   }
 
   function durableAcceptedOutput({ workflow, request, step, output, runsRoot }) {
+    if (request.fanout?.branch_id) return output;
     const stepId = workflowStepIdForRequest(request);
-    const recoverableStep = request.matrix ? { kind: 'worker' } : step;
-    const blockerStepId = request.matrix ? stepIdForRequest(request) : stepId;
+    const recoverableStep = Number.isInteger(request.shard?.index) ? { kind: 'worker' } : step;
+    const blockerStepId = Number.isInteger(request.shard?.index) ? stepIdForRequest(request) : stepId;
     if (isRecoverableWorkerBlockerOutput({ workflow, stepId: blockerStepId, step: recoverableStep, output })) {
       const blocker = publicRecoverableBlockerDetails(output.blocker, { stepId: blockerStepId, runsRoot });
       if (step?.kind === 'approval') return { approval: 'blocked', blocker };
@@ -919,7 +926,7 @@ export function createWorkflowRunnerCommand({
       if (request.action !== 'run_worker') throw new Error(`workflow step '${stepId}' is not a run_worker request`);
       const acceptedStepId = stepIdForRequest(request);
       const workflowStepId = workflowStepIdForRequest(request);
-      const bindingKey = request.ownerStepId ? acceptedStepId : workerBindingKeyForStep(workflowStepId, runtime.workflow.steps?.[workflowStepId]);
+      const bindingKey = request.parentStepId || request.ownerStepId ? acceptedStepId : workerBindingKeyForStep(workflowStepId, runtime.workflow.steps?.[workflowStepId]);
       nextBaton = batonWithWorkerBinding(nextBaton, bindingKey, agentId);
       entries.push({ acceptedStepId, baton: nextBaton, requests: response.requests ?? [] });
     }
@@ -977,7 +984,13 @@ export function createWorkflowRunnerCommand({
       const acceptedStepId = stepIdForRequest(request);
       const workflowStepId = workflowStepIdForRequest(request);
       const step = runtime.workflow.steps?.[workflowStepId];
-      const effectiveRequestStep = request.matrix ? { kind: 'worker', output: step?.worker?.output } : step;
+      const effectiveRequestStep = Number.isInteger(request.shard?.index)
+        ? { kind: 'worker', output: step?.worker?.output }
+        : request.fanout?.branch_id
+          ? { kind: 'worker', output: step?.branches?.[request.fanout.branch_id]?.output }
+          : ['fanout', 'shard'].includes(step?.kind)
+            ? { kind: 'worker', output: step.output }
+            : step;
       const accepted = validateAcceptedOutputForRequest({
         workflow: runtime.workflow,
         resources: validationResources,
