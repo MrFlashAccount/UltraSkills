@@ -276,12 +276,12 @@ function schemaRequiresPath(schema, pathSegments) {
   if (pathSegments.length === 0) return true;
   const [segment, ...rest] = pathSegments;
 
+  const propertySchema = schema.properties && typeof schema.properties === 'object'
+    ? schema.properties[segment]
+    : undefined;
   const directRequired = Array.isArray(schema.required)
     && schema.required.includes(segment)
-    && schema.properties
-    && typeof schema.properties === 'object'
-    && Object.hasOwn(schema.properties, segment)
-    && (rest.length === 0 || schemaRequiresPath(schema.properties[segment], rest));
+    && (rest.length === 0 || (propertySchema && schemaRequiresPath(propertySchema, rest)));
 
   const allOfRequired = Array.isArray(schema.allOf) && schema.allOf.some((item) => schemaRequiresPath(item, pathSegments));
   const oneOfRequired = Array.isArray(schema.oneOf) && schema.oneOf.length > 0 && schema.oneOf.every((item) => schemaRequiresPath(item, pathSegments));
