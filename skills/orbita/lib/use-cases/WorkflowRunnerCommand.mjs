@@ -220,7 +220,7 @@ export function createWorkflowRunnerCommand({
   }
 
   function resourcesWithValidatingWriter(resources, paths, { leaseToken } = {}) {
-    const requiresWorkerDebugSummary = (step) => step?.kind === 'worker' || step?.kind === 'fanout';
+    const requiresWorkerDebugSummary = (step) => step?.kind === 'worker' || step?.kind === 'fanout' || step?.kind === 'shard';
     const debugSummaryPathForStep = (stepId) => {
       assertSafeStepId(stepId);
       return join(paths.runDir, stepId, 'debug-summary.md');
@@ -309,11 +309,11 @@ export function createWorkflowRunnerCommand({
   }
 
   function workflowStepIdForRequest(request) {
-    return request.ownerStepId ?? stepIdForRequest(request);
+    return request.parentStepId ?? request.ownerStepId ?? stepIdForRequest(request);
   }
 
-  function isSyntheticOwnerRequest(request) {
-    return typeof request.ownerStepId === 'string' && request.ownerStepId.length > 0;
+  function isSyntheticChildRequest(request) {
+    return [request.parentStepId, request.ownerStepId].some((value) => typeof value === 'string' && value.length > 0);
   }
 
   function acceptedOutputForRequest(baton, request) {
@@ -376,7 +376,7 @@ export function createWorkflowRunnerCommand({
   function recoverableWorkerBlockersForAcceptedState({ workflow, requests, valuesByRequestId, runsRoot }) {
     const blockers = {};
     for (const request of requests) {
-      if (isSyntheticOwnerRequest(request)) continue;
+      if (isSyntheticChildRequest(request)) continue;
       const stepId = workflowStepIdForRequest(request);
       const step = workflow.steps?.[stepId];
       const output = valuesByRequestId.get(request.id);
@@ -809,7 +809,7 @@ export function createWorkflowRunnerCommand({
     const requestStepId = stepIdForRequest(request);
     const workflowStepId = workflowStepIdForRequest(request);
     const workflowStep = workflow.steps?.[workflowStepId];
-    const step = request.matrix
+    const step = Number.isInteger(request.shard?.index)
       ? { kind: 'worker', output: workflowStep?.worker?.output }
       : request.fanout?.branch_id
         ? { kind: 'worker', output: workflowStep?.branches?.[request.fanout.branch_id]?.output }
@@ -847,8 +847,8 @@ export function createWorkflowRunnerCommand({
   function durableAcceptedOutput({ workflow, request, step, output, runsRoot }) {
     if (request.fanout?.branch_id) return output;
     const stepId = workflowStepIdForRequest(request);
-    const recoverableStep = request.matrix ? { kind: 'worker' } : step;
-    const blockerStepId = request.matrix ? stepIdForRequest(request) : stepId;
+    const recoverableStep = Number.isInteger(request.shard?.index) ? { kind: 'worker' } : step;
+    const blockerStepId = Number.isInteger(request.shard?.index) ? stepIdForRequest(request) : stepId;
     if (isRecoverableWorkerBlockerOutput({ workflow, stepId: blockerStepId, step: recoverableStep, output })) {
       const blocker = publicRecoverableBlockerDetails(output.blocker, { stepId: blockerStepId, runsRoot });
       if (step?.kind === 'approval') return { approval: 'blocked', blocker };
@@ -926,7 +926,7 @@ export function createWorkflowRunnerCommand({
       if (request.action !== 'run_worker') throw new Error(`workflow step '${stepId}' is not a run_worker request`);
       const acceptedStepId = stepIdForRequest(request);
       const workflowStepId = workflowStepIdForRequest(request);
-      const bindingKey = request.ownerStepId ? acceptedStepId : workerBindingKeyForStep(workflowStepId, runtime.workflow.steps?.[workflowStepId]);
+      const bindingKey = request.parentStepId || request.ownerStepId ? acceptedStepId : workerBindingKeyForStep(workflowStepId, runtime.workflow.steps?.[workflowStepId]);
       nextBaton = batonWithWorkerBinding(nextBaton, bindingKey, agentId);
       entries.push({ acceptedStepId, baton: nextBaton, requests: response.requests ?? [] });
     }
@@ -984,11 +984,11 @@ export function createWorkflowRunnerCommand({
       const acceptedStepId = stepIdForRequest(request);
       const workflowStepId = workflowStepIdForRequest(request);
       const step = runtime.workflow.steps?.[workflowStepId];
-      const effectiveRequestStep = request.matrix
+      const effectiveRequestStep = Number.isInteger(request.shard?.index)
         ? { kind: 'worker', output: step?.worker?.output }
         : request.fanout?.branch_id
           ? { kind: 'worker', output: step?.branches?.[request.fanout.branch_id]?.output }
-          : step?.kind === 'fanout'
+          : ['fanout', 'shard'].includes(step?.kind)
             ? { kind: 'worker', output: step.output }
             : step;
       const accepted = validateAcceptedOutputForRequest({

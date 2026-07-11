@@ -47,7 +47,7 @@ function validateOutputKind(step, output, stepId) {
     return;
   }
 
-  if (step.kind === 'worker' || step.kind === 'fanout') {
+  if (step.kind === 'worker' || step.kind === 'fanout' || step.kind === 'shard') {
     invariant(!('approval' in output), `worker cursor '${stepId}' must use outcome, not approval`);
     invariant(typeof output.outcome === 'string', `worker cursor '${stepId}' must include string outcome`);
   }
@@ -157,7 +157,7 @@ export class Step {
 
     const requestStepId = request.stepId ?? request.id;
     invariant(typeof requestStepId === 'string' && requestStepId.length > 0, staleCurrentRequestMessage(stepId, requests));
-    const workflowStepId = request.ownerStepId ?? requestStepId;
+    const workflowStepId = request.parentStepId ?? request.ownerStepId ?? requestStepId;
     invariant(workflowDoc.steps?.[workflowStepId], staleCurrentRequestMessage(stepId, requests));
 
     if (workflowStepId === this.id) return { ok: true, stepId: requestStepId };
@@ -173,7 +173,7 @@ export class Step {
     return { workflow: workflowData(workflow), baton, stepId: this.id, step: this.toJSON(), input: this.resolveInputs(baton), userPrompt };
   }
 
-  applyOutput({ baton, output, workflow, attempts, storeStepOutput = ['worker', 'fanout', 'approval'].includes(this.data.kind) } = {}) {
+  applyOutput({ baton, output, workflow, attempts, storeStepOutput = ['worker', 'fanout', 'shard', 'approval'].includes(this.data.kind) } = {}) {
     const wf = workflowData(workflow);
     const resolvedTransition = this.resolveConcreteTargets(baton, wf, output);
     const { transition, loopProgress } = applyLoopPolicyTransition({

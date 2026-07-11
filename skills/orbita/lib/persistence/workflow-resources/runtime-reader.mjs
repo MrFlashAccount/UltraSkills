@@ -74,9 +74,6 @@ function roleNames(workflow) {
     for (const branch of Object.values(step?.branches ?? {})) {
       if (branch?.input?.role) roles.add(branch.input.role);
     }
-    for (const obligation of step?.sharding?.obligations ?? []) {
-      if (typeof obligation?.reviewer_role === 'string' && obligation.reviewer_role.length > 0) roles.add(obligation.reviewer_role);
-    }
   }
   return roles;
 }

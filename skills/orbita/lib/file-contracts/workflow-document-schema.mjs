@@ -32,8 +32,8 @@ function assertWorkflowNoNestedMatchCases(workflowDoc) {
 function assertUnambiguousAgentRuntimeHarnesses(workflowDoc) {
   for (const [stepId, step] of Object.entries(workflowDoc.steps)) {
     const sources = [];
-    if (step.kind === 'worker' || step.kind === 'fanout') sources.push({ worker: step, field: 'agent_runtime' });
-    if (step.kind === 'matrix') sources.push({ worker: step.worker, field: 'matrix.worker.agent_runtime' });
+    if (step.kind === 'worker' || step.kind === 'fanout' || step.kind === 'shard') sources.push({ worker: step, field: 'agent_runtime' });
+    if (step.kind === 'shard') sources.push({ worker: step.worker, field: 'shard.worker.agent_runtime' });
     if (step.kind === 'fanout') {
       for (const [branchId, branch] of Object.entries(step.branches ?? {})) {
         sources.push({ worker: branch, field: `fanout branch '${branchId}' agent_runtime` });

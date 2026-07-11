@@ -1,10 +1,8 @@
 /** Applies host/worker output through Step/Baton-owned runtime behavior. */
 import { assertLoadedWorkflowAndBaton } from '../guards/workflow.mjs';
 import { applyNextTransition } from '../transition/next.mjs';
-import { isShardedStep } from '../sharding.mjs';
-import { isMatrixStep } from '../matrix.mjs';
-import { applyShardedStepOutputs } from '../sharded-step.mjs';
-import { applyMatrixStepOutputs } from '../matrix-step.mjs';
+import { isShardStep } from '../shard.mjs';
+import { applyShardStepOutput } from '../shard-step.mjs';
 import { assertOutputSchemaIfDeclared, readWorkerOutputForStep } from '../output/worker-output.mjs';
 import { isFanoutStep } from '../fanout.mjs';
 import { applyFanoutStepOutput } from '../fanout-step.mjs';
@@ -23,23 +21,14 @@ export function applyWorkflowOutput({ workflowDoc, batonDoc, outputContent, outp
   const parsed = parseCandidateOutput({ outputContent, outputValue });
   const candidateOutput = parsed.value;
   const stepId = baton.cursor;
-  if (isShardedStep(cursorStep)) {
-    return applyShardedStepOutputs({
+  if (isShardStep(cursorStep)) {
+    return applyShardStepOutput({
       workflow,
       baton,
-      ownerStepId: stepId,
-      ownerStep: cursorStep,
+      parentStepId: stepId,
+      parentStep: cursorStep,
       allOutput: candidateOutput,
-      resources,
-    });
-  }
-  if (isMatrixStep(cursorStep)) {
-    return applyMatrixStepOutputs({
-      workflow,
-      baton,
-      ownerStepId: stepId,
-      ownerStep: cursorStep,
-      allOutput: candidateOutput,
+      outputParseError: parsed.error,
       resources,
     });
   }

@@ -24,7 +24,7 @@ function baton(cursor = 'worker') {
 }
 
 function hostFor({ workflow, step, claimContext = options.claimContext }) {
-  return toHostResponse({ steps: [step], baton: baton(step.ownerStepId ?? step.id) }, {
+  return toHostResponse({ steps: [step], baton: baton(step.parentStepId ?? step.ownerStepId ?? step.id) }, {
     ...options,
     workflow,
     claimContext,
@@ -94,43 +94,24 @@ test('agent runtime selects a case-insensitively matched claimed harness only fo
   );
 });
 
-test('agent runtime uses original shard owner configuration and ignores synthetic agent ids', () => {
-  const owner = workerSource();
-  const workflow = { steps: { review: owner } };
-  const synthetic = {
-    id: 'review__shard__security',
-    ownerStepId: 'review',
-    action: 'run_worker',
-    step: { ...owner, agent: 'review__shard__security' },
-    shard: { obligation_id: 'review:security' },
-  };
-  assert.deepEqual(hostFor({ workflow, step: synthetic }).requests[0].agentRuntime, {
-    model: 'gpt-5.5',
-    thinkingLevel: 'high',
-  });
-
-  const noSourceAgent = { steps: { review: workerSource({ agent: undefined }) } };
-  assert.equal(Object.hasOwn(hostFor({ workflow: noSourceAgent, step: synthetic }).requests[0], 'agentRuntime'), false);
-});
-
-test('agent runtime uses original matrix worker template configuration', () => {
+test('agent runtime uses the original shard worker template configuration', () => {
   const template = workerSource();
   delete template.kind;
   delete template.next;
-  const workflow = { steps: { fanout: { name: 'Fanout', kind: 'matrix', worker: template } } };
+  const workflow = { steps: { work: { name: 'Work', kind: 'shard', worker: template } } };
   const synthetic = {
-    id: 'fanout__matrix__unit_a',
-    ownerStepId: 'fanout',
+    id: 'work__shard__1__0',
+    parentStepId: 'work',
     action: 'run_worker',
-    step: { ...template, agent: 'fanout__matrix__unit_a' },
-    matrix: { unit_id: 'unit_a' },
+    step: { ...template, agent: 'work__shard__1__0' },
+    shard: { parent_step_id: 'work', activation: 1, phase: 'shards', index: 0, total: 1, request_id: 'work__shard__1__0' },
   };
   assert.deepEqual(hostFor({ workflow, step: synthetic }).requests[0].agentRuntime, {
     model: 'gpt-5.5',
     thinkingLevel: 'high',
   });
 
-  delete workflow.steps.fanout.worker.agent;
+  delete workflow.steps.work.worker.agent;
   assert.equal(Object.hasOwn(hostFor({ workflow, step: synthetic }).requests[0], 'agentRuntime'), false);
 });
 

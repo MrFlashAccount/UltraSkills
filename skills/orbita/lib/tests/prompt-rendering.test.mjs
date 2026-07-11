@@ -442,7 +442,7 @@ test('prompt renderer: keeps prompt interpolation scoped to prompt input paths',
 
   assert.throws(
     () => renderFixture({ label: 'render-prompt-interpolation-output-root', stepId: 'draft_step', step }),
-    /workflow prompt render failed: prompt expression '\$\{\{ output\.outcome \| default: "ready" \}\}' is invalid: root 'input' is required in input\.prompt interpolation/,
+    /workflow expression.*root 'output' is not allowed; use input or shard/,
   );
 });
 

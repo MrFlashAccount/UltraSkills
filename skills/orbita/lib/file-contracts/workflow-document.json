@@ -15,7 +15,7 @@
           "$ref": "#/$defs/approvalStep"
         },
         {
-          "$ref": "#/$defs/matrixStep"
+          "$ref": "#/$defs/shardStep"
         },
         {
           "$ref": "#/$defs/fanoutStep"
@@ -55,8 +55,53 @@
         "output": {
           "$ref": "#/$defs/output"
         },
-        "sharding": {
-          "$ref": "#/$defs/shardingPolicy"
+        "next": {
+          "$ref": "#/$defs/next"
+        }
+      },
+      "additionalProperties": false,
+      "dependentRequired": {
+        "agent_runtime": ["agent"]
+      }
+    },
+    "shardStep": {
+      "type": "object",
+      "required": [
+        "name",
+        "kind",
+        "input",
+        "output",
+        "worker",
+        "next"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "const": "shard"
+        },
+        "agent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent_runtime": {
+          "$ref": "#/$defs/agentRuntimeByHarness"
+        },
+        "input": {
+          "$ref": "#/$defs/shardInput"
+        },
+        "output": {
+          "$ref": "#/$defs/output"
+        },
+        "max_parallel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "worker": {
+          "$ref": "#/$defs/shardWorkerTemplate"
         },
         "next": {
           "$ref": "#/$defs/next"
@@ -67,99 +112,40 @@
         "agent_runtime": ["agent"]
       }
     },
-    "matrixStep": {
+    "shardInput": {
       "type": "object",
       "required": [
-        "name",
-        "kind",
-        "input",
-        "worker",
-        "next"
+        "shards"
       ],
       "properties": {
-        "name": {
+        "template": {
           "type": "string",
           "minLength": 1
         },
-        "kind": {
-          "const": "matrix"
+        "prompt": {
+          "$ref": "#/$defs/prompt"
         },
-        "input": {
-          "$ref": "#/$defs/matrixInput"
-        },
-        "max_parallel": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 16
-        },
-        "max_attempts": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 10
-        },
-        "worker": {
-          "$ref": "#/$defs/matrixWorkerTemplate"
-        },
-        "next": {
-          "$ref": "#/$defs/next"
-        }
-      },
-      "additionalProperties": false
-    },
-    "matrixInput": {
-      "type": "object",
-      "required": [
-        "items"
-      ],
-      "properties": {
-        "items": {
-          "$ref": "#/$defs/matrixItems"
-        },
-        "id_field": {
+        "role": {
           "type": "string",
-          "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          "minLength": 1
         },
-        "context_fields": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
-          }
+        "shards": {
+          "$ref": "#/$defs/shardValues"
         }
       },
       "additionalProperties": false
     },
-    "matrixItems": {
+    "shardValues": {
       "oneOf": [
         {
           "type": "array",
           "minItems": 1,
-          "items": {
-            "$ref": "#/$defs/staticMatrixUnit"
-          }
+          "items": true
         },
         {
           "$ref": "#/$defs/inputArrayExpression"
         }
       ]
-    },
-    "staticMatrixUnit": {
-      "type": "object",
-      "required": [
-        "id"
-      ],
-      "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]+$"
-        },
-        "context": {
-          "type": "object",
-          "additionalProperties": true
-        }
-      },
-      "additionalProperties": false
     },
     "inputArrayExpression": {
       "description": "A path-only input expression that resolves to a non-empty array when the control step activation starts.",
@@ -305,7 +291,7 @@
         "agent_runtime": ["agent"]
       }
     },
-    "matrixWorkerTemplate": {
+    "shardWorkerTemplate": {
       "type": "object",
       "required": [
         "input",
@@ -484,72 +470,6 @@
         "schema": {
           "type": "string",
           "minLength": 1
-        }
-      },
-      "additionalProperties": false
-    },
-    "shardingPolicy": {
-      "type": "object",
-      "required": [
-        "enabled",
-        "mode",
-        "obligations"
-      ],
-      "properties": {
-        "enabled": {
-          "const": true
-        },
-        "mode": {
-          "const": "review_shards"
-        },
-        "privacy_route": {
-          "const": "safe_context"
-        },
-        "max_attempts": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "obligations": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "$ref": "#/$defs/shardObligation"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "shardObligation": {
-      "type": "object",
-      "required": [
-        "shard_id",
-        "reviewer_role"
-      ],
-      "properties": {
-        "shard_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]+$"
-        },
-        "reviewer_role": {
-          "type": "string",
-          "minLength": 1
-        },
-        "required": {
-          "type": "boolean"
-        },
-        "privacy_route": {
-          "const": "safe_context"
-        },
-        "max_attempts": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "source_evidence": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
         }
       },
       "additionalProperties": false

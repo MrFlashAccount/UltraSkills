@@ -11,8 +11,7 @@ import { RESERVED_STATE_KEYS, DANGEROUS_OBJECT_KEYS, isDangerousObjectKey, isRes
 import { statusForStep } from '../../runtime/step-status.mjs';
 import { assertLoopPolicies } from '../../runtime/loop-policies.mjs';
 import { assertTransitionDescriptorTargets, normalizeTransitionNext } from '../../runtime/transition-next.mjs';
-import { assertWorkflowShardingPolicies, isShardedStep } from '../../runtime/sharding.mjs';
-import { isMatrixStep, normalizeMatrixInput } from '../../runtime/matrix.mjs';
+import { isShardStep } from '../../runtime/shard.mjs';
 import { fanoutBranchIdIssues, isFanoutStep } from '../../runtime/fanout.mjs';
 import { compileWorkflowOutputSchema } from './schema-ref-validation.mjs';
 
@@ -41,7 +40,6 @@ function assertWorkflowRootTargets(workflow) {
   const doneStep = workflow.steps[workflow.done];
   if (!doneStep) fail(`workflow done target not found: ${workflow.done}`);
   if (doneStep.kind !== 'done') fail(`workflow done target '${workflow.done}' must be a done step`);
-
 }
 
 function assertWorkflowIdentity(workflow) {
@@ -75,7 +73,7 @@ function assertWorkflowStepRoles(workflow, allowedRoleNames) {
   const roleCatalog = normalizeAllowedRoleCatalog(allowedRoleNames);
   const allowedRoles = new Set(roleCatalog.names);
   for (const [stepId, step] of Object.entries(workflow.steps)) {
-    if (step.kind !== 'worker' && !isFanoutStep(step)) continue;
+    if (step.kind !== 'worker' && !isFanoutStep(step) && !isShardStep(step)) continue;
     const role = step.input?.role;
     if (!role) continue;
     try {
@@ -107,18 +105,18 @@ function assertWorkflowStepRoles(workflow, allowedRoleNames) {
     }
   }
   for (const [stepId, step] of Object.entries(workflow.steps)) {
-    if (!isMatrixStep(step)) continue;
+    if (!isShardStep(step)) continue;
     const role = step.worker?.input?.role;
     if (!role) continue;
     try {
       assertRoleDirectoryName(role);
     } catch (error) {
-      if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' matrix.worker ${error.message.replace(/^workflow role validation failed: /, '')}`);
+      if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' shard.worker ${error.message.replace(/^workflow role validation failed: /, '')}`);
       throw error;
     }
     if (roleCatalog.loaded && !allowedRoles.has(role)) {
       const expected = [...allowedRoles].join(', ');
-      fail(`step '${stepId}' matrix.worker input.role '${role}' is not an allowed role${expected ? `; expected one of: ${expected}` : ''}`);
+      fail(`step '${stepId}' shard.worker input.role '${role}' is not an allowed role${expected ? `; expected one of: ${expected}` : ''}`);
     }
   }
 }
@@ -210,7 +208,7 @@ function validateOutputSchemaDocument(schema, schemaRef, workflow, _runtimeConte
   void validation;
 
   const normalizedSchema = normalizeSchemaForSemanticIntrospection(schema);
-  if (requireWorkerOutcomeContract && ['worker', 'fanout'].includes(step?.kind)) assertWorkerOutputContract({ stepId, schema: normalizedSchema });
+  if (requireWorkerOutcomeContract && ['worker', 'fanout', 'shard'].includes(step?.kind)) assertWorkerOutputContract({ stepId, schema: normalizedSchema });
   if (isExternalWorkflowOutputSchema(schemaRef, schema)) collectFieldAnnotationWarnings(schema, schemaRef, warnings);
   return normalizedSchema;
 }
@@ -231,17 +229,16 @@ function normalizeStepOutputSchemas({ workflow, outputSchemas = new Map(), warni
       continue;
     }
     const normalizedSchema = validateOutputSchemaDocument(schema, schemaRef, workflow, undefined, warnings, { stepId, step, requireWorkerOutcomeContract, externalSchemas });
-    if (isShardedStep(step)) assertShardedOutputContract({ stepId, schema: normalizedSchema });
     schemasByStep.set(stepId, normalizedSchema);
   }
   for (const [stepId, step] of Object.entries(workflow.steps)) {
-    if (!isMatrixStep(step)) continue;
+    if (!isShardStep(step)) continue;
     const schemaRef = step.worker?.output?.schema;
     if (!schemaRef) continue;
     const schema = outputSchemaForStep(outputSchemas, stepId, schemaRef);
     const loadedSchema = schema ?? outputSchemaForStep(outputSchemas, `${stepId}.worker`, schemaRef);
     if (!loadedSchema) {
-      if (requireSchemaPresence) fail(`step '${stepId}' matrix.worker output.schema '${schemaRef}' was not provided to Workflow.validate()`);
+      if (requireSchemaPresence) fail(`step '${stepId}' shard.worker output.schema '${schemaRef}' was not provided to Workflow.validate()`);
       continue;
     }
     validateOutputSchemaDocument(loadedSchema, schemaRef, workflow, undefined, warnings, {
@@ -346,18 +343,6 @@ function assertWorkerOutputContract({ stepId, schema }) {
   const outcomeSchemas = schemaForPath(schema, ['outcome']);
   if (outcomeSchemas.length === 0 || outcomeSchemas.some((outcomeSchema) => schemaAllowsNonString(outcomeSchema))) {
     fail(`step '${stepId}' output.schema field 'outcome' must allow only strings`);
-  }
-}
-
-function assertShardedOutputContract({ stepId, schema }) {
-  for (const field of ['shard_id', 'reviewer_role']) {
-    if (!schemaRequiresPath(schema, [field])) {
-      fail(`step '${stepId}' sharding requires output.schema to require string field '${field}'`);
-    }
-    const fieldSchemas = schemaForPath(schema, [field]);
-    if (fieldSchemas.length === 0 || fieldSchemas.some((fieldSchema) => schemaAllowsNonString(fieldSchema))) {
-      fail(`step '${stepId}' sharding output.schema field '${field}' must allow only strings`);
-    }
   }
 }
 
@@ -566,10 +551,6 @@ function assertTransitionSemantics(workflow, schemasByStep, { requireSchemaCover
       throw error;
     }
 
-    if (isMatrixStep(step) && descriptor.kind !== 'static-target') {
-      fail(`step '${stepId}' matrix next must be a static step id in matrix v1`);
-    }
-
     if (descriptor.kind === 'dynamic-target') {
       assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expression: descriptor.expression, field: 'next', requireSchemaCoverage, requireExpressionRequiredPaths, allowOpenTransitionSchemas });
       continue;
@@ -615,42 +596,43 @@ function collectExpandedRouteGraphEdges(workflow, schemasByStep, { requireSchema
   return edges;
 }
 
-function assertWorkflowMatrixPolicies(workflow, schemasByStep) {
+function assertWorkflowShardPolicies(workflow, schemasByStep) {
   for (const [stepId, step] of Object.entries(workflow.steps)) {
-    if (!isMatrixStep(step)) continue;
-    const input = normalizeMatrixInput(step.input, { stepId });
-    if (input.kind === 'static') {
-      const seen = new Set();
-      for (const item of input.items) {
-        if (seen.has(item.id)) fail(`step '${stepId}' declares duplicate matrix unit id '${item.id}'`);
-        seen.add(item.id);
-      }
-    }
-    if (input.kind === 'dynamic') {
+    if (!isShardStep(step)) continue;
+    const shards = step.input?.shards;
+    if (!Array.isArray(shards)) {
       let expression;
       try {
-        expression = parsePathExpression(input.items);
+        expression = parsePathExpression(shards);
       } catch (error) {
-        if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' matrix.input.items ${error.message}`);
+        if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' shard input.shards ${error.message}`);
         throw error;
       }
-      if (expression.root !== 'input') fail(`step '${stepId}' matrix.input.items must use input.* selector`);
+      if (expression.root !== 'input') fail(`step '${stepId}' shard input.shards must use input.* selector`);
       const resolved = assertExpressionSchemaAvailable({
         workflow,
         schemasByStep,
         stepId,
         step,
         expression,
-        field: 'matrix.input.items',
+        field: 'shard input.shards',
         requireSchemaCoverage: true,
       });
       assertSchemaRequiresExpressionPath({
         stepId,
         expression,
-        field: 'matrix.input.items',
+        field: 'shard input.shards',
         rootSchema: resolved.rootSchema,
         pathSegments: resolved.requiredPath,
       });
+      const arraySchemas = resolved.schema.flatMap((schema) => schemaVariants(schema))
+        .filter((schema) => schema?.type === 'array' || schema?.items);
+      if (arraySchemas.length === 0) fail(`step '${stepId}' shard input.shards expression ${expression.source} must resolve to an array schema`);
+      for (const schema of arraySchemas) {
+        if (schema.minItems === undefined || schema.minItems < 1) {
+          fail(`step '${stepId}' shard input.shards expression ${expression.source} array schema must declare minItems >= 1`);
+        }
+      }
     }
   }
 }
@@ -737,6 +719,14 @@ function assertWorkflowFanoutPolicies(workflow, schemasByStep) {
   }
 }
 
+function assertShardPromptPath(stepId, interpolation) {
+  const [field, ...nested] = interpolation.expression.path;
+  if (!['value', 'index', 'total'].includes(field)) {
+    fail(`step '${stepId}' shard.worker.input.prompt supports shard.value, shard.index, or shard.total`);
+  }
+  if (field !== 'value' && nested.length > 0) fail(`step '${stepId}' shard.worker.input.prompt cannot read a nested path below shard.${field}`);
+}
+
 function assertPromptExpressionSemantics(workflow, schemasByStep, { requireSchemaCoverage = true } = {}) {
   for (const [stepId, step] of Object.entries(workflow.steps)) {
     const prompt = normalizePromptText(step.input?.prompt, { fieldName: `steps.${stepId}.input.prompt` });
@@ -749,6 +739,9 @@ function assertPromptExpressionSemantics(workflow, schemasByStep, { requireSchem
     }
 
     for (const interpolation of interpolations) {
+      if (interpolation.expression.root === 'shard') {
+        fail(`step '${stepId}' input.prompt may use shard.* only inside shard.worker.input.prompt`);
+      }
       assertExpressionSchemaAvailable({
         workflow,
         schemasByStep,
@@ -760,23 +753,27 @@ function assertPromptExpressionSemantics(workflow, schemasByStep, { requireSchem
       });
     }
 
-    if (isMatrixStep(step)) {
-      const matrixPrompt = normalizePromptText(step.worker?.input?.prompt, { fieldName: `steps.${stepId}.worker.input.prompt` });
-      let matrixInterpolations;
+    if (isShardStep(step)) {
+      const shardPrompt = normalizePromptText(step.worker?.input?.prompt, { fieldName: `steps.${stepId}.worker.input.prompt` });
+      let shardInterpolations;
       try {
-        matrixInterpolations = extractPromptInterpolations(matrixPrompt);
+        shardInterpolations = extractPromptInterpolations(shardPrompt);
       } catch (error) {
-        if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' matrix.worker.input.prompt ${error.message}`);
+        if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' shard.worker.input.prompt ${error.message}`);
         throw error;
       }
-      for (const interpolation of matrixInterpolations) {
+      for (const interpolation of shardInterpolations) {
+        if (interpolation.expression.root === 'shard') {
+          assertShardPromptPath(stepId, interpolation);
+          continue;
+        }
         assertExpressionSchemaAvailable({
           workflow,
           schemasByStep,
           stepId,
           step,
           expression: interpolation.expression,
-          field: 'matrix.worker.input.prompt',
+          field: 'shard.worker.input.prompt',
           requireSchemaCoverage,
         });
       }
@@ -792,6 +789,9 @@ function assertPromptExpressionSemantics(workflow, schemasByStep, { requireSchem
           throw error;
         }
         for (const interpolation of branchInterpolations) {
+          if (interpolation.expression.root === 'shard') {
+            fail(`step '${stepId}' fanout branch '${branchId}' input.prompt may not use shard.*`);
+          }
           assertExpressionSchemaAvailable({
             workflow,
             schemasByStep,
@@ -812,7 +812,6 @@ function validateWorkflowDocument(workflow, options = {}) {
   assertWorkflowStepIds(workflow);
   assertWorkflowRootTargets(workflow);
   assertWorkflowStepRoles(workflow, options.allowedRoles);
-  assertWorkflowShardingPolicies(workflow, { allowedRoles: normalizeAllowedRoleCatalog(options.allowedRoles) });
   const warnings = [];
   const schemasByStep = normalizeStepOutputSchemas({
     workflow,
@@ -822,7 +821,7 @@ function validateWorkflowDocument(workflow, options = {}) {
     requireWorkerOutcomeContract: options.requireWorkerOutcomeContract ?? true,
     externalSchemas: options.externalSchemas ?? [],
   });
-  assertWorkflowMatrixPolicies(workflow, schemasByStep);
+  assertWorkflowShardPolicies(workflow, schemasByStep);
   assertWorkflowFanoutPolicies(workflow, schemasByStep);
   assertTransitionSemantics(workflow, schemasByStep, {
     requireSchemaCoverage: options.requireSchemaCoverage ?? true,

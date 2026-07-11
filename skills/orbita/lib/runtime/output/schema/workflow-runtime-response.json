@@ -3,95 +3,176 @@
   "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/workflow-runtime-response",
   "title": "Workflow Runtime Response",
   "type": "object",
-  "required": ["baton", "steps"],
+  "required": [
+    "baton",
+    "steps"
+  ],
   "properties": {
-    "baton": { "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton" },
+    "baton": {
+      "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton"
+    },
     "steps": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/executableStep" }
+      "items": {
+        "$ref": "#/$defs/executableStep"
+      }
     }
   },
   "additionalProperties": false,
   "$defs": {
     "executableStep": {
       "type": "object",
-      "required": ["id", "action", "step"],
+      "required": [
+        "id",
+        "action",
+        "step"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "ownerStepId": { "type": "string", "minLength": 1 },
-        "action": { "enum": ["run_worker", "wait_for_approval", "stop_done"] },
-        "step": { "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/workflow#/$defs/step" },
-        "shard": { "$ref": "#/$defs/shardWork" },
-        "matrix": { "$ref": "#/$defs/matrixWork" },
-        "fanout": { "$ref": "#/$defs/fanoutWork" },
-        "compiledPrompt": { "$ref": "#/$defs/compiledPrompt" }
-      },
-      "additionalProperties": false
-    },
-    "matrixWork": {
-      "type": "object",
-      "required": ["owner_step_id", "unit_id", "request_id", "required", "attempts", "max_attempts", "context"],
-      "properties": {
-        "owner_step_id": { "type": "string", "minLength": 1 },
-        "unit_id": { "type": "string", "minLength": 1 },
-        "request_id": { "type": "string", "minLength": 1 },
-        "required": { "type": "boolean" },
-        "attempts": { "type": "integer", "minimum": 0 },
-        "max_attempts": { "type": "integer", "minimum": 1 },
-        "context": { "type": "object", "additionalProperties": true }
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ownerStepId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "enum": [
+            "run_worker",
+            "wait_for_approval",
+            "stop_done"
+          ]
+        },
+        "step": {
+          "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/workflow#/$defs/step"
+        },
+        "shard": {
+          "$ref": "#/$defs/shardWork"
+        },
+        "fanout": {
+          "$ref": "#/$defs/fanoutWork"
+        },
+        "compiledPrompt": {
+          "$ref": "#/$defs/compiledPrompt"
+        },
+        "parentStepId": {
+          "type": "string",
+          "minLength": 1
+        }
       },
       "additionalProperties": false
     },
     "fanoutWork": {
       "type": "object",
-      "required": ["owner_step_id", "activation", "phase", "selected_branch_ids"],
+      "required": [
+        "owner_step_id",
+        "activation",
+        "phase",
+        "selected_branch_ids"
+      ],
       "properties": {
-        "owner_step_id": { "type": "string", "minLength": 1 },
-        "activation": { "type": "integer", "minimum": 1 },
-        "phase": { "enum": ["branches", "owner"] },
+        "owner_step_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activation": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "phase": {
+          "enum": [
+            "branches",
+            "owner"
+          ]
+        },
         "selected_branch_ids": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
-        "branch_id": { "type": "string", "minLength": 1 },
-        "request_id": { "type": "string", "minLength": 1 }
+        "branch_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        }
       },
       "additionalProperties": false
     },
     "shardWork": {
       "type": "object",
-      "required": ["obligation_id", "shard_id", "reviewer_role", "required", "privacy_route", "max_attempts", "source_evidence"],
+      "required": [
+        "parent_step_id",
+        "activation",
+        "phase"
+      ],
       "properties": {
-        "obligation_id": { "type": "string", "minLength": 1 },
-        "shard_id": { "type": "string", "minLength": 1 },
-        "reviewer_role": { "type": "string", "minLength": 1 },
-        "required": { "type": "boolean" },
-        "privacy_route": { "const": "safe_context" },
-        "max_attempts": { "type": "integer", "minimum": 1 },
-        "source_evidence": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 }
+        "parent_step_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activation": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "phase": {
+          "enum": [
+            "shards",
+            "worker"
+          ]
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false
     },
     "compiledPrompt": {
       "type": "object",
-      "required": ["prompt"],
+      "required": [
+        "prompt"
+      ],
       "properties": {
-        "prompt": { "type": "string" },
+        "prompt": {
+          "type": "string"
+        },
         "metadata": {
           "type": "object",
           "properties": {
-            "inputTemplate": { "type": "string", "minLength": 1 },
-            "outputTemplate": { "type": "string", "minLength": 1 },
-            "outputSchema": { "type": "string", "minLength": 1 },
+            "inputTemplate": {
+              "type": "string",
+              "minLength": 1
+            },
+            "outputTemplate": {
+              "type": "string",
+              "minLength": 1
+            },
+            "outputSchema": {
+              "type": "string",
+              "minLength": 1
+            },
             "roleMaterial": {
               "type": "array",
-              "items": { "type": "string", "minLength": 1 }
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
           "additionalProperties": false
@@ -101,11 +182,27 @@
           "minItems": 1,
           "items": {
             "type": "object",
-            "required": ["severity", "code", "message"],
+            "required": [
+              "severity",
+              "code",
+              "message"
+            ],
             "properties": {
-              "severity": { "enum": ["info", "warning", "error"] },
-              "code": { "type": "string", "minLength": 1 },
-              "message": { "type": "string", "minLength": 1 }
+              "severity": {
+                "enum": [
+                  "info",
+                  "warning",
+                  "error"
+                ]
+              },
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
             },
             "additionalProperties": false
           }

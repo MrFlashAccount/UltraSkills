@@ -339,10 +339,10 @@ test('workflow catalog read errors redact configured workflow paths', () => {
   assert.doesNotMatch(listed.stderr, new RegExp(configPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 
-test('workflow catalog rejects invalid config entry matrix before listing', () => {
-  const matrixDir = path.join(tempDir, 'invalid-config-matrix');
-  const rootA = path.join(matrixDir, 'root-a');
-  const rootB = path.join(matrixDir, 'root-b');
+test('workflow catalog rejects invalid config entries before listing', () => {
+  const casesDir = path.join(tempDir, 'invalid-config-cases');
+  const rootA = path.join(casesDir, 'root-a');
+  const rootB = path.join(casesDir, 'root-b');
   mkdirSync(rootA, { recursive: true });
   mkdirSync(rootB, { recursive: true });
   const cases = [
@@ -366,13 +366,13 @@ test('workflow catalog rejects invalid config entry matrix before listing', () =
     },
     {
       name: 'unreadable path',
-      content: nestedWorkflowConfig([{ sourceId: 'unreadable-path', path: path.join(matrixDir, 'missing') }]),
+      content: nestedWorkflowConfig([{ sourceId: 'unreadable-path', path: path.join(casesDir, 'missing') }]),
       match: /workflow root 'unreadable-path' is not readable/,
     },
   ];
 
   for (const item of cases) {
-    const configPath = path.join(matrixDir, `${item.name.replaceAll(' ', '-')}.toml`);
+    const configPath = path.join(casesDir, `${item.name.replaceAll(' ', '-')}.toml`);
     writeFileSync(configPath, item.content);
     const listed = runCatalog(['list', '--json', '--config', configPath]);
     assert.equal(listed.status, 1, item.name);

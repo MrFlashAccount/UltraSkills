@@ -23,6 +23,7 @@ export function responseStatusForInterpreterResponse(interpreterResponse) {
 
 function requestInstructionBlock(request) {
   const lines = [`- ${request.action}: ${request.id}`];
+  if (request.parentStepId) lines.push(`  parent step: ${request.parentStepId}`);
   if (request.ownerStepId) lines.push(`  owner step: ${request.ownerStepId}`);
 
   if (request.action === "run_worker") {
@@ -39,7 +40,6 @@ function requestInstructionBlock(request) {
     lines.push(`  pass actual worker id to continue: --bind-agent '${request.stepId}=<agent-id>'`);
     if (request.recoverableBlocker) lines.push(`  recoverable blocker: ${JSON.stringify(request.recoverableBlocker)}`);
     if (request.shard) lines.push(`  shard: ${JSON.stringify(request.shard)}`);
-    if (request.matrix) lines.push(`  matrix: ${JSON.stringify(request.matrix)}`);
     if (request.fanout) lines.push(`  fanout: ${JSON.stringify(request.fanout)}`);
     return lines.join("\n");
   }
@@ -168,13 +168,13 @@ function preferredAgentIdForStep(baton, stepId, stepDoc) {
 }
 
 function workflowStepIdForExecutableStep(step) {
-  return step.ownerStepId ?? step.id;
+  return step.parentStepId ?? step.ownerStepId ?? step.id;
 }
 
 function sourceWorkerForExecutableStep(workflow, step) {
   const source = workflow?.steps?.[workflowStepIdForExecutableStep(step)];
   if (source?.kind === "worker") return source;
-  if (source?.kind === "matrix") return source.worker;
+  if (source?.kind === "shard") return step.shard?.index === undefined ? source : source.worker;
   if (source?.kind === "fanout") {
     return step.fanout?.branch_id ? source.branches?.[step.fanout.branch_id] : source;
   }
@@ -227,6 +227,7 @@ export function buildHostRequests(
       const request = {
         id: step.id,
         stepId: step.id,
+        ...(step.parentStepId ? { parentStepId: step.parentStepId } : {}),
         ...(step.ownerStepId ? { ownerStepId: step.ownerStepId } : {}),
         action: step.action,
         loadInstructionsCommand: loadInstructionsCommandForStep(
@@ -236,7 +237,6 @@ export function buildHostRequests(
         ),
       };
       if (step.shard) request.shard = structuredClone(step.shard);
-      if (step.matrix) request.matrix = structuredClone(step.matrix);
       if (step.fanout) request.fanout = structuredClone(step.fanout);
       if (step.action === "run_worker") {
         const agentRuntime = agentRuntimeForExecutableStep(workflow, step, claimContext);

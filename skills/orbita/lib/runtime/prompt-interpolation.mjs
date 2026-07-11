@@ -26,10 +26,7 @@ export function parsePromptInterpolation(source) {
   }
 
   const [, pathSource, defaultLiteral] = match;
-  const expression = parsePathExpression(`\${{ ${pathSource} }}`);
-  if (expression.root !== 'input') {
-    throw promptInterpolationError(source, "root 'input' is required in input.prompt interpolation");
-  }
+  const expression = parsePathExpression(`\${{ ${pathSource} }}`, { allowedRoots: ['input', 'shard'] });
 
   return {
     expression: { ...expression, source },

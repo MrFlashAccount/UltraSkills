@@ -200,14 +200,15 @@ test('workflow schema accepts exact per-harness agent runtime profiles only with
   assert.throws(() => assertWorkflowSchema(invalidHarnessGrammar), /property name.*pattern|must match pattern/i);
 });
 
-test('workflow schema applies the same agent runtime contract to matrix worker templates', () => {
+test('workflow schema applies the same agent runtime contract to shard worker templates', () => {
   const workflow = minimalWorkflowDoc({
     start: 'fanout',
     steps: {
       fanout: {
         name: 'Fanout',
-        kind: 'matrix',
-        input: { items: [{ id: 'a' }] },
+        kind: 'shard',
+        input: { shards: ['a'], prompt: 'Finalize.' },
+        output: { template: 'output.md' },
         worker: {
           agent: 'reviewer',
           agent_runtime: { codex: { model: 'gpt-5.5', thinking_level: 'high' } },
@@ -224,7 +225,7 @@ test('workflow schema applies the same agent runtime contract to matrix worker t
   assert.throws(() => assertWorkflowSchema(workflow), /agent.*required|agent_runtime/i);
 });
 
-test('workflow schema validation rejects case-folded duplicate harness profiles for worker and matrix sources', () => {
+test('workflow schema validation rejects case-folded duplicate harness profiles for worker and shard sources', () => {
   const worker = minimalWorkflowDoc();
   worker.steps.worker_step.agent = 'architect';
   worker.steps.worker_step.agent_runtime = {
@@ -236,13 +237,14 @@ test('workflow schema validation rejects case-folded duplicate harness profiles 
     /agent_runtime harness keys 'codex' and 'Codex' differ only by ASCII case/,
   );
 
-  const matrix = minimalWorkflowDoc({
+  const shard = minimalWorkflowDoc({
     start: 'fanout',
     steps: {
       fanout: {
         name: 'Fanout',
-        kind: 'matrix',
-        input: { items: [{ id: 'a' }] },
+        kind: 'shard',
+        input: { shards: ['a'], prompt: 'Finalize.' },
+        output: { template: 'output.md' },
         worker: {
           agent: 'reviewer',
           agent_runtime: {
@@ -258,8 +260,8 @@ test('workflow schema validation rejects case-folded duplicate harness profiles 
     },
   });
   assert.throws(
-    () => assertWorkflowSchema(matrix),
-    /matrix\.worker\.agent_runtime harness keys 'CODEX' and 'codex' differ only by ASCII case/,
+    () => assertWorkflowSchema(shard),
+    /shard\.worker\.agent_runtime harness keys 'CODEX' and 'codex' differ only by ASCII case/,
   );
 });
 
@@ -334,22 +336,21 @@ test('runner host response schema enforces action-conditional reuse hint fields'
       },
     ],
   };
-  const validMatrixRunWorker = {
+  const validShardRunWorker = {
     ...validRunWorker,
     requests: [
       {
         ...validRunWorker.requests[0],
-        id: 'review_matrix__matrix__api',
-        stepId: 'review_matrix__matrix__api',
-        ownerStepId: 'review_matrix',
-        matrix: {
-          owner_step_id: 'review_matrix',
-          unit_id: 'api',
-          request_id: 'review_matrix__matrix__api',
-          required: true,
-          attempts: 0,
-          max_attempts: 1,
-          context: { path: 'src/api' },
+        id: 'review__shard__1__0',
+        stepId: 'review__shard__1__0',
+        parentStepId: 'review',
+        shard: {
+          parent_step_id: 'review',
+          activation: 1,
+          phase: 'shards',
+          index: 0,
+          total: 1,
+          request_id: 'review__shard__1__0',
         },
       },
     ],
@@ -359,7 +360,7 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validRecoverableRunWorker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validApproval, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validResolveWorkerBlocker, { schemas: runtimeSchemas }).ok, true);
-  assert.equal(validateJsonSchema(runnerHostResponseSchema, validMatrixRunWorker, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, validShardRunWorker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validRunWorker,
     requests: [{ ...validRunWorker.requests[0], preferredAgentId: undefined }],
