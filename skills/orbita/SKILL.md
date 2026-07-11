@@ -79,7 +79,7 @@ Execute every listed host request. Unknown action or missing executable data is 
 
 ### Worker
 
-Use the directive's follow-up loader only when restoring its preferred worker; otherwise use its fresh loader. Replace only a literal `<lease-token>` placeholder when present. Apply any fresh-worker runtime preference from stdout at worker creation.
+Use the directive's follow-up loader only when restoring its preferred worker; otherwise use its fresh loader. Replace only a literal `<lease-token>` placeholder when present. Treat any fresh-worker runtime preference from stdout as recommended: use it when the model and thinking level are available, otherwise create the worker with the harness default instead of blocking the workflow.
 
 Send exactly:
 

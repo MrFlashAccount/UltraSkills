@@ -28,7 +28,7 @@ function requestInstructionBlock(request) {
 
   if (request.action === "run_worker") {
     if (request.agentRuntime) {
-      lines.push(`  For a fresh subagent, use model ${request.agentRuntime.model} with thinking level ${request.agentRuntime.thinkingLevel}.`);
+      lines.push(`  Recommended for a fresh subagent when available: model ${request.agentRuntime.model} with thinking level ${request.agentRuntime.thinkingLevel}; otherwise use the harness default.`);
     }
     if (request.preferredAgentId) lines.push(`  preferred worker id: ${request.preferredAgentId}`);
     lines.push(`  fresh-worker instruction-loader command: ${request.loadInstructionsCommand}`);

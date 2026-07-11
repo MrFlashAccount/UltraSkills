@@ -187,7 +187,7 @@ test('runner: claimed harness selects fresh-subagent model guidance without poll
 
   const response = await runnerNext({ runId, workflowPath, leaseToken });
   assert.deepEqual(response.requests[0].agentRuntime, { model: 'gpt-5.5', thinkingLevel: 'high' });
-  assert.match(response.orchestratorInstruction, /For a fresh subagent, use model gpt-5\.5 with thinking level high\./);
+  assert.match(response.orchestratorInstruction, /Recommended for a fresh subagent when available: model gpt-5\.5 with thinking level high; otherwise use the harness default\./);
 
   const instructions = await runnerLoadInstructions({ runId, workflowPath, stepId: 'prepare', leaseToken });
   assert.doesNotMatch(instructions, /fresh subagent|thinking level high/);
@@ -208,7 +208,7 @@ test('runner: unknown claimed harness omits model guidance', async () => {
 
   const response = await runnerNext({ runId, workflowPath, leaseToken });
   assert.equal(Object.hasOwn(response.requests[0], 'agentRuntime'), false);
-  assert.doesNotMatch(response.orchestratorInstruction, /For a fresh subagent, use model/);
+  assert.doesNotMatch(response.orchestratorInstruction, /Recommended for a fresh subagent/);
 });
 
 test('runner: agent runtime configuration without an explicit source agent is rejected', async () => {

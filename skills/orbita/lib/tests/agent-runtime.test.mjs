@@ -76,12 +76,12 @@ test('agent runtime selects a case-insensitively matched claimed harness only fo
   const step = { id: 'worker', action: 'run_worker', step: workflow.steps.worker };
   const matched = hostFor({ workflow, step, claimContext: { harness: 'CoDeX' } });
   assert.deepEqual(matched.requests[0].agentRuntime, { model: 'gpt-5.5', thinkingLevel: 'high' });
-  assert.equal(matched.orchestratorInstruction.match(/For a fresh subagent, use model gpt-5\.5 with thinking level high\./g)?.length, 1);
+  assert.equal(matched.orchestratorInstruction.match(/Recommended for a fresh subagent when available: model gpt-5\.5 with thinking level high; otherwise use the harness default\./g)?.length, 1);
 
   for (const claimContext of [null, { harness: 'portable' }, { harness: 'toString' }]) {
     const unmatched = hostFor({ workflow, step, claimContext });
     assert.equal(Object.hasOwn(unmatched.requests[0], 'agentRuntime'), false);
-    assert.doesNotMatch(unmatched.orchestratorInstruction, /For a fresh subagent, use model/);
+    assert.doesNotMatch(unmatched.orchestratorInstruction, /Recommended for a fresh subagent/);
   }
 
   const mixedKeyWorkflow = structuredClone(workflow);
@@ -122,5 +122,5 @@ test('approval requests never receive agent runtime fields or prose', () => {
     step: { id: 'approval', action: 'wait_for_approval', step: workflow.steps.approval },
   });
   assert.equal(Object.hasOwn(host.requests[0], 'agentRuntime'), false);
-  assert.doesNotMatch(host.orchestratorInstruction, /For a fresh subagent, use model/);
+  assert.doesNotMatch(host.orchestratorInstruction, /Recommended for a fresh subagent/);
 });

@@ -56,7 +56,7 @@
             "minLength": 1
           },
           "agentRuntime": {
-            "description": "Advisory fresh-worker model and thinking level selected from the executable source worker's per-harness agent_runtime configuration.",
+            "description": "Advisory fresh-worker model and thinking level selected from the executable source worker's per-harness agent_runtime configuration. Hosts fall back to their default runtime when either recommendation is unavailable.",
             "type": "object",
             "required": [
               "model",
