@@ -34,10 +34,25 @@ const selectionSchema = {
   additionalProperties: true,
 };
 
+const optionalSelectionSchema = {
+  ...structuredClone(selectionSchema),
+  required: ['outcome'],
+};
+
+const unionSelectionSchema = structuredClone(selectionSchema);
+unionSelectionSchema.properties.branch_ids = {
+  anyOf: [
+    structuredClone(selectionSchema.properties.branch_ids),
+    { type: 'string' },
+  ],
+};
+
 const resources = {
   outputSchemas: {
     'worker.schema.json': workerSchema,
     'selection.schema.json': selectionSchema,
+    'optional-selection.schema.json': optionalSelectionSchema,
+    'union-selection.schema.json': unionSelectionSchema,
   },
   templates: {
     'output.md': 'Return strict JSON.',
@@ -152,7 +167,7 @@ test('fanout schema and semantics accept owner/branch workers and reject branch 
   assert.throws(() => assertWorkflowSchema(branchWithKind), /must NOT have additional properties/);
 });
 
-test('fanout input.branches supports dynamic and first-of selectors without source aliases', () => {
+test('fanout input.branches supports dynamic and first-of selectors', () => {
   const workflow = fanoutWorkflow({
     fanout: {
       input: {
@@ -165,9 +180,28 @@ test('fanout input.branches supports dynamic and first-of selectors without sour
   });
   assert.doesNotThrow(() => validateWorkflow({ workflowDTO: workflow, outputSchemas: resources.outputSchemas }));
 
-  const oldSource = fanoutWorkflow();
-  oldSource.steps.fanout.source = { from: '${{ input.planning.branch_ids }}' };
-  assert.throws(() => assertWorkflowSchema(oldSource), /must NOT have additional properties/);
+  workflow.steps.review.output.schema = 'optional-selection.schema.json';
+  assert.doesNotThrow(() => validateWorkflow({ workflowDTO: workflow, outputSchemas: resources.outputSchemas }));
+});
+
+test('fanout dynamic selector requires its schema path and rejects non-array union variants', () => {
+  const optionalPath = fanoutWorkflow({
+    fanout: { input: { branches: '${{ input.planning.branch_ids }}', prompt: 'Aggregate selected branches.' } },
+  });
+  optionalPath.steps.planning.output.schema = 'optional-selection.schema.json';
+  assert.throws(
+    () => validateWorkflow({ workflowDTO: optionalPath, outputSchemas: resources.outputSchemas }),
+    /must reference a required output\.schema path/,
+  );
+
+  const nonArrayVariant = fanoutWorkflow({
+    fanout: { input: { branches: '${{ input.planning.branch_ids }}', prompt: 'Aggregate selected branches.' } },
+  });
+  nonArrayVariant.steps.planning.output.schema = 'union-selection.schema.json';
+  assert.throws(
+    () => validateWorkflow({ workflowDTO: nonArrayVariant, outputSchemas: resources.outputSchemas }),
+    /must resolve only to array schemas/,
+  );
 });
 
 test('fanout keeps owner cursor through branch batches, then runs the genuine owner worker', () => {
@@ -214,6 +248,43 @@ test('fanout keeps owner cursor through branch batches, then runs the genuine ow
   assert.equal(done.baton.status, 'done');
   assert.equal(done.baton.state.fanouts.fanout.phase, 'completed');
   assert.equal(done.baton.state.fanout.outcome, 'ready');
+});
+
+test('fanout partial batch retry durably accepts valid siblings and retries only the invalid branch', () => {
+  const workflowDoc = fanoutWorkflow({ fanout: { max_parallel: 2 } });
+  const first = runNext({ workflowDoc, batonDoc: initialBaton(), resources });
+  const retry = applyWorkflowOutput({
+    workflowDoc,
+    batonDoc: first.baton,
+    outputValue: {
+      steps: {
+        fanout__fanout__1__branch_a: { outcome: 'implemented', summary: 'A accepted once' },
+        fanout__fanout__1__branch_b: { summary: 'missing outcome' },
+      },
+    },
+    resources,
+  });
+
+  assert.deepEqual(retry.steps.map((entry) => entry.id), ['fanout__fanout__1__branch_b']);
+  assert.deepEqual(retry.baton.state.fanouts.fanout.current_requests, ['fanout__fanout__1__branch_b']);
+  assert.equal(retry.baton.state.fanouts.fanout.branch_records[0].status, 'accepted');
+  assert.equal(retry.baton.state.fanouts.fanout.branch_records[1].status, 'pending');
+  assert.equal(retry.baton.state.branch_a.summary, 'A accepted once');
+  assert.deepEqual(retry.baton.state.fanouts.fanout.accepted_outputs.branch_a.output_ref, { step_id: 'branch_a' });
+
+  const owner = applyWorkflowOutput({
+    workflowDoc,
+    batonDoc: retry.baton,
+    outputValue: {
+      steps: {
+        fanout__fanout__1__branch_b: { outcome: 'implemented', summary: 'B accepted on retry' },
+      },
+    },
+    resources,
+  });
+  assert.equal(owner.baton.state.fanouts.fanout.phase, 'owner');
+  assert.deepEqual(owner.steps.map((entry) => entry.id), ['fanout']);
+  assert.equal(owner.baton.state.branch_a.summary, 'A accepted once');
 });
 
 test('fanout freezes one activation selection and hides stale unselected branch output from owner prompt', () => {

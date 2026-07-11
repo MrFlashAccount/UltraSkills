@@ -369,6 +369,32 @@ function schemaForPath(schema, pathSegments) {
   return candidates.flatMap((item) => schemaVariants(item));
 }
 
+function schemaRootsForPath(schema, pathSegments) {
+  let candidates = [schema];
+  for (const segment of pathSegments) {
+    candidates = candidates
+      .flatMap((item) => schemaVariants(item))
+      .map((candidate) => candidate?.properties?.[segment])
+      .filter(Boolean);
+    if (candidates.length === 0) return [];
+  }
+  return candidates;
+}
+
+function schemaAllowsNonArray(schema) {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return true;
+  if (schema.type !== undefined) {
+    if (schema.type === 'array') return false;
+    if (Array.isArray(schema.type)) return schema.type.some((type) => type !== 'array');
+    return true;
+  }
+  if (schema.items !== undefined) return false;
+  if (Array.isArray(schema.allOf)) return schema.allOf.every((item) => schemaAllowsNonArray(item));
+  if (Array.isArray(schema.oneOf)) return schema.oneOf.some((item) => schemaAllowsNonArray(item));
+  if (Array.isArray(schema.anyOf)) return schema.anyOf.some((item) => schemaAllowsNonArray(item));
+  return true;
+}
+
 
 function mergeSelectorAnalysis(target, source) {
   for (const value of source.directValues) target.directValues.add(value);
@@ -673,6 +699,11 @@ function assertFanoutSelectionSchema({ workflow, schemasByStep, stepId, step, ex
     });
   }
 
+  const selectorSchemas = schemaRootsForPath(resolved.rootSchema, resolved.requiredPath);
+  if (selectorSchemas.length === 0 || selectorSchemas.some((schema) => schemaAllowsNonArray(schema))) {
+    fail(`step '${stepId}' fanout input.branches expression ${expression.source} must resolve only to array schemas`);
+  }
+
   const arraySchemas = resolved.schema.flatMap((schema) => schemaVariants(schema))
     .filter((schema) => schema?.type === 'array' || schema?.items);
   if (arraySchemas.length === 0) fail(`step '${stepId}' fanout input.branches expression ${expression.source} must resolve to an array schema`);
@@ -713,7 +744,7 @@ function assertWorkflowFanoutPolicies(workflow, schemasByStep) {
         stepId,
         step,
         expressionSource,
-        requirePath: false,
+        requirePath: typeof selection === 'string',
       });
     }
   }

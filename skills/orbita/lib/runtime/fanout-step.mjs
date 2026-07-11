@@ -59,9 +59,17 @@ function nextActivationAfterBatch(activation, acceptedRequestIds) {
   };
 }
 
-function retryResponseForBranch(retryResponse, ownerStepId, activation, record) {
+function retryResponseForBranch(retryResponse, ownerStepId, activation, record, acceptedRequestIds, acceptedOutputs) {
+  const retryActivation = {
+    ...nextActivationAfterBatch(activation, acceptedRequestIds),
+    phase: 'branches',
+    status: 'awaiting_branches',
+    current_requests: [record.request_id],
+    accepted_outputs: acceptedOutputs,
+  };
   return {
     ...retryResponse,
+    baton: batonWithFanoutActivation(retryResponse.baton, ownerStepId, retryActivation),
     steps: retryResponse.steps.map((entry) => ({
       ...entry,
       ownerStepId,
@@ -95,7 +103,16 @@ function applyBranchBatch({ workflow, baton, ownerStepId, ownerStep, activation,
       workerOutput: rawOutput,
       resources,
     });
-    if (validation.retryResponse) return retryResponseForBranch(validation.retryResponse, ownerStepId, activation, record);
+    if (validation.retryResponse) {
+      return retryResponseForBranch(
+        validation.retryResponse,
+        ownerStepId,
+        activation,
+        record,
+        acceptedRequestIds,
+        acceptedOutputs,
+      );
+    }
 
     updatedBaton.state = applyOutputToBatonState(updatedBaton, validation.workerOutput, undefined, record.branch_id);
     delete updatedBaton.state[requestId];
