@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { claimWorkflowRunForTest, runWorkflowRunnerApi } from './helpers/workflow-runner-api-client.mjs';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -7,7 +8,7 @@ import { afterAll, test } from 'bun:test';
 import { next as runnerNext } from './helpers/orbita-production-api.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 import { publicFailureHistoryDetails } from '../runner/history-projection.mjs';
-import { appendHistoryOnce } from '../persistence/run-state/durable-commit.mjs';
+import { appendHistory, appendHistoryOnce } from '../persistence/run-state/durable-commit.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-check-'));
 writeFileSync(path.join(tempDir, 'output.md'), '## Output contract\nReturn markdown.\n');
@@ -192,6 +193,24 @@ test('history-once recovery completes marker after append crash without duplicat
   assert.equal(await appendHistoryOnce(paths, entry, { dedupeKey: 'same-logical-record' }), true);
   assert.equal(await appendHistoryOnce(paths, entry, { dedupeKey: 'same-logical-record' }), false);
   assert.equal((readFileSync(paths.historyPath, 'utf8').match(/source: history-once-crash/g) ?? []).length, 1);
+});
+
+test('history-once treats legacy empty marker as already applied', async () => {
+  const paths = resolveRunPaths({ runId: `workflow-runner-test-${process.pid}-history-once-legacy-marker` });
+  rmSync(paths.runDir, { recursive: true, force: true });
+  mkdirSync(paths.runnerDir, { recursive: true });
+  const entry = { source: 'history-once-legacy-marker', baton: { cursor: 'prepare', status: 'running' } };
+  const dedupeKey = 'legacy-logical-record';
+  const digest = createHash('sha256').update(dedupeKey).digest('hex');
+  const markerPath = path.join(paths.runnerDir, `history-entry-${digest}.marker`);
+
+  await appendHistory(paths, entry);
+  writeFileSync(markerPath, '');
+  const historyBeforeRetry = readFileSync(paths.historyPath, 'utf8');
+
+  assert.equal(await appendHistoryOnce(paths, entry, { dedupeKey }), false);
+  assert.equal(readFileSync(paths.historyPath, 'utf8'), historyBeforeRetry);
+  assert.equal((historyBeforeRetry.match(/source: history-once-legacy-marker/g) ?? []).length, 1);
 });
 
 

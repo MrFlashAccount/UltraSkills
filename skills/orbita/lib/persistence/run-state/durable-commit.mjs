@@ -426,6 +426,7 @@ export async function appendHistoryOnce(paths, entry, { dedupeKey } = {}) {
   const transactionId = `history-${digest}`;
   let entryText = historyEntry(entry, { transactionId });
   if (await exists(markerPath)) {
+    if ((await stat(markerPath)).size === 0) return false;
     const marker = await readJson(markerPath, 'workflow history dedupe marker');
     if (marker?.status === 'applied') return false;
     if (marker?.transactionId !== transactionId || typeof marker.entryText !== 'string' || marker?.entryHash !== createHash('sha256').update(marker.entryText).digest('hex')) {
