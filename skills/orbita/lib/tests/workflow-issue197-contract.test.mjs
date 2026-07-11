@@ -91,3 +91,11 @@ test('Orbita skill invokes bundled CLI entrypoints from the resolved skill root'
   assert.match(skillText, /\$ORBITA_SKILL_ROOT\/lib\/entrypoints\/cli\/workflow-runner\.mjs/);
   assert.doesNotMatch(skillText, /bun \.\/lib\/entrypoints\/cli\//);
 });
+
+test('Orbita skill stays bounded and delegates dynamic request protocol to runner stdout', () => {
+  const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
+  assert.ok(Buffer.byteLength(skillText) <= 9_000, 'Orbita SKILL.md exceeded the 9 KB always-loaded budget');
+  assert.match(skillText, /stdout is the sole active directive/);
+  assert.match(skillText, /already supplies current actions, dynamic commands, schemas, bindings, approval text, continuation, and terminal JSON/);
+  assert.doesNotMatch(skillText, /loadFollowupInstructionsCommand|pass actual worker id to continue|Then run this single continue command/);
+});

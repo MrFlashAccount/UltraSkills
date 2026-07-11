@@ -39,7 +39,8 @@ function approvalAttachmentsBlock(items = []) {
   });
   lines.push(
     '',
-    'These files are approval attachments, not required reads. Open one only if the user explicitly asks a content question after the gate is presented.',
+    'Attachments are not required reads. Open one only after an explicit user content question.',
+    'In Codex/Codex Desktop, render each as an absolute Markdown file link. Never substitute a summary, plain path, or inline body; if links are unavailable, state the gap and affected path.',
   );
   return lines.join('\n');
 }

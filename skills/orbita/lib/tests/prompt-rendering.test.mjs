@@ -564,7 +564,7 @@ test('prompt renderer: approval keeps role reads but renders prompt input artifa
     `2. Role material for 'backend': \`${path.join(tempDir, 'roles', 'backend', 'RUBRIC.md')}\``,
     '## Approval attachments',
     `1. Prompt input artifact 'packet' from 'worker_step' (text/markdown): \`${path.join(runDir, 'worker_step', 'artifacts', 'packet.md')}\``,
-    'These files are approval attachments, not required reads.',
+    'Attachments are not required reads.',
   ]);
   assert.doesNotMatch(compiled.prompt, /3\. Prompt input artifact/);
 });
