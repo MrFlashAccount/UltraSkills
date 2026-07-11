@@ -9,6 +9,7 @@
     "outcome": {
       "enum": [
         "ready_for_attack",
+        "ready_for_approval",
         "blocked"
       ],
       "description": "Producer must emit the single enum value that reflects the completed stage state; use blocked only when blocker explains the recoverable pause.",
@@ -107,7 +108,7 @@
       "if": {
         "properties": {
           "outcome": {
-            "const": "ready_for_attack"
+            "enum": ["ready_for_attack", "ready_for_approval"]
           }
         },
         "required": [

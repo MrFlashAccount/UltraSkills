@@ -122,8 +122,8 @@ Always include a `User Questions / Decisions` section for non-trivial UI. Put 3-
 Use existing screenshots, approved reference images, proof pages, generated mockups, prior visual proposals, or current UI captures as visual evidence when they are already available in the task/repo/context. Record what each asset proves and what frontend should preserve or ignore. For non-trivial UI, explicitly state the rendered proof/screenshots the implementation or review must capture; do not silently accept text-only evidence when the surface can be rendered locally.
 If design law, existing UI basis, product context, visual evidence, or user choice is missing and the task needs high-confidence new screen direction, return blocked with blocker.source_step_id = ui_intent_draft and the smallest concrete user-facing question, screenshot/proof request, or create-design/frontend-taste routing need. For small conservative UI work, record the fallback basis instead of blocking.
 Emit artifact metadata for `ui-design-proposal` in artifacts[] with content_type `text/html` and a compact output.summary as the human-facing UI design proposal state.
-Return ready_for_attack or blocked with blocker.source_step_id = ui_intent_draft.
-When revising after ui_intent_attack feedback or approve_ui_intent rejection, read feedback from input.ui_intent_attack and input.approve_ui_intent and address it explicitly while preserving approved research constraints.
+Return ready_for_attack for the initial proposal or a ui_intent_attack-requested revision, ready_for_approval after correcting an approve_ui_intent rejection, or blocked with blocker.source_step_id = ui_intent_draft.
+When revising after ui_intent_attack feedback or approve_ui_intent rejection, read feedback from input.ui_intent_attack and input.approve_ui_intent and address it explicitly while preserving approved research constraints. If the latest approve_ui_intent output is rejected, return ready_for_approval after the correction; do not send that user-requested revision through ui_intent_attack again.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
 If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = ui_intent_draft and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
@@ -144,6 +144,7 @@ match = "${{ output.outcome }}"
 
 [steps.ui_intent_draft.next.cases]
 ready_for_attack = "ui_intent_attack"
+ready_for_approval = "approve_ui_intent"
 
 [steps.ui_intent_attack]
 name = "UI design proposal attack"
@@ -178,7 +179,7 @@ kind = "approval"
 
 [steps.approve_ui_intent.input]
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Read ui_intent_draft.summary as the human-facing UI design proposal state. Present that summary, attach the `ui-design-proposal` artifact from ui_intent_draft, and include ui_intent_attack.verdict for human approval.
+Read ui_intent_draft.summary as the human-facing UI design proposal state and attach the `ui-design-proposal` artifact from ui_intent_draft. On the first visit, include ui_intent_attack.verdict. After a user-rejected proposal is corrected, return directly to this gate and treat the old attack verdict only as evidence about the previous version; do not present it as critique of the revised artifact.
 Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
 If the user asks for a UI design proposal file, retrieve/export the existing artifact referenced by baton/output artifacts, limited to `ui-design-proposal`. Do not ask a worker to recreate it in a temp path.
 Continue only after explicit approval.
