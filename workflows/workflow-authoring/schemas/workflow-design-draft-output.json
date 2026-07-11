@@ -8,6 +8,7 @@
     "outcome": {
       "enum": [
         "ready_for_attack",
+        "ready_for_approval",
         "blocked"
       ]
     },
@@ -24,7 +25,10 @@
       "if": {
         "properties": {
           "outcome": {
-            "const": "ready_for_attack"
+            "enum": [
+              "ready_for_attack",
+              "ready_for_approval"
+            ]
           }
         },
         "required": [

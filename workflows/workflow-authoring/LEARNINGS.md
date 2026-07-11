@@ -15,6 +15,7 @@ Durable lessons for authoring workflow-runner workflows. Apply these before desi
 - Re-review fanout should route from the current review owner selection, not from the original plan, so passed branches are not rerun unless their owned surfaces changed.
 - Review joins must aggregate the branches selected for the current review pass, not stale planning-time branches.
 - Expanded fanout needs an explicit risk reason. Default to the smallest reviewer set that covers material independent risk classes.
+- For a draft already accepted by a critic and then rejected with user corrections, route revision draft -> same user approval; do not rerun the critic. Keep first drafts and critic-requested revisions on draft -> critic -> approval. Do not apply this rule to question gates or optional decisions where rejection means skip or stop rather than revise.
 
 ## Worker Phase Boundaries
 

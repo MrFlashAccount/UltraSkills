@@ -530,7 +530,7 @@ test('prompt renderer: appends required reads, output, and workflow prompt in fi
   assert.doesNotMatch(compiled.prompt, /## Prompt input context/);
 });
 
-test('prompt renderer: runtime layer resolves role and artifact required-read paths before compilation', () => {
+test('prompt renderer: approval keeps role reads but renders prompt input artifacts as attachment-only', () => {
   writeRoleMaterial('backend');
   writeFileSync(path.join(tempDir, 'runtime-required-reads-template.md'), '# Worker step\n');
   const runDir = path.join(tempDir, 'runs', 'runtime-required-reads');
@@ -558,11 +558,51 @@ test('prompt renderer: runtime layer resolves role and artifact required-read pa
     resources,
   });
 
-  assert.ok(compiled.prompt.includes(`1. Role material for 'backend': \`${path.join(tempDir, 'roles', 'backend', 'ROLE.md')}\``));
-  assert.ok(compiled.prompt.includes(`3. Prompt input artifact 'packet' from 'worker_step' (text/markdown): \`${path.join(runDir, 'worker_step', 'artifacts', 'packet.md')}\``));
+  assertMarkersInOrder(compiled.prompt, [
+    '## Required reads',
+    `1. Role material for 'backend': \`${path.join(tempDir, 'roles', 'backend', 'ROLE.md')}\``,
+    `2. Role material for 'backend': \`${path.join(tempDir, 'roles', 'backend', 'RUBRIC.md')}\``,
+    '## Approval attachments',
+    `1. Prompt input artifact 'packet' from 'worker_step' (text/markdown): \`${path.join(runDir, 'worker_step', 'artifacts', 'packet.md')}\``,
+    'Attachments are not required reads.',
+  ]);
+  assert.doesNotMatch(compiled.prompt, /3\. Prompt input artifact/);
 });
 
-test('prompt renderer: rejects relative prompt input artifact read paths when no runtime resolver is available', () => {
+test('prompt renderer: worker prompt input artifacts remain required reads', () => {
+  writeFileSync(path.join(tempDir, 'worker-artifact-template.md'), '# Worker step\n');
+  const runDir = path.join(tempDir, 'runs', 'worker-artifact-read');
+  mkdirSync(path.join(runDir, 'prepare', 'artifacts'), { recursive: true });
+  const step = {
+    name: 'Worker step',
+    kind: 'worker',
+    input: { template: 'worker-artifact-template.md', prompt: 'Review.\n\nArtifacts:\n${{ input.prepare.artifacts }}' },
+    output: { template: 'output.md' },
+    next: 'done',
+  };
+  const workflow = {
+    ...schemaWorkflowDoc,
+    steps: { ...schemaWorkflowDoc.steps, worker_step: step },
+  };
+  const workflowPath = writeJson('worker-artifact-read-workflow.json', workflow);
+  const resources = loadWorkflowResources({ workflow, workflowPath, repositoryRoot: tempDir, runDir });
+
+  const compiled = renderPromptWithResources({
+    workflowPath,
+    workflow,
+    baton: baton({ cursor: 'worker_step', state: { artifacts: [], results: [], prepare: { artifacts: [{ id: 'packet', content_type: 'text/markdown', path: 'prepare/artifacts/packet.md' }] } } }),
+    stepId: 'worker_step',
+    step,
+    repositoryRoot: tempDir,
+    resources,
+  });
+
+  assert.match(compiled.prompt, /## Required reads/);
+  assert.ok(compiled.prompt.includes(`1. Prompt input artifact 'packet' from 'prepare' (text/markdown): \`${path.join(runDir, 'prepare', 'artifacts', 'packet.md')}\``));
+  assert.doesNotMatch(compiled.prompt, /## Approval attachments/);
+});
+
+test('prompt renderer: rejects relative prompt input artifact attachment paths when no runtime resolver is available', () => {
   writeFileSync(path.join(tempDir, 'cwd-ambiguity-template.md'), '# Worker step\n');
   const step = {
     name: 'Approval step',

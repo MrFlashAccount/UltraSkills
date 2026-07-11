@@ -46,7 +46,6 @@ function requestInstructionBlock(request) {
 
   if (request.action === "wait_for_approval") {
     if (request.outputSchema) lines.push(`  output schema: ${request.outputSchema}`);
-    lines.push("  use the inline approval request below as the complete approval prompt");
     return lines.join("\n");
   }
 
@@ -103,22 +102,23 @@ function inlineInstructionForStep(step, { runId, runsRoot, leaseToken } = {}) {
         leaseToken,
       })
     : "";
+  if (!writeOutputCommand) {
+    throw new Error(`missing validating approval writer for workflow step '${step.id}'`);
+  }
+  const writerFallback = prompt.includes(writeOutputCommand)
+    ? ""
+    : [
+        "After the user decides, normalize the answer to strict JSON and submit it with this validating command:",
+        "",
+        writeOutputCommand,
+      ].join("\n");
   return [
     `Approval request: ${step.id}`,
     "",
     "The orchestrator must execute this approval instruction itself.",
-    "Use the following compiled approval prompt as the complete source for the user-facing approval message.",
-    "When the compiled approval prompt lists required-read files or prompt input artifact paths, attach those files through the host/platform approval mechanism before asking for a decision.",
-    "In Codex/Codex Desktop, attaching means rendering each listed local artifact as a Markdown file link with an absolute target, for example: [reasons-canvas-research.md](/absolute/path/reasons-canvas-research.md). A plain text path, artifact id, or summary is not an attachment.",
-    "Do not replace artifact attachments with summaries, plain paths, or inline full artifact bodies. If the host cannot attach or render a file link for a listed artifact, state that capability gap explicitly in the approval message and include the path/reference that could not be attached.",
+    "The compiled prompt below is the complete user-facing source.",
     "Do not inspect workflow source, runner internals, schema files, or CLI help to reconstruct approval output.",
-    writeOutputCommand
-      ? [
-          "After the user decides, normalize the answer to strict JSON and submit it with this validating command:",
-          "",
-          writeOutputCommand,
-        ].join("\n")
-      : "If no validating write-output command is present, stop with a runner contract bug.",
+    writerFallback,
     "",
     prompt.trimEnd(),
   ].join("\n");

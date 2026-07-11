@@ -1,6 +1,6 @@
 {
   "title": "DevHarness Research Draft Output",
-  "description": "Producer output contract for the DevHarness research draft gate before critic attack.",
+  "description": "Producer output contract for the DevHarness research draft before critic attack or repeat user approval.",
   "type": "object",
   "required": [
     "outcome"
@@ -9,9 +9,10 @@
     "outcome": {
       "enum": [
         "ready_for_attack",
+        "ready_for_approval",
         "blocked"
       ],
-      "description": "Producer must emit the single enum value that reflects the completed stage state; use blocked only when blocker explains the recoverable pause.",
+      "description": "Producer must use ready_for_attack for an initial or critic-requested draft, ready_for_approval for a correction requested at the user gate, and blocked only for a recoverable pause.",
       "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when this says blocked or needs revision."
     },
     "summary": {
@@ -25,7 +26,7 @@
       "items": {
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
       },
-      "description": "Producer must emit artifact metadata for the required immutable reasons-canvas-research artifact when outcome is ready_for_attack.",
+      "description": "Producer must emit artifact metadata for the required immutable reasons-canvas-research artifact when ready for attack or approval.",
       "x-usage": "Emit only the required immutable reasons-canvas-research artifact. Exact artifact field semantics come from the shared baton artifact schema.",
       "minItems": 1,
       "maxItems": 1,
@@ -103,7 +104,10 @@
       "if": {
         "properties": {
           "outcome": {
-            "const": "ready_for_attack"
+            "enum": [
+              "ready_for_attack",
+              "ready_for_approval"
+            ]
           }
         },
         "required": [

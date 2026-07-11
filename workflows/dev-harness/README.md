@@ -10,7 +10,7 @@ Keep workflow mechanics in `workflow.toml` and schemas in `schemas/*.json`. Use 
 
 Every draft step that feeds a human approval gate must emit a compact `summary` as the human-facing proposal state and a file-backed artifact for the proposal body.
 
-Approval gates present the draft-produced `summary`, attach the referenced artifact, include the attack verdict, and wait for explicit approval. The orchestrator must not read the artifact body to invent a fresh approval summary.
+Approval gates present the draft-produced `summary`, attach the referenced artifact without opening it, include the attack verdict, and wait for explicit approval. The orchestrator must not read the artifact body merely to prepare the gate or invent a fresh approval summary; it may open the attachment later only when the user explicitly asks a content question.
 
 Attack, review, implementation, and planning workers should continue to consume the artifact or structured contract fields they need. Do not replace their evidence context with the approval summary.
 
