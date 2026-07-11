@@ -12,7 +12,7 @@
       "input": {
         "role": "architect",
         "prompt": [
-          "Design the smallest useful workflow-runner workflow for the user's task. Inspect existing workflows and repo rules. Produce a workflow contract with name, path, top-level description, use/do-not-use boundaries, steps, roles, approval gates, output schemas, validation plan, smoke scenario, analyzer finding contract, rerun comparison plan, and non-goals. When revising after workflow_design_attack feedback or approve_workflow_design rejection, read prompt input feedback and address it explicitly while preserving approved constraints. Return ready_for_attack when the contract is ready for critic review, or blocked when the workflow should not be created or required context is unavailable. Do not edit files in this step.",
+          "Design the smallest useful workflow-runner workflow for the user's task. Inspect existing workflows and repo rules. Produce a workflow contract with name, path, top-level description, use/do-not-use boundaries, steps, roles, approval gates, output schemas, validation plan, smoke scenario, analyzer finding contract, rerun comparison plan, and non-goals. When revising after workflow_design_attack feedback or approve_workflow_design rejection, read prompt input feedback and address it explicitly while preserving approved constraints. Return ready_for_attack for the initial contract or a critic-requested revision. If the latest approve_workflow_design output is rejected, return ready_for_approval after the correction and do not rerun workflow_design_attack. Return blocked when the workflow should not be created or required context is unavailable. Do not edit files in this step.",
           "",
           "Input context:",
           "Previous workflow design draft:",
@@ -32,7 +32,8 @@
       "next": {
         "match": "${{ output.outcome }}",
         "cases": {
-          "ready_for_attack": "workflow_design_attack"
+          "ready_for_attack": "workflow_design_attack",
+          "ready_for_approval": "approve_workflow_design"
         }
       }
     },
@@ -66,7 +67,7 @@
       "kind": "approval",
       "input": {
         "prompt": [
-          "Show the workflow contract and critic verdict to the user. Continue only after explicit approval. Return approval approved to implement the workflow, rejected to revise the design, or blocked with the blocker.",
+          "Show the workflow contract to the user and continue only after explicit approval. On the first visit, include the critic verdict. After a user-rejected contract is corrected, return directly to this gate and treat the old verdict only as evidence about the previous version; do not present it as critique of the revised contract. Return approval approved to implement the workflow, rejected to revise the design, or blocked with the blocker.",
           "",
           "Input context:",
           "Workflow contract:",
@@ -76,7 +77,10 @@
           "${{ input.workflow_design_attack.verdict }}",
           "",
           "Critic findings:",
-          "${{ input.workflow_design_attack.findings | default: \"No critic findings provided.\" }}"
+          "${{ input.workflow_design_attack.findings | default: \"No critic findings provided.\" }}",
+          "",
+          "Previous workflow design approval:",
+          "${{ input.approve_workflow_design | default: \"No previous workflow design approval.\" }}"
         ]
       },
       "next": {

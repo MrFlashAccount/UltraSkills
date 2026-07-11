@@ -10,9 +10,10 @@
     "outcome": {
       "enum": [
         "ready_for_attack",
+        "ready_for_approval",
         "blocked"
       ],
-      "description": "Producer must emit the single enum value that reflects the completed stage state; use blocked only when blocker explains the recoverable pause.",
+      "description": "Producer must use ready_for_attack for an initial or critic-requested plan, ready_for_approval for a correction requested at the user gate, and blocked only for a recoverable pause.",
       "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when this says blocked or needs revision."
     },
     "summary": {
@@ -314,7 +315,7 @@
           }
         }
       },
-      "description": "Producer must emit artifact metadata for the required immutable implementation-plan artifact when outcome is ready_for_attack.",
+      "description": "Producer must emit artifact metadata for the required immutable implementation-plan artifact when ready for attack or approval.",
       "x-usage": "Emit only the required implementation-plan artifact. The full readable plan/proposal body lives in the referenced artifact file; structured routing fields remain in JSON."
     },
     "results": {
@@ -379,7 +380,10 @@
       "if": {
         "properties": {
           "outcome": {
-            "const": "ready_for_attack"
+            "enum": [
+              "ready_for_attack",
+              "ready_for_approval"
+            ]
           }
         },
         "required": [
