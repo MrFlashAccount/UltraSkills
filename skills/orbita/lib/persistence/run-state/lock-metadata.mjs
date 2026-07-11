@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { link, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { hostname } from 'node:os';
 
 export const RUN_STATE_LOCK_HEARTBEAT_MS = 3_000;
 export const RUN_STATE_LOCK_STALE_MS = 12_000;
@@ -9,6 +10,7 @@ export function createLockMetadata({ now = new Date() } = {}) {
   return {
     lockId: randomUUID(),
     pid: process.pid,
+    hostname: hostname(),
     createdAt: timestamp,
     heartbeatAt: timestamp,
   };
@@ -43,10 +45,14 @@ function isProcessAlive(pid) {
 }
 
 export function isStaleLockMetadata(metadata, { now = Date.now(), staleMs = RUN_STATE_LOCK_STALE_MS } = {}) {
-  const alive = isProcessAlive(metadata?.pid);
-  const heartbeatAt = timestampMs(metadata?.heartbeatAt);
-  if (Number.isFinite(heartbeatAt)) return !alive || now - heartbeatAt >= staleMs;
+  // A delayed event loop cannot refresh its heartbeat, but it still owns the
+  // lock. Never steal from a verifiably live process on this host. Host-tagged
+  // locks from another machine cannot use local PID liveness as authority.
+  const localOwner = metadata?.hostname === undefined || metadata.hostname === hostname();
+  const alive = localOwner && isProcessAlive(metadata?.pid);
   if (alive) return false;
+  const heartbeatAt = timestampMs(metadata?.heartbeatAt);
+  if (Number.isFinite(heartbeatAt)) return now - heartbeatAt >= staleMs;
   const createdAt = timestampMs(metadata?.createdAt);
   if (Number.isFinite(createdAt)) return now - createdAt >= staleMs;
   const invalidMtime = Number(metadata?.invalidLockFileMtimeMs);

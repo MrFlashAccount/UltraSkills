@@ -831,6 +831,20 @@ test('runner: fanout persists owner phase and synthetic branch requests through 
       { input: JSON.stringify(workerOutput(summary)), debugSummary: true },
     );
     assert.equal(written.status, 0, written.stderr);
+    if (stepId.endsWith('backend_review')) {
+      const replay = await runRunner(
+        ['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', stepId],
+        { input: JSON.stringify({ results: [{ summary, type: 'check' }], outcome: 'ready' }), debugSummary: true },
+      );
+      assert.equal(replay.status, 0, replay.stderr);
+      assert.equal(JSON.parse(replay.stdout).idempotent, true);
+      const conflict = await runRunner(
+        ['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', stepId],
+        { input: JSON.stringify(workerOutput('conflicting fanout replay')), debugSummary: true },
+      );
+      assert.equal(conflict.status, 1);
+      assert.match(conflict.stderr, /already accepted with a different payload/);
+    }
   }
 
   const owner = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue fanout owner');
@@ -908,10 +922,17 @@ test('runner: shard persists batches and runs the genuine final step worker', as
   assert.match(instructions.stdout, /Review backend \(0\/2\)/);
   assert.doesNotMatch(instructions.stdout, /EXPLICIT_ONLY/);
 
-  assert.equal((await runRunner(
+  const firstShardWrite = await runRunner(
     ['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'review__shard__1__0'],
     { input: JSON.stringify(workerOutput('backend reviewed')), debugSummary: true },
-  )).status, 0);
+  );
+  assert.equal(firstShardWrite.status, 0, firstShardWrite.stderr);
+  const shardReplay = await runRunner(
+    ['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'review__shard__1__0'],
+    { input: JSON.stringify({ results: [{ summary: 'backend reviewed', type: 'check' }], outcome: 'ready' }), debugSummary: true },
+  );
+  assert.equal(shardReplay.status, 0, shardReplay.stderr);
+  assert.equal(JSON.parse(shardReplay.stdout).idempotent, true);
   const second = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'continue shard batch');
   assert.deepEqual(second.requests.map((request) => request.stepId), ['review__shard__1__1']);
   assert.equal(second.baton.state.review__shard__1__0.results[0].summary, 'backend reviewed');

@@ -7,6 +7,7 @@ import { afterAll, test } from 'bun:test';
 import { next as runnerNext } from './helpers/orbita-production-api.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 import { publicFailureHistoryDetails } from '../runner/history-projection.mjs';
+import { appendHistoryOnce } from '../persistence/run-state/durable-commit.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-check-'));
 writeFileSync(path.join(tempDir, 'output.md'), '## Output contract\nReturn markdown.\n');
@@ -173,6 +174,25 @@ function workerOutput(summary) {
 }
 
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
+
+test('history-once recovery completes marker after append crash without duplicate entry', async () => {
+  const paths = resolveRunPaths({ runId: `workflow-runner-test-${process.pid}-history-once-crash` });
+  rmSync(paths.runDir, { recursive: true, force: true });
+  mkdirSync(paths.runnerDir, { recursive: true });
+  const entry = { source: 'history-once-crash', baton: { cursor: 'prepare', status: 'running' } };
+  process.env.WORKFLOW_RUNNER_FAIL_HISTORY_ONCE_AFTER = 'history';
+  try {
+    await assert.rejects(
+      () => appendHistoryOnce(paths, entry, { dedupeKey: 'same-logical-record' }),
+      /injected history-once failure after history/,
+    );
+  } finally {
+    delete process.env.WORKFLOW_RUNNER_FAIL_HISTORY_ONCE_AFTER;
+  }
+  assert.equal(await appendHistoryOnce(paths, entry, { dedupeKey: 'same-logical-record' }), true);
+  assert.equal(await appendHistoryOnce(paths, entry, { dedupeKey: 'same-logical-record' }), false);
+  assert.equal((readFileSync(paths.historyPath, 'utf8').match(/source: history-once-crash/g) ?? []).length, 1);
+});
 
 
 

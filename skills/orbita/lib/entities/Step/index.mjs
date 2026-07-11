@@ -9,6 +9,7 @@ import { applyOutputToBatonState } from '../../runtime/baton-state.mjs';
 import { selectState } from '../../runtime/state-selection.mjs';
 import { statusForStep } from '../../runtime/step-status.mjs';
 import { assertTransitionTarget } from '../../runtime/transition-targets.mjs';
+import { deepFreeze } from '../../runtime/owned-snapshot.mjs';
 import {
   assertNoNestedMatchCasesTarget,
   assertTransitionDescriptorTargets,
@@ -22,6 +23,10 @@ function cloneBoundaryData(dto) {
 
 function workflowData(workflow) {
   return typeof workflow?.toJSON === 'function' ? workflow.toJSON() : workflow;
+}
+
+function normalizeBaton(baton) {
+  return typeof baton?.toJSON === 'function' ? baton.toJSON() : baton;
 }
 
 function requireObject(value, name) {
@@ -104,7 +109,7 @@ function resolveMatchCasesDescriptor({ workflow, baton, stepId, step, output, de
   return assertResolvedTransitionTargets(workflow, stepId, resolveMatchCasesValue({ baton, stepId, step, output, descriptor }));
 }
 
-export function resolveTransition({ workflow, baton, stepId, step, output }) {
+function resolveTransitionData({ workflow, baton, stepId, step, output }) {
   const wf = workflowData(workflow);
   requireObject(output, 'worker output');
   invariant(step.kind !== 'done', `cursor '${stepId}' is terminal and cannot be applied`);
@@ -117,12 +122,16 @@ export function resolveTransition({ workflow, baton, stepId, step, output }) {
   invariant(false, `workflow step '${stepId}' has unsupported transition kind '${descriptor.kind}'`);
 }
 
+export function resolveTransition({ workflow, baton, stepId, step, output }) {
+  return resolveTransitionData({ workflow, baton: normalizeBaton(baton), stepId, step, output });
+}
+
 export class Step {
   constructor(stepData) {
     const data = cloneBoundaryData(stepData);
     this.id = data.id;
     this.data = data.step ? { id: data.id, ...data.step } : data;
-    Object.freeze(this.data);
+    deepFreeze(this.data);
   }
 
   toJSON() {
@@ -135,12 +144,15 @@ export class Step {
   }
 
   resolveInputs(baton) {
+    const batonData = normalizeBaton(baton);
     const descriptor = Object.hasOwn(this.data, 'next') ? normalizeTransitionNext(this.data.next) : undefined;
-    return contextInputForStep(baton, descriptor ? transitionInputSelectors(descriptor) : [], this.id);
+    return structuredClone(contextInputForStep(batonData, descriptor ? transitionInputSelectors(descriptor) : [], this.id));
   }
 
-  resolveConcreteTargets(baton, workflow, output = baton?.state?.[this.id]) {
-    return resolveTransition({ workflow, baton, stepId: this.id, step: this.data, output });
+  resolveConcreteTargets(baton, workflow, output) {
+    const batonData = normalizeBaton(baton);
+    const normalizedOutput = output === undefined ? batonData?.state?.[this.id] : output;
+    return resolveTransitionData({ workflow, baton: batonData, stepId: this.id, step: this.data, output: normalizedOutput });
   }
 
   validateForRun({ workflow } = {}) {
@@ -149,7 +161,7 @@ export class Step {
   }
 
   validateInstructionRequest({ workflow, baton, runState = {}, stepId } = {}) {
-    const batonData = typeof baton?.toJSON === 'function' ? baton.toJSON() : baton;
+    const batonData = normalizeBaton(baton);
     const workflowDoc = workflowData(workflow);
     const requests = runState.requests ?? batonData?.requests ?? [];
     const request = requests.find((candidate) => candidate?.stepId === stepId || candidate?.id === stepId);
@@ -162,7 +174,7 @@ export class Step {
 
     if (workflowStepId === this.id) return { ok: true, stepId: requestStepId };
     if (batonData?.state && Object.hasOwn(batonData.state, this.id) && Object.hasOwn(this.data, 'next')) {
-      const resolved = this.resolveConcreteTargets(batonData, workflowDoc, batonData.state[this.id]);
+      const resolved = resolveTransitionData({ workflow: workflowDoc, baton: batonData, stepId: this.id, step: this.data, output: batonData.state[this.id] });
       if (resolved.targetStepId === workflowStepId) return { ok: true, stepId: requestStepId };
     }
 
@@ -170,23 +182,28 @@ export class Step {
   }
 
   prepareRenderContext({ workflow, baton, userPrompt } = {}) {
-    return { workflow: workflowData(workflow), baton, stepId: this.id, step: this.toJSON(), input: this.resolveInputs(baton), userPrompt };
+    const batonData = normalizeBaton(baton);
+    const descriptor = Object.hasOwn(this.data, 'next') ? normalizeTransitionNext(this.data.next) : undefined;
+    const input = structuredClone(contextInputForStep(batonData, descriptor ? transitionInputSelectors(descriptor) : [], this.id));
+    return { workflow: workflowData(workflow), baton: batonData, stepId: this.id, step: this.toJSON(), input, userPrompt };
   }
 
   applyOutput({ baton, output, workflow, attempts, storeStepOutput = ['worker', 'fanout', 'shard', 'approval'].includes(this.data.kind) } = {}) {
+    const batonData = normalizeBaton(baton);
     const wf = workflowData(workflow);
-    const resolvedTransition = this.resolveConcreteTargets(baton, wf, output);
+    const normalizedOutput = output === undefined ? batonData?.state?.[this.id] : output;
+    const resolvedTransition = resolveTransitionData({ workflow: wf, baton: batonData, stepId: this.id, step: this.data, output: normalizedOutput });
     const { transition, loopProgress } = applyLoopPolicyTransition({
       workflow: wf,
-      baton,
+      baton: batonData,
       stepId: this.id,
       transition: resolvedTransition,
     });
-    const batonData = cloneBoundaryData(baton);
+    const nextBatonData = cloneBoundaryData(batonData);
     const outputStepId = storeStepOutput ? this.id : undefined;
     const withOutput = {
-      ...batonData,
-      state: applyOutputToBatonState(batonData, output, attempts ?? transition.attempts, outputStepId, { loopProgress }),
+      ...nextBatonData,
+      state: applyOutputToBatonState(nextBatonData, normalizedOutput, attempts ?? transition.attempts, outputStepId, { loopProgress }),
     };
 
     const targetStep = wf.steps?.[transition.targetStepId];

@@ -246,6 +246,47 @@ test('shard partial batch retry durably accepts valid siblings and retries only 
   assert.deepEqual(finalWorker.steps.map((entry) => entry.id), ['shard_work']);
 });
 
+test('shard malformed JSON retries every current child deterministically and remains bounded', () => {
+  const workflowDoc = shardWorkflow();
+  const first = runNext({ workflowDoc, batonDoc: initialBaton(), resources });
+  const retry = applyWorkflowOutput({ workflowDoc, batonDoc: first.baton, outputContent: '{bad', resources });
+
+  assert.deepEqual(retry.steps.map((entry) => entry.id), first.steps.map((entry) => entry.id));
+  assert.deepEqual(retry.baton.state.shards.shard_work.current_requests, first.baton.state.shards.shard_work.current_requests);
+  assert.equal(retry.baton.state.attempts['shard_work__shard__1__0:output.schema'], 1);
+  assert.equal(retry.baton.state.attempts['shard_work__shard__1__1:output.schema'], 1);
+  assert.throws(
+    () => applyWorkflowOutput({
+      workflowDoc,
+      batonDoc: applyWorkflowOutput({ workflowDoc, batonDoc: retry.baton, outputContent: '{bad-again', resources }).baton,
+      outputContent: '{bad-third',
+      resources,
+    }),
+    /after 3 attempts: step output is not valid JSON/,
+  );
+});
+
+test('shard rejects corrupted durable activation identity and incomplete accepted child state', () => {
+  const workflowDoc = shardWorkflow();
+  const first = runNext({ workflowDoc, batonDoc: initialBaton(), resources });
+  const corruptIdentity = structuredClone(first.baton);
+  corruptIdentity.state.shards.shard_work.shard_records[0].request_id = 'forged';
+  assert.throws(() => runNext({ workflowDoc, batonDoc: corruptIdentity, resources }), /non-deterministic identity/);
+
+  const incomplete = structuredClone(first.baton);
+  const activation = incomplete.state.shards.shard_work;
+  const requestId = activation.shard_records[0].request_id;
+  activation.shard_records[0].status = 'accepted';
+  activation.accepted_outputs['0'] = {
+    index: 0,
+    request_id: requestId,
+    status: 'accepted',
+    output_ref: { step_id: requestId },
+  };
+  delete incomplete.state[requestId];
+  assert.throws(() => runNext({ workflowDoc, batonDoc: incomplete, resources }), /lacks retained output state/);
+});
+
 test('shard rejects empty, numeric, and dynamically non-array inputs', () => {
   const empty = shardWorkflow({ shard: { input: { shards: [], prompt: 'Finalize.' } } });
   assert.throws(() => assertWorkflowSchema(empty), /must NOT have fewer than 1 items/);

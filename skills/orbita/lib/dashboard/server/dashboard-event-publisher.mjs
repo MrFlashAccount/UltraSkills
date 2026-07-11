@@ -19,6 +19,7 @@ export class DashboardEventPublisher {
     this.lastData = undefined;
     this.refreshing = false;
     this.closed = false;
+    this.unhealthy = false;
   }
 
   subscribe(callback) {
@@ -61,9 +62,10 @@ export class DashboardEventPublisher {
     try {
       const data = await this.snapshot();
       const payload = safeJson(data);
-      if (payload !== this.lastPayload) {
+      if (payload !== this.lastPayload || this.unhealthy) {
         this.lastPayload = payload;
         this.lastData = data;
+        this.unhealthy = false;
         this.publish({ type: DASHBOARD_EVENT_TYPES.SNAPSHOT, data });
       }
     } finally {
@@ -78,6 +80,7 @@ export class DashboardEventPublisher {
   }
 
   publishError(error) {
+    this.unhealthy = true;
     this.publish({
       type: DASHBOARD_EVENT_TYPES.ERROR,
       data: { message: this.errorMessage(error) },

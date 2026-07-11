@@ -27,13 +27,20 @@ function isSymlink(pathname) {
   }
 }
 
-export function artifactPathBoundaryErrors(output, artifactOutputDir) {
+export function artifactPathBoundaryErrors(output, artifactOutputDir, runDir) {
   if (artifactOutputDir === undefined || !output || typeof output !== 'object' || Array.isArray(output) || !Object.hasOwn(output, 'artifacts') || !Array.isArray(output.artifacts)) return [];
 
   const errors = [];
   const expectedDir = resolve(artifactOutputDir);
+  const canonicalRunDir = runDir === undefined ? undefined : realPathPreservingMissingTail(resolve(runDir));
   const expectedDirIsSymlink = isSymlink(expectedDir);
   const realExpectedDir = expectedDirIsSymlink ? expectedDir : realPathPreservingMissingTail(expectedDir);
+  if (canonicalRunDir !== undefined && (
+    !isInsideDirectory(expectedDir, resolve(runDir))
+    || !isInsideDirectory(realExpectedDir, canonicalRunDir)
+  )) {
+    return ['/artifacts path boundary must stay under the canonical run directory'];
+  }
   for (const [index, artifact] of output.artifacts.entries()) {
     if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact) || typeof artifact.path !== 'string' || !isAbsolute(artifact.path)) continue;
     const artifactPath = resolve(artifact.path);
@@ -46,7 +53,10 @@ export function artifactPathBoundaryErrors(output, artifactOutputDir) {
       continue;
     }
     const realArtifactPath = realPathPreservingMissingTail(artifactPath);
-    if (!isInsideDirectory(realArtifactPath, realExpectedDir)) errors.push(`/artifacts/${index}/path must not escape artifact output directory through symlinks: ${artifactOutputDir}`);
+    if (!isInsideDirectory(realArtifactPath, realExpectedDir)
+      || (canonicalRunDir !== undefined && !isInsideDirectory(realArtifactPath, canonicalRunDir))) {
+      errors.push(`/artifacts/${index}/path must not escape artifact output directory through symlinks: ${artifactOutputDir}`);
+    }
   }
   return errors;
 }

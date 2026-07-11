@@ -18,7 +18,7 @@ const outputSchemaCache = new Map();
 
 function fileCacheSignature(filePath) {
   const stats = statSync(filePath);
-  return `${stats.mtimeMs}:${stats.size}`;
+  return `${stats.dev}:${stats.ino}:${stats.ctimeMs}:${stats.mtimeMs}:${stats.size}`;
 }
 
 function readOutputSchemaJson(schemaPath, schemaRef, messagePrefix) {

@@ -107,8 +107,15 @@ test('dashboard browser client consumes API and SSE surfaces without filesystem 
   assert.doesNotMatch(client, /\/api\/dashboard\//);
   assert.doesNotMatch(client, /updateSelection/);
   assert.match(client, /EventSource/);
+  assert.match(client, /dashboard\.error/);
+  assert.match(client, /source\.onerror/);
   assert.equal(/\bnode:fs\b|\bfs\.|readFile|writeFile|workflow-runner|lease-token/.test(client), false);
   assert.equal(/dragstart|drop|draggable/.test(client), false);
+});
+
+test('dashboard UI renders transport health errors and clears them through snapshots', () => {
+  const html = renderDashboard({ ...fixture, transportError: 'dashboard observer read failed' });
+  assert.match(html, /dashboard observer read failed/);
 });
 
 test('dashboard drawer can close without selecting the first run again', () => {

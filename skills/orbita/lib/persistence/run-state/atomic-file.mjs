@@ -39,6 +39,8 @@ export async function writeJsonAtomic(path, value) {
     await handle.sync();
     await handle.close();
     await rename(tempPath, path);
+    const directory = await open(dirname(path), 'r');
+    try { await directory.sync(); } finally { await directory.close(); }
     renamed = true;
   } finally {
     try { await handle.close(); } catch {}
@@ -57,11 +59,18 @@ export async function writeTextAtomic(path, value) {
     await handle.sync();
     await handle.close();
     await rename(tempPath, path);
+    const directory = await open(dirname(path), 'r');
+    try { await directory.sync(); } finally { await directory.close(); }
     renamed = true;
   } finally {
     try { await handle.close(); } catch {}
     if (!renamed) await rm(tempPath, { force: true });
   }
+}
+
+export async function fsyncParentDirectory(path) {
+  const directory = await open(dirname(path), 'r');
+  try { await directory.sync(); } finally { await directory.close(); }
 }
 
 export async function readText(path, name) {

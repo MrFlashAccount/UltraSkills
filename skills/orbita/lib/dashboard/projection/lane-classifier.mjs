@@ -1,7 +1,5 @@
 import { DASHBOARD_LANES } from '../contracts/dashboard-contracts.mjs';
 
-const USER_WAITING_STEP = /(user|human|approval|approve|clarification|gate)/i;
-
 function hasUnresolvedRecoverableBlocker(baton) {
   const blockers = baton?.recoverableWorkerBlockers;
   if (!blockers || typeof blockers !== 'object' || Array.isArray(blockers)) return false;
@@ -11,11 +9,12 @@ function hasUnresolvedRecoverableBlocker(baton) {
   });
 }
 
-export function classifyDashboardLane({ run, baton, degraded } = {}) {
+export function classifyDashboardLane({ run, baton, degraded, currentRequests } = {}) {
   if (degraded) return DASHBOARD_LANES.DEGRADED;
-  if (baton?.status === 'done' || run?.status === 'done') return DASHBOARD_LANES.DONE;
+  if (run?.status === 'done') return DASHBOARD_LANES.DONE;
+  if (run?.status === 'failed') return DASHBOARD_LANES.BLOCKED;
   if (hasUnresolvedRecoverableBlocker(baton)) return DASHBOARD_LANES.BLOCKED;
-  if (typeof baton?.cursor === 'string' && USER_WAITING_STEP.test(baton.cursor)) {
+  if (Array.isArray(currentRequests) && currentRequests.some((request) => request?.action === 'wait_for_approval')) {
     return DASHBOARD_LANES.WAITING_FOR_USER;
   }
   return DASHBOARD_LANES.WORKER_RUNNING;

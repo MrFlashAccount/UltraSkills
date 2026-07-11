@@ -19,7 +19,7 @@ export function readOutputSchemas({ workflow, workflowPath, repositoryRoot = def
     const schemaEntries = [
       [stepId, step.output?.schema],
       [`${stepId}.worker`, step.worker?.output?.schema],
-      ...Object.entries(step.branches ?? {}).map(([branchId, branch]) => [branchId, branch?.output?.schema]),
+      ...Object.entries(step.branches ?? {}).map(([branchId, branch]) => [`${stepId}.branches.${branchId}`, branch?.output?.schema]),
     ].filter(([, schemaRef]) => Boolean(schemaRef));
     for (const [producerId, schemaRef] of schemaEntries) {
       const schema = loadOutputSchema({ workflow: doc, workflowPath, schemaRef, repositoryRoot }).schema;

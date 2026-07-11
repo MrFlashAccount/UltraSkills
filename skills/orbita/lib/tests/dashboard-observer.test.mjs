@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import { get } from 'node:http';
+import { EventEmitter } from 'node:events';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 import { listDashboardRuns, getDashboardRun, startDashboardServer } from '../dashboard/api.mjs';
 import { DashboardEventPublisher } from '../dashboard/server/dashboard-event-publisher.mjs';
+import { createDashboardRequestHandler } from '../dashboard/server/dashboard-server.mjs';
+import { projectDashboardRun } from '../dashboard/projection/safe-dashboard-projection.mjs';
+import { buildHistoryExcerpt } from '../dashboard/projection/history-excerpt-policy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const defaultWorkflow = path.join(root, 'workflows/dev-harness/workflow.toml');
@@ -38,6 +42,24 @@ async function writeRunState(runsRoot, runId, baton, history = '') {
   await mkdir(path.join(runDir, '.workflow-runner'), { recursive: true });
   await writeFile(path.join(runDir, 'baton.json'), `${JSON.stringify(baton, null, 2)}\n`, { mode: 0o600 });
   await writeFile(path.join(runDir, 'history.md'), history, { mode: 0o600 });
+}
+
+async function writeCurrentRequests(runsRoot, runId, requests) {
+  await writeFile(path.join(runsRoot, runId, '.workflow-runner', 'current-requests.json'), `${JSON.stringify(requests)}\n`, { mode: 0o600 });
+}
+
+async function writeAuthority(runsRoot, runId, patch = {}) {
+  const entry = indexRun(runId, patch);
+  await writeFile(path.join(runsRoot, runId, '.workflow-runner', 'authority.json'), `${JSON.stringify({
+    schemaVersion: 1,
+    topologyVersion: 'run-authority-v1',
+    runId,
+    workflow: entry.workflow,
+    status: patch.status ?? entry.status,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+    workerLease: patch.workerLease ?? null,
+  })}\n`, { mode: 0o600 });
 }
 
 function indexRun(runId, patch = {}) {
@@ -180,6 +202,7 @@ test('dashboard list isolates per-run read failures as degraded without hiding h
     status: 'running',
     state: { artifacts: [], results: [] },
   });
+  await writeCurrentRequests(runsRoot, healthyId, [{ id: 'approval', action: 'wait_for_approval', stepId: 'approval_gate' }]);
   await mkdir(path.join(runsRoot, corruptId), { recursive: true });
   await writeFile(path.join(runsRoot, corruptId, 'baton.json'), '{not json', { mode: 0o600 });
 
@@ -195,7 +218,7 @@ test('dashboard list isolates per-run read failures as degraded without hiding h
 test('dashboard observer rebuilds read model from durable state after restart', async () => {
   const runsRoot = await makeRunsRoot('restart');
   const runId = `dashboard-restart-${process.pid}`;
-  await writeIndex(runsRoot, { [runId]: indexRun(runId, { title: 'Restarted' }) });
+  await writeIndex(runsRoot, { [runId]: { ...indexRun(runId, { title: 'Restarted' }), status: 'done' } });
   await writeRunState(runsRoot, runId, {
     cursor: 'done_step',
     status: 'done',
@@ -230,6 +253,110 @@ test('dashboard event publisher emits changed snapshots through polling without 
   assert.equal(events[0].data[0].runId, 'run-0');
   assert.equal(events[1].data[0].runId, 'run-1');
   assert.deepEqual(lateEvents[0].data, [{ runId: 'run-1' }]);
+});
+
+test('dashboard event publisher emits recovery snapshot even when durable data is unchanged', async () => {
+  const publisher = new DashboardEventPublisher({ snapshot: async () => [{ runId: 'same-run' }] });
+  const events = [];
+  publisher.subscribe((event) => events.push(event.type));
+  await publisher.refresh();
+  publisher.publishError(new Error('/private/read/path failed'));
+  await publisher.refresh();
+  publisher.close();
+
+  assert.deepEqual(events, ['dashboard.snapshot', 'dashboard.error', 'dashboard.snapshot']);
+});
+
+test('dashboard SSE client coalesces slow-consumer updates and closes without retaining clients', async () => {
+  const publisher = new DashboardEventPublisher({ snapshot: async () => [] });
+  const observer = { runsRoot: '/private/runs', listRuns: async () => [], getRun: async () => undefined };
+  const handler = createDashboardRequestHandler({ observer, publisher, staticRoot: path.join(root, 'skills/orbita/lib/dashboard/ui') });
+  const request = new EventEmitter();
+  request.method = 'GET';
+  request.url = '/api/events';
+  const response = new EventEmitter();
+  const writes = [];
+  response.writeHead = () => {};
+  response.write = (frame) => { writes.push(frame); return writes.length !== 1; };
+  response.end = () => response.emit('close');
+  response.destroy = () => response.emit('close');
+
+  await handler(request, response);
+  publisher.publish({ type: 'dashboard.snapshot', data: [{ runId: 'old' }] });
+  publisher.publish({ type: 'dashboard.snapshot', data: [{ runId: 'latest' }] });
+  assert.equal(writes.length, 1);
+  response.emit('drain');
+  assert.equal(writes.length, 2);
+  assert.doesNotMatch(writes[1], /old/);
+  assert.match(writes[1], /latest/);
+  assert.equal(handler.sseClientCount(), 1);
+  handler.closeSseClients();
+  assert.equal(handler.sseClientCount(), 0);
+  publisher.close();
+});
+
+test('dashboard projection sanitizes every browser string and path-like refs', () => {
+  const privatePath = '/home/secret/artifact.md';
+  const command = `bun workflow-runner.mjs instructions --run-id x --lease-token lease-secret ${privatePath}`;
+  const projected = projectDashboardRun({
+    run: {
+      runId: 'safe-run', title: command, summary: command,
+      workflow: { identity: command }, status: 'running',
+      createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', workerLease: null,
+    },
+    persistedState: {
+      baton: {
+        cursor: 'worker', status: 'running',
+        state: {
+          artifacts: [{ producerStepId: 'worker', artifact: { id: command, content_type: 'text/plain', summary: command } }],
+          results: [{ type: command, cursor: 'worker', outcome: command, summary: command, ref: privatePath }],
+          worker: { ok: true },
+        },
+      },
+      history: { mode: 'embedded-text', text: command },
+      currentRequests: [],
+    },
+  }, { includeDetail: true });
+  const serialized = JSON.stringify(projected);
+  assert.doesNotMatch(serialized, /lease-secret|--lease-token|workflow-runner|instructions --run-id|\/home\/secret/);
+  assert.match(serialized, /redacted/);
+});
+
+test('dashboard history excerpt keeps the newest safe lines in chronological order', () => {
+  const excerpt = buildHistoryExcerpt({ mode: 'embedded-text', text: 'old-1\nold-2\nnew-1\nnew-2' }, { lines: 2, bytes: 1024 });
+  assert.deepEqual(excerpt.lines, ['new-1', 'new-2']);
+  assert.equal(excerpt.truncated, true);
+});
+
+test('dashboard authority controls status and final sort order after overlay', async () => {
+  const runsRoot = await makeRunsRoot('authority-sort');
+  const firstId = `authority-first-${process.pid}`;
+  const secondId = `authority-second-${process.pid}`;
+  await writeIndex(runsRoot, {
+    [firstId]: indexRun(firstId, { updatedAt: '2026-06-01T10:00:00.000Z' }),
+    [secondId]: { ...indexRun(secondId, { updatedAt: '2026-06-01T12:00:00.000Z' }), status: 'done' },
+  });
+  await writeRunState(runsRoot, firstId, { cursor: 'done', status: 'done', state: { artifacts: [], results: [] } });
+  await writeRunState(runsRoot, secondId, { cursor: 'done', status: 'done', state: { artifacts: [], results: [] } });
+  await writeAuthority(runsRoot, firstId, { status: 'done', updatedAt: '2026-06-01T13:00:00.000Z' });
+  await writeAuthority(runsRoot, secondId, { status: 'running', updatedAt: '2026-06-01T09:00:00.000Z' });
+
+  const runs = await listDashboardRuns({ runsRoot });
+  assert.deepEqual(runs.map((run) => run.runId), [firstId, secondId]);
+  assert.equal(runs[0].status, 'done');
+  assert.equal(runs[0].lane.id, 'done');
+  assert.equal(runs[1].status, 'running');
+  assert.equal(runs[1].lane.id, 'worker_running');
+});
+
+test('dashboard mini-map excludes interpreter-owned state metadata', () => {
+  const projected = projectDashboardRun({
+    run: { runId: 'mini-map-safe', workflow: { identity: 'test' }, status: 'running', workerLease: null },
+    persistedState: { baton: { cursor: 'worker', status: 'running', state: {
+      artifacts: [], results: [], attempts: {}, $loopProgress: {}, shards: {}, fanouts: {}, worker: { ok: true },
+    } } },
+  });
+  assert.deepEqual(projected.miniMap.completedSteps, ['worker']);
 });
 
 function readSseEvent(url) {
@@ -313,6 +440,23 @@ test('dashboard local server exposes list, detail, events, and static surfaces',
   }
 });
 
+test('dashboard server close terminates an attached SSE client within its bounded shutdown window', async () => {
+  const runsRoot = await makeRunsRoot('sse-close');
+  await writeIndex(runsRoot, {});
+  const dashboard = await startDashboardServer({ runsRoot, pollMs: 25 });
+  const connected = new Promise((resolve, reject) => {
+    const request = get(`${dashboard.url}/api/events`, (response) => {
+      response.once('data', () => resolve(request));
+    });
+    request.once('error', reject);
+  });
+  const request = await connected;
+  const startedAt = Date.now();
+  await dashboard.close();
+  request.destroy();
+  assert.ok(Date.now() - startedAt < 1000, 'dashboard close exceeded the bounded SSE shutdown window');
+});
+
 test('dashboard API and server redact corrupt runs index paths', async () => {
   const runsRoot = await makeRunsRoot('redaction');
   await writeFile(path.join(runsRoot, 'runs.json'), '{not json\n', { mode: 0o600 });
@@ -371,6 +515,24 @@ test('dashboard static read failures do not expose local static paths', async ()
     assert.equal(payload.error, 'static asset not found');
     assert.doesNotMatch(JSON.stringify(payload), /private-static-root/);
     assert.doesNotMatch(JSON.stringify(payload), new RegExp(runsRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  } finally {
+    await dashboard.close();
+  }
+});
+
+test('dashboard static server rejects symlink assets that escape the canonical root', async () => {
+  const runsRoot = await makeRunsRoot('static-symlink');
+  await writeIndex(runsRoot, {});
+  const staticRoot = path.join(runsRoot, 'static');
+  const privateFile = path.join(runsRoot, 'private.txt');
+  await mkdir(staticRoot);
+  await writeFile(privateFile, 'private dashboard escape');
+  await symlink(privateFile, path.join(staticRoot, 'client.js'));
+  const dashboard = await startDashboardServer({ runsRoot, staticRoot, pollMs: 25 });
+  try {
+    const response = await fetch(`${dashboard.url}/dashboard/client.js`);
+    assert.equal(response.status, 404);
+    assert.doesNotMatch(await response.text(), /private dashboard escape|private\.txt/);
   } finally {
     await dashboard.close();
   }

@@ -18,6 +18,7 @@ function assertCommitSchema(commit) {
   assertString(commit.id, 'persisted run-state commit id');
   assertString(commit.createdAt, 'persisted run-state commit createdAt');
   if (!['pending', 'applying', 'applied'].includes(commit.status)) throw new Error('persisted run-state commit status is invalid');
+  if ('operation' in commit) assertString(commit.operation, 'persisted run-state commit operation');
   assertObject(commit.sideEffects, 'persisted run-state commit sideEffects');
   if (commit.version === 2 && Object.hasOwn(commit, 'historyAppend')) {
     assertObject(commit.historyAppend, 'persisted run-state commit historyAppend');
@@ -83,16 +84,22 @@ export function assertPersistedRunState(state, name = 'persisted run state') {
 
 export function commitMetadata(commit) {
   if (!commit) return undefined;
+  if ('operation' in commit && (typeof commit.operation !== 'string' || commit.operation.length === 0)) {
+    throw new Error('pending durable workflow commit operation must be a non-empty string');
+  }
   const sideEffects = {
     baton: Object.hasOwn(commit, 'baton'),
     history: typeof commit.historyText === 'string' || commit?.historyAppend?.entryText !== undefined,
     currentRequests: Object.hasOwn(commit, 'currentRequests'),
   };
-  return {
+  const metadata = {
     version: commit.version,
     id: commit.id,
     createdAt: commit.createdAt,
     status: commit.status ?? 'pending',
     sideEffects,
   };
+  if (commit.operation !== undefined) metadata.operation = commit.operation;
+  if (commit.replay !== undefined) metadata.replay = structuredClone(commit.replay);
+  return metadata;
 }

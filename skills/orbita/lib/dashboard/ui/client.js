@@ -6,6 +6,7 @@ const state = {
   selectedRunId: null,
   lastSelectedRunId: null,
   searchQuery: '',
+  transportError: null,
 };
 
 const endpoints = {
@@ -20,6 +21,7 @@ async function loadRuns() {
   const snapshot = await response.json();
   state.snapshot = snapshot && typeof snapshot === 'object' ? snapshot : {};
   state.runs = Array.isArray(snapshot.runs) ? snapshot.runs : [];
+  state.transportError = null;
   state.selectedRunId ??= state.runs[0]?.runId ?? state.runs[0]?.id ?? null;
   renderSnapshot();
 }
@@ -45,6 +47,7 @@ function renderSnapshot() {
     runs: state.runs,
     selectedRunId: state.selectedRunId,
     searchQuery: state.searchQuery,
+    transportError: state.transportError,
   };
   const existing = document.querySelector('.orbita-dashboard');
   if (existing) {
@@ -77,11 +80,18 @@ function connectEvents() {
     const update = JSON.parse(event.data);
     if (update?.runId) selectRun(update.runId).catch(showReadError);
   });
+  source.addEventListener('dashboard.error', (event) => {
+    let message = 'dashboard observer read failed';
+    try { message = JSON.parse(event.data)?.message ?? message; } catch {}
+    showReadError(new Error(message));
+  });
+  source.onerror = () => showReadError(new Error('dashboard event connection interrupted'));
 }
 
 function showReadError(error) {
+  state.transportError = error?.message ?? 'dashboard read failed';
   const target = document.querySelector('.freshness');
-  if (target) target.textContent = error.message;
+  if (target) target.textContent = state.transportError;
 }
 
 document.addEventListener('click', (event) => {

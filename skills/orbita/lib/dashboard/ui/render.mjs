@@ -24,7 +24,7 @@ export function renderDashboard(snapshot = {}) {
   const selectedRunId = Object.hasOwn(snapshot, 'selectedRunId') ? snapshot.selectedRunId : runs[0]?.id;
   const selectedRun = runs.find((run) => run.id === selectedRunId);
   const rootLabel = snapshot.rootLabel || dashboardCopy.emptyRoot;
-  const freshness = snapshot.freshnessLabel ?? relativeTimeLabel(snapshot.generatedAt);
+  const freshness = snapshot.transportError ?? snapshot.freshnessLabel ?? relativeTimeLabel(snapshot.generatedAt);
   const counts = countsByLane(runs);
 
   return `<main class="orbita-dashboard" data-read-only="true">

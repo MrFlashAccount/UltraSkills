@@ -3,21 +3,17 @@ import { parseArgs } from 'node:util';
 import { WorkflowRuntimeError } from '../../errors.mjs';
 import { continueRun, listPointerTransitions, loadInstructions, movePointer, next, writeOutput } from '../workflow-runner-command.mjs';
 import { publicErrorMessage } from '../../public-error.mjs';
+import { readBoundedHostJsonStream } from '../../host-json-input.mjs';
 
+let activeLeaseToken;
 
 function fail(message) {
-  console.error(`workflow-runner: ${publicErrorMessage(message)}`);
+  console.error(`workflow-runner: ${publicErrorMessage(message, { leaseToken: activeLeaseToken })}`);
   process.exit(1);
 }
 
 function usage() {
   return 'usage: bun ./lib/entrypoints/cli/workflow-runner.mjs next --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--user-prompt <text> | --user-prompt-file <path>] [--lease-token <token> + diagnostics metadata] | continue --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--diagnostics] [--only-instructions] [--bind-agent <step-id=agent-id>...] [--orchestrator-debug-json <json> | --orchestrator-debug-file <path>] [--lease-token <token> + diagnostics metadata] | instructions --run-id <id> --step-id <id> [--follow-up] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | write-output --run-id <id> --step-id <id> [--json <json>] [--debug-summary-file <path>] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | list-pointer-transitions --run-id <id> [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata] | move-pointer --run-id <id> --transition-id <id> [--acknowledge-retained-state] [--workflow <workflow-file>] [--runs-root <dir>] [--lease-token <token> + diagnostics metadata]';
-}
-
-async function readStdin() {
-  const chunks = [];
-  for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
-  return Buffer.concat(chunks).toString('utf8');
 }
 
 function parseCliArgs(argv) {
@@ -98,6 +94,10 @@ function writeHostResponse(response, { onlyInstructions }) {
 
 try {
   const { mode, values } = parseCliArgs(process.argv.slice(2));
+  activeLeaseToken = values['lease-token'];
+  if (mode === 'next' && (values.owner !== undefined || values['session-id'] !== undefined || values['worker-id'] !== undefined)) {
+    fail('workflow-runner next supports implicit claim metadata only through --harness; claim first to use owner/session/worker metadata');
+  }
   if (mode === 'instructions') {
     const instructions = await loadInstructions({
       runId: values['run-id'],
@@ -114,7 +114,7 @@ try {
       workflowPath: values.workflow,
       runsRoot: values['runs-root'],
       stepId: values['step-id'],
-      json: values.json ?? await readStdin(),
+      json: values.json ?? await readBoundedHostJsonStream(process.stdin),
       debugSummaryFile: values['debug-summary-file'],
       ...leaseArgs(values),
     });

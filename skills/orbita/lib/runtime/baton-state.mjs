@@ -70,7 +70,7 @@ function mergeArtifacts(existingArtifacts, newArtifacts = [], stepId) {
 }
 
 function appendResults(existingResults = [], newResults = []) {
-  return [...existingResults, ...newResults];
+  return structuredClone([...existingResults, ...newResults]);
 }
 
 function aggregateArray(output, fieldName) {
@@ -92,7 +92,7 @@ export function applyOutputToBatonState(baton, output, attempts, stepId, { loopP
     state[stepId] = structuredClone(output);
   }
 
-  if (attempts) state.attempts = attempts;
-  if (loopProgress) state[LOOP_PROGRESS_STATE_KEY] = loopProgress;
+  if (attempts) state.attempts = structuredClone(attempts);
+  if (loopProgress) state[LOOP_PROGRESS_STATE_KEY] = structuredClone(loopProgress);
   return state;
 }

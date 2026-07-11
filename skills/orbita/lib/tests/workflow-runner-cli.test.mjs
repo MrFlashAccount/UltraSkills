@@ -8,6 +8,7 @@ import { claimWorkflowRunForTest } from './helpers/workflow-runner-api-client.mj
 import { makeTestDir } from './helpers/test-temp-dir.mjs';
 import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../runner/runner-command-builder.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
+import { HOST_JSON_INPUT_MAX_BYTES } from '../host-json-input.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = makeTestDir('workflow-runner-cli-check');
@@ -137,6 +138,22 @@ function terminalResponseFromOrchestratorInstruction(instruction) {
 }
 
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
+
+test('validate-workflow CLI rejects every step ID that runner storage cannot represent', () => {
+  for (const stepId of ['bad/id', 'bad id', 'шаг', '.', '..']) {
+    const invalid = structuredClone(workflowDoc);
+    invalid.start = stepId;
+    invalid.steps = { [stepId]: invalid.steps.prepare, done: invalid.steps.done };
+    const workflowPath = path.join(tempDir, `invalid-step-id-${Buffer.from(stepId).toString('hex')}.json`);
+    writeJson(workflowPath, invalid);
+    const result = spawnSync(process.execPath, ['skills/orbita/lib/entrypoints/cli/validate-workflow.mjs', workflowPath], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stdout}${result.stderr}`, /workflow failed schema validation/);
+  }
+});
 
 test('runner CLI: generated load-instructions command works from another cwd', async () => {
   const workflowPath = path.join(tempDir, 'portable-load-command-workflow.json');
@@ -385,4 +402,50 @@ test('runner CLI: errors do not expose raw workflow pathnames', async () => {
   assert.match(result.stderr, /failed to read workflow JSON: ENOENT|cannot read workflow: ENOENT/);
   assert.doesNotMatch(result.stderr, /missing-private-cli-workflow\.json/);
   assert.doesNotMatch(result.stderr, /workflow-redaction-cli/);
+});
+
+test('runner CLI redacts its exact lease credential from stderr', () => {
+  const leaseToken = `unknown-run-token-${process.pid}`;
+  const runsRoot = path.join(tempDir, 'credential-redaction-runs');
+  const result = spawnSync(process.execPath, [
+    'skills/orbita/lib/entrypoints/cli/workflow-runner.mjs',
+    'list-pointer-transitions', '--run-id', leaseToken, '--runs-root', runsRoot, '--lease-token', leaseToken,
+  ], { cwd: root, encoding: 'utf8', env: process.env });
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stderr.includes(leaseToken), false);
+  assert.match(result.stderr, /redacted-lease-token|workflow run private state/);
+});
+
+test('runner CLI bounds stdin and orchestrator debug files before run authorization', () => {
+  const runsRoot = path.join(tempDir, 'bounded-host-json-runs');
+  const stdinRunId = `bounded-stdin-${process.pid}`;
+  const stdinResult = spawnSync(process.execPath, [
+    'skills/orbita/lib/entrypoints/cli/workflow-runner.mjs',
+    'write-output', '--run-id', stdinRunId, '--runs-root', runsRoot, '--step-id', 'prepare', '--lease-token', 'unused-token',
+  ], { cwd: root, encoding: 'utf8', input: 'x'.repeat(HOST_JSON_INPUT_MAX_BYTES + 1), env: process.env });
+  assert.notEqual(stdinResult.status, 0);
+  assert.match(stdinResult.stderr, /host JSON stdin exceeds the 1048576-byte limit/);
+  assert.equal(existsSync(resolveRunPaths({ runId: stdinRunId, runsRoot }).runDir), false);
+
+  const debugRunId = `bounded-debug-${process.pid}`;
+  const debugFile = path.join(tempDir, 'oversized-orchestrator-debug.json');
+  writeFileSync(debugFile, 'x'.repeat(HOST_JSON_INPUT_MAX_BYTES + 1));
+  const debugResult = spawnSync(process.execPath, [
+    'skills/orbita/lib/entrypoints/cli/workflow-runner.mjs',
+    'continue', '--run-id', debugRunId, '--runs-root', runsRoot, '--orchestrator-debug-file', debugFile, '--lease-token', 'unused-token',
+  ], { cwd: root, encoding: 'utf8', env: process.env });
+  assert.notEqual(debugResult.status, 0);
+  assert.match(debugResult.stderr, /orchestrator debug JSON file exceeds the 1048576-byte limit/);
+  assert.equal(existsSync(resolveRunPaths({ runId: debugRunId, runsRoot }).runDir), false);
+});
+
+test('runner CLI rejects unsupported implicit next claim metadata explicitly', () => {
+  for (const [flag, value] of [['--owner', 'qa'], ['--session-id', 'session-a'], ['--worker-id', 'worker-a']]) {
+    const result = spawnSync(process.execPath, [
+      'skills/orbita/lib/entrypoints/cli/workflow-runner.mjs',
+      'next', '--run-id', `unsupported-next-${flag.slice(2)}-${process.pid}`, '--lease-token', 'unused-token', flag, value,
+    ], { cwd: root, encoding: 'utf8', env: process.env });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /supports implicit claim metadata only through --harness/);
+  }
 });

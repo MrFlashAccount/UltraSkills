@@ -124,6 +124,10 @@ export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow
   const claimedSteps = new Map();
   for (const [policyId, policy] of Object.entries(policies)) {
     if (isDangerousObjectKey(policyId)) fail(`loopPolicy id '${policyId}' is unsafe as a JavaScript object key`);
+    if (!policy || typeof policy !== 'object' || Array.isArray(policy)) fail(`loopPolicy '${policyId}' must be an object`);
+    if (!Array.isArray(policy.steps) || policy.steps.length === 0) fail(`loopPolicy '${policyId}' steps must be a non-empty array`);
+    if (!Number.isSafeInteger(policy.maxIterations) || policy.maxIterations < 0) fail(`loopPolicy '${policyId}' maxIterations must be a non-negative safe integer`);
+    if (typeof policy.onLimit !== 'string' || policy.onLimit.length === 0) fail(`loopPolicy '${policyId}' onLimit must be a non-empty step id`);
     const steps = sortedUnique(policy.steps);
     for (const stepId of steps) {
       if (!Object.hasOwn(workflow.steps, stepId)) fail(`loopPolicy '${policyId}' references unknown step '${stepId}'`);
@@ -152,13 +156,34 @@ export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow
 export function applyLoopPolicyTransition({ workflow, baton, stepId, transition }) {
   const policies = workflow.loopPolicies;
   const targetStepId = singleTransitionTarget(transition);
+  if (policies !== undefined && (!policies || typeof policies !== 'object' || Array.isArray(policies))) {
+    throw new WorkflowRuntimeError('loopPolicies must be an object keyed by policy id');
+  }
+  for (const [policyId, policy] of Object.entries(policies ?? {})) {
+    if (!policy || typeof policy !== 'object' || !Array.isArray(policy.steps)) {
+      throw new WorkflowRuntimeError(`loopPolicy '${policyId}' must define a steps array`);
+    }
+    if (!Number.isSafeInteger(policy.maxIterations) || policy.maxIterations < 0) {
+      throw new WorkflowRuntimeError(`loopPolicy '${policyId}' maxIterations must be a non-negative safe integer`);
+    }
+  }
+  const currentProgress = baton.state?.[LOOP_PROGRESS_STATE_KEY] ?? {};
+  if (!currentProgress || typeof currentProgress !== 'object' || Array.isArray(currentProgress)) {
+    throw new WorkflowRuntimeError(`loop progress '${LOOP_PROGRESS_STATE_KEY}' must be an object of counters`);
+  }
+  for (const [policyId, currentCount] of Object.entries(currentProgress)) {
+    const policy = policies?.[policyId];
+    if (!policy) throw new WorkflowRuntimeError(`loop progress references unknown policy '${policyId}'`);
+    if (!Number.isSafeInteger(currentCount) || currentCount < 0 || currentCount > policy.maxIterations) {
+      throw new WorkflowRuntimeError(`loop progress counter '${policyId}' must be a non-negative safe integer not exceeding maxIterations ${policy.maxIterations}`);
+    }
+  }
   if (!policies || !targetStepId) return { transition };
 
   const policyEntry = Object.entries(policies).find(([, policy]) => policy.steps.includes(stepId) && policy.steps.includes(targetStepId));
   if (!policyEntry) return { transition };
 
   const [policyId, policy] = policyEntry;
-  const currentProgress = baton.state?.[LOOP_PROGRESS_STATE_KEY] ?? {};
   const currentCount = currentProgress[policyId] ?? 0;
   const nextCount = currentCount + 1;
   const loopProgress = { ...currentProgress, [policyId]: Math.min(nextCount, policy.maxIterations) };

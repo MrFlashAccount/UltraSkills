@@ -405,6 +405,34 @@ test('persisted-state commit schema rejects missing id', async () => {
   await assert.rejects(() => readPersistedRunState(paths), /persisted run-state commit id/);
 });
 
+test('persisted-state reader omits absent operation for legacy v1 and pre-operation v2 journals', async () => {
+  for (const version of [1, 2]) {
+    const paths = setupRunDir(`legacy_commit_without_operation_v${version}`);
+    const commit = {
+      version,
+      id: `legacy-without-operation-v${version}`,
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+      sideEffects: { baton: false, history: false, currentRequests: false },
+    };
+    if (version === 2) {
+      const entryText = 'legacy v2 history\n';
+      commit.historyAppend = {
+        transactionId: commit.id,
+        baseExists: true,
+        baseSize: 0,
+        entryText,
+        entryHash: createHash('sha256').update(entryText).digest('hex'),
+      };
+    }
+    writeJson(paths.durableCommitPath, commit);
+    const state = await readPersistedRunState(paths, { includeHistoryText: false });
+    assert.equal(Object.hasOwn(state.commit, 'operation'), false);
+    await recoverDurableCommit(paths);
+    assert.equal(existsSync(paths.durableCommitPath), false);
+  }
+});
+
 test('persisted-state reader rejects unsupported version and topology metadata', async () => {
   const paths = setupRunDir('invalid_metadata');
   const persisted = await readPersistedRunState(paths);

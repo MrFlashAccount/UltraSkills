@@ -14,6 +14,8 @@ import { assertTransitionDescriptorTargets, normalizeTransitionNext } from '../.
 import { isShardStep } from '../../runtime/shard.mjs';
 import { fanoutBranchIdIssues, isFanoutStep } from '../../runtime/fanout.mjs';
 import { compileWorkflowOutputSchema } from './schema-ref-validation.mjs';
+import { isSafeWorkflowStepId } from '../../runtime/step-id.mjs';
+import { deepFreeze } from '../../runtime/owned-snapshot.mjs';
 
 function cloneBoundaryData(dto) {
   return typeof dto?.toJSON === 'function' ? dto.toJSON() : structuredClone(dto);
@@ -50,6 +52,9 @@ function assertWorkflowIdentity(workflow) {
 
 function assertWorkflowStepIds(workflow) {
   for (const stepId of Object.keys(workflow.steps)) {
+    if (!isSafeWorkflowStepId(stepId)) {
+      fail(`workflow step id '${stepId}' is invalid for runner storage; expected ASCII letters, digits, underscore, hyphen, or period, excluding '.' and '..'`);
+    }
     if (isReservedStateKey(stepId)) {
       fail(`workflow step id '${stepId}' is reserved for runtime aggregate state; reserved ids: ${RESERVED_STATE_KEYS.join(', ')}`);
     }
@@ -213,8 +218,10 @@ function validateOutputSchemaDocument(schema, schemaRef, workflow, _runtimeConte
   return normalizedSchema;
 }
 
-function outputSchemaForStep(outputSchemas, stepId, schemaRef) {
-  const loaded = outputSchemas instanceof Map ? outputSchemas.get(stepId) ?? outputSchemas.get(schemaRef) : outputSchemas?.[stepId] ?? outputSchemas?.[schemaRef];
+function outputSchemaForProducer(outputSchemas, producerKey, schemaRef) {
+  const loaded = outputSchemas instanceof Map
+    ? outputSchemas.get(producerKey) ?? outputSchemas.get(schemaRef)
+    : outputSchemas?.[producerKey] ?? outputSchemas?.[schemaRef];
   return loaded?.schema ?? loaded;
 }
 
@@ -223,7 +230,7 @@ function normalizeStepOutputSchemas({ workflow, outputSchemas = new Map(), warni
   for (const [stepId, step] of Object.entries(workflow.steps)) {
     const schemaRef = step.output?.schema;
     if (!schemaRef) continue;
-    const schema = outputSchemaForStep(outputSchemas, stepId, schemaRef);
+    const schema = outputSchemaForProducer(outputSchemas, stepId, schemaRef);
     if (!schema) {
       if (requireSchemaPresence) fail(`step '${stepId}' output.schema '${schemaRef}' was not provided to Workflow.validate()`);
       continue;
@@ -235,8 +242,8 @@ function normalizeStepOutputSchemas({ workflow, outputSchemas = new Map(), warni
     if (!isShardStep(step)) continue;
     const schemaRef = step.worker?.output?.schema;
     if (!schemaRef) continue;
-    const schema = outputSchemaForStep(outputSchemas, stepId, schemaRef);
-    const loadedSchema = schema ?? outputSchemaForStep(outputSchemas, `${stepId}.worker`, schemaRef);
+    const producerKey = `${stepId}.worker`;
+    const loadedSchema = outputSchemaForProducer(outputSchemas, producerKey, schemaRef);
     if (!loadedSchema) {
       if (requireSchemaPresence) fail(`step '${stepId}' shard.worker output.schema '${schemaRef}' was not provided to Workflow.validate()`);
       continue;
@@ -253,8 +260,8 @@ function normalizeStepOutputSchemas({ workflow, outputSchemas = new Map(), warni
     for (const [branchId, branch] of Object.entries(step.branches ?? {})) {
       const schemaRef = branch.output?.schema;
       if (!schemaRef) continue;
-      const loadedSchema = outputSchemaForStep(outputSchemas, branchId, schemaRef)
-        ?? outputSchemaForStep(outputSchemas, `${ownerStepId}.branches.${branchId}`, schemaRef);
+      const producerKey = `${ownerStepId}.branches.${branchId}`;
+      const loadedSchema = outputSchemaForProducer(outputSchemas, producerKey, schemaRef);
       if (!loadedSchema) {
         if (requireSchemaPresence) fail(`step '${ownerStepId}' fanout branch '${branchId}' output.schema '${schemaRef}' was not provided to Workflow.validate()`);
         continue;
@@ -880,7 +887,7 @@ export class Workflow {
   constructor(workflowData) {
     this.data = cloneBoundaryData(workflowData);
     this.steps = this.data.steps ?? {};
-    Object.freeze(this.data);
+    deepFreeze(this.data);
   }
 
   toJSON() {

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { hostname, tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { next as runnerNext } from './helpers/orbita-production-api.mjs';
@@ -70,7 +72,7 @@ test('runner: API next recovers stale run-state lock left by killed process', as
   assert.equal(existsSync(paths.continueLockPath), false);
 });
 
-test('runner: API next recovers missed-heartbeat run-state lock even when owner pid is alive', async () => {
+test('runner: API next does not steal missed-heartbeat run-state lock while owner pid is alive', async () => {
   const runId = `lock-${process.pid}-api-next-live-missed-heartbeat-continue-lock`;
   const workflowPath = path.join(tempDir, 'api-next-live-missed-heartbeat-continue-lock-workflow.json');
   const paths = resolveRunPaths({ runId, workflowPath, runsRoot });
@@ -81,9 +83,36 @@ test('runner: API next recovers missed-heartbeat run-state lock even when owner 
 
   await assert.rejects(
     runnerNext({ runId, workflowPath, runsRoot, leaseToken: `missed-heartbeat-run-lock-token-${process.pid}` }),
-    /workflow prompt render failed|missing-input-template/,
+    /run-state lock contention timed out/,
   );
-  assert.equal(existsSync(paths.continueLockPath), false);
+  assert.equal(existsSync(paths.continueLockPath), true);
+  rmSync(paths.continueLockPath, { force: true });
+});
+
+test('run-state lock does not steal from a separate live owner after heartbeat pause', async () => {
+  const runId = `lock-${process.pid}-two-process-heartbeat-pause`;
+  const paths = resolveRunPaths({ runId, workflowPath: path.join(tempDir, 'two-process-heartbeat-pause.json'), runsRoot });
+  rmSync(paths.runDir, { recursive: true, force: true });
+  mkdirSync(paths.runnerDir, { recursive: true });
+  const owner = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { stdio: 'ignore' });
+  try {
+    writeFileSync(paths.continueLockPath, `${JSON.stringify({
+      lockId: 'separate-live-owner',
+      pid: owner.pid,
+      hostname: hostname(),
+      createdAt: '1970-01-01T00:00:00.000Z',
+      heartbeatAt: '1970-01-01T00:00:00.000Z',
+    })}\n`);
+    await assert.rejects(
+      () => withRunStateLock(paths, async () => {}, { lockWaitTimeoutMs: 50, lockWaitIntervalMs: 5 }),
+      /run-state lock contention timed out/,
+    );
+    assert.equal(JSON.parse(readFileSync(paths.continueLockPath, 'utf8')).lockId, 'separate-live-owner');
+  } finally {
+    owner.kill();
+    await once(owner, 'exit');
+    rmSync(paths.continueLockPath, { force: true });
+  }
 });
 
 test('runner: API next render failure does not overwrite existing index lifecycle status', async () => {

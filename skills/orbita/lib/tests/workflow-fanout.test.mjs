@@ -287,6 +287,46 @@ test('fanout partial batch retry durably accepts valid siblings and retries only
   assert.equal(owner.baton.state.branch_a.summary, 'A accepted once');
 });
 
+test('fanout malformed JSON retries every current branch deterministically and remains bounded', () => {
+  const workflowDoc = fanoutWorkflow({ fanout: { max_parallel: 2 } });
+  const first = runNext({ workflowDoc, batonDoc: initialBaton(), resources });
+  const retry = applyWorkflowOutput({ workflowDoc, batonDoc: first.baton, outputContent: '{bad', resources });
+
+  assert.deepEqual(retry.steps.map((entry) => entry.id), first.steps.map((entry) => entry.id));
+  assert.deepEqual(retry.baton.state.fanouts.fanout.current_requests, first.baton.state.fanouts.fanout.current_requests);
+  assert.equal(retry.baton.state.attempts['fanout__fanout__1__branch_a:output.schema'], 1);
+  assert.equal(retry.baton.state.attempts['fanout__fanout__1__branch_b:output.schema'], 1);
+  assert.throws(
+    () => applyWorkflowOutput({
+      workflowDoc,
+      batonDoc: applyWorkflowOutput({ workflowDoc, batonDoc: retry.baton, outputContent: '{bad-again', resources }).baton,
+      outputContent: '{bad-third',
+      resources,
+    }),
+    /after 3 attempts: step output is not valid JSON/,
+  );
+});
+
+test('fanout rejects corrupted durable activation identity and incomplete accepted child state', () => {
+  const workflowDoc = fanoutWorkflow();
+  const first = runNext({ workflowDoc, batonDoc: initialBaton(), resources });
+  const corruptIdentity = structuredClone(first.baton);
+  corruptIdentity.state.fanouts.fanout.branch_records[0].request_id = 'forged';
+  assert.throws(() => runNext({ workflowDoc, batonDoc: corruptIdentity, resources }), /non-deterministic identity/);
+
+  const incomplete = structuredClone(first.baton);
+  const activation = incomplete.state.fanouts.fanout;
+  activation.branch_records[0].status = 'accepted';
+  activation.accepted_outputs.branch_a = {
+    branch_id: 'branch_a',
+    request_id: activation.branch_records[0].request_id,
+    status: 'accepted',
+    output_ref: { step_id: 'branch_a' },
+  };
+  delete incomplete.state.branch_a;
+  assert.throws(() => runNext({ workflowDoc, batonDoc: incomplete, resources }), /lacks retained output state/);
+});
+
 test('fanout freezes one activation selection and hides stale unselected branch output from owner prompt', () => {
   const workflowDoc = fanoutWorkflow({
     fanout: {

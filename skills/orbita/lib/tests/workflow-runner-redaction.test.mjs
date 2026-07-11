@@ -64,6 +64,13 @@ test('public error redaction hides Windows-style workflow-runner paths', () => {
   assert.match(redacted, /workflow runs index/);
 });
 
+test('public error redaction removes the exact supplied lease token before path processing', () => {
+  const leaseToken = `secret/path-token-${process.pid}`;
+  const redacted = publicErrorMessage(`cannot open ${leaseToken}/private and token=${leaseToken}`, { leaseToken });
+  assert.equal(redacted.includes(leaseToken), false);
+  assert.equal(redacted.match(/\[redacted-lease-token\]/g)?.length, 2);
+});
+
 
 test('workflow runner API corrupt runs index errors do not expose raw private index pathnames', async () => {
   const tempDir = await mkdtemp(path.join(tmpdir(), 'workflow-redaction-index-'));

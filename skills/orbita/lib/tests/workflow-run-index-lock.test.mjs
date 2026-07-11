@@ -16,14 +16,16 @@ function indexPathsFor(label) {
   return runsIndexPathsForRoot(runsRoot);
 }
 
-test('runs index lock: missed-heartbeat lock is stale even while its owner process is alive', async () => {
+test('runs index lock: missed-heartbeat lock is not stolen while its owner process is alive', async () => {
   const paths = indexPathsFor('live-missed-heartbeat-index-lock');
   writeFileSync(paths.runsIndexLockPath, `${JSON.stringify({ lockId: 'missed-heartbeat', pid: process.pid, createdAt: '1970-01-01T00:00:00.000Z', heartbeatAt: '1970-01-01T00:00:00.000Z' })}\n`);
 
-  const result = await withRunsIndexLock(paths, async () => 'entered');
-
-  assert.equal(result, 'entered');
-  assert.equal(existsSync(paths.runsIndexLockPath), false);
+  await assert.rejects(
+    withRunsIndexLock(paths, async () => 'entered', { waitMs: 50 }),
+    /workflow runs index is locked/,
+  );
+  assert.equal(existsSync(paths.runsIndexLockPath), true);
+  rmSync(paths.runsIndexLockPath, { force: true });
 });
 
 test('runs index lock: fresh-heartbeat lock is not stale while its owner process is alive', async () => {

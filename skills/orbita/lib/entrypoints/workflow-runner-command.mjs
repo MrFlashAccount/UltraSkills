@@ -16,7 +16,7 @@ import { toHostResponse, workerBindingKeyForStep } from '../runner/host-requests
 import { assertSafeStepId, writeOutputCommandForStep } from '../runner/runner-command-builder.mjs';
 import { readText } from '../persistence/run-state/atomic-file.mjs';
 import { assertFreshTokenAuthority, assertMatchingTokenAuthority, buildTokenLease, renewTokenLease } from '../persistence/run-state/lease-authority.mjs';
-import { appendHistoryOnce, recoverDurableCommit } from '../persistence/run-state/durable-commit.mjs';
+import { appendHistoryOnce, readOperationReceipt, recoverDurableCommit } from '../persistence/run-state/durable-commit.mjs';
 import { readPersistedRunState } from '../persistence/run-state/PersistedRunStateReader.mjs';
 import { ensureRunFiles, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../persistence/run-state/paths.mjs';
 import { createRunIndexEntry, upsertRunIndexEntry } from '../persistence/run-state/run-index.mjs';
@@ -29,6 +29,7 @@ import { createWorkflowStartupValidator } from '../workflow-startup-validation.m
 import { validateWorkflowFile } from './validate-workflow-file.mjs';
 import { isRecoverableWorkerBlockerOutput, publicRecoverableBlockerDetails, publicRecoveryResolutionDetails } from '../runtime/recoverable-worker-blocker.mjs';
 import { applyOutputToBatonState } from '../runtime/baton-state.mjs';
+import { assertBoundedHostJsonText, readBoundedHostJsonFile } from '../host-json-input.mjs';
 
 const validateWorkflowStartup = createWorkflowStartupValidator({
   validateWorkflowFile,
@@ -67,6 +68,7 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   renewTokenLease,
   appendHistoryOnce,
   recoverDurableCommit,
+  readOperationReceipt,
   readPersistedRunState,
   ensureRunFiles,
   migrateLegacyWorkflowRunsRootIfNeeded,
@@ -86,6 +88,8 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   publicRecoverableBlockerDetails,
   publicRecoveryResolutionDetails,
   applyOutputToBatonState,
+  assertBoundedHostJsonText,
+  readBoundedHostJsonFile,
 });
 
 export const {

@@ -149,7 +149,7 @@ agent_runtime.codex = { model = "gpt-5.5", thinking_level = "high" }
 
 Shard workflows put parallel-worker fields under `steps.<id>.worker`; generated shard requests inherit that source worker/template configuration. `agent_runtime` is invalid without an explicit source `agent`, and each harness profile contains exactly `model` and `thinking_level`.
 
-The current harness is private claim control-plane state in the runs index as `claimContext: { harness }`, next to the lease. Plain create stores no claim context. Create-with-claim and every successful claim replace it with the supplied harness; a successful claim without a harness clears it, while heartbeat preserves it. It is not exposed in the baton or public run list.
+The current harness is private claim control-plane state in the runs index and canonical per-run authority as `claimContext: { harness }`, next to the hashed lease authority. Plain create stores no claim context. Create-with-claim and every successful claim replace it with the supplied harness; a successful claim without a harness clears it, while heartbeat preserves it. An implicit first `workflow-runner next --harness ...` claim persists the same lowercase context before rendering, so its first worker request gets matching `agentRuntime`. Implicit `next` rejects `--owner`, `--session-id`, and `--worker-id`; use `workflow-runs claim` for those adapter diagnostics. Raw lease tokens and other private claim metadata are never persisted. Claim context is not exposed in the baton or public run list.
 
 Harness matching is ASCII case-insensitive: new successful claims persist a lowercase harness, while runtime also folds legacy mixed-case claim state and workflow keys. Workflow keys that differ only by case are rejected as ambiguous. On a match, the executable source worker's `run_worker` request includes `agentRuntime: { model, thinkingLevel }`, and `--only-instructions` adds one short sentence telling the host which model and thinking level to use for a fresh subagent. Orbita leaves configured model and thinking values unchanged. A missing source agent, claim harness, or profile match emits neither the field nor the sentence. Restored preferred workers keep their existing runtime; a fresh fallback applies the preference.
 
@@ -197,6 +197,8 @@ preserve current `continue` reuse semantics.
 
 `write-output` owns accepted-output history projection. After schema validation, artifact path validation, and required worker debug-summary side-channel validation succeed, it may append a deterministic entry to the run's managed `history.md` from the accepted output, accepted step metadata, and the bounded side-channel debug summary. This entry is part of the same durable output acceptance path as the baton update; hidden host transcripts, subagent sessions, private prompts, lease tokens, instruction storage paths, and worker/control-plane metadata must never be scraped or written into history.
 
+`write-output` is idempotent for command replay within the current request batch. Replaying the same canonically normalized payload succeeds without rewriting baton state or appending a second history entry; replaying the same request id with a different payload fails as a conflict. The runner clears its payload signature when `continue` consumes that request batch, so a later activation of the same workflow step can accept new output normally.
+
 Accepted-output history uses two layers:
 
 - A compact fallback summary derived from public accepted output fields such as `outcome`, `approval`, `artifacts`, `results`, `blocker`, and the accepted step id. This fallback remains enabled for compatible existing worker outputs and for debug-history disabled mode.
@@ -226,6 +228,8 @@ Approval output without a declared schema is any host/user JSON object compatibl
 ```
 
 When an approval step declares `output.schema`, the host should normalize the user's answer as strict JSON matching that schema before calling `write-output`. The schema normalizes the answer shape for validation/routing.
+
+All host JSON input is capped at 1,048,576 UTF-8 bytes. `write-output` aborts stdin as soon as it crosses the cap, before concatenation, parsing, or run authorization. `continue --orchestrator-debug-file` accepts only a regular file, checks its size through the opened handle, and reads at most the same cap before authorization. Inline API/CLI JSON is checked against the same limit. Limit failures are bounded public errors and do not include file content or credentials.
 
 Missing host capability is represented as blocked output, not as a transition decision in skill text:
 

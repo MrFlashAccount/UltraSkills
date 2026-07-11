@@ -208,6 +208,31 @@ test('runner pointer API list remains read-only on existing-state failures and s
   assert.deepEqual(rawRunFiles(staleRun.paths), staleBefore);
 });
 
+test('runner pointer API list fails closed without recovering a pending durable transaction', async () => {
+  const run = await createClaimedRun('api-read-only-pending-transaction');
+  await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
+  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared pending transaction' });
+  process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER = 'pending';
+  try {
+    await assert.rejects(
+      () => continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') }),
+      /injected durable commit failure after pending/,
+    );
+  } finally {
+    delete process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER;
+  }
+  const before = rawRunFiles(run.paths);
+  const pendingBefore = readFileSync(run.paths.durableCommitPath, 'utf8');
+
+  await assert.rejects(
+    () => listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') }),
+    /durable workflow transaction is pending/,
+  );
+
+  assert.deepEqual(rawRunFiles(run.paths), before);
+  assert.equal(readFileSync(run.paths.durableCommitPath, 'utf8'), pendingBefore);
+});
+
 test('runner pointer API move does not initialize missing state on rejected moves', async () => {
   const run = await createClaimedRun('api-move-missing-state');
   const before = {
@@ -231,23 +256,23 @@ test('runner pointer API move does not initialize missing state on rejected move
   }, before);
 });
 
-test('runner pointer API rejects stale transition ids and wrong leases without mutation', async () => {
+test('runner pointer API replays exact duplicate moves and rejects wrong leases without mutation', async () => {
   const run = await createClaimedRun('api-stale');
   await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
   await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared stale' });
   await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
   const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });
-  await movePointer({ ...run, transitionId: listed.transitions[0].id, acknowledgeRetainedState: true, now: new Date('2026-06-01T10:04:00.000Z') });
+  const firstMove = await movePointer({ ...run, transitionId: listed.transitions[0].id, acknowledgeRetainedState: true, now: new Date('2026-06-01T10:04:00.000Z') });
   const beforeRejected = snapshot(run.paths);
 
-  await assert.rejects(
-    () => movePointer({ ...run, transitionId: listed.transitions[0].id, acknowledgeRetainedState: true, now: new Date('2026-06-01T10:05:00.000Z') }),
-    /stale, non-adjacent, or not observed/,
-  );
+  const replayedMove = await movePointer({ ...run, transitionId: listed.transitions[0].id, acknowledgeRetainedState: true, now: new Date('2026-06-01T12:05:00.000Z') });
+  assert.deepEqual(replayedMove, firstMove);
   const afterStaleRejected = snapshot(run.paths);
   assert.deepEqual(afterStaleRejected.baton, beforeRejected.baton);
   assert.deepEqual(afterStaleRejected.index, beforeRejected.index);
   assert.equal(afterStaleRejected.history, beforeRejected.history);
+  assert.equal(afterStaleRejected.authority.updatedAt, '2026-06-01T12:05:00.000Z');
+  assert.equal(afterStaleRejected.authority.workerLease.leaseExpiresAt, '2026-06-01T13:05:00.000Z');
 
   await assert.rejects(
     () => listPointerTransitions({ ...run, leaseToken: 'wrong-token', now: new Date('2026-06-01T10:05:00.000Z') }),
@@ -259,6 +284,72 @@ test('runner pointer API rejects stale transition ids and wrong leases without m
   );
 
   assert.deepEqual(snapshot(run.paths), afterStaleRejected);
+});
+
+test('runner pointer API rejects mismatched pending retry and replays matching retry once recovered', async () => {
+  const run = await createClaimedRun('api-pending-retry-fingerprint');
+  await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
+  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared pending move' });
+  await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
+  const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });
+  const transitionId = listed.transitions[0].id;
+
+  process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER = 'pending';
+  try {
+    await assert.rejects(
+      () => movePointer({ ...run, transitionId, acknowledgeRetainedState: true, now: new Date('2026-06-01T10:04:00.000Z') }),
+      /injected durable commit failure after pending/,
+    );
+  } finally {
+    delete process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER;
+  }
+  const pendingBefore = readFileSync(run.paths.durableCommitPath, 'utf8');
+  await assert.rejects(
+    () => movePointer({ ...run, transitionId, acknowledgeRetainedState: false, now: new Date('2026-06-01T10:05:00.000Z') }),
+    /interrupted workflow-runner-move-pointer operation with different input/,
+  );
+  assert.equal(readFileSync(run.paths.durableCommitPath, 'utf8'), pendingBefore);
+
+  const recovered = await movePointer({ ...run, transitionId, acknowledgeRetainedState: true, now: new Date('2026-06-01T12:06:00.000Z') });
+  assert.equal(recovered.moved.id, transitionId);
+  assert.equal(existsSync(run.paths.durableCommitPath), false);
+  assert.equal((readFileSync(run.paths.historyPath, 'utf8').match(/source: workflow-runner-move-pointer/g) ?? []).length, 1);
+  const renewed = snapshot(run.paths).authority;
+  assert.equal(renewed.updatedAt, '2026-06-01T12:06:00.000Z');
+  assert.equal(renewed.workerLease.leaseExpiresAt, '2026-06-01T13:06:00.000Z');
+});
+
+test('runner continue replay renews authority without duplicating workflow mutation', async () => {
+  const cases = [
+    ['to-next', workflowDoc, 'review'],
+    ['to-done', {
+      ...workflowDoc,
+      steps: {
+        prepare: { ...workflowDoc.steps.prepare, next: 'done' },
+        done: workflowDoc.steps.done,
+      },
+    }, 'done'],
+  ];
+  for (const [label, workflow, expectedStatusOrCursor] of cases) {
+    const run = await createClaimedRun(`continue-replay-${label}`, workflow);
+    await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
+    await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: `prepared ${label}` });
+    const first = await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
+    assert.doesNotMatch(readFileSync(run.paths.operationReceiptPath, 'utf8'), new RegExp(run.leaseToken));
+    const beforeReplay = rawRunFiles(run.paths);
+    const replayed = await continueRun({ ...run, now: new Date('2026-06-01T12:03:00.000Z') });
+    assert.deepEqual(replayed, first);
+    const afterReplay = rawRunFiles(run.paths);
+    assert.equal(afterReplay.baton, beforeReplay.baton);
+    assert.equal(afterReplay.history, beforeReplay.history);
+    assert.deepEqual(afterReplay.indexEntry, beforeReplay.indexEntry);
+    const renewedAuthority = JSON.parse(afterReplay.authority);
+    assert.equal(renewedAuthority.status, first.status);
+    assert.equal(renewedAuthority.updatedAt, '2026-06-01T12:03:00.000Z');
+    assert.equal(renewedAuthority.workerLease.leaseExpiresAt, '2026-06-01T13:03:00.000Z');
+    assert.equal(first.status === 'done' ? first.status : first.baton.cursor, expectedStatusOrCursor);
+    assert.equal((readFileSync(run.paths.historyPath, 'utf8').match(/source: workflow-runner-continue/g) ?? []).length, 1);
+  }
 });
 
 test('runner pointer API allows rollback from terminal cursors', async () => {
@@ -285,6 +376,85 @@ test('runner pointer API allows rollback from terminal cursors', async () => {
   assert.equal(terminalMoved.current.status, 'running');
   assert.equal(snapshot(terminalRun.paths).authority.status, 'needs_host_actions');
 
+});
+
+test('runner pointer API persists coherent activation state when moving into completed fanout and shard steps', async () => {
+  const output = { template: 'output.md' };
+  const cases = [
+    ['fanout', {
+      name: 'pointer-fanout-reactivation',
+      version: 1,
+      start: 'parallel',
+      done: 'done',
+      steps: {
+        parallel: {
+          name: 'Parallel',
+          kind: 'fanout',
+          max_parallel: 1,
+          input: { branches: ['only'], prompt: 'Aggregate.' },
+          output,
+          branches: { only: { input: { prompt: 'Run only branch.' }, output } },
+          next: 'done',
+        },
+        done: { name: 'Done', kind: 'done' },
+      },
+    }],
+    ['shard', {
+      name: 'pointer-shard-reactivation',
+      version: 1,
+      start: 'partition',
+      done: 'done',
+      steps: {
+        partition: {
+          name: 'Partition',
+          kind: 'shard',
+          max_parallel: 1,
+          input: { shards: ['only'], prompt: 'Aggregate.' },
+          output,
+          worker: { input: { prompt: 'Run shard.' }, output },
+          next: 'done',
+        },
+        done: { name: 'Done', kind: 'done' },
+      },
+    }],
+  ];
+
+  for (const [kind, workflow] of cases) {
+    const run = await createClaimedRun(`api-${kind}-reactivation`, workflow);
+    let response = await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
+    for (let index = 0; response.status === 'needs_host_actions' && index < 5; index += 1) {
+      for (const request of response.requests) {
+        await acceptCurrentWorkerOutput({ ...run, stepId: request.stepId, summary: `${kind} first activation ${index}` });
+      }
+      response = await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
+    }
+    assert.equal(response.status, 'done');
+    const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });
+    const moved = await movePointer({
+      ...run,
+      transitionId: listed.transitions[0].id,
+      acknowledgeRetainedState: true,
+      now: new Date('2026-06-01T10:04:00.000Z'),
+    });
+    assert.equal(moved.current.status, 'running');
+    const requestsDoc = JSON.parse(readFileSync(run.paths.currentRequestsPath, 'utf8'));
+    const request = requestsDoc.requests[0];
+    const baton = JSON.parse(readFileSync(run.paths.batonPath, 'utf8'));
+    const activation = kind === 'fanout'
+      ? baton.state.fanouts.parallel
+      : baton.state.shards.partition;
+    assert.equal(activation.activation, 2);
+    assert.match(request.stepId, /__2__/);
+
+    response = { status: 'needs_host_actions', requests: [request] };
+    for (let index = 0; response.status === 'needs_host_actions' && index < 5; index += 1) {
+      for (const currentRequest of response.requests) {
+        await acceptCurrentWorkerOutput({ ...run, stepId: currentRequest.stepId, summary: `${kind} second activation ${index}` });
+      }
+      response = await continueRun({ ...run, now: new Date('2026-06-01T10:05:00.000Z') });
+    }
+    assert.equal(response.status, 'done');
+  }
 });
 
 

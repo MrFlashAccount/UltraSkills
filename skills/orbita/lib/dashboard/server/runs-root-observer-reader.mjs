@@ -3,6 +3,7 @@ import { resolveRunPaths, workflowRunsRoot } from '../../persistence/run-state/p
 import { readPersistedRunState } from '../../persistence/run-state/PersistedRunStateReader.mjs';
 import { mergeRunAuthorityIntoIndexEntry, readRunAuthority, runAuthorityFromIndexEntry } from '../../persistence/run-state/run-authority.mjs';
 import { projectDashboardRun } from '../projection/safe-dashboard-projection.mjs';
+import { publicErrorMessage } from '../../public-error.mjs';
 
 const RUN_READ_CONCURRENCY = 16;
 
@@ -21,13 +22,13 @@ async function mapWithConcurrency(values, limit, mapper) {
 }
 
 function sortByUpdatedAtDesc(left, right) {
-  return String(right.updatedAt ?? '').localeCompare(String(left.updatedAt ?? '')) || left.runId.localeCompare(right.runId);
+  return String(right.updatedAt ?? '').localeCompare(String(left.updatedAt ?? '')) || String(left.runId).localeCompare(String(right.runId));
 }
 
-function degradedFromError(error) {
+function degradedFromError(_error, runsRoot) {
   return {
     reason: 'read_failed',
-    message: error?.message ? String(error.message).replace(/\s+from\s+.*$/, '') : 'run state could not be read',
+    message: publicErrorMessage('run state could not be read', { runsRoot }),
   };
 }
 
@@ -60,15 +61,15 @@ export class RunsRootObserverReader {
     } catch (error) {
       return projectDashboardRun({
         run: entry,
-        degraded: degradedFromError(error),
+        degraded: degradedFromError(error, this.runsRoot),
       }, { now: this.now(), includeDetail });
     }
   }
 
   async listRuns() {
     const index = await this.readIndex();
-    const entries = Object.values(index.runs).sort(sortByUpdatedAtDesc);
-    return mapWithConcurrency(entries, RUN_READ_CONCURRENCY, (entry) => this.readRunEntry(entry));
+    const runs = await mapWithConcurrency(Object.values(index.runs), RUN_READ_CONCURRENCY, (entry) => this.readRunEntry(entry));
+    return runs.sort(sortByUpdatedAtDesc);
   }
 
   async getRun(runId) {

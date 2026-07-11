@@ -243,7 +243,7 @@ export function buildHostRequests(
         if (agentRuntime) request.agentRuntime = agentRuntime;
         request.preferredAgentId = preferredAgentIdForStep(
           interpreterResponse.baton,
-          workflowStepIdForExecutableStep(step),
+          step.id,
           step.step,
         );
         request.loadFollowupInstructionsCommand =

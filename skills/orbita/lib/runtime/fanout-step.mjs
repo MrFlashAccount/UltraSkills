@@ -85,7 +85,31 @@ function retryResponseForBranch(retryResponse, ownerStepId, activation, record, 
   };
 }
 
-function applyBranchBatch({ workflow, baton, ownerStepId, ownerStep, activation, allOutput, resources }) {
+function applyBranchBatch({ workflow, baton, ownerStepId, ownerStep, activation, allOutput, outputParseError, resources }) {
+  if (outputParseError) {
+    let retryBaton = clone(baton);
+    const steps = [];
+    for (const requestId of activation.current_requests) {
+      const record = branchRecordForRequest(activation, requestId);
+      invariant(record, `fanout activation '${ownerStepId}' has no durable branch record for current request '${requestId}'`);
+      const branchStep = stepForFanoutBranch(ownerStepId, ownerStep, activation, record);
+      const retry = readWorkerOutputForStep({ baton: retryBaton, stepId: requestId, step: branchStep, allOutput: undefined, outputParseError }).retryResponse;
+      retryBaton = retry.baton;
+      steps.push(...retry.steps.map((entry) => ({
+        ...entry,
+        ownerStepId,
+        fanout: {
+          owner_step_id: ownerStepId,
+          activation: activation.activation,
+          phase: 'branches',
+          selected_branch_ids: [...activation.selected_branch_ids],
+          branch_id: record.branch_id,
+          request_id: record.request_id,
+        },
+      })));
+    }
+    return { baton: batonWithFanoutActivation(retryBaton, ownerStepId, activation), steps };
+  }
   assertOnlyCurrentRequests(allOutput, activation);
   let updatedBaton = clone(baton);
   const acceptedRequestIds = new Set();
@@ -99,6 +123,7 @@ function applyBranchBatch({ workflow, baton, ownerStepId, ownerStep, activation,
     const validation = assertOutputSchemaIfDeclared({
       baton: updatedBaton,
       stepId: requestId,
+      producerKey: `${ownerStepId}.branches.${record.branch_id}`,
       step: branchStep,
       workerOutput: rawOutput,
       resources,
@@ -166,7 +191,7 @@ export function applyFanoutStepOutput({ workflow, baton, ownerStepId, ownerStep,
   const activation = fanoutActivationForBaton({ baton, ownerStepId, ownerStep });
   invariant(activation.owner_step_id === ownerStepId, `fanout activation owner mismatch for '${ownerStepId}'`);
   if (activation.phase === 'branches') {
-    return applyBranchBatch({ workflow, baton, ownerStepId, ownerStep, activation, allOutput, resources });
+    return applyBranchBatch({ workflow, baton, ownerStepId, ownerStep, activation, allOutput, outputParseError, resources });
   }
   invariant(activation.phase === 'owner', `fanout step '${ownerStepId}' cannot accept output in phase '${activation.phase}'`);
   return applyOwnerOutput({

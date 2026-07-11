@@ -5,12 +5,12 @@ import { validateAgainstOutputSchema, OUTPUT_SCHEMA_MAX_ATTEMPTS } from './outpu
 import { invalidJsonOutputRetry, outputSchemaAttempt, responseForOutputSchemaRetry } from '../loop/guard.mjs';
 
 export function readWorkerOutputForStep({ baton, stepId, step, allOutput, outputParseError }) {
-  if (!step.output?.schema) return { workerOutput: allOutput, retryResponse: undefined };
   if (outputParseError) return { workerOutput: undefined, retryResponse: invalidJsonOutputRetry({ baton, stepId, step, error: outputParseError }) };
+  if (!step.output?.schema) return { workerOutput: allOutput, retryResponse: undefined };
   return { workerOutput: allOutput, retryResponse: undefined };
 }
 
-function assertGenericApprovalOutput(hostOutput) {
+export function assertGenericApprovalOutput(hostOutput) {
   if (!hostOutput || typeof hostOutput !== 'object' || Array.isArray(hostOutput)) {
     throw new WorkflowRuntimeError('approval output failed schema validation: / must be object');
   }
@@ -39,7 +39,7 @@ function assertGenericApprovalOutput(hostOutput) {
   }
 }
 
-export function assertOutputSchemaIfDeclared({ baton, stepId, step, workerOutput, resources }) {
+export function assertOutputSchemaIfDeclared({ baton, stepId, producerKey = stepId, step, workerOutput, resources }) {
   const schemaRef = step.output?.schema;
   if (!schemaRef) {
     if (step.kind === 'approval') assertGenericApprovalOutput(workerOutput);
@@ -47,7 +47,9 @@ export function assertOutputSchemaIfDeclared({ baton, stepId, step, workerOutput
     return { workerOutput, retryResponse: undefined };
   }
 
-  const loaded = resources?.outputSchemas instanceof Map ? resources.outputSchemas.get(schemaRef) : resources?.outputSchemas?.[schemaRef];
+  const loaded = resources?.outputSchemas instanceof Map
+    ? resources.outputSchemas.get(producerKey) ?? resources.outputSchemas.get(schemaRef)
+    : resources?.outputSchemas?.[producerKey] ?? resources?.outputSchemas?.[schemaRef];
   const schema = loaded?.schema ?? loaded;
   if (!schema) throw new WorkflowRuntimeError(`output schema validation failed: missing output.schema '${schemaRef}'`);
   const validation = validateAgainstOutputSchema({ schemaRef, schema, output: workerOutput });

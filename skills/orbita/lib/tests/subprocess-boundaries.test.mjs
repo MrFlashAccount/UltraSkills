@@ -6,10 +6,13 @@ import { fileURLToPath } from 'node:url';
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const testsDir = path.dirname(currentFilePath);
-const allowedCliSuites = new Set([
+const allowedProcessBoundarySuites = new Set([
   'workflow-catalog.test.mjs',
   'workflow-runid-runtime.test.mjs',
   'workflow-runner-cli.test.mjs',
+  // Verifies PID liveness across a genuine process boundary; an in-process
+  // fake cannot prove that lock ownership survives a missed heartbeat.
+  'workflow-runner-lock.test.mjs',
   'workflow-runs-api.test.mjs',
 ]);
 
@@ -29,8 +32,8 @@ test('test boundary: subprocess APIs remain confined to explicit CLI suites', ()
       return /node:child_process|\bBun\.(?:spawn|spawnSync)\b/.test(source);
     })
     .map((filePath) => path.relative(testsDir, filePath))
-    .filter((relativePath) => !allowedCliSuites.has(relativePath))
+    .filter((relativePath) => !allowedProcessBoundarySuites.has(relativePath))
     .sort();
 
-  assert.deepEqual(unexpected, [], `move semantic tests to the in-process production API; update the allowlist only for CLI-only contracts`);
+  assert.deepEqual(unexpected, [], `move semantic tests to the in-process production API; allow subprocesses only for CLI or genuine process-boundary contracts`);
 });

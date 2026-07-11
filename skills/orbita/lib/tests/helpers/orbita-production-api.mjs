@@ -19,7 +19,7 @@ import { toHostResponse, workerBindingKeyForStep } from '../../runner/host-reque
 import { assertSafeStepId, writeOutputCommandForStep } from '../../runner/runner-command-builder.mjs';
 import { readText } from '../../persistence/run-state/atomic-file.mjs';
 import { assertFreshTokenAuthority, assertMatchingTokenAuthority, buildTokenLease, renewTokenLease } from '../../persistence/run-state/lease-authority.mjs';
-import { appendHistoryOnce, recoverDurableCommit } from '../../persistence/run-state/durable-commit.mjs';
+import { appendHistoryOnce, readOperationReceipt, recoverDurableCommit } from '../../persistence/run-state/durable-commit.mjs';
 import { readPersistedRunState } from '../../persistence/run-state/PersistedRunStateReader.mjs';
 import { defaultWorkflowPath, ensureRunFiles, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../../persistence/run-state/paths.mjs';
 import { createRunIndexEntry, upsertRunIndexEntry } from '../../persistence/run-state/run-index.mjs';
@@ -34,6 +34,7 @@ import { applyOutputToBatonState } from '../../runtime/baton-state.mjs';
 import { read, readAllowedRoles, readOutputSchemas } from '../../persistence/workflow-resources/workflow-file-reader.mjs';
 import { defaultRepositoryRootForWorkflow } from '../../persistence/workflow-resources/resource-resolver.mjs';
 import { createWorkflowStartupValidator } from '../../workflow-startup-validation.mjs';
+import { assertBoundedHostJsonText, readBoundedHostJsonFile } from '../../host-json-input.mjs';
 
 export const validateWorkflowFile = createValidateWorkflowFile({
   readWorkflow: read,
@@ -80,6 +81,7 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   renewTokenLease,
   appendHistoryOnce,
   recoverDurableCommit,
+  readOperationReceipt,
   readPersistedRunState,
   ensureRunFiles,
   migrateLegacyWorkflowRunsRootIfNeeded,
@@ -99,6 +101,8 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   publicRecoverableBlockerDetails,
   publicRecoveryResolutionDetails,
   applyOutputToBatonState,
+  assertBoundedHostJsonText,
+  readBoundedHostJsonFile,
 });
 
 const workflowRuns = createWorkflowRuns({

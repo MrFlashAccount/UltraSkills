@@ -5,6 +5,7 @@
 import { parsePathExpression } from '../../runtime/expression.mjs';
 import { prepareWorkflowPromptContext } from '../../runtime/prompt-render-context.mjs';
 import { renderWorkflowPrompt as renderCompiledWorkflowPrompt } from './compiler/index.mjs';
+import { deepFreeze } from '../../runtime/owned-snapshot.mjs';
 
 function cloneBoundaryData(dto) {
   return typeof dto?.toJSON === 'function' ? dto.toJSON() : structuredClone(dto ?? {});
@@ -13,7 +14,7 @@ function cloneBoundaryData(dto) {
 export class Template {
   constructor(templateData = {}) {
     this.data = cloneBoundaryData(templateData);
-    Object.freeze(this.data);
+    deepFreeze(this.data);
   }
 
   toJSON() {
@@ -26,7 +27,7 @@ export class Template {
 
   render(context = {}) {
     if (typeof this.data.content === 'string') {
-      return { prompt: this.data.content.replace(/\$\{\{\s*userPrompt\s*\}\}/g, context.userPrompt ?? '') };
+      return { prompt: this.data.content.replace(/\$\{\{\s*userPrompt\s*\}\}/g, () => context.userPrompt ?? '') };
     }
     const promptContext = { ...this.data, ...context };
     return renderCompiledWorkflowPrompt({

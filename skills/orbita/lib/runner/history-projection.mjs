@@ -1,5 +1,6 @@
 import { constants } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { open, realpath, stat } from 'node:fs/promises';
+import path from 'node:path';
 
 const DEBUG_SUMMARY_LIMIT = { bytes: 4096, lines: 80 };
 const ORCHESTRATOR_DEBUG_LIMIT = { bytes: 4096, lines: 80 };
@@ -91,14 +92,40 @@ function outputObject(output) {
   return output && typeof output === 'object' && !Array.isArray(output) ? output : undefined;
 }
 
-async function readBoundedRegularFile(pathname, { bytes }) {
+function isInside(child, parent) {
+  const rel = path.relative(parent, child);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+async function readBoundedRegularFile(pathname, { bytes, runDir }) {
+  const canonicalRoot = runDir ? await realpath(runDir) : undefined;
+  const canonicalCandidate = await realpath(pathname);
+  if (canonicalRoot && (!isInside(canonicalCandidate, canonicalRoot) || canonicalCandidate === canonicalRoot)) {
+    const error = new Error('path escapes canonical run directory');
+    error.code = 'EBOUNDARY';
+    throw error;
+  }
   const noFollow = constants.O_NOFOLLOW ?? 0;
-  const handle = await open(pathname, constants.O_RDONLY | constants.O_NONBLOCK | noFollow);
+  const handle = await open(canonicalCandidate, constants.O_RDONLY | constants.O_NONBLOCK | noFollow);
   try {
     const fileStat = await handle.stat();
     if (!fileStat.isFile()) {
       const error = new Error('not a regular file');
       error.code = 'ENOTREG';
+      throw error;
+    }
+    const [revalidatedRoot, revalidatedCandidate, pathStat] = await Promise.all([
+      runDir ? realpath(runDir) : undefined,
+      realpath(pathname),
+      stat(canonicalCandidate),
+    ]);
+    if ((canonicalRoot && revalidatedRoot !== canonicalRoot)
+      || revalidatedCandidate !== canonicalCandidate
+      || (canonicalRoot && !isInside(revalidatedCandidate, canonicalRoot))
+      || fileStat.dev !== pathStat.dev
+      || fileStat.ino !== pathStat.ino) {
+      const error = new Error('path changed during boundary validation');
+      error.code = 'EBOUNDARY';
       throw error;
     }
     const buffer = Buffer.alloc(bytes + 1);
@@ -109,11 +136,11 @@ async function readBoundedRegularFile(pathname, { bytes }) {
   }
 }
 
-async function debugSummaryBodyLines(pathname, { enabled, leaseToken }) {
+async function debugSummaryBodyLines(pathname, { enabled, leaseToken, runDir }) {
   if (typeof pathname !== 'string' || pathname.length === 0) return [];
   let body;
   try {
-    body = await readBoundedRegularFile(pathname, DEBUG_SUMMARY_LIMIT);
+    body = await readBoundedRegularFile(pathname, { ...DEBUG_SUMMARY_LIMIT, runDir });
   } catch (error) {
     const code = typeof error?.code === 'string' ? error.code : 'unreadable';
     throw new Error(`debug summary file is required but unavailable (${code})`);
@@ -127,7 +154,7 @@ async function debugSummaryBodyLines(pathname, { enabled, leaseToken }) {
   return lines;
 }
 
-export async function acceptedOutputHistoryDetails({ stepId, request, output, debugSummaryPath, env = process.env, leaseToken } = {}) {
+export async function acceptedOutputHistoryDetails({ stepId, request, output, debugSummaryPath, runDir, env = process.env, leaseToken } = {}) {
   const options = { leaseToken };
   const action = compactValue(request?.action, 'unknown', options);
   const details = [`- accepted output summary: step=${compactValue(stepId, 'unknown', options)} action=${action}`];
@@ -144,7 +171,7 @@ export async function acceptedOutputHistoryDetails({ stepId, request, output, de
   if (artifacts) details.push(`- artifacts: ${artifacts}`);
   if (object.blocker) details.push(`- blocker summary: ${compactValue(object.blocker.summary ?? object.blocker.needed ?? object.blocker, 'n/a', options)}`);
 
-  details.push(...await debugSummaryBodyLines(debugSummaryPath, { enabled: richDebugHistoryEnabled(env), leaseToken }));
+  details.push(...await debugSummaryBodyLines(debugSummaryPath, { enabled: richDebugHistoryEnabled(env), leaseToken, runDir }));
   return details;
 }
 

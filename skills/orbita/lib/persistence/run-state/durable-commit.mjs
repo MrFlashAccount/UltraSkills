@@ -8,7 +8,7 @@ import {
   persistedRunStateFileSnapshot,
   readPersistedRunState,
 } from './PersistedRunStateReader.mjs';
-import { assertManagedRunStateFile, writeJsonAtomic, writeTextAtomic } from './atomic-file.mjs';
+import { assertManagedRunStateFile, fsyncParentDirectory, writeJsonAtomic, writeTextAtomic } from './atomic-file.mjs';
 import { durableFileSignature } from './file-signature.mjs';
 
 async function exists(path) { try { await access(path, constants.F_OK); return true; } catch { return false; } }
@@ -48,6 +48,10 @@ function historyEntry({ source, baton, requests, steps, output, decision, detail
 
 function maybeFailDurableCommitAfter(action) {
   if (process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER === action) throw new Error(`injected durable commit failure after ${action}`);
+}
+
+function maybeFailHistoryOnceAfter(action) {
+  if (process.env.WORKFLOW_RUNNER_FAIL_HISTORY_ONCE_AFTER === action) throw new Error(`injected history-once failure after ${action}`);
 }
 
 async function readTextIfExists(path) {
@@ -187,6 +191,7 @@ async function recoverDurableCommitState(paths, { before: suppliedBefore, includ
       : undefined,
   });
   let targetsTouched = false;
+  let journalRemoved = false;
   let appliedCurrentRequestsBatonSignature;
   try {
     await writeJsonAtomic(paths.durableCommitPath, { ...commit, status: 'applying' });
@@ -214,12 +219,29 @@ async function recoverDurableCommitState(paths, { before: suppliedBefore, includ
       });
     }
     maybeFailDurableCommitAfter('currentRequests');
+    if (commit.replay !== undefined) {
+      if (!commit.replay || typeof commit.replay !== 'object' || Array.isArray(commit.replay)) throw new Error('pending durable workflow commit replay must be an object');
+      if (typeof commit.replay.fingerprint !== 'string' || commit.replay.fingerprint.length === 0) throw new Error('pending durable workflow commit replay fingerprint must be a non-empty string');
+      if (typeof commit.operation !== 'string' || commit.operation.length === 0) throw new Error('pending durable workflow commit replay operation must be a non-empty string');
+      await writeJsonAtomic(paths.operationReceiptPath, {
+        version: 1,
+        commitId: commit.id,
+        operation: commit.operation,
+        fingerprint: commit.replay.fingerprint,
+        preBatonSignature: commit.replay.preBatonSignature,
+        result: commit.replay.result,
+        postBatonSignature: await durableFileSignature(paths.batonPath),
+        completedAt: new Date().toISOString(),
+      });
+    }
     await rm(paths.durableCommitPath, { force: true });
+    journalRemoved = true;
+    await fsyncParentDirectory(paths.durableCommitPath);
     if (!readResultState) return { recovered: true, state: undefined, currentRequestsBatonSignature: appliedCurrentRequestsBatonSignature };
     const state = assertPersistedRunState(await readPersistedRunState(paths, { includeHistoryText }), 'persisted run state after recovery');
     return { recovered: true, state, currentRequestsBatonSignature: appliedCurrentRequestsBatonSignature };
   } catch (error) {
-    if (targetsTouched) await restoreDurableTargets(paths, before);
+    if (targetsTouched && !journalRemoved) await restoreDurableTargets(paths, before);
     throw error;
   }
 }
@@ -299,7 +321,7 @@ function appliedPersistedRunState(paths, pendingState, currentFiles, {
   });
 }
 
-export async function commitDurableRunState(paths, { baton, history, currentRequests, writeBaton = true }, { currentState } = {}) {
+export async function commitDurableRunState(paths, { baton, history, currentRequests, writeBaton = true, replay }, { currentState } = {}) {
   const includeHistoryText = currentState?.history?.mode !== 'file-ref';
   const recovery = await recoverDurableCommitState(paths, { includeHistoryText });
   const current = recovery.state
@@ -322,6 +344,7 @@ export async function commitDurableRunState(paths, { baton, history, currentRequ
     id: commitId,
     createdAt: new Date().toISOString(),
     status: 'pending',
+    operation: history.source,
     historyAppend: {
       transactionId: commitId,
       baseExists: historyBaseExists,
@@ -332,6 +355,7 @@ export async function commitDurableRunState(paths, { baton, history, currentRequ
     sideEffects: { baton: writeBaton, history: true, currentRequests: currentRequests !== undefined },
   };
   if (writeBaton) commit.baton = baton;
+  if (replay !== undefined) commit.replay = structuredClone(replay);
   if (currentRequests !== undefined) {
     commit.currentRequests = currentRequests;
     commit.currentRequestsWorkflowSignature = currentRequestsWorkflowSignature;
@@ -367,6 +391,16 @@ export async function commitDurableRunState(paths, { baton, history, currentRequ
   });
 }
 
+export async function readOperationReceipt(paths) {
+  if (!paths.operationReceiptPath || !(await exists(paths.operationReceiptPath))) return undefined;
+  await assertManagedRunStateFile(paths.operationReceiptPath, 'workflow operation receipt');
+  const receipt = await readJson(paths.operationReceiptPath, 'workflow operation receipt');
+  if (receipt?.version !== 1 || typeof receipt.operation !== 'string' || typeof receipt.fingerprint !== 'string' || typeof receipt.postBatonSignature !== 'string' || !Object.hasOwn(receipt, 'result')) {
+    throw new Error('workflow operation receipt is invalid');
+  }
+  return receipt;
+}
+
 export async function appendHistory(paths, entry) {
   await assertManagedRunStateFile(paths.historyPath, 'workflow history');
   const handle = await open(paths.historyPath, 'a', 0o600);
@@ -383,14 +417,32 @@ export async function appendHistoryOnce(paths, entry, { dedupeKey } = {}) {
   const digest = createHash('sha256').update(dedupeKey).digest('hex');
   const markerPath = join(paths.runnerDir, `history-entry-${digest}.marker`);
   await assertManagedRunStateFile(markerPath, 'workflow history dedupe marker');
-  if (await exists(markerPath)) return false;
-  await appendHistory(paths, entry);
-  try {
-    const handle = await open(markerPath, 'wx', 0o600);
-    await handle.close();
-  } catch (error) {
-    if (error?.code === 'EEXIST') return false;
-    throw error;
+  const transactionId = `history-${digest}`;
+  let entryText = historyEntry(entry, { transactionId });
+  if (await exists(markerPath)) {
+    const marker = await readJson(markerPath, 'workflow history dedupe marker');
+    if (marker?.status === 'applied') return false;
+    if (marker?.transactionId !== transactionId || typeof marker.entryText !== 'string' || marker?.entryHash !== createHash('sha256').update(marker.entryText).digest('hex')) {
+      throw new Error('workflow history dedupe marker does not match requested entry');
+    }
+    entryText = marker.entryText;
+  } else {
+    await writeJsonAtomic(markerPath, {
+      version: 1,
+      status: 'pending',
+      transactionId,
+      entryText,
+      entryHash: createHash('sha256').update(entryText).digest('hex'),
+    });
   }
+  maybeFailHistoryOnceAfter('marker');
+  const existingHistory = await readTextIfExists(paths.historyPath);
+  if (!existingHistory.content?.includes(`\n- transaction: ${transactionId}\n`)) {
+    await assertManagedRunStateFile(paths.historyPath, 'workflow history');
+    const handle = await open(paths.historyPath, 'a', 0o600);
+    try { await handle.writeFile(entryText, 'utf8'); await handle.sync(); } finally { await handle.close(); }
+  }
+  maybeFailHistoryOnceAfter('history');
+  await writeJsonAtomic(markerPath, { version: 1, status: 'applied', transactionId });
   return true;
 }

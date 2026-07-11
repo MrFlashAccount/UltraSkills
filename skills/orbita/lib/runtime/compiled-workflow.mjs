@@ -1,20 +1,30 @@
 import { validateWorkflowDocument } from '../entities/Workflow/index.mjs';
 import { workflowSemanticValidationOptions } from './workflow-semantic-validation.mjs';
+import { deepFreeze, ownedSnapshot } from './owned-snapshot.mjs';
 
 const COMPILED_WORKFLOW = Symbol('orbita.compiledWorkflow');
-const semanticObjectIds = new WeakMap();
-let nextSemanticObjectId = 1;
-
-function semanticObjectKey(value) {
-  if (!value || typeof value !== 'object') return String(value);
-  if (typeof value.$id === 'string' && value.$id.length > 0) return `id:${value.$id}`;
-  let id = semanticObjectIds.get(value);
-  if (!id) {
-    id = nextSemanticObjectId;
-    nextSemanticObjectId += 1;
-    semanticObjectIds.set(value, id);
+function canonicalize(value, seen = new WeakSet()) {
+  if (value === undefined) return ['undefined'];
+  if (value === null || typeof value !== 'object') return value;
+  if (seen.has(value)) throw new TypeError('semantic validation inputs must not contain cycles');
+  seen.add(value);
+  let result;
+  if (Array.isArray(value)) {
+    result = value.map((entry) => canonicalize(entry, seen));
+    if (Object.hasOwn(value, 'loaded')) result = { values: result, loaded: value.loaded };
+  } else if (value instanceof Map) {
+    result = [...value.entries()]
+      .sort(([left], [right]) => String(left).localeCompare(String(right)))
+      .map(([key, entry]) => [key, canonicalize(entry, seen)]);
+  } else {
+    result = Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key], seen)]));
   }
-  return `object:${id}`;
+  seen.delete(value);
+  return result;
+}
+
+function contentSignature(value) {
+  return JSON.stringify(canonicalize(value));
 }
 
 function allowedRolesKey(allowedRoles) {
@@ -24,25 +34,14 @@ function allowedRolesKey(allowedRoles) {
 }
 
 function outputSchemasKey(outputSchemas) {
-  if (!outputSchemas) return '';
-  const entries = outputSchemas instanceof Map
-    ? [...outputSchemas.entries()]
-    : Object.entries(outputSchemas);
-  return entries
-    .sort(([left], [right]) => String(left).localeCompare(String(right)))
-    .map(([key, loaded]) => {
-      const schema = loaded?.schema ?? loaded;
-      const schemaPath = loaded?.schemaPath ?? '';
-      return `${key}:${schemaPath}:${semanticObjectKey(schema)}`;
-    })
-    .join('\u001f');
+  return contentSignature(outputSchemas ?? null);
 }
 
 function semanticInputs(options = {}) {
   return {
     allowedRoles: allowedRolesKey(options.allowedRoles),
     outputSchemas: outputSchemasKey(options.outputSchemas),
-    externalSchemas: (options.externalSchemas ?? []).map(semanticObjectKey).join('\u001f'),
+    externalSchemas: contentSignature(options.externalSchemas ?? []),
   };
 }
 
@@ -55,13 +54,16 @@ function sameSemanticInputs(left = {}, right = {}) {
 export function compileWorkflowForRuntime(workflow, options = {}) {
   if (isCompiledWorkflowForRuntime(workflow, options)) return workflow;
   const inputs = semanticInputs(options);
-  validateWorkflowDocument(workflow, workflowSemanticValidationOptions(options));
-  Object.defineProperty(workflow, COMPILED_WORKFLOW, {
+  const workflowSnapshot = structuredClone(workflow);
+  const validationOptions = workflowSemanticValidationOptions(options);
+  const ownedValidationOptions = ownedSnapshot(validationOptions);
+  validateWorkflowDocument(workflowSnapshot, ownedValidationOptions);
+  Object.defineProperty(workflowSnapshot, COMPILED_WORKFLOW, {
     value: { inputs },
     enumerable: false,
-    configurable: true,
+    configurable: false,
   });
-  return workflow;
+  return deepFreeze(workflowSnapshot);
 }
 
 export function isCompiledWorkflowForRuntime(workflow, options = {}) {

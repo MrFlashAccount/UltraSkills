@@ -645,3 +645,60 @@ test('runner API emits absolute runsRoot in portable commands for relative custo
   assert.equal(first.requests[0].loadFollowupInstructionsCommand.includes(`--runs-root '${resolvedRunsRoot}'`), true);
   assert.equal(first.orchestratorInstruction.includes(`--runs-root '${resolvedRunsRoot}'`), true);
 });
+
+test('runner write-output validates schema-less approval before persisting its signature', async () => {
+  const runId = `workflow-runner-test-${process.pid}-generic-approval`;
+  const runsRoot = path.join(tempDir, 'generic-approval-runs');
+  const workflowPath = path.join(tempDir, 'generic-approval-workflow.json');
+  const leaseToken = `generic-approval-token-${process.pid}`;
+  writeJson(workflowPath, {
+    name: 'generic-approval', version: 1, start: 'approve', done: 'done',
+    steps: {
+      approve: { name: 'Approve', kind: 'approval', input: { prompt: 'Approve.' }, next: 'done' },
+      done: { name: 'Done', kind: 'done', input: { prompt: 'Finished.' } },
+    },
+  });
+  await runnerNext({ runId, workflowPath, runsRoot, leaseToken });
+  await assert.rejects(
+    () => runnerWriteOutput({ runId, runsRoot, stepId: 'approve', json: JSON.stringify({ approval: 7 }), leaseToken }),
+    /approval output failed schema validation: \/approval must be string/,
+  );
+  const paths = resolveRunPaths({ runId, runsRoot });
+  const rejectedBaton = JSON.parse(readFileSync(paths.batonPath, 'utf8'));
+  assert.equal(rejectedBaton.state.approve, undefined);
+  assert.equal(rejectedBaton.acceptedHostOutputSignatures, undefined);
+
+  const accepted = await runnerWriteOutput({ runId, runsRoot, stepId: 'approve', json: JSON.stringify({ approval: 'approved' }), leaseToken });
+  assert.equal(accepted.accepted, true);
+  const replay = await runnerWriteOutput({ runId, runsRoot, stepId: 'approve', json: JSON.stringify({ approval: 'approved' }), leaseToken });
+  assert.equal(replay.idempotent, true);
+});
+
+test('runner implicit next claim persists safe harness context and emits matching agent runtime', async () => {
+  const runId = `workflow-runner-test-${process.pid}-implicit-harness`;
+  const runsRoot = path.join(tempDir, 'implicit-harness-runs');
+  const workflowPath = path.join(tempDir, 'implicit-harness-workflow.json');
+  const leaseToken = `implicit-harness-token-${process.pid}`;
+  const workflow = structuredClone(workflowDoc);
+  workflow.steps.prepare.agent = 'qa';
+  workflow.steps.prepare.agent_runtime = { codex: { model: 'gpt-5.5', thinking_level: 'high' } };
+  writeJson(workflowPath, workflow);
+
+  const response = await runnerNext({ runId, workflowPath, runsRoot, leaseToken, harness: 'CoDeX' });
+  assert.deepEqual(response.requests[0].agentRuntime, { model: 'gpt-5.5', thinkingLevel: 'high' });
+  const authority = JSON.parse(readFileSync(resolveRunPaths({ runId, runsRoot }).authorityPath, 'utf8'));
+  assert.deepEqual(authority.claimContext, { harness: 'codex' });
+  assert.equal(JSON.stringify(authority).includes(leaseToken), false);
+});
+
+test('runner API rejects unsupported implicit next claim metadata before creating state', async () => {
+  const runsRoot = path.join(tempDir, 'unsupported-next-metadata-runs');
+  for (const [field, value] of [['owner', 'qa'], ['sessionId', 'session-a'], ['workerId', 'worker-a']]) {
+    const runId = `unsupported-next-${field}-${process.pid}`;
+    await assert.rejects(
+      () => runnerNext({ runId, runsRoot, leaseToken: 'unused-token', [field]: value }),
+      /supports implicit claim metadata only through harness/,
+    );
+    assert.equal(existsSync(resolveRunPaths({ runId, runsRoot }).runDir), false);
+  }
+});

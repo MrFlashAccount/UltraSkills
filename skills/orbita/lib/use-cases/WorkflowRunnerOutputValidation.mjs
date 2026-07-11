@@ -1,6 +1,7 @@
 /** Workflow-runner output validation policy over IO-free runtime helpers. */
 import { validateAgainstOutputSchema } from '../runtime/output/output-schema-validation.mjs';
 import { workerOutputSchema } from '../runtime/output/worker-output-schema.mjs';
+import { assertGenericApprovalOutput } from '../runtime/output/worker-output.mjs';
 
 export function validateRunnerAcceptedOutput({
   requestStepId,
@@ -17,7 +18,10 @@ export function validateRunnerAcceptedOutput({
     : undefined;
   const schema = schemaRef ? (loaded?.schema ?? loaded) : (requestAction === 'run_worker' ? workerOutputSchema : undefined);
   if (schemaRef && !schema) throw new Error(`output schema validation failed: missing output.schema '${schemaRef}'`);
-  if (!schema) return output;
+  if (!schema) {
+    if (requestAction === 'wait_for_approval') assertGenericApprovalOutput(output);
+    return output;
+  }
   const validation = validateAgainstOutputSchema({
     schemaRef: schemaRef ?? 'worker-output',
     schema,

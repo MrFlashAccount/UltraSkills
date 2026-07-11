@@ -4,6 +4,11 @@ import { workflowRunsRoot } from './persistence/run-state/paths.mjs';
 const PATH_TOKEN = /(?:^|[\s'"`(=])([^\s'"`)]+)/g;
 const TRAILING_PUNCTUATION = /[,:;.!?]+$/;
 
+function redactExactSecret(value, secret) {
+  if (typeof secret !== 'string' || secret.length === 0) return value;
+  return value.split(secret).join('[redacted-lease-token]');
+}
+
 function normalizeComparablePath(value) {
   return String(value ?? '')
     .replaceAll('\\', '/')
@@ -55,7 +60,8 @@ function redactPathToken(token, roots) {
 
 export function publicErrorMessage(message, options = {}) {
   const roots = privateRoots(options);
-  return String(message).replaceAll(PATH_TOKEN, (match, token) => {
+  const secretRedacted = redactExactSecret(String(message), options.leaseToken);
+  return secretRedacted.replaceAll(PATH_TOKEN, (match, token) => {
     const prefixLength = match.length - token.length;
     return `${match.slice(0, prefixLength)}${redactPathToken(token, roots)}`;
   });

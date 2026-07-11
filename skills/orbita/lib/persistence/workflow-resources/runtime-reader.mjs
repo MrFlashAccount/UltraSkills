@@ -9,6 +9,7 @@ import { assertWorkflowSchema } from '../../file-contracts/workflow-document-sch
 import { readWorkflowDocument } from './workflow-document-reader.mjs';
 import { assertBatonSchema, batonSchema } from '../../file-contracts/baton/baton-schema.mjs';
 import { compileWorkflowForRuntime } from '../../runtime/compiled-workflow.mjs';
+import { deepFreeze, ownedSnapshot } from '../../runtime/owned-snapshot.mjs';
 import { isValidatedPersistedBaton } from '../validated-baton.mjs';
 
 const compiledRuntimeCache = new Map();
@@ -25,7 +26,7 @@ function readJson(pathname, kind) {
 function fileSignature(pathname) {
   try {
     const stats = statSync(pathname);
-    return `${path.resolve(pathname)}:${stats.mtimeMs}:${stats.size}`;
+    return `${path.resolve(pathname)}:${stats.dev}:${stats.ino}:${stats.ctimeMs}:${stats.mtimeMs}:${stats.size}`;
   } catch (error) {
     if (error?.code === 'ENOENT') return `${path.resolve(pathname)}:missing`;
     throw error;
@@ -232,15 +233,15 @@ function loadCompiledWorkflowPackage({ workflowPath }) {
   const workflow = readWorkflowDocument(workflowPath, 'workflow');
   assertWorkflowSchema(workflow);
   const repositoryRoot = defaultRepositoryRootForWorkflow(workflowPath);
-  const staticResources = loadWorkflowStaticResources({ workflow, workflowPath, repositoryRoot });
+  const staticResources = ownedSnapshot(loadWorkflowStaticResources({ workflow, workflowPath, repositoryRoot }));
   const signaturePaths = resourceSignaturePaths({ workflowPath, repositoryRoot, resources: staticResources });
-  const entry = {
+  const entry = deepFreeze({
     workflow: compileWorkflowForRuntime(workflow, staticResources),
     repositoryRoot,
     staticResources,
     signaturePaths,
     signature: resourceSignature(signaturePaths),
-  };
+  });
   if (!compiledRuntimeCache.has(cacheKey) && compiledRuntimeCache.size >= COMPILED_RUNTIME_CACHE_MAX_ENTRIES) {
     compiledRuntimeCache.delete(compiledRuntimeCache.keys().next().value);
   }

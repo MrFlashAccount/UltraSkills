@@ -46,6 +46,15 @@ Binding rules:
   hash, and requested baton/current-request values. It must not contain the full
   existing history. The transaction id is also written into the human-facing
   history entry.
+- Retriable `continue` and `move-pointer` commits persist a canonical input
+  fingerprint, pre-commit baton signature, and original public result in the
+  pending transaction. Recovery publishes `operation-receipt.json` before
+  unlinking the journal. A matching retry replays the receipt only while its
+  post-commit baton signature is still current; a later baton mutation
+  supersedes it. Mismatched pending retries fail closed. Legacy v1 and
+  pre-replay-v2 journals omit this metadata and remain recoverable.
+  Replay results replace the active lease token with a private placeholder on
+  disk and restore it only in the authenticated command response.
 - V2 recovery is byte-oriented and idempotent. The history file may be exactly
   at the recorded base, contain an exact partial prefix of `entryText`, or
   contain the full entry. Recovery truncates only the partial transaction tail,
@@ -87,6 +96,13 @@ Binding rules:
   `baton.state`, accepted outputs, artifacts/results, worker bindings, prompt
   markers, attempts, or existing history content.
 - `history.md` is the managed, deterministic, human-facing flight recorder for one run. It records lifecycle/control-flow history, accepted-output summaries, required bounded worker debug-summary side-channel content, terminal outcomes, and safe public failures; it is not a transcript store.
+- Standalone deduplicated history writes create a durable pending marker before
+  append, embed the deterministic transaction id in the entry, fsync history,
+  then atomically mark it applied. Recovery detects an already appended entry,
+  preventing both duplicate records and permanent suppression across crashes.
+- Heartbeat age alone never makes a lock stale when its owner PID is verifiably
+  alive on the same host. Host-tagged metadata prevents treating an unrelated
+  local PID as a remote owner's liveness proof.
 - `write-output` owns accepted-output history entries after output schema validation, artifact path validation, and worker debug-summary side-channel validation. For `run_worker`, accepted-output projection requires the exact generated `--debug-summary-file` path, validates a non-empty regular file, and reads only a bounded prefix; the debug summary is not part of baton/state. Rich debug-summary body ingestion is suppressible and is bounded after normalization to 4 KiB or 80 lines with a truncation marker.
 - `continue` owns transition and terminal history, and those history writes must stay atomic with baton transition durability. Retry/recovery must not duplicate, corrupt, or advance misleading history entries ahead of baton state.
 - `movePointer` owns pointer-recovery history entries. They must be append-only

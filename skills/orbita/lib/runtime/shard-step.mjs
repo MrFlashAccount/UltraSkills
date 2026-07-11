@@ -80,7 +80,31 @@ function retryResponseForShard(retryResponse, parentStepId, activation, record, 
   };
 }
 
-function applyShardBatch({ workflow, baton, parentStepId, parentStep, activation, allOutput, resources }) {
+function applyShardBatch({ workflow, baton, parentStepId, parentStep, activation, allOutput, outputParseError, resources }) {
+  if (outputParseError) {
+    let retryBaton = clone(baton);
+    const steps = [];
+    for (const requestId of activation.current_requests) {
+      const record = shardRecordForRequest(activation, requestId);
+      invariant(record, `shard activation '${parentStepId}' has no durable record for current request '${requestId}'`);
+      const workerStep = stepForShardWorker(parentStepId, parentStep, activation, record);
+      const retry = readWorkerOutputForStep({ baton: retryBaton, stepId: requestId, step: workerStep, allOutput: undefined, outputParseError }).retryResponse;
+      retryBaton = retry.baton;
+      steps.push(...retry.steps.map((entry) => ({
+        ...entry,
+        parentStepId,
+        shard: {
+          parent_step_id: parentStepId,
+          activation: activation.activation,
+          phase: 'shards',
+          index: record.index,
+          total: activation.values.length,
+          request_id: record.request_id,
+        },
+      })));
+    }
+    return { baton: batonWithShardActivation(retryBaton, parentStepId, activation), steps };
+  }
   assertOnlyCurrentRequests(allOutput, activation);
   let updatedBaton = clone(baton);
   const acceptedRequestIds = new Set();
@@ -93,6 +117,7 @@ function applyShardBatch({ workflow, baton, parentStepId, parentStep, activation
     const validation = assertOutputSchemaIfDeclared({
       baton: updatedBaton,
       stepId: requestId,
+      producerKey: `${parentStepId}.worker`,
       step: workerStep,
       workerOutput: outputForRequest(allOutput, requestId),
       resources,
@@ -158,7 +183,7 @@ export function applyShardStepOutput({ workflow, baton, parentStepId, parentStep
   const activation = shardActivationForBaton({ baton, parentStepId, parentStep });
   invariant(activation.parent_step_id === parentStepId, `shard activation parent mismatch for '${parentStepId}'`);
   if (activation.phase === 'shards') {
-    return applyShardBatch({ workflow, baton, parentStepId, parentStep, activation, allOutput, resources });
+    return applyShardBatch({ workflow, baton, parentStepId, parentStep, activation, allOutput, outputParseError, resources });
   }
   invariant(activation.phase === 'worker', `shard step '${parentStepId}' cannot accept output in phase '${activation.phase}'`);
   return applyFinalWorkerOutput({

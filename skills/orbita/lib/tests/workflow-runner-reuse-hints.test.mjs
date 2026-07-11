@@ -299,6 +299,136 @@ test('runner reuse hints: continue bind-agent flag stores top-level worker bindi
   assert.equal(response.requests[0].preferredAgentId, null);
 });
 
+test('runner reuse hints: pending continue retry returns the committed next or done response once', async () => {
+  for (const nextStep of ['branch_a', 'done']) {
+    const workflow = structuredClone(workflowDoc);
+    workflow.steps.prepare.next = nextStep;
+    const { runId, runDir, workflowPath, leaseToken, now } = await runCase(`pending-continue-${nextStep}`, workflow);
+    await next({ runId, workflowPath, leaseToken, now });
+    await writeOutput({
+      runId,
+      workflowPath,
+      stepId: 'prepare',
+      json: JSON.stringify(workerOutput(`prepared for ${nextStep}`)),
+      debugSummaryFile: debugSummaryFileFor(runDir, 'prepare'),
+      leaseToken,
+      now,
+    });
+    process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER = 'pending';
+    try {
+      await assert.rejects(
+        () => continueRun({ runId, workflowPath, leaseToken, now }),
+        /injected durable commit failure after pending/,
+      );
+    } finally {
+      delete process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER;
+    }
+
+    const retryNow = new Date('2026-06-01T12:00:01.000Z');
+    const retried = await continueRun({ runId, workflowPath, leaseToken, now: retryNow });
+    assert.equal(retried.status, nextStep === 'done' ? 'done' : 'needs_host_actions');
+    assert.deepEqual((retried.requests ?? []).map((request) => request.stepId), nextStep === 'done' ? [] : [nextStep]);
+    const history = readFileSync(path.join(runDir, 'history.md'), 'utf8');
+    assert.equal(history.match(/^- source: workflow-runner-continue$/gm)?.length, 1);
+    const authority = await readRunAuthority(resolveRunPaths({ runId, workflowPath }));
+    assert.equal(authority.status, retried.status);
+    assert.equal(authority.updatedAt, retryNow.toISOString());
+    assert.equal(authority.workerLease.leaseExpiresAt, '2026-06-01T13:00:01.000Z');
+  }
+});
+
+test('runner reuse hints: recovered bind preaction and duplicate binding specs append one binding entry', async () => {
+  const workflow = structuredClone(workflowDoc);
+  workflow.steps.prepare.next = 'done';
+  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('pending-bind-preaction', workflow);
+  await next({ runId, workflowPath, leaseToken, now });
+  await writeOutput({
+    runId,
+    workflowPath,
+    stepId: 'prepare',
+    json: JSON.stringify(workerOutput('prepared')),
+    debugSummaryFile: debugSummaryFileFor(runDir, 'prepare'),
+    leaseToken,
+    now,
+  });
+  process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER = 'pending';
+  try {
+    await assert.rejects(
+      () => continueRun({ runId, workflowPath, bindAgents: ['prepare=worker-1'], leaseToken, now }),
+      /injected durable commit failure after pending/,
+    );
+  } finally {
+    delete process.env.WORKFLOW_RUNNER_FAIL_DURABLE_COMMIT_AFTER;
+  }
+  const retried = await continueRun({
+    runId,
+    workflowPath,
+    bindAgents: ['prepare=worker-1', 'prepare=worker-1'],
+    leaseToken,
+    now,
+  });
+  assert.equal(retried.status, 'done');
+  const history = readFileSync(path.join(runDir, 'history.md'), 'utf8');
+  assert.equal(history.match(/^- source: workflow-runner-continue-bind-agent$/gm)?.length, 1);
+});
+
+test('runner reuse hints: conflicting bindings for one canonical logical agent fail before mutation', async () => {
+  const output = { template: 'output.md' };
+  const workflow = {
+    name: 'conflicting-logical-agent-bindings',
+    version: 1,
+    start: 'review',
+    done: 'done',
+    steps: {
+      review: {
+        name: 'Review',
+        kind: 'fanout',
+        max_parallel: 2,
+        input: { branches: ['first', 'second'], prompt: 'Finalize.' },
+        output,
+        branches: {
+          first: { agent: 'shared-reviewer', input: { prompt: 'First.' }, output },
+          second: { agent: 'shared-reviewer', input: { prompt: 'Second.' }, output },
+        },
+        next: 'done',
+      },
+      done: { name: 'Done', kind: 'done' },
+    },
+  };
+  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('conflicting-canonical-bindings', workflow);
+  const first = await next({ runId, workflowPath, leaseToken, now });
+  for (const request of first.requests) {
+    await writeOutput({
+      runId,
+      workflowPath,
+      stepId: request.stepId,
+      json: JSON.stringify(workerOutput(request.stepId)),
+      debugSummaryFile: debugSummaryFileFor(runDir, request.stepId),
+      leaseToken,
+      now,
+    });
+  }
+  const batonBefore = readFileSync(path.join(runDir, 'baton.json'), 'utf8');
+  const historyBefore = readFileSync(path.join(runDir, 'history.md'), 'utf8');
+  await assert.rejects(
+    () => continueRun({
+      runId,
+      workflowPath,
+      bindAgents: [
+        `${first.requests[0].stepId}=worker-a`,
+        `${first.requests[1].stepId}=worker-b`,
+      ],
+      leaseToken,
+      now,
+    }),
+    /conflicting worker ids to logical agent 'shared-reviewer'/,
+  );
+  assert.equal(readFileSync(path.join(runDir, 'baton.json'), 'utf8'), batonBefore);
+  const historyAfter = readFileSync(path.join(runDir, 'history.md'), 'utf8');
+  assert.equal(historyAfter.startsWith(historyBefore), true);
+  assert.doesNotMatch(historyAfter.slice(historyBefore.length), /workflow-runner-continue-bind-agent/);
+});
+
 test('runner reuse hints: logical agent name reuses one worker across different workflow steps', async () => {
   const workflow = structuredClone(workflowDoc);
   workflow.steps.prepare.agent = 'architect';
@@ -325,6 +455,95 @@ test('runner reuse hints: logical agent name reuses one worker across different 
   assert.deepEqual(readBaton(runDir).workerBindings, { architect: 'architect-worker' });
   assert.equal(followUp.requests[0].stepId, 'branch_a');
   assert.equal(followUp.requests[0].preferredAgentId, 'architect-worker');
+});
+
+test('runner reuse hints: fanout child binding uses canonical logical agent key across branches', async () => {
+  const output = { template: 'output.md' };
+  const workflow = {
+    name: 'fanout-logical-agent-binding',
+    version: 1,
+    start: 'review',
+    done: 'done',
+    steps: {
+      review: {
+        name: 'Review',
+        kind: 'fanout',
+        max_parallel: 1,
+        input: { branches: ['first', 'second'], prompt: 'Finalize.' },
+        output,
+        branches: {
+          first: { agent: 'shared-reviewer', input: { prompt: 'First.' }, output },
+          second: { agent: 'shared-reviewer', input: { prompt: 'Second.' }, output },
+        },
+        next: 'done',
+      },
+      done: { name: 'Done', kind: 'done' },
+    },
+  };
+  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('fanout-logical-agent-binding', workflow);
+  const first = await next({ runId, workflowPath, leaseToken, now });
+  const firstStepId = first.requests[0].stepId;
+  await writeOutput({
+    runId,
+    workflowPath,
+    stepId: firstStepId,
+    json: JSON.stringify(workerOutput('first accepted')),
+    debugSummaryFile: debugSummaryFileFor(runDir, firstStepId),
+    leaseToken,
+    now,
+  });
+  const second = await continueRun({ runId, workflowPath, bindAgents: [`${firstStepId}=fanout-worker-1`], leaseToken, now });
+
+  assert.deepEqual(readBaton(runDir).workerBindings, { 'shared-reviewer': 'fanout-worker-1' });
+  assert.equal(second.requests[0].stepId, 'review__fanout__1__second');
+  assert.equal(second.requests[0].preferredAgentId, 'fanout-worker-1');
+});
+
+test('runner reuse hints: write-output replay is canonical-idempotent and conflicting payload fails without duplicate history', async () => {
+  const workflow = structuredClone(workflowDoc);
+  workflow.steps.prepare.next = 'done';
+  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('write-output-idempotency', workflow);
+  await next({ runId, workflowPath, leaseToken, now });
+  const debugSummaryFile = debugSummaryFileFor(runDir, 'prepare');
+  const firstPayload = { outcome: 'ready', results: [{ summary: 'accepted', type: 'check' }] };
+  const first = await writeOutput({
+    runId,
+    workflowPath,
+    stepId: 'prepare',
+    json: JSON.stringify(firstPayload),
+    debugSummaryFile,
+    leaseToken,
+    now,
+  });
+  const replay = await writeOutput({
+    runId,
+    workflowPath,
+    stepId: 'prepare',
+    json: JSON.stringify({ results: [{ type: 'check', summary: 'accepted' }], outcome: 'ready' }),
+    debugSummaryFile,
+    leaseToken,
+    now,
+  });
+
+  assert.equal(first.idempotent, undefined);
+  assert.equal(replay.idempotent, true);
+  await assert.rejects(
+    () => writeOutput({
+      runId,
+      workflowPath,
+      stepId: 'prepare',
+      json: JSON.stringify(workerOutput('conflicting')),
+      debugSummaryFile,
+      leaseToken,
+      now,
+    }),
+    /already accepted with a different payload/,
+  );
+  const history = readFileSync(path.join(runDir, 'history.md'), 'utf8');
+  assert.equal((history.match(/accepted:prepare/g) ?? []).length, 1);
+  const completed = await continueRun({ runId, workflowPath, leaseToken, now });
+  assert.equal(completed.status, 'done');
+  assert.equal(readBaton(runDir).acceptedHostOutputSignatures, undefined);
 });
 
 test('runner reuse hints: continue bind-agent renews stale matching worker lease', async () => {
@@ -389,14 +608,24 @@ test('runner reuse hints: recoverable implementation blocker keeps host work act
   assert.equal(recovery.requests[0].recoverableBlocker.source_step_id, 'backend_implementation');
   assert.equal(recovery.requests[0].recoverableBlocker.needed, 'Approve the smallest recovery question.');
 
+  const resolution = resolutionOutput();
   await writeOutput({
     runId,
     workflowPath,
     stepId: 'backend_implementation',
-    json: JSON.stringify(resolutionOutput()),
+    json: JSON.stringify(resolution),
     leaseToken,
     now,
   });
+  const resolutionReplay = await writeOutput({
+    runId,
+    workflowPath,
+    stepId: 'backend_implementation',
+    json: JSON.stringify({ resolution: { evidence: resolution.resolution.evidence, decision: resolution.resolution.decision, summary: resolution.resolution.summary } }),
+    leaseToken,
+    now,
+  });
+  assert.equal(resolutionReplay.idempotent, true);
   const batonAfterResolutionWrite = readBaton(runDir);
   assert.equal(
     batonAfterResolutionWrite.state.backend_implementation.resolution.decision,
@@ -532,21 +761,31 @@ test('runner reuse hints: recoverable approval blocker waits for orchestrator re
   assert.equal(first.requests[0].stepId, 'approval_gate');
   assert.equal(first.requests[0].action, 'wait_for_approval');
 
+  const blockedApproval = {
+    approval: 'blocked',
+    blocker: {
+      summary: 'Need orchestrator decision before approval can continue.',
+      source_step_id: 'approval_gate',
+      needed: 'Resolve approval concern.',
+    },
+  };
   await writeOutput({
     runId,
     workflowPath,
     stepId: 'approval_gate',
-    json: JSON.stringify({
-      approval: 'blocked',
-      blocker: {
-        summary: 'Need orchestrator decision before approval can continue.',
-        source_step_id: 'approval_gate',
-        needed: 'Resolve approval concern.',
-      },
-    }),
+    json: JSON.stringify(blockedApproval),
     leaseToken,
     now,
   });
+  const approvalReplay = await writeOutput({
+    runId,
+    workflowPath,
+    stepId: 'approval_gate',
+    json: JSON.stringify({ blocker: blockedApproval.blocker, approval: 'blocked' }),
+    leaseToken,
+    now,
+  });
+  assert.equal(approvalReplay.idempotent, true);
 
   const persistedAfterWrite = readBaton(runDir).state.approval_gate;
   assert.deepEqual(Object.keys(persistedAfterWrite).sort(), ['approval', 'blocker'].sort());

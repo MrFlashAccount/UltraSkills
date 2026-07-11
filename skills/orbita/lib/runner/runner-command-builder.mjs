@@ -1,16 +1,8 @@
 import { fileURLToPath } from "node:url";
-
-const SAFE_STEP_ID = /^[A-Za-z0-9_.-]+$/;
+import { assertSafeWorkflowStepId } from '../runtime/step-id.mjs';
 
 export function assertSafeStepId(stepId) {
-  if (
-    typeof stepId !== "string" ||
-    !SAFE_STEP_ID.test(stepId) ||
-    stepId === "." ||
-    stepId === ".."
-  ) {
-    throw new Error(`invalid workflow step id for runner storage: ${stepId}`);
-  }
+  assertSafeWorkflowStepId(stepId);
 }
 
 export function shellQuote(value) {
