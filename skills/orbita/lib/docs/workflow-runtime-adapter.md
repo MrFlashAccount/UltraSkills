@@ -63,19 +63,21 @@ The API functions `listPointerTransitions` and `movePointer` are exposed through
 the CLI modes `list-pointer-transitions` and `move-pointer`. They are operator
 recovery commands, not normal workflow-loop commands. Both validate a fresh
 explicit `--lease-token`. `listPointerTransitions` is a logical read but remains
-lease-required because it exposes bounded pointer/history recovery metadata. It
-returns only current pointer, observed earlier transition options, and
+lease-required because it exposes bounded pointer recovery metadata. It returns
+only current pointer, state-bearing predecessor options resolved through the
+workflow's current transition rules, and
 unsupported reasons; it must not initialize
 missing run state, append history, update the run index, mutate baton/current
 pointer state, or emit raw baton, raw history, private paths, lease data, or
-token-bearing commands. `movePointer` accepts one listed observed transition id
+token-bearing commands. `movePointer` accepts one listed state-resolved transition id
 and mutates only baton cursor/status through the existing lease, lock,
 validation, durable writer, history append, and run-index path. One move may
-target any earlier cursor reachable through the run's observed history. It
+target any state-bearing predecessor of the current cursor. Debug history is
+never a navigation source. It
 must not roll back, prune, rewrite, or clean `baton.state`, accepted outputs,
 artifacts/results, worker bindings, prompt markers, attempts, or existing
-history. Terminal `done` runs may move backward to an observed non-terminal
-step; array cursors are invalid persisted state. Baton state is preserved
+history. Terminal `done` runs may move backward to a state-bearing non-terminal
+predecessor; array cursors are invalid persisted state. Baton state is preserved
 without a separate acknowledgement gate.
 
 Commands returned in host responses are rendered with the absolute path to `workflow-runner.mjs` and an explicit absolute `--runs-root`, quoted for shell execution, so a worker or host can run them from any current working directory. For human-authored commands, set `ORBITA_SKILL_ROOT` to the directory containing `skills/orbita/SKILL.md` and invoke CLI entrypoints through `$ORBITA_SKILL_ROOT/lib/entrypoints/cli/...`; do not rely on the current working directory.

@@ -671,14 +671,13 @@ export function createWorkflowRunnerCommand({
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
     const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
     await assertWorkerLeaseAuthority(paths, { leaseToken, now });
-    const current = await readPersistedRunState(paths);
+    const current = await readPersistedRunState(paths, { includeHistoryText: false });
     const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
     return {
       runId: paths.runId,
       ...projectPointerTransitions({
         workflow: runtime.workflow,
         baton: runtime.baton,
-        historyText: current.history?.text,
       }),
     };
   }
@@ -695,12 +694,11 @@ export function createWorkflowRunnerCommand({
       const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
       const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now });
       await recoverDurableCommit(paths);
-      const current = await readPersistedRunState(paths);
+      const current = await readPersistedRunState(paths, { includeHistoryText: false });
       const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
       const resolved = resolvePointerMove({
         workflow: runtime.workflow,
         baton: runtime.baton,
-        historyText: current.history?.text,
         transitionId,
       });
       const { response } = await renderCurrentHostResponse(paths, resolved.baton, { leaseToken });

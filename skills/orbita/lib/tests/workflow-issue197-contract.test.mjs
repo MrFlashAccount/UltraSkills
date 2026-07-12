@@ -100,11 +100,11 @@ test('Orbita skill stops on lease conflicts and offers only an approved forced t
   assert.match(skillText, /takeover invalidates\s+the previous holder's token/);
 });
 
-test('Orbita skill explains direct rollback to any earlier observed cursor', () => {
+test('Orbita skill explains direct rollback to state-bearing workflow predecessors', () => {
   const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
-  assert.match(skillText, /every valid earlier cursor observed in this run/);
-  assert.match(skillText, /not unvisited workflow steps/);
-  assert.match(skillText, /target matches the request and move once/);
+  assert.match(skillText, /every valid predecessor present in `baton\.state`/);
+  assert.match(skillText, /never derives navigation from debug history or offers downstream steps/);
+  assert.match(skillText, /target matching the request and move once/);
   assert.match(skillText, /preserves baton state without extra acknowledgement/);
   assert.doesNotMatch(skillText, /acknowledge-retained-state/);
 });

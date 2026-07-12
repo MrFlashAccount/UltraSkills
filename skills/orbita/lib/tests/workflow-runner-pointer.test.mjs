@@ -15,6 +15,7 @@ import {
 } from './helpers/orbita-production-api.mjs';
 import { registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
+import { projectPointerTransitions } from '../runner/pointer-transition-projection.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-pointer-'));
@@ -123,7 +124,73 @@ function rawRunFiles(paths) {
   };
 }
 
-test('runner pointer API moves to an observed cursor while preserving replaceable state', async () => {
+test('pointer projection follows current workflow branches and excludes stale downstream state', () => {
+  const workflow = {
+    name: 'pointer-current-branch',
+    version: 1,
+    start: 'prepare',
+    done: 'done',
+    steps: {
+      prepare: { name: 'Prepare', kind: 'worker', next: 'decide' },
+      decide: {
+        name: 'Decide',
+        kind: 'worker',
+        next: { match: '${{ output.route }}', cases: { left: 'left', right: 'right' } },
+      },
+      left: { name: 'Old branch', kind: 'worker', next: 'done' },
+      right: { name: 'Current branch', kind: 'worker', next: 'done' },
+      done: { name: 'Done', kind: 'done' },
+    },
+  };
+  const baton = {
+    cursor: 'right',
+    status: 'running',
+    state: {
+      artifacts: [],
+      results: [],
+      prepare: { outcome: 'ready' },
+      decide: { outcome: 'ready', route: 'right' },
+      left: { outcome: 'ready' },
+    },
+  };
+
+  const projected = projectPointerTransitions({ workflow, baton });
+
+  assert.deepEqual(projected.transitions.map((transition) => transition.to.cursor), ['decide', 'prepare']);
+  assert.equal(projected.transitions.some((transition) => transition.to.cursor === 'left'), false);
+});
+
+test('pointer projection handles resolved cycles using baton membership', () => {
+  const workflow = {
+    name: 'pointer-cycle',
+    version: 1,
+    start: 'a',
+    done: 'done',
+    steps: {
+      a: { name: 'A', kind: 'worker', next: 'b' },
+      b: { name: 'B', kind: 'worker', next: 'c' },
+      c: { name: 'C', kind: 'worker', next: 'a' },
+      done: { name: 'Done', kind: 'done' },
+    },
+  };
+  const baton = {
+    cursor: 'c',
+    status: 'running',
+    state: {
+      artifacts: [],
+      results: [],
+      a: { outcome: 'ready' },
+      b: { outcome: 'ready' },
+      c: { outcome: 'ready' },
+    },
+  };
+
+  const projected = projectPointerTransitions({ workflow, baton });
+
+  assert.deepEqual(projected.transitions.map((transition) => transition.to.cursor), ['b', 'a']);
+});
+
+test('runner pointer API moves to a state-bearing predecessor while preserving replaceable state', async () => {
   const run = await createClaimedRun('api-retained');
   await next({ ...run, userPrompt: 'keep prompt marker', now: new Date('2026-06-01T10:00:01.000Z') });
   await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared' });
@@ -243,7 +310,7 @@ test('runner pointer API rejects stale transition ids and wrong leases without m
 
   await assert.rejects(
     () => movePointer({ ...run, transitionId: listed.transitions[0].id, now: new Date('2026-06-01T10:05:00.000Z') }),
-    /stale, unavailable, or not observed/,
+    /stale, unavailable, or not a state-bearing predecessor/,
   );
   const afterStaleRejected = snapshot(run.paths);
   assert.deepEqual(afterStaleRejected.baton, beforeRejected.baton);

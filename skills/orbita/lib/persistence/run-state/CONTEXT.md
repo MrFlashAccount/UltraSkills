@@ -76,7 +76,8 @@ Binding rules:
 - API `next`, `continue`, `write-output`, and `instructions` read persisted baton before rendering; `continue` and `write-output` validate accepted outputs against the freshly rendered current requests, and `instructions` returns the freshly rendered prompt for the current step.
 - Pointer recovery API functions `listPointerTransitions` and `movePointer` use
   CLI modes `list-pointer-transitions` and `move-pointer`. They read persisted
-  baton and durable history through this run-state boundary. Both require active
+  baton through this run-state boundary; debug history is not a navigation
+  source. Both require active
   lease authority. `listPointerTransitions` is a logical read: it may use the
   run-state boundary for consistency, but it must not initialize missing run
   state, append history, renew authority, or mutate baton/current pointer
@@ -92,11 +93,7 @@ Binding rules:
 - `continue` owns transition and terminal history, and those history writes must stay atomic with baton transition durability. Retry/recovery must not duplicate, corrupt, or advance misleading history entries ahead of baton state.
 - `movePointer` owns pointer-recovery history entries. They must be append-only
   and atomic with the cursor/status update, recording bounded before/after
-  cursor/status edge, transition id, direction, and retained-output step ids or
-  `none`. Existing history is never rewritten by pointer recovery.
-- Retained accepted-output warnings for pointer recovery must be derived from
-  the same per-step accepted-output surface in `baton.state[stepId]` that
-  `continue` reads. A reusable helper may be extracted only inside runner-owned
-  code and must preserve current `continue` reuse semantics.
+  cursor/status edge, transition id, direction, and state-preservation fact.
+  Existing history is never rewritten by pointer recovery.
 - Public command failure history may be appended only when a safe run directory, matching lease context, and managed history path are available. Record only exact relevant public error text after host-safe redaction, bounded after normalization to 2 KiB or 40 lines with a truncation marker. Unsafe or missing context means no history write.
 - History must never scrape or persist hidden host transcripts, session registries, private prompts, lease tokens, instruction storage paths, worker lifecycle state, or other host control-plane metadata.
