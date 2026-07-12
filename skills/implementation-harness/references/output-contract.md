@@ -13,20 +13,17 @@ Return one structured packet with these top-level fields exactly:
 - `change_summary`
 - `verification_results`
 - `review_handoff`
-- `blockers`
 - `warnings`
 - `next_action`
 - `issue_comment`
 
 `status` allowed values:
 
-- `blocked`
 - `in_progress`
 - `ready_for_review`
 
 Conditional rules:
 
-- If `status` is `blocked`, `blockers` must be non-empty.
 - If `status` is `ready_for_review`, `verification_results` must be non-empty and `review_handoff` must be populated.
 
 Field intent:
@@ -40,9 +37,9 @@ Field intent:
 - `branch_name`: working branch used or prepared for transport.
 - `pr_url`: published PR URL when transport already supplied one; otherwise empty.
 - `change_summary`: concise user-visible changes.
-- `verification_results`: commands/checks run, results, notable gaps, and whether each delegated implementer satisfied loaded role material's additional, final-answer, or output requirements, or the `blocked` state if required role material could not be used.
+- `verification_results`: commands/checks run, results, notable gaps, and whether each delegated implementer satisfied loaded role material's additional, final-answer, or output requirements.
 - `review_handoff`: compact handoff for the separate review stage, including intended reviewer coverage and any review-sensitive hotspots. For architecture-sensitive work, include resolved proof obligations, deviations from the architecture contract, unresolved compatibility surfaces, and negative checks run.
-- `blockers`: unresolved blockers that prevent safe progress. Keep this limited to concrete execution blockers, contradictions, missing implementation-critical facts that survived earlier stages, missing external input or permission, required approved-contract changes, redesign/plan decisions, or unsafe repo/environment state. Red tests caused by your own in-scope changes are implementation work to fix and rerun, not blockers by themselves.
+If progress requires help because of a concrete execution blocker, contradiction, missing implementation-critical fact, missing external input or permission, required approved-contract change, redesign/plan decision, or unsafe repo/environment state, report `NON_BLOCKING_STOP` through the orchestrator/host control channel with the smallest help request. Do not return a completed packet for that stop; resume the same implementation task after resolution. Red tests caused by your own in-scope changes are implementation work to fix and rerun, not a reason to stop.
 - `warnings`: non-blocking risks, follow-ups, or caveats.
 - `next_action`: one explicit next step for the caller.
 - `issue_comment`: transport-ready comment body another layer can persist.

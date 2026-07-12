@@ -91,7 +91,7 @@ function applyBranchBatch({ workflow, baton, ownerStepId, ownerStep, activation,
   const acceptedRequestIds = new Set();
   const acceptedOutputs = clone(activation.accepted_outputs);
 
-  for (const requestId of activation.current_requests) {
+  for (const requestId of Object.keys(allOutput.steps)) {
     const record = branchRecordForRequest(activation, requestId);
     invariant(record, `fanout activation '${ownerStepId}' has no durable branch record for current request '${requestId}'`);
     const branchStep = stepForFanoutBranch(ownerStepId, ownerStep, activation, record);

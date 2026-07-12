@@ -4,12 +4,13 @@ import {
   continueInstructionCommandForRun,
   loadFollowupInstructionsCommandForStep,
   loadInstructionsCommandForStep,
+  resolveStopCommandForStep,
   writeOutputCommandForStep,
 } from "./runner-command-builder.mjs";
-import { publicRecoverableBlockerDetails } from "../runtime/recoverable-worker-blocker.mjs";
+import { publicNonBlockingStopDetails } from "../runtime/non-blocking-stop.mjs";
 
 const TERMINAL_ACTIONS = new Set(["stop_done"]);
-const RESOLVE_WORKER_BLOCKER_ACTION = "resolve_worker_blocker";
+const RESOLVE_NON_BLOCKING_STOP_ACTION = "resolve_non_blocking_stop";
 const SUPERSEDES_STDOUT_INSTRUCTION =
   "Supersedes all previous workflow-runner stdout.";
 
@@ -38,7 +39,7 @@ function requestInstructionBlock(request) {
       lines.push("  send that command only when restoring the preferred worker; do not run it in the orchestrator");
     }
     lines.push(`  pass actual worker id to continue: --bind-agent '${request.stepId}=<agent-id>'`);
-    if (request.recoverableBlocker) lines.push(`  recoverable blocker: ${JSON.stringify(request.recoverableBlocker)}`);
+    if (request.nonBlockingStop) lines.push(`  non-blocking stop: ${JSON.stringify(request.nonBlockingStop)}`);
     if (request.shard) lines.push(`  shard: ${JSON.stringify(request.shard)}`);
     if (request.fanout) lines.push(`  fanout: ${JSON.stringify(request.fanout)}`);
     return lines.join("\n");
@@ -49,9 +50,9 @@ function requestInstructionBlock(request) {
     return lines.join("\n");
   }
 
-  if (request.action === RESOLVE_WORKER_BLOCKER_ACTION) {
-    lines.push(`  recoverable blocker: ${JSON.stringify(request.recoverableBlocker)}`);
-    lines.push(`  write resolution: ${request.writeResolutionCommand}`);
+  if (request.action === RESOLVE_NON_BLOCKING_STOP_ACTION) {
+    lines.push(`  non-blocking stop: ${JSON.stringify(request.nonBlockingStop)}`);
+    lines.push(`  write resolution: ${request.resolveStopCommand}`);
     return lines.join("\n");
   }
 
@@ -74,7 +75,7 @@ const TERMINAL_ORCHESTRATOR_INSTRUCTIONS_BY_STATUS = Object.freeze({
   needs_host_actions: (ctx) => [
     hostRequestInstructionList(ctx.requests),
     ctx.inlineInstructions,
-    "Then run this single continue command after every current request has accepted output. Replace every <agent-id> placeholder with the actual selected worker id, and replace the debug JSON placeholder with a concise orchestrator debug summary covering completed host actions, rationale, commands/tools used, validation/evidence, and remaining risks or blockers. Do not include private prompts, hidden reasoning, tokens, or raw transcripts.",
+    "Then run this single continue command after every current request has submitted completed output or a stop resolution. Replace every <agent-id> placeholder with the actual selected worker id, and replace the debug JSON placeholder with a concise orchestrator debug summary covering completed host actions, rationale, commands/tools used, validation/evidence, and remaining risks or blockers. Do not include private prompts, hidden reasoning, tokens, or raw transcripts.",
     ctx.continueCommand,
     "Follow that stdout instruction exactly.",
   ].filter(Boolean).join("\n"),
@@ -195,10 +196,10 @@ function agentRuntimeForExecutableStep(workflow, step, claimContext) {
   return { model: profile.model, thinkingLevel: profile.thinking_level };
 }
 
-function recoverableBlockerForStep(baton, stepId, options = {}) {
-  const blocker = baton?.recoverableWorkerBlockers?.[stepId];
-  if (!blocker || typeof blocker !== "object" || Array.isArray(blocker)) return undefined;
-  return publicRecoverableBlockerDetails(blocker, { stepId, runsRoot: options.runsRoot });
+function nonBlockingStopForStep(baton, stepId, options = {}) {
+  const stop = baton?.nonBlockingStops?.[stepId];
+  if (!stop || typeof stop !== "object" || Array.isArray(stop)) return undefined;
+  return publicNonBlockingStopDetails(stop, { stepId, runsRoot: options.runsRoot });
 }
 
 export function buildHostRequests(
@@ -211,14 +212,14 @@ export function buildHostRequests(
   return interpreterResponse.steps
     .filter((step) => !TERMINAL_ACTIONS.has(step.action))
     .map((step) => {
-      const recoverableBlocker = recoverableBlockerForStep(interpreterResponse.baton, step.id, { runsRoot });
-      if (recoverableBlocker && !interpreterResponse.baton.recoverableWorkerBlockers?.[step.id]?.resolution) {
+      const nonBlockingStop = nonBlockingStopForStep(interpreterResponse.baton, step.id, { runsRoot });
+      if (nonBlockingStop && !interpreterResponse.baton.nonBlockingStops?.[step.id]?.resolution) {
         return {
           id: step.id,
           stepId: step.id,
-          action: RESOLVE_WORKER_BLOCKER_ACTION,
-          recoverableBlocker,
-          writeResolutionCommand: writeOutputCommandForStep(runId, step.id, {
+          action: RESOLVE_NON_BLOCKING_STOP_ACTION,
+          nonBlockingStop,
+          resolveStopCommand: resolveStopCommandForStep(runId, step.id, {
             runsRoot,
             leaseToken,
           }),
@@ -241,17 +242,20 @@ export function buildHostRequests(
       if (step.action === "run_worker") {
         const agentRuntime = agentRuntimeForExecutableStep(workflow, step, claimContext);
         if (agentRuntime) request.agentRuntime = agentRuntime;
+        const bindingStepId = step.parentStepId || step.ownerStepId
+          ? step.id
+          : workflowStepIdForExecutableStep(step);
         request.preferredAgentId = preferredAgentIdForStep(
           interpreterResponse.baton,
-          workflowStepIdForExecutableStep(step),
-          step.step,
+          bindingStepId,
+          step.parentStepId || step.ownerStepId ? undefined : step.step,
         );
         request.loadFollowupInstructionsCommand =
           loadFollowupInstructionsCommandForStep(runId, step.id, {
             runsRoot,
             leaseToken,
           });
-        if (recoverableBlocker) request.recoverableBlocker = recoverableBlocker;
+        if (nonBlockingStop) request.nonBlockingStop = nonBlockingStop;
       }
       const resolvedOutputSchema = resolvedOutputSchemaForStep(step, {
         workflow,

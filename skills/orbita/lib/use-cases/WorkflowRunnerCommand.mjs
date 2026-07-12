@@ -25,6 +25,8 @@ export function createWorkflowRunnerCommand({
   workerBindingKeyForStep,
   assertSafeStepId,
   writeOutputCommandForStep,
+  reportStopCommandForStep,
+  resolveStopCommandForStep,
   readText,
   assertFreshTokenAuthority,
   assertMatchingTokenAuthority,
@@ -47,10 +49,8 @@ export function createWorkflowRunnerCommand({
   publicErrorMessage,
   assertAbsoluteWorkflowPath,
   validateWorkflowStartup,
-  isRecoverableWorkerBlockerOutput,
-  publicRecoverableBlockerDetails,
-  publicRecoveryResolutionDetails,
-  applyOutputToBatonState,
+  publicNonBlockingStopDetails,
+  publicStopResolutionDetails,
 }) {
   async function readJson(pathname, kind) {
     let content;
@@ -232,6 +232,10 @@ export function createWorkflowRunnerCommand({
         leaseToken,
         debugSummaryFile: requiresWorkerDebugSummary(step) ? debugSummaryPathForStep(stepId) : undefined,
       }),
+      reportStopCommandForStep: (stepId) => reportStopCommandForStep(paths.runId, stepId, {
+        runsRoot: paths.runsRoot,
+        leaseToken,
+      }),
       artifactOutputDirForStep: (stepId) => {
         assertSafeStepId(stepId);
         return join(paths.runDir, stepId, 'artifacts');
@@ -312,10 +316,6 @@ export function createWorkflowRunnerCommand({
     return request.parentStepId ?? request.ownerStepId ?? stepIdForRequest(request);
   }
 
-  function isSyntheticChildRequest(request) {
-    return [request.parentStepId, request.ownerStepId].some((value) => typeof value === 'string' && value.length > 0);
-  }
-
   function acceptedOutputForRequest(baton, request) {
     for (const alias of requestAliases(request)) {
       if (Object.hasOwn(baton?.state ?? {}, alias)) return structuredClone(baton.state[alias]);
@@ -373,83 +373,76 @@ export function createWorkflowRunnerCommand({
     return { outputValue: { steps }, historyOutput: historyOutput.join(', '), currentBaton };
   }
 
-  function recoverableWorkerBlockersForAcceptedState({ workflow, requests, valuesByRequestId, runsRoot }) {
-    const blockers = {};
+  function reportedStopsForRequests(currentBaton, requests) {
+    const stops = {};
     for (const request of requests) {
-      if (isSyntheticChildRequest(request)) continue;
-      const stepId = workflowStepIdForRequest(request);
-      const step = workflow.steps?.[stepId];
-      const output = valuesByRequestId.get(request.id);
-      if (isRecoverableWorkerBlockerOutput({ workflow, stepId, step, output })) {
-        blockers[stepId] = publicRecoverableBlockerDetails(output.blocker, { stepId, runsRoot });
-      }
+      const requestId = stepIdForRequest(request);
+      const stop = currentBaton?.nonBlockingStops?.[requestId];
+      if (stop) stops[requestId] = structuredClone(stop);
     }
-    return blockers;
+    return stops;
   }
 
-  function acceptedOutputsExcludingRecoverableBlockers({ requests, valuesByRequestId, recoverableWorkerBlockers }) {
+  function acceptedOutputsExcludingStops({ requests, valuesByRequestId, nonBlockingStops }) {
     const outputs = {};
     for (const request of requests) {
       const stepId = stepIdForRequest(request);
-      if (Object.hasOwn(recoverableWorkerBlockers, stepId)) continue;
+      if (Object.hasOwn(nonBlockingStops, stepId)) continue;
       outputs[stepId] = valuesByRequestId.get(request.id);
     }
     return outputs;
   }
 
-  function recoveryResolutionsForAcceptedState({ currentBaton, requests, valuesByRequestId, runsRoot }) {
-    const resolutions = {};
+  function resolvedStopsForRequests(currentBaton, requests) {
+    const stops = {};
     for (const request of requests) {
-      if (request.action !== 'resolve_worker_blocker') continue;
-      const stepId = stepIdForRequest(request);
-      if (!currentBaton?.recoverableWorkerBlockers?.[stepId]) continue;
-      resolutions[stepId] = publicRecoveryResolutionDetails(valuesByRequestId.get(request.id), { runsRoot });
+      if (request.action !== 'resolve_non_blocking_stop') continue;
+      const requestId = stepIdForRequest(request);
+      const stop = currentBaton?.nonBlockingStops?.[requestId];
+      if (!stop?.resolution) continue;
+      stops[requestId] = structuredClone(stop);
     }
-    return resolutions;
+    return stops;
   }
 
   function withContinuationContext(value, context) {
     return { ...value, ...context };
   }
 
-  function outputOrRecoveryForAcceptedState(currentBaton, requests, { hasSyntheticRequests, workflow, runsRoot, runtime, response, currentHistoryText }) {
+  function outputOrRecoveryForAcceptedState(currentBaton, requests, { hasSyntheticRequests, runtime, response, currentHistoryText }) {
     const context = { runtime, response, currentHistoryText };
     const parsedOutputRefs = parsedOutputRefsForAcceptedState(currentBaton, requests);
     assertNamedOutputRefsMatchRequests(parsedOutputRefs, requests);
-    const { valuesByRequestId, missing } = acceptedOutputsForRequests(currentBaton, requests);
-    if (missing.length > 0) {
-      throw new Error(`missing accepted host output for workflow step ${missing.join(', ')}; run workflow-runner write-output first`);
-    }
-
-    const recoveryResolutions = recoveryResolutionsForAcceptedState({
-      currentBaton,
-      requests,
-      valuesByRequestId,
-      runsRoot,
-    });
+    const { valuesByRequestId } = acceptedOutputsForRequests(currentBaton, requests);
+    const recoveryResolutions = resolvedStopsForRequests(currentBaton, requests);
     if (Object.keys(recoveryResolutions).length > 0) {
-      const historyOutput = requests
-        .map((request) => `accepted:${stepIdForRequest(request)}`)
-        .join(', ');
-      return withContinuationContext({ recoveryResolutions, historyOutput, currentBaton }, context);
+      return withContinuationContext({
+        recoveryResolutions,
+        historyOutput: Object.keys(recoveryResolutions).map((requestId) => `resolved-stop:${requestId}`).join(', '),
+        currentBaton,
+      }, context);
     }
 
-    const recoverableWorkerBlockers = recoverableWorkerBlockersForAcceptedState({
-      workflow,
-      requests,
-      valuesByRequestId,
-      runsRoot,
-    });
-    if (Object.keys(recoverableWorkerBlockers).length > 0) {
+    const nonBlockingStops = reportedStopsForRequests(currentBaton, requests);
+    const missing = requests
+      .filter((request) => !valuesByRequestId.has(request.id) && !Object.hasOwn(nonBlockingStops, stepIdForRequest(request)))
+      .map((request) => request.id);
+    if (missing.length > 0) {
+      throw new Error(`missing completed output or non-blocking stop for workflow request ${missing.join(', ')}; run workflow-runner write-output or report-stop first`);
+    }
+
+    if (Object.keys(nonBlockingStops).length > 0) {
       const historyOutput = requests
-        .map((request) => `accepted:${stepIdForRequest(request)}`)
+        .map((request) => Object.hasOwn(nonBlockingStops, stepIdForRequest(request))
+          ? `stopped:${stepIdForRequest(request)}`
+          : `accepted:${stepIdForRequest(request)}`)
         .join(', ');
-      const acceptedOutputs = acceptedOutputsExcludingRecoverableBlockers({
+      const acceptedOutputs = acceptedOutputsExcludingStops({
         requests,
         valuesByRequestId,
-        recoverableWorkerBlockers,
+        nonBlockingStops,
       });
-      return withContinuationContext({ recoverableWorkerBlockers, acceptedOutputs, historyOutput, currentBaton }, context);
+      return withContinuationContext({ nonBlockingStops, acceptedOutputs, historyOutput, currentBaton }, context);
     }
 
     return withContinuationContext(
@@ -512,8 +505,6 @@ export function createWorkflowRunnerCommand({
     return {
       ...outputOrRecoveryForAcceptedState(current.baton, requests, {
         hasSyntheticRequests,
-        workflow: runtime.workflow,
-        runsRoot: paths.runsRoot,
         runtime,
         response,
         currentHistoryText: current.history?.text,
@@ -552,51 +543,6 @@ export function createWorkflowRunnerCommand({
     return publicApiCall(() => nextInternal(options), { ...options, command: 'next' });
   }
 
-  function cursorForRecoverableWorkerBlockers(recoverableWorkerBlockers) {
-    const stepIds = Object.keys(recoverableWorkerBlockers);
-    if (stepIds.length !== 1) throw new Error('recoverable worker blocker state must have exactly one owner workflow step');
-    return stepIds[0];
-  }
-
-  function batonWithRecoverableWorkerBlockers(baton, recoverableWorkerBlockers, acceptedOutputs = {}) {
-    const nextBaton = structuredClone(baton);
-    nextBaton.state = { ...(nextBaton.state ?? {}) };
-    for (const [stepId, output] of Object.entries(acceptedOutputs)) {
-      nextBaton.state = applyOutputToBatonState(nextBaton, output, undefined, stepId);
-    }
-    for (const stepId of Object.keys(recoverableWorkerBlockers)) {
-      delete nextBaton.state[stepId];
-    }
-    nextBaton.cursor = cursorForRecoverableWorkerBlockers(recoverableWorkerBlockers);
-    nextBaton.status = 'running';
-    nextBaton.recoverableWorkerBlockers = {
-      ...(nextBaton.recoverableWorkerBlockers ?? {}),
-      ...structuredClone(recoverableWorkerBlockers),
-    };
-    delete nextBaton.blocker;
-    return nextBaton;
-  }
-
-  function batonWithRecoveryResolutions(baton, recoveryResolutions) {
-    const nextBaton = structuredClone(baton);
-    nextBaton.state = { ...(nextBaton.state ?? {}) };
-    nextBaton.recoverableWorkerBlockers = {
-      ...(nextBaton.recoverableWorkerBlockers ?? {}),
-    };
-    for (const [stepId, resolution] of Object.entries(recoveryResolutions)) {
-      if (!nextBaton.recoverableWorkerBlockers[stepId]) continue;
-      nextBaton.recoverableWorkerBlockers[stepId] = {
-        ...nextBaton.recoverableWorkerBlockers[stepId],
-        resolution: structuredClone(resolution),
-      };
-      delete nextBaton.state[stepId];
-    }
-    nextBaton.cursor = cursorForRecoverableWorkerBlockers(recoveryResolutions);
-    nextBaton.status = 'running';
-    delete nextBaton.blocker;
-    return nextBaton;
-  }
-
   async function continueRunInternal({ runId, workflowPath, output, includeDiagnostics = false, bindAgents, orchestratorDebugJson, orchestratorDebugFile, leaseToken, now = new Date(), runsRoot } = {}) {
     await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
     if (output !== undefined && (!Array.isArray(output) || output.length > 0)) {
@@ -611,7 +557,7 @@ export function createWorkflowRunnerCommand({
       const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
       await ensureRunFiles(paths);
       const continuation = await outputForCurrentState(paths, { includeHistoryText: debugNote !== undefined });
-      const { outputValue, historyOutput, recoverableWorkerBlockers, acceptedOutputs, recoveryResolutions } = continuation;
+      const { outputValue, historyOutput, nonBlockingStops, acceptedOutputs, recoveryResolutions } = continuation;
       const preActions = applyWorkerBindingsForContinue({
         baton: continuation.currentBaton,
         runtime: continuation.runtime,
@@ -621,8 +567,7 @@ export function createWorkflowRunnerCommand({
       const currentBaton = preActions.baton;
       const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: currentBaton });
       if (recoveryResolutions) {
-        const recoveryBaton = batonWithRecoveryResolutions(runtime.baton, recoveryResolutions);
-        const recoveryRuntime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: recoveryBaton });
+        const recoveryRuntime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: runtime.baton });
         const renderResources = resourcesWithValidatingWriter(recoveryRuntime.resources, paths, { leaseToken });
         const rendered = runNext({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
         const response = await runnerResponseForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true, workflowDoc: recoveryRuntime.workflow });
@@ -649,8 +594,16 @@ export function createWorkflowRunnerCommand({
         await persistRenewedRunAuthority(paths, authority, { leaseToken, now, status: response.status });
         return response;
       }
-      if (recoverableWorkerBlockers) {
-        const recoveryBaton = batonWithRecoverableWorkerBlockers(runtime.baton, recoverableWorkerBlockers, acceptedOutputs);
+      if (nonBlockingStops) {
+        const partial = Object.keys(acceptedOutputs).length > 0
+          ? applyWorkflowOutput({
+              workflowDoc: runtime.workflow,
+              batonDoc: runtime.baton,
+              outputValue: { steps: acceptedOutputs },
+              resources: runtime.resources,
+            })
+          : { baton: runtime.baton };
+        const recoveryBaton = partial.baton;
         const recoveryRuntime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: recoveryBaton });
         const renderResources = resourcesWithValidatingWriter(recoveryRuntime.resources, paths, { leaseToken });
         const rendered = runNext({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
@@ -805,7 +758,9 @@ export function createWorkflowRunnerCommand({
   }
 
   function validateAcceptedOutputForRequest({ workflow, resources, request, output, runsRoot }) {
-    if (request.action === 'resolve_worker_blocker') return validateRecoveryResolutionOutput(output, { runsRoot });
+    if (!['run_worker', 'wait_for_approval'].includes(request.action)) {
+      throw new Error(`workflow request '${stepIdForRequest(request)}' does not accept completed output while action is '${request.action}'`);
+    }
     const requestStepId = stepIdForRequest(request);
     const workflowStepId = workflowStepIdForRequest(request);
     const workflowStep = workflow.steps?.[workflowStepId];
@@ -825,47 +780,38 @@ export function createWorkflowRunnerCommand({
     });
   }
 
-  function validateRecoveryResolutionOutput(output, { runsRoot } = {}) {
+  function validateStopResolutionOutput(output, { runsRoot } = {}) {
+    const stopId = output?.stop_id;
+    if (typeof stopId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(stopId)) {
+      throw new Error('non-blocking stop resolution failed schema validation: /stop_id must be a UUID v4');
+    }
     const resolution = output?.resolution;
     if (!resolution || typeof resolution !== 'object' || Array.isArray(resolution)) {
-      throw new Error('blocker resolution output failed schema validation: /resolution must be object');
+      throw new Error('non-blocking stop resolution failed schema validation: /resolution must be object');
     }
     const summary = resolution.summary;
     const decision = resolution.decision ?? resolution.answer;
     if (typeof summary !== 'string' || summary.trim().length === 0) {
-      throw new Error('blocker resolution output failed schema validation: /resolution/summary must be non-empty string');
+      throw new Error('non-blocking stop resolution failed schema validation: /resolution/summary must be non-empty string');
     }
     if (typeof decision !== 'string' || decision.trim().length === 0) {
-      throw new Error('blocker resolution output failed schema validation: /resolution/decision must be non-empty string');
+      throw new Error('non-blocking stop resolution failed schema validation: /resolution/decision must be non-empty string');
     }
     if ('evidence' in resolution && !Array.isArray(resolution.evidence)) {
-      throw new Error('blocker resolution output failed schema validation: /resolution/evidence must be array');
+      throw new Error('non-blocking stop resolution failed schema validation: /resolution/evidence must be array');
     }
-    return { resolution: publicRecoveryResolutionDetails(output, { runsRoot }) };
+    return { stopId, resolution: publicStopResolutionDetails(output, { runsRoot }) };
   }
 
-  function durableAcceptedOutput({ workflow, request, step, output, runsRoot }) {
-    if (request.fanout?.branch_id) return output;
-    const stepId = workflowStepIdForRequest(request);
-    const recoverableStep = Number.isInteger(request.shard?.index) ? { kind: 'worker' } : step;
-    const blockerStepId = Number.isInteger(request.shard?.index) ? stepIdForRequest(request) : stepId;
-    if (isRecoverableWorkerBlockerOutput({ workflow, stepId: blockerStepId, step: recoverableStep, output })) {
-      const blocker = publicRecoverableBlockerDetails(output.blocker, { stepId: blockerStepId, runsRoot });
-      if (step?.kind === 'approval') return { approval: 'blocked', blocker };
-      return { outcome: 'blocked', blocker };
-    }
-    return output;
-  }
-
-  function batonWithAcceptedOutput(baton, stepId, output, { clearRecoverableBlocker = true } = {}) {
+  function batonWithAcceptedOutput(baton, stepId, output) {
     const nextBaton = structuredClone(baton);
     nextBaton.state = {
       ...nextBaton.state,
       [stepId]: structuredClone(output),
     };
-    if (clearRecoverableBlocker && nextBaton.recoverableWorkerBlockers?.[stepId]) {
-      delete nextBaton.recoverableWorkerBlockers[stepId];
-      if (Object.keys(nextBaton.recoverableWorkerBlockers).length === 0) delete nextBaton.recoverableWorkerBlockers;
+    if (nextBaton.nonBlockingStops?.[stepId]) {
+      delete nextBaton.nonBlockingStops[stepId];
+      if (Object.keys(nextBaton.nonBlockingStops).length === 0) delete nextBaton.nonBlockingStops;
     }
     return nextBaton;
   }
@@ -964,6 +910,156 @@ export function createWorkflowRunnerCommand({
     return 'orchestrator-only-history';
   }
 
+  function validateReportedStop(output, { stepId, runsRoot } = {}) {
+    const stop = output?.non_blocking_stop;
+    if (!stop || typeof stop !== 'object' || Array.isArray(stop)) {
+      throw new Error('non-blocking stop failed schema validation: /non_blocking_stop must be object');
+    }
+    if (typeof stop.stop_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(stop.stop_id)) {
+      throw new Error('non-blocking stop failed schema validation: /non_blocking_stop/stop_id must be a UUID v4');
+    }
+    for (const field of ['summary', 'needed']) {
+      if (typeof stop[field] !== 'string' || stop[field].trim().length === 0) {
+        throw new Error(`non-blocking stop failed schema validation: /non_blocking_stop/${field} must be non-empty string`);
+      }
+    }
+    if ('source_step_id' in stop && (typeof stop.source_step_id !== 'string' || stop.source_step_id.trim().length === 0)) {
+      throw new Error('non-blocking stop failed schema validation: /non_blocking_stop/source_step_id must be non-empty string');
+    }
+    if ('evidence' in stop && (!Array.isArray(stop.evidence) || stop.evidence.some((item) => typeof item !== 'string' || item.trim().length === 0))) {
+      throw new Error('non-blocking stop failed schema validation: /non_blocking_stop/evidence must be an array of non-empty strings');
+    }
+    if ('risk' in stop && (typeof stop.risk !== 'string' || stop.risk.trim().length === 0)) {
+      throw new Error('non-blocking stop failed schema validation: /non_blocking_stop/risk must be non-empty string');
+    }
+    if ('resolution' in stop) {
+      throw new Error('non-blocking stop report must not include resolution; only the resolve-stop control action can resolve it');
+    }
+    return publicNonBlockingStopDetails(stop, { stepId, runsRoot });
+  }
+
+  function stopReportWithoutResolution(stop) {
+    if (!stop || typeof stop !== 'object' || Array.isArray(stop)) return stop;
+    const { resolution: _resolution, ...reported } = stop;
+    return reported;
+  }
+
+  function sameStopReport(left, right) {
+    return JSON.stringify(stopReportWithoutResolution(left)) === JSON.stringify(stopReportWithoutResolution(right));
+  }
+
+  async function reportStopInternal({ runId, workflowPath, stepId, json, leaseToken, now = new Date(), runsRoot } = {}) {
+    await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
+    assertSafeStepId(stepId);
+    const output = parseOutputJson(json);
+    const lockPaths = resolveRunPaths({ runId, runsRoot });
+    await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
+    return withRunStateLock(lockPaths, async () => {
+      const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
+      const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
+      await ensureRunFiles(paths);
+      await recoverDurableCommit(paths);
+      const current = await readPersistedRunState(paths, { includeHistoryText: false });
+      const { response } = await currentRuntimeAndResponse(paths, current, { leaseToken });
+      const request = currentRequestForStep(response, stepId);
+      if (!request) throw staleWorkflowCommandError(stepId, response);
+      if (!['run_worker', 'wait_for_approval'].includes(request.action)) {
+        throw new Error(`workflow request '${stepId}' cannot report a non-blocking stop while action is '${request.action}'`);
+      }
+      const requestId = stepIdForRequest(request);
+      if (Object.hasOwn(current.baton?.state ?? {}, requestId)) {
+        throw new Error(`workflow request '${requestId}' already has accepted completed output`);
+      }
+      const stop = validateReportedStop(output, { stepId: requestId, runsRoot: paths.runsRoot });
+      const existing = current.baton?.nonBlockingStops?.[requestId];
+      if (existing) {
+        if (existing.stop_id === stop.stop_id) {
+          if (!sameStopReport(existing, stop)) {
+            throw new Error(`non-blocking stop '${stop.stop_id}' conflicts with its previously accepted report`);
+          }
+          await persistRenewedRunAuthority(paths, authority, { leaseToken, now });
+          return { ok: true, runId: paths.runId, stepId: requestId, reported: true, duplicate: true };
+        }
+        if (!existing.resolution) {
+          throw new Error(`workflow request '${requestId}' already has unresolved non-blocking stop '${existing.stop_id}'`);
+        }
+      }
+      const baton = structuredClone(current.baton);
+      baton.nonBlockingStops = { ...(baton.nonBlockingStops ?? {}), [requestId]: stop };
+      await writePersistedRunStateUpdate(paths, {
+        baton,
+        currentRequests: response.requests ?? [],
+        history: {
+          source: 'workflow-runner-report-stop',
+          baton,
+          output: `stopped:${requestId}`,
+          requests: response.requests ?? [],
+          details: [`non-blocking stop id: ${stop.stop_id}`],
+        },
+      }, { currentState: current });
+      await persistRenewedRunAuthority(paths, authority, { leaseToken, now });
+      return { ok: true, runId: paths.runId, stepId: requestId, reported: true };
+    });
+  }
+
+  async function reportStop(options = {}) {
+    return publicApiCall(() => reportStopInternal(options), { ...options, command: 'report-stop' });
+  }
+
+  async function resolveStopInternal({ runId, workflowPath, stepId, json, leaseToken, now = new Date(), runsRoot } = {}) {
+    await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
+    assertSafeStepId(stepId);
+    const output = parseOutputJson(json);
+    const lockPaths = resolveRunPaths({ runId, runsRoot });
+    await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now, allowStale: true });
+    return withRunStateLock(lockPaths, async () => {
+      const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
+      const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now, allowStale: true });
+      await ensureRunFiles(paths);
+      await recoverDurableCommit(paths);
+      const current = await readPersistedRunState(paths, { includeHistoryText: false });
+      const { response } = await currentRuntimeAndResponse(paths, current, { leaseToken });
+      const request = currentRequestForStep(response, stepId);
+      if (!request) throw staleWorkflowCommandError(stepId, response);
+      const requestId = stepIdForRequest(request);
+      const existing = current.baton?.nonBlockingStops?.[requestId];
+      if (!existing) throw new Error(`workflow request '${requestId}' has no reported non-blocking stop`);
+      const { stopId, resolution } = validateStopResolutionOutput(output, { runsRoot: paths.runsRoot });
+      if (stopId !== existing.stop_id) {
+        throw new Error(`stale non-blocking stop resolution '${stopId}' does not match current stop '${existing.stop_id}'`);
+      }
+      if (existing.resolution) {
+        if (JSON.stringify(existing.resolution) !== JSON.stringify(resolution)) {
+          throw new Error(`non-blocking stop resolution '${stopId}' conflicts with its previously accepted resolution`);
+        }
+        await persistRenewedRunAuthority(paths, authority, { leaseToken, now });
+        return { ok: true, runId: paths.runId, stepId: requestId, resolved: true, duplicate: true };
+      }
+      if (request.action !== 'resolve_non_blocking_stop') {
+        throw new Error(`workflow request '${stepId}' does not have a non-blocking stop to resolve`);
+      }
+      const baton = structuredClone(current.baton);
+      baton.nonBlockingStops[requestId] = { ...existing, resolution };
+      await writePersistedRunStateUpdate(paths, {
+        baton,
+        currentRequests: response.requests ?? [],
+        history: {
+          source: 'workflow-runner-resolve-stop',
+          baton,
+          output: `resolved-stop:${requestId}`,
+          requests: response.requests ?? [],
+          details: [`resolved non-blocking stop id: ${existing.stop_id}`],
+        },
+      }, { currentState: current });
+      await persistRenewedRunAuthority(paths, authority, { leaseToken, now });
+      return { ok: true, runId: paths.runId, stepId: requestId, resolved: true };
+    });
+  }
+
+  async function resolveStop(options = {}) {
+    return publicApiCall(() => resolveStopInternal(options), { ...options, command: 'resolve-stop' });
+  }
+
   async function writeOutputInternal({ runId, workflowPath, stepId, json, debugSummaryFile, leaseToken, now = new Date(), runsRoot } = {}) {
     await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
     assertSafeStepId(stepId);
@@ -998,13 +1094,7 @@ export function createWorkflowRunnerCommand({
         output,
         runsRoot: paths.runsRoot,
       });
-      const durableAccepted = durableAcceptedOutput({
-        workflow: runtime.workflow,
-        request,
-        step,
-        output: accepted,
-        runsRoot: paths.runsRoot,
-      });
+      const durableAccepted = accepted;
       const expectedDebugSummaryPath = request.action === 'run_worker'
         ? validationResources.debugSummaryPathForStep?.(acceptedStepId, effectiveRequestStep)
         : undefined;
@@ -1016,9 +1106,7 @@ export function createWorkflowRunnerCommand({
       } else if (debugSummaryFile !== undefined) {
         throw new Error(`debug summary file is only accepted for run_worker requests, not '${request.action}'`);
       }
-      const baton = batonWithAcceptedOutput(current.baton, acceptedStepId, durableAccepted, {
-        clearRecoverableBlocker: request.action !== 'resolve_worker_blocker',
-      });
+      const baton = batonWithAcceptedOutput(current.baton, acceptedStepId, durableAccepted);
       const details = await acceptedOutputHistoryDetails({ stepId: acceptedStepId, request, output: durableAccepted, debugSummaryPath: expectedDebugSummaryPath, leaseToken });
       await writePersistedRunStateUpdate(paths, {
         baton,
@@ -1074,6 +1162,8 @@ export function createWorkflowRunnerCommand({
     loadInstructions,
     movePointer,
     next,
+    reportStop,
+    resolveStop,
     writeOutput,
   };
 }

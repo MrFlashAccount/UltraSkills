@@ -1,6 +1,8 @@
 const MAX_TEXT_LENGTH = 512;
 const MAX_EVIDENCE_ITEMS = 5;
-const PATH_TOKEN = /(?:^|[\s'"`(=])([^\s'"`)]+)/g;
+const LOCAL_PATH_CANDIDATE = /(?:file:\/+[^\s'"`\[\]{}()<>,;!?]*|~(?:[^/\s'"`\[\]{}()<>,;!?]+)?\/[^\s'"`\[\]{}()<>,;!?]*|\.\.?\/[^\s'"`\[\]{}()<>,;!?]*|(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s'"`\[\]{}()<>,;!?]*|\/[^\s'"`\[\]{}()<>,;!?]*)/gi;
+const HTTP_URL_CANDIDATE = /https?:\/\/[^\s'"`<>\[\]{}()]+/gi;
+const SENSITIVE_KEY_NAME = /(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|(?:^|[_-])(?:sig(?:nature)?|credential|authorization|auth)(?:$|[_-]))/i;
 const TRAILING_PUNCTUATION = /[,:;.!?]+$/;
 
 function normalizeComparablePath(value) {
@@ -46,7 +48,7 @@ function replacementForPrivatePath(relativePath) {
 
 function replacementForLocalPath(pathname) {
   const normalized = normalizeComparablePath(pathname);
-  if (/^(?:[a-z]:\/|\/)/i.test(normalized)) return 'local filesystem path';
+  if (/^(?:file:\/|~(?:[^/]+)?\/|\.\.?\/|[a-z]:\/|\/)/i.test(normalized)) return 'local filesystem path';
   return undefined;
 }
 
@@ -62,9 +64,37 @@ function redactPrivatePathToken(token, roots) {
 
 function redactPrivatePaths(value, options = {}) {
   const roots = privateRoots(options);
-  return String(value).replaceAll(PATH_TOKEN, (match, token) => {
-    const prefixLength = match.length - token.length;
-    return `${match.slice(0, prefixLength)}${redactPrivatePathToken(token, roots)}`;
+  const text = String(value);
+  return text.replace(LOCAL_PATH_CANDIDATE, (candidate, offset) => {
+    const previous = offset > 0 ? text[offset - 1] : '';
+    const embeddedTraversal = /^\/\.\.?[\\/]/.test(candidate);
+    if (/^[/.]/.test(candidate) && /[A-Za-z0-9]/.test(previous) && !embeddedTraversal) return candidate;
+    if (candidate.startsWith('/') && /https?:$/i.test(text.slice(Math.max(0, offset - 6), offset))) return candidate;
+    return redactPrivatePathToken(candidate, roots);
+  });
+}
+
+function redactHttpUrlCredentials(value) {
+  return String(value).replace(HTTP_URL_CANDIDATE, (candidate) => {
+    let parsed;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      return candidate;
+    }
+    let changed = false;
+    if (parsed.username || parsed.password) {
+      parsed.username = '';
+      parsed.password = '';
+      changed = true;
+    }
+    for (const [key, fieldValue] of parsed.searchParams) {
+      if (SENSITIVE_KEY_NAME.test(key) || replacementForLocalPath(fieldValue) || /\/\.\.?[\\/]/.test(fieldValue)) {
+        parsed.searchParams.set(key, '[redacted]');
+        changed = true;
+      }
+    }
+    return changed ? parsed.toString() : candidate;
   });
 }
 
@@ -74,70 +104,57 @@ function boundedText(value, fallback = '', options = {}) {
     .replaceAll('\r', '\n')
     .replaceAll('\0', '')
     .trim();
-  return redactSensitiveText(redactPrivatePaths(text, options)).slice(0, MAX_TEXT_LENGTH).trim();
+  return redactSensitiveText(redactPrivatePaths(redactHttpUrlCredentials(text), options)).slice(0, MAX_TEXT_LENGTH).trim();
 }
 
 function redactSensitiveText(value) {
   return String(value ?? '')
     .replace(/(--lease-token(?:=|\s+))(?:"[^"]*"|'[^']*'|[^\s'"]+)/g, '$1[redacted-lease-token]')
+    .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[redacted-aws-access-key]')
+    .replace(/(\[\s*["'`][A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)[A-Za-z0-9_.-]*["'`]\s*\])\s*[:=]\s*(?:"[^"]*"|'[^']*'|`[^`]*`|[^\s,;}]+)/gi, '$1=[redacted]')
+    .replace(/(["'`]?)((?:[A-Za-z][A-Za-z0-9_.-]*[_.-])?(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)(?:[_.-][A-Za-z0-9_.-]+)*)\1\s*[:=]\s*(?:"[^"]*"|'[^']*'|`[^`]*`|[^\s,;}]+)/gi, '$1$2$1=[redacted]')
     .replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[redacted-token]')
     .replace(/(?:[A-Za-z]:)?[^\s]*\.workflow-runner[^\s]*/g, '[redacted-workflow-runner-private-state]')
     .replace(/\/Users\/[^\s]*\.orbita\/workflow-runs[^\s]*/g, '[redacted-workflow-runs-private-state]');
 }
 
-export function isRecoverableBlockerStep(_workflow, _stepId, step) {
-  return step?.kind === 'worker' || step?.kind === 'approval';
-}
-
-export function isRecoverableBlockerOutput({ workflow, stepId, step, output } = {}) {
-  const blockedSignal = step?.kind === 'approval'
-    ? output?.approval === 'blocked'
-    : output?.outcome === 'blocked';
-  return isRecoverableBlockerStep(workflow, stepId, step) &&
-    blockedSignal &&
-    output?.blocker &&
-    typeof output.blocker === 'object' &&
-    !Array.isArray(output.blocker);
-}
-
-export const isRecoverableWorkerBlockerStep = isRecoverableBlockerStep;
-export const isRecoverableWorkerBlockerOutput = isRecoverableBlockerOutput;
-
-export function publicRecoverableBlockerDetails(blocker, { stepId, runsRoot } = {}) {
+export function publicNonBlockingStopDetails(stop, { stepId, runsRoot } = {}) {
   const options = { runsRoot };
-  const sourceStepId = boundedText(blocker?.source_step_id ?? stepId, stepId, options);
-  const needed = boundedText(blocker?.needed ?? blocker?.summary, 'Accepted worker output is required to continue.', options);
-  const summary = boundedText(blocker?.summary ?? needed, needed, options);
+  const stopId = String(stop?.stop_id ?? '');
+  const sourceStepId = boundedText(stop?.source_step_id ?? stepId, stepId, options);
+  const needed = boundedText(stop?.needed ?? stop?.summary, 'Help is required before this request can continue.', options);
+  const summary = boundedText(stop?.summary ?? needed, needed, options);
   const details = {
+    stop_id: stopId,
     summary,
     source_step_id: sourceStepId,
     needed,
   };
 
-  if (Array.isArray(blocker?.evidence)) {
-    const evidence = blocker.evidence
+  if (Array.isArray(stop?.evidence)) {
+    const evidence = stop.evidence
       .slice(0, MAX_EVIDENCE_ITEMS)
       .map((entry) => boundedText(entry, '', options))
       .filter(Boolean);
     if (evidence.length > 0) details.evidence = evidence;
   }
 
-  const risk = boundedText(blocker?.risk, '', options);
+  const risk = boundedText(stop?.risk, '', options);
   if (risk) details.risk = risk;
 
-  if (blocker?.resolution && typeof blocker.resolution === 'object' && !Array.isArray(blocker.resolution)) {
-    details.resolution = publicRecoveryResolutionDetails(blocker.resolution, options);
+  if (stop?.resolution && typeof stop.resolution === 'object' && !Array.isArray(stop.resolution)) {
+    details.resolution = publicStopResolutionDetails(stop.resolution, options);
   }
 
   return details;
 }
 
-export function publicRecoveryResolutionDetails(output, { runsRoot } = {}) {
+export function publicStopResolutionDetails(output, { runsRoot } = {}) {
   const options = { runsRoot };
   const resolution = output?.resolution && typeof output.resolution === 'object' && !Array.isArray(output.resolution)
     ? output.resolution
     : output;
-  const summary = boundedText(resolution?.summary ?? resolution?.decision, 'The orchestrator resolved the blocker.', options);
+  const summary = boundedText(resolution?.summary ?? resolution?.decision, 'The orchestrator resolved the non-blocking stop.', options);
   const decision = boundedText(resolution?.decision ?? resolution?.answer ?? summary, summary, options);
   const details = { summary, decision };
 

@@ -19,7 +19,7 @@ writeFileSync(path.join(tempDir, 'worker-output.schema.json'), `${JSON.stringify
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   type: 'object',
   required: ['outcome'],
-  properties: { outcome: { enum: ['ready', 'blocked'] }, results: { type: 'array' }, artifacts: { type: 'array' } },
+  properties: { outcome: { const: 'ready' }, results: { type: 'array' }, artifacts: { type: 'array' } },
   additionalProperties: true,
 }, null, 2)}\n`);
 

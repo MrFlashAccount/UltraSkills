@@ -6,9 +6,9 @@ Return JSON metadata for the final saved `reasons-canvas-research` artifact, not
 
 When persistence is safe and complete, return `outcome: saved`, a short `saved.summary`, optional `saved.history_note`, artifact metadata for the saved approved `reasons-canvas-research` artifact, and a compact result summary.
 
-## Blocked outcome
+## Non-blocking stop
 
-When the Canvas cannot be safely saved, return `outcome: blocked` with a blocker that names why persistence is unsafe or incomplete, the owning source step, the exact missing input/action, and any useful evidence or risk.
+When the Canvas cannot be safely saved, report `NON_BLOCKING_STOP` through the orchestrator/host control channel. Name why persistence is unsafe or incomplete, the owning source step, the exact missing input/action, and any useful evidence or risk. Do not return it as a completed Canvas outcome; resume the same save task after resolution.
 
 ## Template rules
 

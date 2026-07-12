@@ -57,11 +57,11 @@
       }
     },
     {
-      "runId": "run-blocked-333333",
+      "runId": "run-needs-help-333333",
       "title": "Architecture decision missing",
       "workflow": { "identity": "dev-harness" },
-      "status": "blocked",
-      "lane": { "id": "blocked", "label": "Blocked" },
+      "status": "needs_host_actions",
+      "lane": { "id": "needs_help", "label": "Needs help" },
       "cursor": {
         "kind": "single",
         "steps": ["architecture_artifact_update"],

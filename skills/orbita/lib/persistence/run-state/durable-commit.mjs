@@ -41,7 +41,6 @@ function historyEntry({ source, baton, requests, steps, output, decision, detail
   if (output) lines.push(`- output: ${output}`);
   if (decision) lines.push(`- decision: ${decision}`);
   if (Array.isArray(details)) lines.push(...details.filter((line) => typeof line === 'string' && line.length > 0));
-  if (baton.blocker) lines.push(`- blocker: ${JSON.stringify(baton.blocker).replace(/\s+/g, ' ').trim()}`);
   lines.push('', '');
   return lines.join('\n');
 }

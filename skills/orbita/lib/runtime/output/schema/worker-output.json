@@ -5,21 +5,36 @@
   "type": "object",
   "minProperties": 1,
   "properties": {
-    "outcome": { "type": "string" },
-    "approval": { "type": "string" },
+    "outcome": {
+      "type": "string"
+    },
+    "approval": {
+      "type": "string"
+    },
     "artifacts": {
       "type": "array",
-      "items": { "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact" }
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
+      }
     },
     "results": {
       "type": "array",
-      "items": { "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result" }
-    },
-    "blocker": { "type": "object" }
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
+      }
+    }
   },
   "additionalProperties": false,
   "anyOf": [
-    { "required": ["outcome"] },
-    { "required": ["approval"] }
+    {
+      "required": [
+        "outcome"
+      ]
+    },
+    {
+      "required": [
+        "approval"
+      ]
+    }
   ]
 }

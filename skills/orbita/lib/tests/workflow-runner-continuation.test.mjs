@@ -187,7 +187,7 @@ test('runner: continue reports missing requested output as an error', async () =
   const result = await runRunner(['continue', '--run-id', runId, '--workflow', workflowPath]);
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /missing accepted host output/);
+  assert.match(result.stderr, /missing completed output or non-blocking stop/);
 });
 
 test('runner: continue does not persist applied output when next render fails', async () => {
@@ -392,7 +392,6 @@ test('runner: accepted output history redacts copied lease tokens from summaries
   writeJson(outputPath, {
     outcome: 'ready',
     results: [{ type: 'check', summary: `command includes --lease-token ${leaseToken}` }],
-    blocker: { summary: `token ${leaseToken} must not persist` },
   });
 
   await writeOutputFile({
@@ -524,14 +523,14 @@ test('runner: public continue failure history is safely attributable and dedupli
   await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next public failure history');
   const failed = await runRunner(['continue', '--run-id', runId, '--workflow', workflowPath]);
   assert.notEqual(failed.status, 0);
-  assert.match(failed.stderr, /missing accepted host output/);
+  assert.match(failed.stderr, /missing completed output or non-blocking stop/);
 
   const failedAgain = await runRunner(['continue', '--run-id', runId, '--workflow', workflowPath]);
   assert.notEqual(failedAgain.status, 0);
   const history = readFileSync(path.join(runDir, 'history.md'), 'utf8');
   assert.match(history, /source: workflow-runner-failure/);
   assert.match(history, /public failure: command=continue/);
-  assert.match(history, /missing accepted host output for workflow step prepare/);
+  assert.match(history, /missing completed output or non-blocking stop for workflow request prepare/);
   assert.equal((history.match(/public failure: command=continue/g) ?? []).length, 1);
 });
 

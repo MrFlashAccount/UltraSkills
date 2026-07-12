@@ -10,6 +10,7 @@ export function renderStepPrompts({ workflow, baton, steps, resources, includeDi
     const stepResources = {
       ...resources,
       validatingWriterCommand: resources?.validatingWriterCommandForStep?.(entry.id, entry.step) ?? resources?.validatingWriterCommand,
+      reportStopCommand: resources?.reportStopCommandForStep?.(entry.id) ?? resources?.reportStopCommand,
       artifactOutputDir: resources?.artifactOutputDirForStep?.(entry.id) ?? resources?.artifactOutputDir,
       debugSummaryPath: resources?.debugSummaryPathForStep?.(entry.id, entry.step) ?? resources?.debugSummaryPath,
     };

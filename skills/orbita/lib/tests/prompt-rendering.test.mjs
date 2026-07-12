@@ -20,10 +20,9 @@ writeFileSync(path.join(tempDir, 'worker-output.schema.json'), `${JSON.stringify
   type: 'object',
   required: ['outcome'],
   properties: {
-    outcome: { enum: ['ready', 'retry', 'blocked'] },
+    outcome: { enum: ['ready', 'retry'] },
     artifacts: { type: 'array' },
     results: { type: 'array' },
-    blocker: { type: 'object' },
     summary: { type: 'string' },
   },
   additionalProperties: false,
@@ -33,10 +32,9 @@ writeFileSync(path.join(tempDir, 'review-output.schema.json'), `${JSON.stringify
   type: 'object',
   required: ['outcome'],
   properties: {
-    outcome: { enum: ['ready', 'blocked'] },
+    outcome: { const: 'ready' },
     artifacts: { type: 'array' },
     results: { type: 'array' },
-    blocker: { type: 'object' },
     summary: { type: 'string' },
   },
   additionalProperties: false,
@@ -46,11 +44,10 @@ writeFileSync(path.join(tempDir, 'approval-output.schema.json'), `${JSON.stringi
   type: 'object',
   required: ['approval'],
   properties: {
-    approval: { enum: ['approved', 'rejected', 'blocked'] },
+    approval: { enum: ['approved', 'rejected'] },
     artifacts: { type: 'array' },
     results: { type: 'array' },
-    blocker: { type: 'object' },
-    choice: { enum: ['approved', 'blocked'] },
+    choice: { const: 'approved' },
   },
   additionalProperties: false,
 }, null, 2)}\n`);

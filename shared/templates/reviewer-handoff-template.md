@@ -6,7 +6,7 @@ Use this as the format/context packet passed to a reviewer. The reviewer must ju
 
 - Owner:
 - Date:
-- State: Ready for review | In review | Passed | Failed | Blocked
+- State: Ready for review | In review | Passed | Failed
 - Repo / branch:
 - Issue / PR:
 - Base comparison:
@@ -61,9 +61,9 @@ Rules:
 
 Return:
 
-- overall verdict: PASS | FAIL | BLOCKED
-- contract trace verdict: PASS | FAIL | BLOCKED
-- issue closure verdict: closes | partially_closes | does_not_close | blocked
+- overall verdict: PASS | FAIL
+- contract trace verdict: PASS | FAIL
+- issue closure verdict: closes | partially_closes | does_not_close
 - must-fix findings
 - should-fix findings
 - can-delay findings
@@ -71,3 +71,5 @@ Return:
 - semantic substitutions: approved | unapproved | none
 - evidence checked
 - confidence
+
+If required evidence or authority is missing, report `NON_BLOCKING_STOP` through the orchestrator/host control channel instead of returning a terminal verdict. Resume the same review after resolution.

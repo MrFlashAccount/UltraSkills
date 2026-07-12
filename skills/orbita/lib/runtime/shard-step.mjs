@@ -86,7 +86,7 @@ function applyShardBatch({ workflow, baton, parentStepId, parentStep, activation
   const acceptedRequestIds = new Set();
   const acceptedOutputs = clone(activation.accepted_outputs);
 
-  for (const requestId of activation.current_requests) {
+  for (const requestId of Object.keys(allOutput.steps)) {
     const record = shardRecordForRequest(activation, requestId);
     invariant(record, `shard activation '${parentStepId}' has no durable record for current request '${requestId}'`);
     const workerStep = stepForShardWorker(parentStepId, parentStep, activation, record);

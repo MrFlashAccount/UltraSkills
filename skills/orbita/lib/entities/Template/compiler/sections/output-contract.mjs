@@ -31,6 +31,23 @@ function validatingWriterProtocol(command) {
   return `Generate strict JSON matching this schema. Write the request output by calling this validating writer command. The command already contains the run id, step id, and lease token; only replace the JSON body/stdin content:\n\n\`\`\`bash\n${trimmedCommand}\n\`\`\`\n\nThe command validates against this request output schema and accepts the output directly into the run baton/state. If it fails with validation errors, fix the JSON and run the same command again. Repeat for a bounded number of attempts until it returns OK. Do not create a separate JSON output file and do not pass an output path to the orchestrator. Artifact content files are allowed and required when producing artifacts, but they must be handed off through the workflow artifacts metadata accepted into baton/state; do not create arbitrary temp/export files as substitutes for baton artifacts.`;
 }
 
+function nonBlockingStopProtocol(command) {
+  const trimmedCommand = typeof command === 'string' ? command.trim() : '';
+  if (!trimmedCommand) return '';
+  return [
+    'If this request cannot continue after you exhaust safe, in-scope automatic recovery, do not fabricate a completed output.',
+    'Report a non-blocking stop through this control-plane command instead. This does not complete the step or advance the workflow:',
+    '',
+    '```bash',
+    trimmedCommand,
+    '```',
+    '',
+    'Replace the JSON body with {"non_blocking_stop":{"stop_id":"<new UUID v4 for this stop>","summary":"...","needed":"...","source_step_id":"...","evidence":[],"risk":"..."}}.',
+    'Reuse the same stop_id only when retrying the exact same report. Generate a new UUID v4 for a genuinely new stop after an earlier one was resolved.',
+    'Use needed for the smallest concrete help required. The orchestrator will try to resolve it safely and will ask the user only when a user decision, permission, or missing input is required.',
+  ].join('\n');
+}
+
 function artifactOutputDirectoryInstruction(artifactOutputDir) {
   const trimmedDir = typeof artifactOutputDir === 'string' ? artifactOutputDir.trim() : '';
   if (!trimmedDir) return '';
@@ -83,11 +100,19 @@ function compactFollowUpOutputContract({ outputTemplate, templatePath, outputSch
     '',
     'If it fails with validation errors, fix the JSON and run the same command again. Do not create a separate JSON output file.',
   ].join('\n'));
+  const stopProtocol = nonBlockingStopProtocol(options.reportStopCommand);
+  if (stopProtocol) parts.push(stopProtocol);
   return section('Output contract', parts.filter(Boolean).join('\n\n'));
 }
 
 export function outputContractSection(outputTemplate, templatePath, outputSchema, schemaPath, outputSchemaValue, options = {}) {
-  if (!outputTemplate && !outputSchema) return '';
+  if (!outputTemplate && !outputSchema) {
+    const parts = [];
+    if (options.validatingWriterCommand) parts.push(validatingWriterProtocol(options.validatingWriterCommand));
+    const stopProtocol = nonBlockingStopProtocol(options.reportStopCommand);
+    if (stopProtocol) parts.push(stopProtocol);
+    return parts.length > 0 ? section('Output contract', parts.join('\n\n')) : '';
+  }
   if (options.compactFollowUp === true) {
     return compactFollowUpOutputContract({ outputTemplate, templatePath, outputSchema, schemaPath, options });
   }
@@ -114,6 +139,8 @@ export function outputContractSection(outputTemplate, templatePath, outputSchema
     if (debugSummary) schemaParts.push(debugSummary);
     if (artifactNotes) schemaParts.push(artifactNotes);
     schemaParts.push(`${validatingWriterProtocol(options.validatingWriterCommand)}${schemaComment}\n\n\`\`\`json\n${trimStable(outputSchema)}\n\`\`\``);
+    const stopProtocol = nonBlockingStopProtocol(options.reportStopCommand);
+    if (stopProtocol) schemaParts.push(stopProtocol);
     parts.push(schemaParts.join('\n\n'));
   }
   return section('Output contract', parts.join('\n\n'));

@@ -35,15 +35,15 @@ Use only after approval. This skill executes against approved research and appro
 - Treat the approved scope as frozen.
 - Do not execute implementation in the parent orchestrator session just because it would be faster; this stage should run through delegated implementer workers/subagents.
 - Plain user action verbs like `fix`, `do`, `сделай`, or `исправь` do not count as permission for direct parent-session implementation; only an explicit request for direct in-session execution overrides the orchestrator default.
-- If required implementer delegation is unavailable, fails to start, or cannot be used, stop as `blocked`; do not fall back to manual implementation in the parent/orchestrator session.
+- If required implementer delegation is unavailable, fails to start, or cannot be used, report a `NON_BLOCKING_STOP` and request help; do not fall back to manual implementation in the parent/orchestrator session. Resume the same stage after resolution.
 - Treat the approved `reasons-canvas-research` plus approved execution plan as the implementation contract unless a concrete blocker, contradiction, or missing implementation-critical fact survived earlier stages.
 - Use only canonical implementer labels: `backend`, `frontend`.
 - A role label alone is not a role contract. Each implementer prompt must include the shared delegated role task template from [../../shared/delegate/delegated-role-task-template.md](../../shared/delegate/delegated-role-task-template.md), the selected role material path, compact implementer focus from [references/roles/implementers.md](references/roles/implementers.md), and the concrete approved task packet/scope/verification expectations.
-- Do not accept implementer output for a required file zone if required role material cannot be loaded or loaded role material's additional, final-answer, or output requirements cannot be satisfied; mark the stage `blocked` instead.
+- Do not accept implementer output for a required file zone if required role material cannot be loaded or loaded role material's additional, final-answer, or output requirements cannot be satisfied; report a `NON_BLOCKING_STOP` for that file zone and request the smallest concrete help needed instead.
 - One owner per file zone. If zones overlap, collapse to one implementer.
 - Verification is mandatory before handing the slice to post-implementation review.
 - If verification fails, fix in scope and re-validate before handing off.
-- If development forces redesign or scope growth, stop as `blocked`.
+- If development forces redesign or scope growth, report a `NON_BLOCKING_STOP` with the smallest concrete approval question and resume the same task after resolution.
 - Return only the packet shape defined in [references/output-contract.md](references/output-contract.md).
 - Treat implementer completion notes as non-authoritative until validation passes and the downstream review gate clears the slice.
 - Do not embed an independent review verdict inside this stage; the separate review stage owns that decision. The handoff must frame downstream review as a hostile-prior gate: assume the implemented slice is wrong, incomplete, overcomplicated, or under-evidenced until evidence proves otherwise; PASS only after serious attack finds no evidence-backed blocker or important finding.

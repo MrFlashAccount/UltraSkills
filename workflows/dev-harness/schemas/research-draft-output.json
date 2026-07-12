@@ -9,11 +9,10 @@
     "outcome": {
       "enum": [
         "ready_for_attack",
-        "ready_for_approval",
-        "blocked"
+        "ready_for_approval"
       ],
-      "description": "Producer must use ready_for_attack for an initial or critic-requested draft, ready_for_approval for a correction requested at the user gate, and blocked only for a recoverable pause.",
-      "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when this says blocked or needs revision."
+      "description": "Producer must use ready_for_attack for an initial or critic-requested draft and ready_for_approval for a correction requested at the user gate. Missing help is reported through the runner non-blocking stop control channel, never as an output outcome.",
+      "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when it requires revision."
     },
     "summary": {
       "type": "string",
@@ -48,52 +47,7 @@
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
       },
       "description": "Producer may emit compact structured results, decisions, or evidence summaries created by this stage.",
-      "x-usage": "Use these as supporting evidence or compact summaries. Do not let them override outcome, selected steps, blockers, or approved contracts."
-    },
-    "blocker": {
-      "type": "object",
-      "required": [
-        "summary",
-        "source_step_id",
-        "needed"
-      ],
-      "properties": {
-        "summary": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Producer must summarize the relevant decision or handoff in concise human-readable form without adding new scope.",
-          "x-usage": "Use this as concise human-readable context only. Do not route, approve, or expand scope from this text."
-        },
-        "source_step_id": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Producer must name the workflow step id that found or owns this blocker or finding.",
-          "x-usage": "Use this to identify the step that found or owns the blocker/finding. Do not treat it as a retry target by itself."
-        },
-        "needed": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Producer must state the exact missing decision, permission, input, or evidence required to proceed.",
-          "x-usage": "Surface this exact missing input, permission, evidence, or decision before proceeding. When the blocker is user-answerable, treat this as the exact user-facing question to route to the user; do not substitute assumptions, summarize it away, or answer it from orchestrator inference."
-        },
-        "evidence": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "Producer should list concrete evidence references supporting this handoff, verdict, finding, or blocker.",
-          "x-usage": "Use these references to inspect or challenge the claim. Do not assume unreferenced surfaces were checked."
-        },
-        "risk": {
-          "type": "string",
-          "description": "Producer should describe the residual risk if this blocker or finding is ignored.",
-          "x-usage": "Use this to understand why ignoring the item is unsafe. Treat it as risk context unless paired with a blocked outcome."
-        }
-      },
-      "additionalProperties": false,
-      "description": "Producer must populate this when outcome is blocked, naming the recoverable pause reason, owning step, and specific missing input or permission.",
-      "x-usage": "Treat this as a recoverable pause. Surface the missing input or decision, route user-answerable questions to the user as questions, then continue this same workflow step after it is resolved."
+      "x-usage": "Use these as supporting evidence or compact summaries. Do not let them override outcome, selected steps or approved contracts."
     }
   },
   "additionalProperties": false,
@@ -118,23 +72,6 @@
         "required": [
           "summary",
           "artifacts"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "blocked"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "blocker"
         ]
       }
     }

@@ -9,7 +9,6 @@ import { readWorkflowDocument } from '../persistence/workflow-resources/workflow
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const WORKFLOWS_ROOT = path.join(REPO_ROOT, 'workflows');
 const devHarness = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml'));
-const researchCritic = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/research-critic/workflow.toml'));
 const workflowAuthoring = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/workflow-authoring/workflow.json'));
 
 const catalogWorkflows = readdirSync(WORKFLOWS_ROOT, { withFileTypes: true })
@@ -105,8 +104,7 @@ for (const gate of revisionGates) {
   });
 }
 
-test('question and optional-decision approvals keep their non-revision semantics', () => {
-  assert.equal(researchCritic.steps.ask_research_questions.next.cases.rejected, undefined);
+test('optional-decision approvals keep their non-revision semantics', () => {
   assert.equal(workflowAuthoring.steps.approve_reviewed_improvement.next.cases.rejected, 'workflow_implementation_attack');
   assert.equal(workflowAuthoring.steps.workflow_implementation_attack.next.cases.needs_revision, 'workflow_implementation');
 });

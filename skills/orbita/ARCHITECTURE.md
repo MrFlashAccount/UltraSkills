@@ -191,8 +191,8 @@ Retained accepted-output detection must use the same per-step accepted-output
 surface in `baton.state[stepId]` that `continue` uses; if extracted, it remains a
 small runner-owned helper with tests for current `continue` reuse semantics.
 
-Recoverable blocker helpers under `lib/runtime/**` own public shaping and
-redaction of blocker/resolution records. They must receive path facts from the
+Non-blocking stop helpers under `lib/runtime/**` own public shaping and
+redaction of stop/resolution records. They must receive path facts from the
 caller and must not discover workflow-run storage through persistence imports.
 
 Shard runtime helpers own IO-free activation projection, shard output application, bounded batching, and final-worker readiness. They may consume
@@ -427,29 +427,44 @@ represented by the shard step itself. Its schema-valid output follows the normal
 `next` transition. There is no dispatch step, aggregation section, deterministic
 completion output, or separate completion worker.
 
-## Recoverable Worker Blockers
+## Non-blocking Stops
 
-`baton.recoverableWorkerBlockers` is runner-owned durable recovery state. It is
-keyed by workflow step id and stores only public, bounded blocker and resolution
+`baton.nonBlockingStops` is runner-owned durable control-plane state. It is
+keyed by active request id and stores only public, bounded stop and resolution
 records. It must not contain transcripts, hidden prompts, lease tokens, raw
-worker/approval outputs, private workflow-run paths, or arbitrary local paths.
+worker/approval outputs, private workflow-run paths, arbitrary local paths,
+credential assignments, or recognizable access keys. Public stop/resolution
+text uses a bounded sanitizer that covers absolute, home-relative,
+traversal-relative, and `file://` path forms before persistence or projection.
 
 Lifecycle:
 
-- `write-output` validates the current host output and persists a sanitized
-  temporary value in `baton.state[stepId]`.
-- `continue` converts a blocked worker/approval output into
-  `recoverableWorkerBlockers[stepId]`, removes the blocked output from normal
-  baton state, keeps the run `running`, and asks the host to resolve the
-  blocker.
-- `write-output` for `resolve_worker_blocker` persists a sanitized resolution
-  value in `baton.state[stepId]`.
-- `continue` moves the sanitized resolution into the existing recoverable
-  blocker entry, renders the same step again with resolution context, and clears
-  the recoverable blocker only after that step emits normal accepted output.
+- `write-output` accepts only schema-valid completed step output.
+- After safe automatic recovery is exhausted, `report-stop` persists a
+  sanitized `non_blocking_stop` record without completing the request or
+  advancing the cursor. Every new stop carries a worker-generated UUID v4
+  `stop_id`. Repeating the exact report with the same id is idempotent;
+  conflicting reuse is rejected. A delayed report for a resolved id cannot
+  erase its resolution, while a genuinely new stop must use a new id.
+- `continue` projects an unresolved record as a
+  `resolve_non_blocking_stop` host action. Completed siblings in fanout/shard
+  batches remain accepted while the stopped request stays active.
+- `resolve-stop` requires the exact current `stop_id` and persists the bounded
+  orchestrator/user resolution on that control record. Exact retries are
+  idempotent; conflicting retries and stale resolutions for an older stop are
+  rejected without mutation.
+- `continue` renders the same request again with resolution context and the
+  preferred worker hint when available. The record is cleared only after that
+  request submits normal completed output through `write-output`.
 
-The final runner statuses remain `needs_host_actions` and `done`; a recoverable
-blocker is a host-action pause, not a terminal runner status.
+Managed history records only the stop id for report/resolve lifecycle events;
+it never copies the free-text stop or resolution fields. Those bounded fields
+live only in the active Baton control record and are deleted with that record
+after normal completed output is accepted.
+
+The final runner statuses remain `needs_host_actions` and `done`. A non-blocking
+stop is a host-action pause, never a step outcome, transition value, or terminal
+runner status.
 
 ## Dashboard Observer Architecture
 
@@ -493,7 +508,7 @@ must isolate per-run read/parse failures as degraded dashboard records and must
 not persist those degraded records into workflow state.
 
 Dashboard projection is a read-model context. It owns allowlisted DTOs and
-classification policy for `Waiting for user`, `Worker running`, `Blocked`,
+classification policy for `Waiting for user`, `Worker running`, `Needs help`,
 `Degraded`, and `Done`. It may expose bounded, redacted history excerpts and
 artifact metadata, but it must not expose raw baton, raw history, compiled
 instructions, private prompts, token-bearing commands, hidden transcripts,
@@ -685,15 +700,15 @@ Architecture review must verify:
 
 Backend review must verify:
 
-- canonical `next`, `instructions`, `write-output`, and `continue` behavior
-  remains coherent
+- canonical `next`, `instructions`, `write-output`, `report-stop`,
+  `resolve-stop`, and `continue` behavior remains coherent
 - output validation, artifact metadata handling, run-state persistence, leases,
   history, and current migration semantics did not change accidentally
 - imports obey the dependency rules above
 - custom workflow roots validate before run creation, retain source-qualified
   catalog identity, and do not widen resource access by duplicate workflow name
 - shard `input.shards` expansion snapshots arbitrary JSON values once, restart rerenders the durable current batch, accepted outputs remain single primary records, and final worker output follows normal `next`
-- existing sequential, approval, fanout, output schema, lease, artifact/debug-summary, history, worker binding, and recoverable blocker behavior remains compatible
+- existing sequential, approval, fanout, output schema, lease, artifact/debug-summary, history, worker binding, and non-blocking stop behavior remains compatible
 
 QA/reliability review must verify:
 

@@ -34,12 +34,20 @@ function assertGenericApprovalOutput(hostOutput) {
       }
     }
   }
-  if ('blocker' in hostOutput && (!hostOutput.blocker || typeof hostOutput.blocker !== 'object' || Array.isArray(hostOutput.blocker))) {
-    throw new WorkflowRuntimeError('approval output failed schema validation: /blocker must be object');
+}
+
+export function assertCompletedStepOutput(output) {
+  if (!output || typeof output !== 'object' || Array.isArray(output)) return;
+  if (Object.hasOwn(output, 'non_blocking_stop')) {
+    throw new WorkflowRuntimeError('completed step output must not contain non_blocking_stop; use workflow-runner report-stop');
+  }
+  if (Object.hasOwn(output, 'blocker') || output.outcome === 'blocked' || output.approval === 'blocked') {
+    throw new WorkflowRuntimeError('completed step output uses a removed stop-as-output contract; use workflow-runner report-stop');
   }
 }
 
 export function assertOutputSchemaIfDeclared({ baton, stepId, step, workerOutput, resources }) {
+  assertCompletedStepOutput(workerOutput);
   const schemaRef = step.output?.schema;
   if (!schemaRef) {
     if (step.kind === 'approval') assertGenericApprovalOutput(workerOutput);

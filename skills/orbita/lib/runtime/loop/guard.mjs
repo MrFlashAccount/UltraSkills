@@ -11,7 +11,6 @@ export function responseForOutputSchemaRetry({ baton, stepId, step, errors, atte
       [outputSchemaRetryKey(stepId)]: attempt,
     },
   };
-  delete updatedBaton.blocker;
   const feedbackPrompt = validationRetryPrompt({ errors, attempt });
   return responseFor(updatedBaton, stepId, stepWithValidationFeedback(step, feedbackPrompt));
 }

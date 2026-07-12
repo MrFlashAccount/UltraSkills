@@ -15,6 +15,8 @@ stopConditions:
   - "max iterations"
   - "success criteria met"
   - "noProgressCount >= 2"
+helpConditions:
+  - "missing orchestrator or user input"
   - "unapproved approval boundary"
 verificationRequirements:
   - "tests/checks/review to run when relevant"
@@ -25,7 +27,7 @@ lastResult:
   verification: []
 nextAction: "specific next cycle objective"
 noProgressCount: 0
-blocker: null
+openRisks: []
 retryContext: null
 approvalBoundaries:
   - "no remote push without approval"
@@ -48,12 +50,14 @@ Do exactly one cycle:
 4. Report compactly, then stop. Do not start the next iteration.
 
 Return:
-- status: completed | partial | blocked | no-progress
+- status: completed | partial | no-progress
 - result:
 - evidence: exact paths/commands/IDs/errors/findings
+
+When continuation needs orchestrator or user help, emit `NON_BLOCKING_STOP` through the control channel instead of returning a terminal status. Resume the same iteration after resolution.
 - artifacts: files/PRs/issues/notes created or changed
 - verification: checks run and outcomes, or why not run
-- blocker:
+- open risks:
 - next: recommended next action
 ```
 
@@ -63,7 +67,7 @@ Return:
 Iteration {n} result: {one-line summary}
 Evidence: {key evidence}
 Verification: {check status}
-Decision: continue | retry-with-context | stop | pause-for-approval
+Decision: continue | retry-with-context | stop | non-blocking-stop
 Reason: {continuation/stop rule}
 Next action: {specific next cycle objective, if continuing}
 ```
@@ -72,9 +76,10 @@ Next action: {specific next cycle objective, if continuing}
 
 Update `noProgressCount` as follows:
 
-- Reset to `0` when the executor finds a new useful result, lands an approved change, removes a blocker, or produces new evidence that changes the next action.
-- Increment by `1` when the executor repeats known information, cannot act for the same reason, or produces no actionable evidence.
-- Stop at `noProgressCount >= 2` unless the user explicitly requested a larger saturation window.
+- Reset to `0` when the executor finds a new useful result, lands an approved change, resolves an open risk/help condition, or produces new evidence that changes the next action.
+- Increment by `1` when an otherwise executable attempt repeats known information or produces no actionable evidence.
+- Do not increment for a missing decision, permission, capability, or external input. Report `NON_BLOCKING_STOP`, preserve the current iteration, and request the smallest concrete orchestrator/user help instead.
+- Finish at `noProgressCount >= 2` only for executable saturation unless the user explicitly requested a larger saturation window.
 
 ## Resume Checklist
 
@@ -83,4 +88,4 @@ Before resuming an interrupted loop:
 1. Read the last baton and final executor report.
 2. Inspect current artifacts/state; do not trust stale baton entries blindly.
 3. Re-run only cheap, relevant verification if state may have changed.
-4. Continue from the next safe iteration, or stop/pause if an approval boundary is now active.
+4. Continue from the next safe iteration. If an approval/help boundary is active, report `NON_BLOCKING_STOP` and resume this same iteration after resolution.

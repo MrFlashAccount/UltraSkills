@@ -8,14 +8,10 @@
     "outcome": {
       "enum": [
         "ready_for_attack",
-        "ready_for_approval",
-        "blocked"
+        "ready_for_approval"
       ]
     },
     "workflow_contract": {
-      "type": "object"
-    },
-    "blocker": {
       "type": "object"
     }
   },
@@ -38,23 +34,6 @@
       "then": {
         "required": [
           "workflow_contract"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "blocked"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "blocker"
         ]
       }
     }

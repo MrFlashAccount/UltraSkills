@@ -9,10 +9,9 @@
     "outcome": {
       "enum": [
         "baseline_collected",
-        "rerun_collected",
-        "blocked"
+        "rerun_collected"
       ],
-      "description": "Whether this smoke evidence is the baseline before reviewed edits, the rerun after reviewed edits, or a blocker."
+      "description": "Whether this smoke evidence is the baseline before reviewed edits, the rerun after reviewed edits."
     },
     "smoke_evidence": {
       "$ref": "#/$defs/smoke_evidence",
@@ -25,30 +24,6 @@
     "rerun_smoke_evidence": {
       "$ref": "#/$defs/smoke_evidence",
       "description": "After-run evidence required for rerun_collected outputs."
-    },
-    "blocker": {
-      "type": "object",
-      "required": [
-        "summary"
-      ],
-      "properties": {
-        "summary": {
-          "type": "string",
-          "minLength": 1
-        },
-        "needed": {
-          "type": "string",
-          "minLength": 1
-        },
-        "evidence": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      },
-      "additionalProperties": true
     }
   },
   "additionalProperties": true,
@@ -87,23 +62,6 @@
         "required": [
           "baseline_smoke_evidence",
           "rerun_smoke_evidence"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "blocked"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "blocker"
         ]
       }
     }

@@ -46,7 +46,7 @@ Apply this rule strictly:
 
 When reviewing `x-usage`:
 
-- Prefer direct commands: `Treat this as ...`, `Use this to ...`, `Do not reinterpret ...`, `Do not change ...`, `Stop and report blocked if ...`.
+- Prefer direct commands: `Treat this as ...`, `Use this to ...`, `Do not reinterpret ...`, `Do not change ...`, `Report a non-blocking stop if ...`.
 - Require concrete receiver semantics: whether the value is authoritative or advisory, draft or final, mutable or frozen, and how it changes the next action.
 - Flag vague lines that only say a field is useful for review, downstream consumers, or later stages.
 - Flag `x-usage` that tells a reviewer how to evaluate the field instead of telling the receiving agent how to use it.

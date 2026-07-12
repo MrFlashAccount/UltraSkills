@@ -1,9 +1,0 @@
-{
-  "outcome": "blocked",
-  "blocker": {
-    "summary": "missing decision",
-    "source_step_id": "triage",
-    "needed": "Provide the missing decision."
-  },
-  "results": [{ "type": "triage", "summary": "blocked" }]
-}

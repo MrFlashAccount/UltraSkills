@@ -4,11 +4,14 @@ import { validateJsonSchema } from '../../../../shared/scripts/schema-validation
 import implementationFanoutOutputSchema from '../../../../workflows/dev-harness/schemas/implementation-fanout-output.json' with { type: 'json' };
 import reviewFanoutOutputSchema from '../../../../workflows/dev-harness/schemas/review-fanout-output.json' with { type: 'json' };
 import reviewerSelectionOutputSchema from '../../../../workflows/dev-harness/schemas/reviewer-selection-output.json' with { type: 'json' };
+import researchDraftOutputSchema from '../../../../workflows/research-critic/schemas/research-draft-output.json' with { type: 'json' };
+import researchAttackOutputSchema from '../../../../workflows/research-critic/schemas/research-attack-output.json' with { type: 'json' };
+import saveResearchCanvasOutputSchema from '../../../../workflows/research-critic/schemas/save-research-canvas-output.json' with { type: 'json' };
 import { assertBatonSchema, batonSchema } from '../file-contracts/baton/baton-schema.mjs';
 import { assertWorkflowSchema, workflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import runnerHostResponseSchema from '../persistence/run-state/schema/runner-host-response.json' with { type: 'json' };
 
-const runtimeSchemas = [workflowSchema, batonSchema, reviewerSelectionOutputSchema, implementationFanoutOutputSchema, reviewFanoutOutputSchema, runnerHostResponseSchema];
+const runtimeSchemas = [workflowSchema, batonSchema, reviewerSelectionOutputSchema, implementationFanoutOutputSchema, reviewFanoutOutputSchema, researchDraftOutputSchema, researchAttackOutputSchema, saveResearchCanvasOutputSchema, runnerHostResponseSchema];
 
 function minimalWorkflowDoc(overrides = {}) {
   return {
@@ -103,6 +106,33 @@ test('implementation fanout owner schema selects review branches without a routi
     reviewer_handoffs: { backend_review: valid.reviewer_handoffs.backend_review },
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(implementationFanoutOutputSchema, { outcome: 'blocked' }, { schemas: runtimeSchemas }).ok, false);
+});
+
+test('research-critic schemas keep every completed variant satisfiable after stop control moved out of output', () => {
+  const artifact = {
+    id: 'reasons-canvas-research',
+    content_type: 'text/markdown',
+    path: '/tmp/reasons-canvas-research.md',
+    summary: 'Research canvas',
+  };
+  assert.equal(validateJsonSchema(researchDraftOutputSchema, {
+    outcome: 'ready_for_attack',
+    artifacts: [artifact],
+  }, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(researchDraftOutputSchema, {
+    outcome: 'ready_for_attack',
+    questions: ['Which public contract should be preserved?'],
+  }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(researchAttackOutputSchema, {
+    outcome: 'approved',
+    verdict: { summary: ['PASS'], evidence_checked: [], findings: [] },
+  }, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(saveResearchCanvasOutputSchema, {
+    outcome: 'saved',
+    saved: { summary: 'Saved approved research canvas.' },
+    artifacts: [artifact],
+    results: [{ type: 'saved', summary: 'Saved.' }],
+  }, { schemas: runtimeSchemas }).ok, true);
 });
 
 
@@ -286,12 +316,13 @@ test('runner host response schema enforces action-conditional reuse hint fields'
       },
     ],
   };
-  const validRecoverableRunWorker = {
+  const validStoppedRunWorker = {
     ...validRunWorker,
     baton: {
       ...validRunWorker.baton,
-      recoverableWorkerBlockers: {
+      nonBlockingStops: {
         worker_step: {
+          stop_id: '00000000-0000-4000-8000-000000000008',
           summary: 'Need a decision.',
           source_step_id: 'worker_step',
           needed: 'Provide approved input.',
@@ -303,7 +334,8 @@ test('runner host response schema enforces action-conditional reuse hint fields'
     requests: [
       {
         ...validRunWorker.requests[0],
-        recoverableBlocker: {
+        nonBlockingStop: {
+          stop_id: '00000000-0000-4000-8000-000000000008',
           summary: 'Need a decision.',
           source_step_id: 'worker_step',
           needed: 'Provide approved input.',
@@ -323,16 +355,16 @@ test('runner host response schema enforces action-conditional reuse hint fields'
       },
     ],
   };
-  const validResolveWorkerBlocker = {
+  const validResolveStop = {
     ...validRunWorker,
-    baton: validRecoverableRunWorker.baton,
+    baton: validStoppedRunWorker.baton,
     requests: [
       {
         id: 'worker_step',
         stepId: 'worker_step',
-        action: 'resolve_worker_blocker',
-        recoverableBlocker: validRecoverableRunWorker.requests[0].recoverableBlocker,
-        writeResolutionCommand: 'bun workflow-runner.mjs write-output',
+        action: 'resolve_non_blocking_stop',
+        nonBlockingStop: validStoppedRunWorker.requests[0].nonBlockingStop,
+        resolveStopCommand: 'bun workflow-runner.mjs resolve-stop',
       },
     ],
   };
@@ -357,9 +389,9 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   };
 
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validRunWorker, { schemas: runtimeSchemas }).ok, true);
-  assert.equal(validateJsonSchema(runnerHostResponseSchema, validRecoverableRunWorker, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, validStoppedRunWorker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validApproval, { schemas: runtimeSchemas }).ok, true);
-  assert.equal(validateJsonSchema(runnerHostResponseSchema, validResolveWorkerBlocker, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, validResolveStop, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validShardRunWorker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validRunWorker,
@@ -379,7 +411,7 @@ test('runner host response schema enforces action-conditional reuse hint fields'
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validApproval,
-    requests: [{ ...validApproval.requests[0], recoverableBlocker: validRecoverableRunWorker.requests[0].recoverableBlocker }],
+    requests: [{ ...validApproval.requests[0], nonBlockingStop: validStoppedRunWorker.requests[0].nonBlockingStop }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validApproval,
@@ -390,27 +422,27 @@ test('runner host response schema enforces action-conditional reuse hint fields'
     requests: [{ ...validRunWorker.requests[0], attemptId: 'attempt-1' }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
-    ...validRecoverableRunWorker,
-    requests: [{ ...validRecoverableRunWorker.requests[0], recoverableBlocker: { summary: 'missing required fields' } }],
+    ...validStoppedRunWorker,
+    requests: [{ ...validStoppedRunWorker.requests[0], nonBlockingStop: { summary: 'missing required fields' } }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
-    ...validRecoverableRunWorker,
-    requests: [{ ...validRecoverableRunWorker.requests[0], loadInstructionsCommand: undefined }],
+    ...validStoppedRunWorker,
+    requests: [{ ...validStoppedRunWorker.requests[0], loadInstructionsCommand: undefined }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
-    ...validResolveWorkerBlocker,
-    requests: [{ ...validResolveWorkerBlocker.requests[0], writeResolutionCommand: undefined }],
+    ...validResolveStop,
+    requests: [{ ...validResolveStop.requests[0], resolveStopCommand: undefined }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
-    ...validResolveWorkerBlocker,
-    requests: [{ ...validResolveWorkerBlocker.requests[0], preferredAgentId: null }],
+    ...validResolveStop,
+    requests: [{ ...validResolveStop.requests[0], preferredAgentId: null }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
-    ...validResolveWorkerBlocker,
-    requests: [{ ...validResolveWorkerBlocker.requests[0], loadInstructionsCommand: 'bun workflow-runner.mjs instructions' }],
+    ...validResolveStop,
+    requests: [{ ...validResolveStop.requests[0], loadInstructionsCommand: 'bun workflow-runner.mjs instructions' }],
   }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
-    ...validResolveWorkerBlocker,
-    requests: [{ ...validResolveWorkerBlocker.requests[0], agentRuntime: { model: 'gpt-5.5', thinkingLevel: 'high' } }],
+    ...validResolveStop,
+    requests: [{ ...validResolveStop.requests[0], agentRuntime: { model: 'gpt-5.5', thinkingLevel: 'high' } }],
   }, { schemas: runtimeSchemas }).ok, false);
 });

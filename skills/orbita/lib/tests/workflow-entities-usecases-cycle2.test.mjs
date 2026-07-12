@@ -30,7 +30,6 @@ const routeSchema = {
     },
     artifacts: { type: 'array', items: { type: 'object' } },
     results: { type: 'array', items: { type: 'object' } },
-    blocker: { type: 'object' },
   },
   additionalProperties: false,
 };
@@ -43,7 +42,6 @@ const branchSchema = {
     outcome: { type: 'string' },
     artifacts: { type: 'array', items: { type: 'object' } },
     results: { type: 'array', items: { type: 'object' } },
-    blocker: { type: 'object' },
   },
   additionalProperties: false,
 };
@@ -190,15 +188,6 @@ test('Step.resolveInputs projects only state keys referenced by dynamic transiti
 
   assert.deepEqual(step.resolveInputs({ state: { branch_a: { next: 'done' }, branch_b: { next: 'skip' } } }), { branch_a: { next: 'done' } });
 });
-
-test('Step.applyOutput clears a stale blocker when a later transition reaches a non-blocked status', () => {
-  const step = new Step({ id: 'producer', step: workflowDoc().steps.producer });
-  const applied = step.applyOutput({ workflow: workflowDoc(), baton: batonDoc({ blocker: { reason: 'old' } }), output: { outcome: 'ok', route: 'direct', targets: ['branch_a'] } });
-
-  assert.equal(applied.baton.status, 'done');
-  assert.equal(Object.hasOwn(applied.baton, 'blocker'), false);
-});
-
 
 test('Step.validateInstructionRequest rejects unknown current request ids', () => {
   const step = new Step({ id: 'producer', step: workflowDoc().steps.producer });

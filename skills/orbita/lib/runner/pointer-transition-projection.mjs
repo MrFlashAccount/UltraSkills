@@ -12,7 +12,7 @@ import { normalizeCursor } from '../runtime/cursor.mjs';
 import { statusForStep } from '../runtime/step-status.mjs';
 
 const TRANSITION_LINE = /^- transition: cursor=(.+?) status=([a-z_]+) -> cursor=(.+?) status=([a-z_]+)$/;
-const TERMINAL_STATUSES = new Set(['done', 'blocked']);
+const TERMINAL_STATUSES = new Set(['done']);
 
 function cursorValue(raw) {
   if (typeof raw !== 'string' || raw.length === 0) return undefined;

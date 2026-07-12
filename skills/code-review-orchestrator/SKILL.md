@@ -8,7 +8,7 @@ description: Orchestrate multi-role code reviews for any repository, branch, PR,
 ## Goal
 Run one review entrypoint, choose the right reviewer set from the canonical post-implementation roles, spawn those reviewers in parallel, and merge their findings into one actionable report. Do not collapse this into a manual self-review in the orchestrator session just because the diff looks small or speed would be higher.
 
-If required reviewer delegation is unavailable, fails to start, or cannot be used, stop as `blocked` and report that state; do not replace the delegated review gate with a manual review in the orchestrator session.
+If required reviewer delegation is unavailable, fails to start, or cannot be used, report a `NON_BLOCKING_STOP` that requests help from the orchestrator or user; do not replace the delegated review gate with a manual review in the orchestrator session. Resume the same review gate after the stop is resolved.
 
 This is stage 4, the post-implementation review gate. The pre-implementation `research` flow lives in `research-critic`, while execution planning is supplied by the caller's approved task contract. For non-trivial code work, this gate should act as an adversarial contract check with binary pass/fail semantics, not a soft advisory lap.
 
@@ -98,9 +98,9 @@ Each reviewer prompt must include:
 - the shared delegated role task template from [../../shared/delegate/delegated-role-task-template.md](../../shared/delegate/delegated-role-task-template.md), filled with the selected reviewer role, role file, task, scope, and output format
 - the applicable compact focus section from [references/role-prompts.md](references/role-prompts.md) for the selected reviewer role
 
-Do not accept reviewer output for a required gate when required role material cannot be loaded or loaded role material's additional, final-answer, or output requirements cannot be satisfied. Mark that reviewer gate `blocked` instead.
+Do not accept reviewer output for a required gate when required role material cannot be loaded or loaded role material's additional, final-answer, or output requirements cannot be satisfied. Report a `NON_BLOCKING_STOP` for that reviewer gate and request the smallest concrete help needed instead.
 
-If the delegated reviewer path is unavailable, fails to start, or cannot be used, stop as `blocked` instead of reviewing directly in the orchestrator session.
+If the delegated reviewer path is unavailable, fails to start, or cannot be used, report a `NON_BLOCKING_STOP` and request help instead of reviewing directly in the orchestrator session. Resume the same reviewer gate after resolution.
 
 Keep each role prompt short and specific. Include the approved contract or compact acceptance criteria when available, plus only the diff summary, target branch/PR, the review focus for that role, the project’s `AGENTS.md` guidance, and the merge rubric.
 

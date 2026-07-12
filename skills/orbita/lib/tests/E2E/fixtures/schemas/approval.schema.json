@@ -8,12 +8,8 @@
     "approval": {
       "enum": [
         "approved",
-        "rejected",
-        "blocked"
+        "rejected"
       ]
-    },
-    "blocker": {
-      "type": "object"
     }
   },
   "additionalProperties": true
