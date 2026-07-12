@@ -1,41 +1,29 @@
-import type { DashboardLaneId } from '@dashboard-contracts';
-import { Filter, Search, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { PopoverContent, PopoverRoot, PopoverTrigger } from '@/components/ui/popover';
-import { SelectField } from '@/components/ui/select';
-import type { FreshnessView } from '@/features/freshness/freshness-selector';
-import { ConnectionStatus } from '@/features/freshness/ConnectionStatus';
-import { LANE_LABELS, type BoardFilters } from './selectors/board-selectors';
+import type { DashboardLaneId } from "@dashboard-contracts";
+import { Filter, Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { PopoverContent, PopoverRoot, PopoverTrigger } from "@/components/ui/popover";
+import { SelectField } from "@/components/ui/select";
+import type { FreshnessView } from "@/features/freshness/freshness-selector";
+import { ConnectionStatus } from "@/features/freshness/ConnectionStatus";
+import { LANE_LABELS, type BoardFilters } from "./selectors/board-selectors";
 
 type ToolbarProps = {
   filters: BoardFilters;
-  workflows: string[];
-  total: number;
   freshness: FreshnessView;
   onChange: (change: Partial<BoardFilters>) => void;
+  total: number;
+  workflows: Array<string>;
 };
 
-export function BoardToolbar({ filters, workflows, total, freshness, onChange }: ToolbarProps) {
-  const [query, setQuery] = useState(filters.q);
-  useEffect(() => {
-    setQuery(filters.q);
-  }, [filters.q]);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (query !== filters.q) onChange({ q: query });
-    }, 180);
-    return () => clearTimeout(timer);
-  }, [query, filters.q, onChange]);
+export function BoardToolbar({ filters, freshness, onChange, total, workflows }: ToolbarProps) {
   const clear = () => {
-    setQuery('');
-    onChange({ q: '', workflow: undefined, lane: undefined });
+    onChange({ lane: undefined, q: "", workflow: undefined });
   };
   return (
     <header className="toolbar">
       <div className="brand">
-        <span className="orb" aria-hidden="true" />
+        <span aria-hidden="true" className="orb" />
         <h1>Orbita runs</h1>
         <span className="read-only">Read only</span>
       </div>
@@ -44,16 +32,16 @@ export function BoardToolbar({ filters, workflows, total, freshness, onChange }:
           <Search aria-hidden="true" size={16} />
           <span className="sr-only">Search runs</span>
           <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => onChange({ q: event.target.value })}
             placeholder="Search run, workflow, step"
+            value={filters.q}
           />
-          {query ? (
+          {filters.q ? (
             <Button
-              variant="quiet"
-              size="icon"
               aria-label="Clear search"
-              onClick={() => setQuery('')}
+              onClick={() => onChange({ q: "" })}
+              size="icon"
+              variant="quiet"
             >
               <X aria-hidden="true" size={15} />
             </Button>
@@ -68,20 +56,20 @@ export function BoardToolbar({ filters, workflows, total, freshness, onChange }:
           </PopoverTrigger>
           <PopoverContent align="end" aria-label="Run filters">
             <SelectField
-              label="Workflow"
-              value={filters.workflow}
               allLabel="All workflows"
-              options={workflows.map((workflow) => ({ value: workflow, label: workflow }))}
+              label="Workflow"
               onValueChange={(workflow) => onChange({ workflow })}
+              options={workflows.map((workflow) => ({ value: workflow, label: workflow }))}
+              value={filters.workflow}
             />
             <SelectField
-              label="Lane"
-              value={filters.lane}
               allLabel="All lanes"
-              options={Object.entries(LANE_LABELS).map(([value, label]) => ({ value, label }))}
+              label="Lane"
               onValueChange={(lane) => onChange({ lane: lane as DashboardLaneId | undefined })}
+              options={Object.entries(LANE_LABELS).map(([value, label]) => ({ value, label }))}
+              value={filters.lane}
             />
-            <Button variant="quiet" onClick={clear}>
+            <Button onClick={clear} variant="quiet">
               Clear filters
             </Button>
           </PopoverContent>

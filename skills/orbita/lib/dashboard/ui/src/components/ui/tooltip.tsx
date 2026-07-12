@@ -1,9 +1,9 @@
-import { Tooltip } from 'radix-ui';
+import { Tooltip } from "radix-ui";
 
 export function TooltipLabel({
-  label,
   children,
-}: Readonly<{ label: string; children: React.ReactNode }>) {
+  label,
+}: Readonly<{ children: React.ReactNode; label: string }>) {
   return (
     <Tooltip.Root>
       <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>

@@ -1,5 +1,5 @@
 /** Immutable last-good dashboard read model with truthful freshness and lossy invalidation. */
-import { watch, type FSWatcher } from 'node:fs';
+import { watch, type FSWatcher } from "node:fs";
 import {
   InvalidationEventSchema,
   SnapshotEnvelopeSchema,
@@ -7,27 +7,27 @@ import {
   type ObserverFreshnessDTO,
   type RunDetailDTO,
   type SnapshotEnvelope,
-} from '../contracts/browser';
+} from "../contracts/browser";
 
 export class ObserverUnavailableError extends Error {
   constructor() {
-    super('Dashboard observer is unavailable');
+    super("Dashboard observer is unavailable");
   }
 }
 
 type Reader = {
-  listRuns(signal?: AbortSignal): Promise<SnapshotEnvelope['runs']>;
   getRun(runId: string, signal?: AbortSignal): Promise<RunDetailDTO | undefined>;
+  listRuns(signal?: AbortSignal): Promise<SnapshotEnvelope["runs"]>;
 };
 type Subscriber = (event: InvalidationEvent) => void;
 type Options = {
-  runsRoot?: string;
-  pollMs?: number;
-  staleAfterMs?: number;
-  now?: () => Date;
-  watchEnabled?: boolean;
-  watchCoalesceMs?: number;
   invalidationCoalesceMs?: number;
+  now?: () => Date;
+  pollMs?: number;
+  runsRoot?: string;
+  staleAfterMs?: number;
+  watchCoalesceMs?: number;
+  watchEnabled?: boolean;
 };
 
 function freezeSnapshot(snapshot: SnapshotEnvelope): SnapshotEnvelope {
@@ -37,8 +37,8 @@ function freezeSnapshot(snapshot: SnapshotEnvelope): SnapshotEnvelope {
 }
 
 function sameRuns(
-  left: SnapshotEnvelope['runs'] | undefined,
-  right: SnapshotEnvelope['runs'],
+  left: SnapshotEnvelope["runs"] | undefined,
+  right: SnapshotEnvelope["runs"],
 ): boolean {
   return left !== undefined && JSON.stringify(left) === JSON.stringify(right);
 }
@@ -51,15 +51,15 @@ export class DashboardReadModel {
   private snapshot?: SnapshotEnvelope;
   private snapshotVersion = 0;
   private observerRevision = 0;
-  private activeRefresh?: Promise<void>;
-  private refreshAbort?: AbortController;
+  private activeRefresh: Promise<void> | undefined;
+  private refreshAbort: AbortController | undefined;
   private queuedRefresh = false;
   private closed = false;
-  private timer?: ReturnType<typeof setInterval>;
-  private watcher?: FSWatcher;
-  private watchTimer?: ReturnType<typeof setTimeout>;
-  private invalidationTimer?: ReturnType<typeof setTimeout>;
-  private staleDeadlineTimer?: ReturnType<typeof setTimeout>;
+  private timer: ReturnType<typeof setInterval> | undefined;
+  private watcher: FSWatcher | undefined;
+  private watchTimer: ReturnType<typeof setTimeout> | undefined;
+  private invalidationTimer: ReturnType<typeof setTimeout> | undefined;
+  private staleDeadlineTimer: ReturnType<typeof setTimeout> | undefined;
   private lastSnapshotInvalidationAt = 0;
   private pendingSnapshotInvalidation = false;
   private readonly subscribers = new Set<Subscriber>();
@@ -73,20 +73,24 @@ export class DashboardReadModel {
     return this.options.now ?? (() => new Date());
   }
   private get pollMs(): number {
-    return this.options.pollMs ?? 2_000;
+    return this.options.pollMs ?? 2000;
   }
   private get staleAfterMs(): number {
     return this.options.staleAfterMs ?? 10_000;
   }
 
   start(): void {
-    if (this.closed || this.timer) return;
+    if (this.closed || this.timer) {
+      return;
+    }
     this.timer = setInterval(() => void this.refresh().catch(() => {}), this.pollMs);
     this.timer.unref?.();
     if (this.options.runsRoot && this.options.watchEnabled !== false) {
       try {
         this.watcher = watch(this.options.runsRoot, { persistent: false }, () => {
-          if (this.watchTimer) clearTimeout(this.watchTimer);
+          if (this.watchTimer) {
+            clearTimeout(this.watchTimer);
+          }
           this.watchTimer = setTimeout(
             () => void this.refresh().catch(() => {}),
             this.options.watchCoalesceMs ?? 100,
@@ -100,7 +104,9 @@ export class DashboardReadModel {
   }
 
   subscribe(subscriber: Subscriber): () => void {
-    if (this.closed) return () => {};
+    if (this.closed) {
+      return () => {};
+    }
     this.subscribers.add(subscriber);
     return () => this.subscribers.delete(subscriber);
   }
@@ -110,13 +116,13 @@ export class DashboardReadModel {
     return String(this.observerRevision);
   }
 
-  private publishNow(reason: InvalidationEvent['reason']): void {
+  private publishNow(reason: InvalidationEvent["reason"]): void {
     const event = InvalidationEventSchema.parse({
-      schemaVersion: '1',
-      type: 'invalidation',
-      reason,
       changeId: String(this.observerRevision),
       emittedAt: this.now().toISOString(),
+      reason,
+      schemaVersion: "1",
+      type: "invalidation",
     });
     for (const subscriber of this.subscribers) {
       try {
@@ -127,9 +133,11 @@ export class DashboardReadModel {
     }
   }
 
-  private publish(reason: InvalidationEvent['reason']): void {
-    if (reason !== 'snapshot_changed') {
-      if (this.invalidationTimer) clearTimeout(this.invalidationTimer);
+  private publish(reason: InvalidationEvent["reason"]): void {
+    if (reason !== "snapshot_changed") {
+      if (this.invalidationTimer) {
+        clearTimeout(this.invalidationTimer);
+      }
       this.invalidationTimer = undefined;
       this.pendingSnapshotInvalidation = false;
       this.publishNow(reason);
@@ -143,14 +151,18 @@ export class DashboardReadModel {
       return;
     }
     this.pendingSnapshotInvalidation = true;
-    if (this.invalidationTimer) return;
+    if (this.invalidationTimer) {
+      return;
+    }
     this.invalidationTimer = setTimeout(
       () => {
         this.invalidationTimer = undefined;
-        if (!this.pendingSnapshotInvalidation || this.closed) return;
+        if (!this.pendingSnapshotInvalidation || this.closed) {
+          return;
+        }
         this.pendingSnapshotInvalidation = false;
         this.lastSnapshotInvalidationAt = Date.now();
-        this.publishNow('snapshot_changed');
+        this.publishNow("snapshot_changed");
       },
       Math.max(0, coalesceMs - elapsed),
     );
@@ -158,36 +170,44 @@ export class DashboardReadModel {
   }
 
   private scheduleStaleDeadline(): void {
-    if (this.staleDeadlineTimer) clearTimeout(this.staleDeadlineTimer);
+    if (this.staleDeadlineTimer) {
+      clearTimeout(this.staleDeadlineTimer);
+    }
     this.staleDeadlineTimer = setTimeout(() => this.expireFreshness(), this.staleAfterMs);
     this.staleDeadlineTimer.unref?.();
   }
 
   private expireFreshness(): void {
     this.staleDeadlineTimer = undefined;
-    if (this.closed || !this.snapshot || this.snapshot.freshness.state === 'stale') return;
+    if (this.closed || !this.snapshot || this.snapshot.freshness.state === "stale") {
+      return;
+    }
     const expiredAt = this.now().toISOString();
     const observerRevision = this.nextObserverRevision();
     this.snapshot = freezeSnapshot(
       SnapshotEnvelopeSchema.parse({
         ...this.snapshot,
-        generatedAt: expiredAt,
         freshness: {
           ...this.snapshot.freshness,
-          state: 'stale',
+          state: "stale",
           observerRevision,
           staleSince: expiredAt,
-          failureCode: 'observer_refresh_timeout',
+          failureCode: "observer_refresh_timeout",
           retryAt: after(expiredAt, this.pollMs),
         },
+        generatedAt: expiredAt,
       }),
     );
-    this.publish('observer_stale');
+    this.publish("observer_stale");
   }
 
   async ensureSnapshot(): Promise<SnapshotEnvelope> {
-    if (!this.snapshot) await this.refresh();
-    if (!this.snapshot) throw new ObserverUnavailableError();
+    if (!this.snapshot) {
+      await this.refresh();
+    }
+    if (!this.snapshot) {
+      throw new ObserverUnavailableError();
+    }
     return this.snapshot;
   }
 
@@ -197,7 +217,9 @@ export class DashboardReadModel {
   }
 
   refresh(): Promise<void> {
-    if (this.closed) return Promise.resolve();
+    if (this.closed) {
+      return Promise.resolve();
+    }
     if (this.activeRefresh) {
       this.queuedRefresh = true;
       return this.activeRefresh;
@@ -221,72 +243,92 @@ export class DashboardReadModel {
     this.refreshAbort = new AbortController();
     try {
       const runs = await this.reader.listRuns(this.refreshAbort.signal);
-      if (this.closed) return;
-      const wasStale = this.snapshot?.freshness.state === 'stale';
+      if (this.closed) {
+        return;
+      }
+      const wasStale = this.snapshot?.freshness.state === "stale";
       const changed = !sameRuns(this.snapshot?.runs, runs);
-      if (changed) this.snapshotVersion += 1;
+      if (changed) {
+        this.snapshotVersion += 1;
+      }
       const observerRevision = this.nextObserverRevision();
       const freshness: ObserverFreshnessDTO = {
-        state: 'fresh',
-        observerRevision,
         lastRefreshAttemptAt: attemptedAt,
         lastSuccessfulRefreshAt: attemptedAt,
-        staleSince: null,
-        staleAfterMs: this.staleAfterMs,
+        observerRevision,
         retryAt: null,
+        staleAfterMs: this.staleAfterMs,
+        staleSince: null,
+        state: "fresh",
       };
       this.snapshot = freezeSnapshot(
         SnapshotEnvelopeSchema.parse({
-          schemaVersion: '1',
-          snapshotVersion: String(this.snapshotVersion || 1),
-          generatedAt: attemptedAt,
           freshness,
+          generatedAt: attemptedAt,
           runs,
+          schemaVersion: "1",
+          snapshotVersion: String(this.snapshotVersion || 1),
         }),
       );
       this.scheduleStaleDeadline();
-      this.publish(wasStale ? 'observer_recovered' : 'snapshot_changed');
+      this.publish(wasStale ? "observer_recovered" : "snapshot_changed");
     } catch {
-      if (this.closed) return;
-      if (!this.snapshot) throw new ObserverUnavailableError();
+      if (this.closed) {
+        return;
+      }
+      if (!this.snapshot) {
+        throw new ObserverUnavailableError();
+      }
       const previous = this.snapshot.freshness;
       const observerRevision = this.nextObserverRevision();
       this.snapshot = freezeSnapshot(
         SnapshotEnvelopeSchema.parse({
           ...this.snapshot,
-          generatedAt: attemptedAt,
           freshness: {
-            state: 'stale',
+            state: "stale",
             observerRevision,
             lastRefreshAttemptAt: attemptedAt,
             lastSuccessfulRefreshAt: previous.lastSuccessfulRefreshAt,
             staleSince: previous.staleSince ?? attemptedAt,
             staleAfterMs: this.staleAfterMs,
-            failureCode: 'observer_refresh_failed',
+            failureCode: "observer_refresh_failed",
             retryAt: after(attemptedAt, this.pollMs),
           },
+          generatedAt: attemptedAt,
         }),
       );
-      if (this.staleDeadlineTimer) clearTimeout(this.staleDeadlineTimer);
+      if (this.staleDeadlineTimer) {
+        clearTimeout(this.staleDeadlineTimer);
+      }
       this.staleDeadlineTimer = undefined;
-      this.publish('observer_stale');
+      this.publish("observer_stale");
     }
   }
 
   async close(): Promise<void> {
-    if (this.closed) return;
+    if (this.closed) {
+      return;
+    }
     this.closed = true;
     this.queuedRefresh = false;
     this.refreshAbort?.abort();
-    if (this.timer) clearInterval(this.timer);
+    if (this.timer) {
+      clearInterval(this.timer);
+    }
     this.timer = undefined;
     this.watcher?.close();
     this.watcher = undefined;
-    if (this.watchTimer) clearTimeout(this.watchTimer);
+    if (this.watchTimer) {
+      clearTimeout(this.watchTimer);
+    }
     this.watchTimer = undefined;
-    if (this.invalidationTimer) clearTimeout(this.invalidationTimer);
+    if (this.invalidationTimer) {
+      clearTimeout(this.invalidationTimer);
+    }
     this.invalidationTimer = undefined;
-    if (this.staleDeadlineTimer) clearTimeout(this.staleDeadlineTimer);
+    if (this.staleDeadlineTimer) {
+      clearTimeout(this.staleDeadlineTimer);
+    }
     this.staleDeadlineTimer = undefined;
     this.pendingSnapshotInvalidation = false;
     this.subscribers.clear();

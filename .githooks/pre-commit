@@ -22,8 +22,13 @@ git diff --cached --name-only --diff-filter=ACMR -z -- \
 
 if [ -s "$dashboard_files" ]; then
   echo "Formatting staged dashboard files with oxfmt..."
-  xargs -0 ./node_modules/.bin/oxfmt --write --no-error-on-unmatched-pattern < "$dashboard_files"
+  xargs -0 ./node_modules/.bin/oxfmt \
+    --config ./node_modules/@sergeigarin/hygene/oxfmt.json \
+    --write \
+    --no-error-on-unmatched-pattern < "$dashboard_files"
   xargs -0 git add -- < "$dashboard_files"
+  echo "Linting dashboard with oxlint..."
+  bun run dashboard:lint
 fi
 
 echo "Bundling schema-validation vendor Ajv..."

@@ -1,4 +1,4 @@
-import { Popover } from 'radix-ui';
+import { Popover } from "radix-ui";
 export const PopoverRoot = Popover.Root;
 export const PopoverTrigger = Popover.Trigger;
 export const PopoverClose = Popover.Close;

@@ -1,9 +1,9 @@
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function DetailLoading() {
   return (
-    <div className="detail-state" aria-busy="true">
+    <div aria-busy="true" className="detail-state">
       <Skeleton />
       <Skeleton />
     </div>

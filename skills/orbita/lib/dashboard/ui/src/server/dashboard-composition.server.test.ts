@@ -1,21 +1,22 @@
-import { describe, expect, test } from 'bun:test';
-import { EventEmitter } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { bindDashboardLifecycle, createDashboardComposition } from './dashboard-composition.server';
+import { describe, expect, test } from "bun:test";
+import { EventEmitter } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { bindDashboardLifecycle, createDashboardComposition } from "./dashboard-composition.server";
 
-describe('dashboard production lifecycle binding', () => {
-  test('Nitro close clears watcher, timers, subscriptions, and active plus queued refresh', async () => {
-    const runsRoot = await mkdtemp(join(tmpdir(), 'orbita-dashboard-lifecycle-'));
+describe("dashboard production lifecycle binding", () => {
+  test("Nitro close clears watcher, timers, subscriptions, and active plus queued refresh", async () => {
+    const runsRoot = await mkdtemp(join(tmpdir(), "orbita-dashboard-lifecycle-"));
     let calls = 0;
     let aborted = false;
     const reader = {
+      getRun: async () => undefined,
       listRuns: async (signal?: AbortSignal) => {
         calls++;
         await new Promise<void>((_resolve, reject) =>
           signal?.addEventListener(
-            'abort',
+            "abort",
             () => {
               aborted = true;
               reject(signal.reason);
@@ -25,17 +26,16 @@ describe('dashboard production lifecycle binding', () => {
         );
         return [];
       },
-      getRun: async () => undefined,
     };
     const composition = createDashboardComposition(
       {
-        runsRoot,
-        host: '127.0.0.1',
-        port: 3000,
-        pollMs: 60_000,
-        heartbeatMs: 60_000,
-        staleMs: 60_000,
         coalesceMs: 100,
+        heartbeatMs: 60_000,
+        host: "127.0.0.1",
+        pollMs: 60_000,
+        port: 3000,
+        runsRoot,
+        staleMs: 60_000,
       },
       reader,
     );
@@ -47,7 +47,7 @@ describe('dashboard production lifecycle binding', () => {
     const processLifecycle = new EventEmitter();
     let closeHook!: () => Promise<void>;
     const nitroHooks = {
-      hook: (_name: 'close', callback: () => Promise<void>) => {
+      hook: (_name: "close", callback: () => Promise<void>) => {
         closeHook = callback;
         return () => {};
       },
@@ -68,10 +68,10 @@ describe('dashboard production lifecycle binding', () => {
     expect((model as any).invalidationTimer).toBeUndefined();
     expect((model as any).subscribers.size).toBe(0);
     unbind();
-    await rm(runsRoot, { recursive: true, force: true });
+    await rm(runsRoot, { force: true, recursive: true });
   });
 
-  test('binds Bun termination signals as lifecycle stops', () => {
+  test("binds Bun termination signals as lifecycle stops", () => {
     const processLifecycle = new EventEmitter();
     const unbind = bindDashboardLifecycle(
       processLifecycle as any,
@@ -79,11 +79,11 @@ describe('dashboard production lifecycle binding', () => {
       () => {},
       async () => {},
     );
-    expect(processLifecycle.listenerCount('SIGINT')).toBe(1);
-    expect(processLifecycle.listenerCount('SIGTERM')).toBe(1);
-    expect(processLifecycle.listenerCount('beforeExit')).toBe(1);
+    expect(processLifecycle.listenerCount("SIGINT")).toBe(1);
+    expect(processLifecycle.listenerCount("SIGTERM")).toBe(1);
+    expect(processLifecycle.listenerCount("beforeExit")).toBe(1);
     unbind();
-    expect(processLifecycle.listenerCount('SIGINT')).toBe(0);
-    expect(processLifecycle.listenerCount('SIGTERM')).toBe(0);
+    expect(processLifecycle.listenerCount("SIGINT")).toBe(0);
+    expect(processLifecycle.listenerCount("SIGTERM")).toBe(0);
   });
 });

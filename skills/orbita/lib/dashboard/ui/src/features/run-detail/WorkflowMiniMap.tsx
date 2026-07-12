@@ -1,28 +1,28 @@
-import type { RunDetailDTO } from '@dashboard-contracts';
+import type { RunDetailDTO } from "@dashboard-contracts";
 
-type MiniMap = RunDetailDTO['miniMap'];
+type MiniMap = RunDetailDTO["miniMap"];
 
 /** Bounded workflow orientation only; it never implies parallel execution or control. */
 export function WorkflowMiniMap({ miniMap }: Readonly<{ miniMap: MiniMap }>) {
-  if (miniMap.state === 'unavailable') {
+  if (miniMap.state === "unavailable") {
     return (
-      <section className="detail-section workflow-map" aria-labelledby="workflow-progress-title">
+      <section aria-labelledby="workflow-progress-title" className="detail-section workflow-map">
         <h3 id="workflow-progress-title">Workflow progress</h3>
         <p>Workflow progress is unavailable.</p>
       </section>
     );
   }
   return (
-    <section className="detail-section workflow-map" aria-labelledby="workflow-progress-title">
+    <section aria-labelledby="workflow-progress-title" className="detail-section workflow-map">
       <h3 id="workflow-progress-title">Workflow progress</h3>
       <ol aria-label={`${miniMap.totalSteps} workflow steps`}>
         {miniMap.steps.map((step) => (
           <li
-            key={step.stepId}
+            aria-current={step.state === "current" ? "step" : undefined}
             data-state={step.state}
-            aria-current={step.state === 'current' ? 'step' : undefined}
+            key={step.stepId}
           >
-            <span className="workflow-step-marker" aria-hidden="true" />
+            <span aria-hidden="true" className="workflow-step-marker" />
             <span>{step.stepId}</span>
           </li>
         ))}

@@ -1,16 +1,10 @@
 {
+  "extends": "@sergeigarin/hygene/tsconfig.json",
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "jsx": "react-jsx",
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom", "node", "bun"],
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@dashboard-contracts": ["../contracts/browser.ts"]

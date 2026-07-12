@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 
 /** Reveals the first attention arrival, then preserves explicit mobile disclosure choices. */
 export function useLaneDisclosure(
@@ -10,8 +10,9 @@ export function useLaneDisclosure(
   const userControlled = useRef(false);
   const previousCount = useRef(runCount);
   useEffect(() => {
-    if (attention && previousCount.current === 0 && runCount > 0 && !userControlled.current)
+    if (attention && previousCount.current === 0 && runCount > 0 && !userControlled.current) {
       setOpen(true);
+    }
     previousCount.current = runCount;
   }, [attention, runCount]);
   return {

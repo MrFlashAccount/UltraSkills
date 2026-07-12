@@ -13,12 +13,23 @@ Architecture and placement rules live in `../../ARCHITECTURE.md` and
 Run these from the repository root:
 
 - `bun run dashboard:dev` — start the Vite/TanStack Start development server.
+- `bun run dashboard:format` — format dashboard sources with the pinned
+  `@sergeigarin/hygene` Oxfmt configuration.
+- `bun run dashboard:format:check` — verify dashboard formatting without
+  writing files.
+- `bun run dashboard:lint` — run the shared hygiene Oxlint baseline plus local
+  dashboard boundary overrides.
 - `bun run dashboard:build` — build the production Nitro Bun application.
 - `bun run dashboard:start` — start the built Bun server from
   `skills/orbita/lib/dashboard/ui/.output/server/index.mjs`.
 - `bun run dashboard:typecheck` — check the dashboard TypeScript project.
 - `bun run dashboard:test` — run dashboard contract/component tests.
 - `bun run dashboard:test:browser` — run Playwright browser scenarios.
+
+The TypeScript project extends `@sergeigarin/hygene/tsconfig.json` on stable
+TypeScript 7. The Vite 8 build runs React Compiler through the official
+`reactCompilerPreset`; `routeTree.gen.ts` remains owned by TanStack Router and
+is excluded from handwritten-source format/lint gates.
 
 `bun run depcruise:check` is the repository boundary gate for dashboard
 contracts, projection, observer, server composition, and browser imports.

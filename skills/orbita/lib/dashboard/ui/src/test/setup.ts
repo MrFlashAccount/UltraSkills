@@ -1,13 +1,12 @@
-import '@testing-library/jest-dom/vitest';
-import { afterEach } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import "@testing-library/jest-dom/vitest";
+import { afterEach } from "vitest";
+import { cleanup } from "@testing-library/react";
 
 afterEach(cleanup);
 
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
+Object.defineProperty(window, "matchMedia", {
   value: (query: string) => ({
-    matches: query.includes('min-width'),
+    matches: query.includes("min-width"),
     media: query,
     onchange: null,
     addListener() {},
@@ -16,6 +15,7 @@ Object.defineProperty(window, 'matchMedia', {
     removeEventListener() {},
     dispatchEvent: () => false,
   }),
+  writable: true,
 });
 
 class ResizeObserverMock {

@@ -1,10 +1,10 @@
-import type { RunDetailDTO } from '@dashboard-contracts';
-import { Copy } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { TooltipLabel } from '@/components/ui/tooltip';
-import { formatAge } from '@/lib/time';
-import { WorkflowMiniMap } from './WorkflowMiniMap';
+import type { RunDetailDTO } from "@dashboard-contracts";
+import { Copy } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { TooltipLabel } from "@/components/ui/tooltip";
+import { formatAge } from "@/lib/time";
+import { WorkflowMiniMap } from "./WorkflowMiniMap";
 
 export function RunDetailBody({ detail }: Readonly<{ detail: RunDetailDTO }>) {
   return (
@@ -13,7 +13,7 @@ export function RunDetailBody({ detail }: Readonly<{ detail: RunDetailDTO }>) {
         <Badge className={`tone-${detail.laneId}`}>
           {detail.reason?.value ?? detail.status ?? detail.laneId}
         </Badge>
-        <p>{detail.summary?.value ?? 'No additional summary is available.'}</p>
+        <p>{detail.summary?.value ?? "No additional summary is available."}</p>
       </div>
       <dl className="detail-facts">
         <div>
@@ -22,10 +22,10 @@ export function RunDetailBody({ detail }: Readonly<{ detail: RunDetailDTO }>) {
             <code>{detail.runId}</code>
             <TooltipLabel label="Copy run id">
               <Button
-                variant="quiet"
-                size="icon"
                 aria-label="Copy run id"
                 onClick={() => void navigator.clipboard?.writeText(detail.runId)}
+                size="icon"
+                variant="quiet"
               >
                 <Copy aria-hidden="true" size={15} />
               </Button>
@@ -40,11 +40,11 @@ export function RunDetailBody({ detail }: Readonly<{ detail: RunDetailDTO }>) {
           <dt>Current step</dt>
           <dd>
             <code>
-              {detail.cursor.kind === 'single'
+              {detail.cursor.kind === "single"
                 ? detail.cursor.step
-                : detail.cursor.kind === 'unsupported'
-                  ? 'Unsupported cursor'
-                  : 'None'}
+                : detail.cursor.kind === "unsupported"
+                  ? "Unsupported cursor"
+                  : "None"}
             </code>
           </dd>
         </div>
@@ -70,9 +70,9 @@ export function RunDetailBody({ detail }: Readonly<{ detail: RunDetailDTO }>) {
         <DetailSection title={`Artifacts · ${detail.artifacts.length}`}>
           <ul className="bounded-list">
             {detail.artifacts.map((artifact) => (
-              <li key={`${artifact.producerStepId ?? ''}:${artifact.id}`}>
+              <li key={`${artifact.producerStepId ?? ""}:${artifact.id}`}>
                 <code>{artifact.id}</code>
-                <span>{artifact.contentType ?? 'Artifact'}</span>
+                <span>{artifact.contentType ?? "Artifact"}</span>
               </li>
             ))}
           </ul>
@@ -82,8 +82,8 @@ export function RunDetailBody({ detail }: Readonly<{ detail: RunDetailDTO }>) {
         <DetailSection title={`Results · ${detail.results.length}`}>
           <ul className="bounded-list">
             {detail.results.map((result, index) => (
-              <li key={`${result.ref ?? result.type ?? 'result'}:${index}`}>
-                <span>{result.outcome ?? result.type ?? 'Result'}</span>
+              <li key={`${result.ref ?? result.type ?? "result"}:${index}`}>
+                <span>{result.outcome ?? result.type ?? "Result"}</span>
                 <span>{result.summary?.value ?? result.ref}</span>
               </li>
             ))}
@@ -92,7 +92,7 @@ export function RunDetailBody({ detail }: Readonly<{ detail: RunDetailDTO }>) {
       ) : null}
       {detail.history.length ? (
         <DetailSection
-          title={detail.historyTruncated ? 'Bounded history · truncated' : 'Bounded history'}
+          title={detail.historyTruncated ? "Bounded history · truncated" : "Bounded history"}
         >
           <ol className="history-list">
             {detail.history.map((entry, index) => (
@@ -106,9 +106,9 @@ export function RunDetailBody({ detail }: Readonly<{ detail: RunDetailDTO }>) {
 }
 
 function DetailSection({
-  title,
   children,
-}: Readonly<{ title: string; children: React.ReactNode }>) {
+  title,
+}: Readonly<{ children: React.ReactNode; title: string }>) {
   return (
     <section className="detail-section">
       <h3>{title}</h3>

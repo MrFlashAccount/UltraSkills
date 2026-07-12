@@ -1,27 +1,27 @@
-import { Check, ChevronDown } from 'lucide-react';
-import { Select } from 'radix-ui';
+import { Check, ChevronDown } from "lucide-react";
+import { Select } from "radix-ui";
 
-const ALL = '__orbita_all__';
-type SelectOption = { value: string; label: string };
+const ALL = "__orbita_all__";
+type SelectOption = { label: string; value: string };
 
 type SelectFieldProps = {
-  label: string;
-  value?: string;
   allLabel: string;
-  options: readonly SelectOption[];
+  label: string;
   onValueChange: (value: string | undefined) => void;
+  options: ReadonlyArray<SelectOption>;
+  value?: string | undefined;
 };
 
 /** Source-owned shadcn-style select composition used by compact dashboard filters. */
-export function SelectField({ label, value, allLabel, options, onValueChange }: SelectFieldProps) {
+export function SelectField({ allLabel, label, onValueChange, options, value }: SelectFieldProps) {
   return (
     <div className="filter-field">
       <span>{label}</span>
       <Select.Root
-        value={value ?? ALL}
         onValueChange={(next) => onValueChange(next === ALL ? undefined : next)}
+        value={value ?? ALL}
       >
-        <Select.Trigger className="ui-select" aria-label={label}>
+        <Select.Trigger aria-label={label} className="ui-select">
           <Select.Value />
           <Select.Icon>
             <ChevronDown aria-hidden="true" size={14} />

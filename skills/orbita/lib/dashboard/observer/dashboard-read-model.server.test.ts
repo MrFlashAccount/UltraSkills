@@ -1,36 +1,38 @@
-import { describe, expect, test } from 'bun:test';
-import { DashboardReadModel, ObserverUnavailableError } from './dashboard-read-model.server';
-import type { RunSummaryDTO } from '../contracts/browser';
+import { describe, expect, test } from "bun:test";
+import { DashboardReadModel, ObserverUnavailableError } from "./dashboard-read-model.server";
+import type { RunSummaryDTO } from "../contracts/browser";
 
 const run: RunSummaryDTO = {
-  runId: 'run-1',
-  title: { sourceClass: 'run_title', value: 'Run one', policyVersion: '1' },
-  workflow: 'dev-harness',
-  laneId: 'worker_running',
-  cursor: { kind: 'single', step: 'implementation' },
-  occupancy: { state: 'unclaimed' },
+  cursor: { kind: "single", step: "implementation" },
+  laneId: "worker_running",
+  occupancy: { state: "unclaimed" },
+  runId: "run-1",
+  title: { sourceClass: "run_title", value: "Run one", policyVersion: "1" },
+  workflow: "dev-harness",
 };
 
-describe('DashboardReadModel', () => {
-  test('retains last-good cards and truthfully transitions stale then recovered', async () => {
+describe("DashboardReadModel", () => {
+  test("retains last-good cards and truthfully transitions stale then recovered", async () => {
     let timestamp = 0;
     let failure: Error | undefined;
     const reader = {
+      getRun: async () => undefined,
       listRuns: async () => {
-        if (failure) throw failure;
+        if (failure) {
+          throw failure;
+        }
         return [run];
       },
-      getRun: async () => undefined,
     };
     const model = new DashboardReadModel(reader, {
-      watchEnabled: false,
       now: () => new Date(Date.UTC(2026, 6, 12, 0, 0, timestamp++)),
+      watchEnabled: false,
     });
-    const events: string[] = [];
+    const events: Array<string> = [];
     model.subscribe((event) => events.push(event.reason));
     await model.refresh();
     const fresh = await model.ensureSnapshot();
-    failure = new Error('/private/runs/run-1 failed with secret');
+    failure = new Error("/private/runs/run-1 failed with secret");
     await model.refresh();
     const stale = await model.ensureSnapshot();
     await model.refresh();
@@ -39,16 +41,16 @@ describe('DashboardReadModel', () => {
     await model.refresh();
     const recovered = await model.ensureSnapshot();
     expect(stale.runs).toEqual(fresh.runs);
-    expect(stale.freshness.state).toBe('stale');
+    expect(stale.freshness.state).toBe("stale");
     expect(staleAgain.freshness.staleSince).toBe(stale.freshness.staleSince);
-    expect(staleAgain.freshness.failureCode).toBe('observer_refresh_failed');
+    expect(staleAgain.freshness.failureCode).toBe("observer_refresh_failed");
     expect(staleAgain.freshness.observerRevision).not.toBe(stale.freshness.observerRevision);
-    expect(recovered.freshness.state).toBe('fresh');
+    expect(recovered.freshness.state).toBe("fresh");
     expect(events).toEqual([
-      'snapshot_changed',
-      'observer_stale',
-      'observer_stale',
-      'observer_recovered',
+      "snapshot_changed",
+      "observer_stale",
+      "observer_stale",
+      "observer_recovered",
     ]);
     expect(stale.snapshotVersion).toBe(fresh.snapshotVersion);
     expect(BigInt(stale.freshness.observerRevision)).toBeGreaterThan(
@@ -58,7 +60,7 @@ describe('DashboardReadModel', () => {
     await model.close();
   });
 
-  test('bounds refresh concurrency to one active and one queued', async () => {
+  test("bounds refresh concurrency to one active and one queued", async () => {
     let active = 0;
     let maximum = 0;
     let calls = 0;
@@ -67,15 +69,17 @@ describe('DashboardReadModel', () => {
       release = resolve;
     });
     const reader = {
+      getRun: async () => undefined,
       listRuns: async () => {
         calls++;
         active++;
         maximum = Math.max(maximum, active);
-        if (calls === 1) await gate;
+        if (calls === 1) {
+          await gate;
+        }
         active--;
         return [run];
       },
-      getRun: async () => undefined,
     };
     const model = new DashboardReadModel(reader, { watchEnabled: false });
     const first = model.refresh();
@@ -89,13 +93,13 @@ describe('DashboardReadModel', () => {
     await model.close();
   });
 
-  test('fails first build with a bounded observer error', async () => {
+  test("fails first build with a bounded observer error", async () => {
     const model = new DashboardReadModel(
       {
-        listRuns: async () => {
-          throw new Error('/secret/path');
-        },
         getRun: async () => undefined,
+        listRuns: async () => {
+          throw new Error("/secret/path");
+        },
       },
       { watchEnabled: false },
     );
@@ -103,70 +107,75 @@ describe('DashboardReadModel', () => {
     await model.close();
   });
 
-  test('coalesces a 100-change burst to at most one invalidation per 100ms window', async () => {
+  test("coalesces a 100-change burst to at most one invalidation per 100ms window", async () => {
     let version = 0;
     const reader = {
+      getRun: async () => undefined,
       listRuns: async () => [
         {
           ...run,
           title: {
-            sourceClass: 'run_title' as const,
+            sourceClass: "run_title" as const,
             value: `Run ${version++}`,
-            policyVersion: '1' as const,
+            policyVersion: "1" as const,
           },
         },
       ],
-      getRun: async () => undefined,
     };
     const model = new DashboardReadModel(reader, {
-      watchEnabled: false,
       invalidationCoalesceMs: 100,
+      watchEnabled: false,
     });
-    const events: string[] = [];
+    const events: Array<string> = [];
     model.subscribe((event) => events.push(event.reason));
-    for (let index = 0; index < 100; index++) await model.refresh();
+    for (let index = 0; index < 100; index++) {
+      await model.refresh();
+    }
     await new Promise((resolve) => setTimeout(resolve, 110));
-    expect(events).toEqual(['snapshot_changed', 'snapshot_changed']);
+    expect(events).toEqual(["snapshot_changed", "snapshot_changed"]);
     await model.close();
   });
 
-  test('expires freshness at the configured deadline while a refresh remains in flight', async () => {
+  test("expires freshness at the configured deadline while a refresh remains in flight", async () => {
     let block = false;
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
     const reader = {
+      getRun: async () => undefined,
       listRuns: async () => {
-        if (block) await gate;
+        if (block) {
+          await gate;
+        }
         return [run];
       },
-      getRun: async () => undefined,
     };
-    const model = new DashboardReadModel(reader, { watchEnabled: false, staleAfterMs: 1_000 });
+    const model = new DashboardReadModel(reader, { staleAfterMs: 1000, watchEnabled: false });
     await model.refresh();
     block = true;
     const pending = model.refresh();
-    await new Promise((resolve) => setTimeout(resolve, 1_050));
+    await new Promise((resolve) => setTimeout(resolve, 1050));
     const stale = await model.ensureSnapshot();
-    expect(stale.freshness.state).toBe('stale');
-    expect(stale.freshness.failureCode).toBe('observer_refresh_timeout');
-    expect(stale.freshness.staleAfterMs).toBe(1_000);
+    expect(stale.freshness.state).toBe("stale");
+    expect(stale.freshness.failureCode).toBe("observer_refresh_timeout");
+    expect(stale.freshness.staleAfterMs).toBe(1000);
     release();
     await pending;
-    expect((await model.ensureSnapshot()).freshness.state).toBe('fresh');
+    expect((await model.ensureSnapshot()).freshness.state).toBe("fresh");
     await model.close();
   });
 
-  test('close aborts one active refresh and drops the queued refresh', async () => {
+  test("close aborts one active refresh and drops the queued refresh", async () => {
     let calls = 0;
     let aborted = false;
     const reader = {
+      getRun: async () => undefined,
       listRuns: async (signal?: AbortSignal) => {
         calls++;
         await new Promise<void>((resolve, reject) =>
           signal?.addEventListener(
-            'abort',
+            "abort",
             () => {
               aborted = true;
               reject(signal.reason);
@@ -176,7 +185,6 @@ describe('DashboardReadModel', () => {
         );
         return [run];
       },
-      getRun: async () => undefined,
     };
     const model = new DashboardReadModel(reader, { watchEnabled: false });
     void model.refresh();

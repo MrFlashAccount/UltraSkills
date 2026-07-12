@@ -1,28 +1,28 @@
-import type { SnapshotEnvelope } from '@dashboard-contracts';
-import type { RunDetailDTO } from '@dashboard-contracts';
-import type { FreshnessView } from '@/features/freshness/freshness-selector';
-import { RunDetailSurface } from '@/features/run-detail/RunDetailSurface';
-import { Board } from './Board';
-import { BoardToolbar } from './BoardToolbar';
-import type { RovingRunFocus } from './hooks/use-roving-run-focus';
-import type { ReturnTypeBoardModel } from './screen-types';
-import { EmptyBoard, NoMatches } from './states/BoardStates';
-import type { BoardFilters } from './selectors/board-selectors';
+import type { SnapshotEnvelope } from "@dashboard-contracts";
+import type { RunDetailDTO } from "@dashboard-contracts";
+import type { FreshnessView } from "@/features/freshness/freshness-selector";
+import { RunDetailSurface } from "@/features/run-detail/RunDetailSurface";
+import { Board } from "./Board";
+import { BoardToolbar } from "./BoardToolbar";
+import type { RovingRunFocus } from "./hooks/use-roving-run-focus";
+import type { ReturnTypeBoardModel } from "./screen-types";
+import { EmptyBoard, NoMatches } from "./states/BoardStates";
+import type { BoardFilters } from "./selectors/board-selectors";
 
 type BoardScreenProps = {
-  snapshot: SnapshotEnvelope;
-  model: ReturnTypeBoardModel;
+  detail?: RunDetailDTO | null | undefined;
+  detailError: boolean;
+  detailLoading: boolean;
   filters: BoardFilters;
   freshness: FreshnessView;
-  selectedId?: string;
-  detail?: RunDetailDTO | null;
-  detailLoading: boolean;
-  detailError: boolean;
-  roving: RovingRunFocus;
-  onFiltersChange: (change: Partial<BoardFilters>) => void;
-  onSelect: (runId: string, origin: HTMLButtonElement) => void;
+  model: ReturnTypeBoardModel;
   onCloseDetail: () => void;
+  onFiltersChange: (change: Partial<BoardFilters>) => void;
   onReturnFocus: () => void;
+  onSelect: (runId: string, origin: HTMLButtonElement) => void;
+  roving: RovingRunFocus;
+  selectedId?: string | undefined;
+  snapshot: SnapshotEnvelope;
 };
 
 export function BoardScreen(props: BoardScreenProps) {
@@ -31,17 +31,17 @@ export function BoardScreen(props: BoardScreenProps) {
     <div className="dashboard-shell">
       <BoardToolbar
         filters={props.filters}
-        workflows={props.model.workflows}
-        total={props.model.total}
         freshness={props.freshness}
         onChange={props.onFiltersChange}
+        total={props.model.total}
+        workflows={props.model.workflows}
       />
       {props.freshness.unhealthy ? (
-        <div className="stale-banner" role="status">
+        <output className="stale-banner">
           {props.freshness.label}. Existing runs remain visible.
-        </div>
+        </output>
       ) : null}
-      <div className="dashboard-main" data-detail={props.selectedId ? 'open' : 'closed'}>
+      <div className="dashboard-main" data-detail={props.selectedId ? "open" : "closed"}>
         <main className="board-region">
           {props.model.total === 0 ? (
             <EmptyBoard />
@@ -50,31 +50,31 @@ export function BoardScreen(props: BoardScreenProps) {
               {noMatches ? (
                 <NoMatches
                   onClear={() =>
-                    props.onFiltersChange({ q: '', workflow: undefined, lane: undefined })
+                    props.onFiltersChange({ lane: undefined, q: "", workflow: undefined })
                   }
                 />
               ) : null}
               <Board
-                lanes={props.model.lanes}
                 counts={props.model.counts}
-                selectedId={props.selectedId}
+                lanes={props.model.lanes}
                 onSelect={props.onSelect}
                 roving={props.roving}
+                selectedId={props.selectedId}
               />
             </>
           )}
         </main>
         <RunDetailSurface
-          selectedId={props.selectedId}
-          visibleInResults={props.model.filtered.some((run) => run.runId === props.selectedId)}
           detail={props.detail}
-          isLoading={props.detailLoading}
           isError={props.detailError}
+          isLoading={props.detailLoading}
           onClose={props.onCloseDetail}
           onReturnFocus={props.onReturnFocus}
+          selectedId={props.selectedId}
+          visibleInResults={props.model.filtered.some((run) => run.runId === props.selectedId)}
         />
       </div>
-      <span className="sr-only" aria-live="polite">
+      <span aria-live="polite" className="sr-only">
         Snapshot version {props.snapshot.snapshotVersion}
       </span>
     </div>

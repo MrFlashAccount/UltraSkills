@@ -111,7 +111,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
-.lane[data-lane='done'] {
+.lane[data-lane="done"] {
   opacity: 0.9;
 }
 .lane-header {
@@ -192,7 +192,7 @@
   background: var(--surface-selected);
   border-color: var(--border-strong);
 }
-.run-card[data-selected='true'] {
+.run-card[data-selected="true"] {
   background: var(--surface-selected);
   border-color: var(--focus);
   box-shadow: inset 0 0 0 1px var(--focus);
@@ -259,29 +259,29 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-[data-lane='waiting_for_user'],
+[data-lane="waiting_for_user"],
 .tone-waiting,
 .tone-waiting_for_user {
   --lane-tone: var(--waiting);
   color: var(--waiting);
 }
-[data-lane='worker_running'],
+[data-lane="worker_running"],
 .tone-running,
 .tone-worker_running {
   --lane-tone: var(--running);
   color: var(--running);
 }
-[data-lane='needs_help'],
+[data-lane="needs_help"],
 .tone-needs-help {
   --lane-tone: var(--needs-help);
   color: var(--needs-help);
 }
-[data-lane='degraded'],
+[data-lane="degraded"],
 .tone-degraded {
   --lane-tone: var(--degraded);
   color: var(--degraded);
 }
-[data-lane='done'],
+[data-lane="done"],
 .tone-done {
   --lane-tone: var(--done);
   color: var(--done);
@@ -431,13 +431,13 @@
   border-radius: 999px;
   background: var(--border);
 }
-.workflow-map li[data-state='completed'] .workflow-step-marker {
+.workflow-map li[data-state="completed"] .workflow-step-marker {
   background: var(--done);
 }
-.workflow-map li[data-state='current'] {
+.workflow-map li[data-state="current"] {
   color: var(--text-primary);
 }
-.workflow-map li[data-state='current'] .workflow-step-marker {
+.workflow-map li[data-state="current"] .workflow-step-marker {
   background: var(--focus);
 }
 .history-list {

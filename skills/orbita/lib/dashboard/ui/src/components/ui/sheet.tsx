@@ -1,27 +1,27 @@
-import { Dialog } from 'radix-ui';
-import { X } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { Button } from './button';
+import { Dialog } from "radix-ui";
+import { X } from "lucide-react";
+import type { ReactNode } from "react";
+import { Button } from "./button";
 
 type SheetProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  description?: string;
   children: ReactNode;
-  onCloseAutoFocus?: Dialog.DialogContentProps['onCloseAutoFocus'];
+  description?: string;
+  onCloseAutoFocus?: Dialog.DialogContentProps["onCloseAutoFocus"];
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  title: string;
 };
 
 export function Sheet({
-  open,
-  onOpenChange,
-  title,
-  description,
   children,
+  description,
   onCloseAutoFocus,
+  onOpenChange,
+  open,
+  title,
 }: SheetProps) {
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root onOpenChange={onOpenChange} open={open}>
       <Dialog.Portal>
         <Dialog.Overlay className="sheet-overlay" />
         <Dialog.Content className="sheet-content" onCloseAutoFocus={onCloseAutoFocus}>
@@ -35,7 +35,7 @@ export function Sheet({
               ) : null}
             </div>
             <Dialog.Close asChild>
-              <Button variant="quiet" size="icon" aria-label="Close details">
+              <Button aria-label="Close details" size="icon" variant="quiet">
                 <X aria-hidden="true" size={18} />
               </Button>
             </Dialog.Close>

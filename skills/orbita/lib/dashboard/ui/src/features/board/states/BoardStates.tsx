@@ -1,12 +1,12 @@
-import { CircleAlert } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { CircleAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function BoardLoading() {
   return (
-    <section className="state-board" aria-busy="true" aria-label="Loading runs">
+    <section aria-busy="true" aria-label="Loading runs" className="state-board">
       {Array.from({ length: 5 }, (_, lane) => (
-        <div key={lane} className="state-lane">
+        <div className="state-lane" key={lane}>
           <Skeleton />
           <Skeleton />
         </div>

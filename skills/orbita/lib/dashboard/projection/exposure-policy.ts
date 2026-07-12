@@ -5,10 +5,10 @@ import {
   PublicDisplayTextSchema,
   type PublicDisplayText,
   type PublicTextSource,
-} from '../contracts/browser';
+} from "../contracts/browser";
 
-export { EXPOSURE_POLICY_VERSION } from '../contracts/browser';
-export type { PublicTextSource } from '../contracts/browser';
+export { EXPOSURE_POLICY_VERSION } from "../contracts/browser";
+export type { PublicTextSource } from "../contracts/browser";
 
 const FORBIDDEN = [
   /(?:^|[\s"'=(])(?:\/[\w.@+-]+){2,}(?:[\s"'),]|$)/u,
@@ -24,25 +24,29 @@ const FORBIDDEN = [
 ];
 
 function normalize(value: unknown): string {
-  return String(value ?? '')
-    .normalize('NFKC')
-    .replace(/[\u0000-\u001F\u007F-\u009F]/gu, ' ')
-    .replace(/\s+/gu, ' ')
+  return String(value ?? "")
+    .normalize("NFKC")
+    .replaceAll(/[\u0000-\u001F\u007F-\u009F]/gu, " ")
+    .replaceAll(/\s+/gu, " ")
     .trim();
 }
 
 function truncate(value: string, codePointLimit: number, utf8ByteLimit: number): string {
   const encoder = new TextEncoder();
-  const accepted: string[] = [];
+  const accepted: Array<string> = [];
   let bytes = 0;
   for (const codePoint of value) {
-    if (accepted.length >= codePointLimit) break;
+    if (accepted.length >= codePointLimit) {
+      break;
+    }
     const nextBytes = encoder.encode(codePoint).byteLength;
-    if (bytes + nextBytes > utf8ByteLimit) break;
+    if (bytes + nextBytes > utf8ByteLimit) {
+      break;
+    }
     accepted.push(codePoint);
     bytes += nextBytes;
   }
-  return accepted.join('').trim();
+  return accepted.join("").trim();
 }
 
 export function exposePublicText(
@@ -50,40 +54,47 @@ export function exposePublicText(
   value: unknown,
 ): PublicDisplayText | undefined {
   const normalized = normalize(value);
-  if (!normalized || FORBIDDEN.some((pattern) => pattern.test(normalized))) return undefined;
+  if (!normalized || FORBIDDEN.some((pattern) => pattern.test(normalized))) {
+    return undefined;
+  }
   const limits = PUBLIC_TEXT_LIMITS[source];
   const exposed = truncate(normalized, limits.codePoints, limits.utf8Bytes);
-  if (!exposed) return undefined;
+  if (!exposed) {
+    return undefined;
+  }
   return PublicDisplayTextSchema.parse({
+    policyVersion: EXPOSURE_POLICY_VERSION,
     sourceClass: source,
     value: exposed,
-    policyVersion: EXPOSURE_POLICY_VERSION,
   });
 }
 
 export function fixedPublicText(
-  source: 'run_title' | 'public_diagnostic',
+  source: "run_title" | "public_diagnostic",
   value: string,
 ): PublicDisplayText {
   const exposed = exposePublicText(source, value);
-  if (!exposed) throw new Error('fixed public dashboard text violates the exposure policy');
+  if (!exposed) {
+    throw new Error("fixed public dashboard text violates the exposure policy");
+  }
   return exposed;
 }
 
 export function exposeIdentifier(
-  source: 'workflow_identity' | 'step_id' | 'artifact_id' | 'result_ref',
+  source: "workflow_identity" | "step_id" | "artifact_id" | "result_ref",
   value: unknown,
 ): string | undefined {
   const normalized = normalize(value);
-  const max = source === 'workflow_identity' ? 120 : 160;
+  const max = source === "workflow_identity" ? 120 : 160;
   if (
     !normalized ||
     Array.from(normalized).length > max ||
     new TextEncoder().encode(normalized).byteLength > max * 2
-  )
+  ) {
     return undefined;
+  }
   const pattern =
-    source === 'artifact_id' || source === 'result_ref'
+    source === "artifact_id" || source === "result_ref"
       ? /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u
       : /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
   return pattern.test(normalized) ? normalized : undefined;

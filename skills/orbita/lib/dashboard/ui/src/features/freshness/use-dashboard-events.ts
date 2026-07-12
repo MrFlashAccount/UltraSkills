@@ -1,46 +1,47 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { InvalidationEventSchema } from '@dashboard-contracts';
-import { useEffect, useRef, useState } from 'react';
-import { snapshotQueryKey } from '@/features/board/hooks/use-snapshot-query';
+import { useQueryClient } from "@tanstack/react-query";
+import { InvalidationEventSchema } from "@dashboard-contracts";
+import { useEffect, useRef, useState } from "react";
+import { snapshotQueryKey } from "@/features/board/hooks/use-snapshot-query";
 
-export type TransportState = 'connecting' | 'connected' | 'disconnected';
-const detailQueryPrefix = ['dashboard', 'run-detail'] as const;
+export type TransportState = "connecting" | "connected" | "disconnected";
+const detailQueryPrefix = ["dashboard", "run-detail"] as const;
 
 /** One EventSource owns invalidation; events are data-free and refetches coalesce to 100ms. */
 export function useDashboardEvents(
-  authoritative?: { changeId: string; state: 'fresh' | 'stale' },
+  authoritative?: { changeId: string; state: "fresh" | "stale" },
   activeRunId?: string,
 ) {
   const queryClient = useQueryClient();
-  const [transport, setTransport] = useState<TransportState>('connecting');
-  const [observerStale, setObserverStale] = useState(false);
+  const [transport, setTransport] = useState<TransportState>("connecting");
+  const [staleHintChangeId, setStaleHintChangeId] = useState<bigint | undefined>(undefined);
   const [reconciliation, setReconciliation] = useState(0);
   const lastChangeId = useRef(0n);
-  const staleChangeId = useRef<bigint | undefined>(undefined);
   const activeRunIdRef = useRef(activeRunId);
-  const transportRef = useRef<TransportState>('connecting');
+  const transportRef = useRef<TransportState>("connecting");
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  activeRunIdRef.current = activeRunId;
+  const authoritativeChangeId = authoritative ? parseChangeId(authoritative.changeId) : undefined;
+  const observerStale =
+    authoritative?.state === "stale" ||
+    (staleHintChangeId !== undefined &&
+      (authoritativeChangeId === undefined || staleHintChangeId > authoritativeChangeId));
 
   useEffect(() => {
-    if (!authoritative) return;
-    const changeId = parseChangeId(authoritative.changeId);
-    if (changeId === undefined) return;
-    if (changeId > lastChangeId.current) lastChangeId.current = changeId;
-    if (authoritative.state === 'stale') {
-      staleChangeId.current = changeId;
-      setObserverStale(true);
-    } else if (staleChangeId.current === undefined || changeId >= staleChangeId.current) {
-      staleChangeId.current = undefined;
-      setObserverStale(false);
+    activeRunIdRef.current = activeRunId;
+  }, [activeRunId]);
+
+  useEffect(() => {
+    if (authoritativeChangeId !== undefined && authoritativeChangeId > lastChangeId.current) {
+      lastChangeId.current = authoritativeChangeId;
     }
-  }, [authoritative?.changeId, authoritative?.state]);
+  }, [authoritativeChangeId]);
 
   useEffect(() => {
-    const source = new EventSource('/api/dashboard/v1/events');
+    const source = new EventSource("/api/dashboard/v1/events");
     const invalidate = () => {
-      if (timer.current) return;
+      if (timer.current) {
+        return;
+      }
       timer.current = setTimeout(() => {
         timer.current = undefined;
         const selectedRunId = activeRunIdRef.current;
@@ -52,41 +53,42 @@ export function useDashboardEvents(
       }, 100);
     };
     source.onopen = () => {
-      if (transportRef.current === 'disconnected') {
+      if (transportRef.current === "disconnected") {
         setReconciliation((value) => value + 1);
       }
-      transportRef.current = 'connected';
-      setTransport('connected');
+      transportRef.current = "connected";
+      setTransport("connected");
       invalidate();
     };
     source.onerror = () => {
-      transportRef.current = 'disconnected';
-      setTransport('disconnected');
+      transportRef.current = "disconnected";
+      setTransport("disconnected");
     };
     const receive = (message: MessageEvent) => {
       const parsed = InvalidationEventSchema.safeParse(parseEventData(message.data));
-      if (!parsed.success) return;
-      const changeId = parseChangeId(parsed.data.changeId);
-      if (changeId === undefined || changeId <= lastChangeId.current) return;
-      lastChangeId.current = changeId;
-      if (parsed.data.reason === 'observer_stale') {
-        staleChangeId.current = changeId;
-        setObserverStale(true);
+      if (!parsed.success) {
+        return;
       }
-      if (parsed.data.reason === 'observer_recovered') {
-        staleChangeId.current = changeId;
-        setObserverStale(true);
+      const changeId = parseChangeId(parsed.data.changeId);
+      if (changeId === undefined || changeId <= lastChangeId.current) {
+        return;
+      }
+      lastChangeId.current = changeId;
+      if (parsed.data.reason === "observer_stale" || parsed.data.reason === "observer_recovered") {
+        setStaleHintChangeId(changeId);
       }
       invalidate();
     };
-    source.addEventListener('invalidation', receive);
+    source.addEventListener("invalidation", receive);
     return () => {
       source.close();
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
     };
   }, [queryClient]);
 
-  return { transport, observerStale, reconciliation };
+  return { observerStale, reconciliation, transport };
 }
 
 function parseChangeId(value: string) {
@@ -105,7 +107,7 @@ function parseEventData(value: string) {
   }
 }
 
-function sameQueryKey(actual: readonly unknown[], expected: readonly unknown[]) {
+function sameQueryKey(actual: ReadonlyArray<unknown>, expected: ReadonlyArray<unknown>) {
   return (
     actual.length === expected.length && actual.every((value, index) => value === expected[index])
   );
