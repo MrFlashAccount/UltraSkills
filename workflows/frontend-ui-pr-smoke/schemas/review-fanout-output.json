@@ -3,9 +3,12 @@
   "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/frontend-ui-pr-smoke/review-fanout-output",
   "title": "Frontend UI Smoke Review Fanout Output",
   "type": "object",
-  "required": ["outcome"],
+  "required": ["outcome", "next"],
   "properties": {
-    "outcome": { "enum": ["passed", "needs_changes", "blocked"] },
+    "outcome": {
+      "enum": ["passed", "needs_changes"],
+      "description": "Completed review aggregation state. Report missing help through the runner non-blocking stop control channel, never as an output outcome."
+    },
     "next": { "enum": ["implementation", "pull_request"] },
     "implementation_branches": {
       "type": "array",
@@ -26,19 +29,7 @@
       },
       "additionalProperties": false
     },
-    "verdict": { "type": "object", "minProperties": 1, "additionalProperties": true },
-    "blocker": {
-      "type": "object",
-      "required": ["summary", "source_step_id", "needed"],
-      "properties": {
-        "summary": { "type": "string", "minLength": 1 },
-        "source_step_id": { "const": "review" },
-        "needed": { "type": "string", "minLength": 1 },
-        "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "risk": { "type": "string", "minLength": 1 }
-      },
-      "additionalProperties": false
-    }
+    "verdict": { "type": "object", "minProperties": 1, "additionalProperties": true }
   },
   "additionalProperties": false,
   "allOf": [
@@ -59,11 +50,6 @@
           "implementer_handoffs": { "type": "object", "required": ["frontend_implementation"] }
         }
       }
-    },
-    {
-      "if": { "properties": { "outcome": { "const": "blocked" } }, "required": ["outcome"] },
-      "then": { "required": ["blocker"], "not": { "required": ["next"] } },
-      "else": { "not": { "required": ["blocker"] } }
     }
   ]
 }

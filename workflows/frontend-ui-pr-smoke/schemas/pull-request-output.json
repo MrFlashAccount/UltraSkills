@@ -7,11 +7,8 @@
   ],
   "properties": {
     "outcome": {
-      "enum": [
-        "opened",
-        "blocked"
-      ],
-      "description": "Whether the pull request was opened or the workflow hit a recoverable blocker."
+      "const": "opened",
+      "description": "Completed pull request publication state. Report missing help through the runner non-blocking stop control channel, never as an output outcome."
     },
     "summary": {
       "type": "string",
@@ -53,39 +50,6 @@
         },
         "additionalProperties": true
       }
-    },
-    "blocker": {
-      "type": "object",
-      "required": [
-        "summary",
-        "source_step_id",
-        "needed"
-      ],
-      "properties": {
-        "summary": {
-          "type": "string",
-          "minLength": 1
-        },
-        "source_step_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "needed": {
-          "type": "string",
-          "minLength": 1
-        },
-        "evidence": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "risk": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
     }
   },
   "additionalProperties": false,
@@ -110,23 +74,6 @@
           "commit",
           "pr_url",
           "verification"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "blocked"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "blocker"
         ]
       }
     }

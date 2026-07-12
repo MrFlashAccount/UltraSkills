@@ -16,6 +16,9 @@ const uiProposalTemplate = readFileSync(path.join(REPO_ROOT, 'shared/templates/u
 const sharedTemplatesReadme = readFileSync(path.join(REPO_ROOT, 'shared/templates/README.md'), 'utf8');
 const devUiDraftSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/dev-harness/schemas/ui-intent-draft-output.json'), 'utf8'));
 const smokeDesignDraftSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/frontend-ui-pr-smoke/schemas/design-draft-output.json'), 'utf8'));
+const smokeImplementationFanoutSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/frontend-ui-pr-smoke/schemas/implementation-fanout-output.json'), 'utf8'));
+const smokeReviewFanoutSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/frontend-ui-pr-smoke/schemas/review-fanout-output.json'), 'utf8'));
+const smokePullRequestSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/frontend-ui-pr-smoke/schemas/pull-request-output.json'), 'utf8'));
 
 const catalogWorkflows = readdirSync(WORKFLOWS_ROOT, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -171,6 +174,9 @@ test('UI proposal contract rejects generic card-drawer routing and requires comp
     assert.deepEqual(imageContentTypes, ['image/png', 'image/jpeg', 'image/webp']);
     assert.equal(schema.properties.artifacts.maxContains, 1);
   }
+  for (const schema of [devUiDraftSchema, smokeDesignDraftSchema, smokeImplementationFanoutSchema, smokeReviewFanoutSchema, smokePullRequestSchema]) {
+    assert.doesNotMatch(JSON.stringify(schema), /"blocked"|"blocker"/);
+  }
   assert.match(draftPrompt, /host's built-in image generation tool/);
   assert.match(draftPrompt, /shared visual brief/);
   assert.match(draftPrompt, /generated gibberish/);
@@ -178,6 +184,8 @@ test('UI proposal contract rejects generic card-drawer routing and requires comp
   assert.match(frontendUiPrSmoke.steps.design_draft.input.prompt, /host's built-in image generation tool/);
   assert.match(frontendUiPrSmoke.steps.design_attack.input.prompt, /renders proposed screens with HTML\/CSS\/SVG\/canvas instead of ordinary raster image artifacts/);
   assert.match(frontendUiPrSmoke.steps.design_attack.input.prompt, /cross-view drift/);
+  assert.doesNotMatch(draftPrompt, /return blocked|blocker\.source_step_id/);
+  assert.doesNotMatch(frontendUiPrSmoke.steps.design_draft.input.prompt, /return blocked|blocker\.source_step_id/);
 });
 
 for (const gate of revisionGates) {
