@@ -671,14 +671,13 @@ export function createWorkflowRunnerCommand({
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
     const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
     await assertWorkerLeaseAuthority(paths, { leaseToken, now });
-    const current = await readPersistedRunState(paths);
+    const current = await readPersistedRunState(paths, { includeHistoryText: false });
     const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
     return {
       runId: paths.runId,
       ...projectPointerTransitions({
         workflow: runtime.workflow,
         baton: runtime.baton,
-        historyText: current.history?.text,
       }),
     };
   }
@@ -687,7 +686,7 @@ export function createWorkflowRunnerCommand({
     return publicApiCall(() => listPointerTransitionsInternal(options), { ...options, command: 'list-pointer-transitions', recordFailure: false });
   }
 
-  async function movePointerInternal({ runId, workflowPath, transitionId, acknowledgeRetainedState = false, leaseToken, now = new Date(), runsRoot } = {}) {
+  async function movePointerInternal({ runId, workflowPath, transitionId, leaseToken, now = new Date(), runsRoot } = {}) {
     await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
     const lockPaths = resolveRunPaths({ runId, runsRoot });
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
@@ -695,14 +694,12 @@ export function createWorkflowRunnerCommand({
       const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
       const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now });
       await recoverDurableCommit(paths);
-      const current = await readPersistedRunState(paths);
+      const current = await readPersistedRunState(paths, { includeHistoryText: false });
       const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
       const resolved = resolvePointerMove({
         workflow: runtime.workflow,
         baton: runtime.baton,
-        historyText: current.history?.text,
         transitionId,
-        acknowledgeRetainedState,
       });
       const { response } = await renderCurrentHostResponse(paths, resolved.baton, { leaseToken });
       await writePersistedRunStateUpdate(paths, {
@@ -967,9 +964,6 @@ export function createWorkflowRunnerCommand({
         throw new Error(`workflow request '${stepId}' cannot report a non-blocking stop while action is '${request.action}'`);
       }
       const requestId = stepIdForRequest(request);
-      if (Object.hasOwn(current.baton?.state ?? {}, requestId)) {
-        throw new Error(`workflow request '${requestId}' already has accepted completed output`);
-      }
       const stop = validateReportedStop(output, { stepId: requestId, runsRoot: paths.runsRoot });
       const existing = current.baton?.nonBlockingStops?.[requestId];
       if (existing) {

@@ -26,24 +26,25 @@ bounded `continue` side effects; they do not navigate separately and do not
 accept worker output. Obsolete backward-compatibility surfaces do not.
 
 `listPointerTransitions` and `movePointer` are runner API control-plane recovery
-surfaces for repositioning only the current baton pointer along already observed
-history. Their shell-facing CLI modes are `list-pointer-transitions` and
+surfaces for repositioning only the current baton pointer among state-bearing
+workflow predecessors. Their shell-facing CLI modes are `list-pointer-transitions` and
 `move-pointer`. Both require an active run lease. `listPointerTransitions` is a
 logical read: it may use the run-state boundary for consistency, but it must not
 initialize missing run state, append history, renew authority, or mutate the
 baton/current pointer. It is not an unleased public read because it exposes
-pointer/history and retained-output recovery metadata. `movePointer` mutates only
+bounded pointer recovery metadata. `movePointer` mutates only
 baton cursor/status through the existing lease, lock, validation, durable writer,
 history, and per-run authority path. Neither surface rolls back, prunes, rewrites, or cleans
 `baton.state`, accepted outputs, artifacts/results, worker bindings, prompt
-markers, attempts, or existing history. The first supported slice is limited to
-one adjacent observed transition edge from the current pointer/status. Terminal
+markers, attempts, or existing history. A move may target any state-bearing
+predecessor that reaches the current cursor through transitions resolved from
+the current workflow and baton state; it must never offer a downstream or
+state-less workflow step. Terminal
 single-cursor positions, including a completed `done` run, may move backward to
-an observed non-terminal step; terminal status must not by itself make pointer
+a state-bearing non-terminal predecessor; terminal status must not by itself make pointer
 recovery unsupported. Array cursors are rejected by the baton schema and cannot
 enter pointer recovery.
-Targets with retained accepted output require visible retained-state disclosure
-and explicit acknowledgement before mutation.
+Pointer moves preserve baton state without an extra acknowledgement gate.
 
 Retired surfaces:
 
@@ -184,12 +185,9 @@ facts. Schema loading, realpath probing, symlink checks, and artifact path facts
 belong to adapters or file-contract owners.
 
 Pointer transition projection belongs under runner-owned runtime/use-case
-internals, not the dashboard. It derives adjacent observed transition edges from
-persisted baton plus durable history and must be shared by list and move
+internals, not the dashboard. It derives state-bearing predecessors by resolving
+workflow transitions against the persisted baton and must be shared by list and move
 validation so inspect-before-mutate output cannot drift from mutation rules.
-Retained accepted-output detection must use the same per-step accepted-output
-surface in `baton.state[stepId]` that `continue` uses; if extracted, it remains a
-small runner-owned helper with tests for current `continue` reuse semantics.
 
 Non-blocking stop helpers under `lib/runtime/**` own public shaping and
 redaction of stop/resolution records. They must receive path facts from the
@@ -338,8 +336,9 @@ deduplication. No history body or file handle is cached across commands.
 binding, claim context, lifecycle/task projection, and token-hash lease record.
 Every runner command still validates authority once before taking the per-run
 lock and again from a fresh record while holding that lock. Matching-token
-renewal preserves the token epoch; a tokenless stale takeover rotates the hash
-and increments the epoch. Raw lease tokens are never persisted.
+renewal preserves the token epoch; an explicit tokenless takeover of a stale or
+occupied lease rotates the hash and increments the epoch. Raw lease tokens are
+never persisted.
 
 `runs.json` is the global discovery/catalog projection, not an authority source
 once a per-run record exists. Warm `next`, `instructions`, `write-output`,
@@ -355,11 +354,11 @@ back to the catalog.
 
 Pointer recovery follows the same runtime flow. `listPointerTransitions` checks
 the active lease, reads existing persisted run state, builds the shared pointer
-transition projection, and returns bounded transition and retained-state metadata
+transition projection, and returns bounded transition metadata
 without initializing missing run files, appending history, renewing authority,
 or mutating baton/current pointer state. `movePointer` checks the active lease
 before and inside the run-state lock, rebuilds the projection while locked,
-validates the requested adjacent edge and retained-state acknowledgement, updates only baton
+validates the requested state-resolved target, updates only baton
 cursor/status, validates persisted state, appends bounded pointer-move history,
 and renews the canonical per-run authority record.
 
@@ -684,10 +683,9 @@ Architecture review must verify:
   rules
 - pointer recovery docs, API exports, CLI modes, tests, and source agree that
   `listPointerTransitions` and `movePointer` require active lease authority,
-  preserve baton state, allow terminal single-cursor rollback along observed
-  non-terminal backward edges, reject invalid legacy array cursor state, require
-  retained-output acknowledgement where applicable, and expose only redacted
-  bounded metadata
+  preserve baton state, derive predecessors from workflow transitions resolved
+  against `baton.state`, never use debug history as navigation state, reject
+  invalid legacy array cursor state, and expose only redacted bounded metadata
 - dashboard changes preserve the read-only observer boundary, safe projection
   layer, SSE/poll recovery behavior, degraded per-run isolation, and
   `DESIGN.md` board/drawer/no-control contract

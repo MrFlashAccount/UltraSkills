@@ -476,6 +476,25 @@ test('workflow runs API rejects occupied fresh lease owned by someone else', asy
   assert.deepEqual((await readRunsIndex(runsIndexPathsForRoot(runsRoot))).runs[runId].claimContext, { harness: 'generic' });
 });
 
+test('workflow runs API requires explicit takeover for occupied fresh leases', async () => {
+  const runId = `${runPrefix}occupied-takeover`;
+  const initial = await registerWorkflowRunAtRoot({ runsRoot, runId, claim: true, owner: 'alice', harness: 'generic', sessionId: 'session-a', leaseMs: 60_000, now: new Date('2026-06-01T10:00:00.000Z') });
+
+  const response = await claimWorkflowRunAtRoot({ runsRoot, runId, owner: 'bob', harness: 'portable', sessionId: 'session-b', leaseMs: 60_000, takeover: true, now: new Date('2026-06-01T10:00:10.000Z') });
+
+  assert.equal(response.ok, true);
+  assert.equal(response.claimed, true);
+  assert.equal(response.run.occupancy.state, 'occupied');
+  assert.equal(typeof response.leaseToken, 'string');
+  assert.notEqual(response.leaseToken, initial.leaseToken);
+  assert.deepEqual((await readRunsIndex(runsIndexPathsForRoot(runsRoot))).runs[runId].claimContext, { harness: 'portable' });
+  assert.equal((await readRunAuthority(resolveRunPaths({ runId, runsRoot }))).workerLease.tokenEpoch, 2);
+
+  const oldHolder = await heartbeatWorkflowRunAtRoot({ runsRoot, runId, leaseToken: initial.leaseToken, now: new Date('2026-06-01T10:00:11.000Z') });
+  assert.equal(oldHolder.ok, false);
+  assert.equal(oldHolder.reason, 'occupied');
+});
+
 test('workflow runs API requires explicit takeover for stale tokenless claims', async () => {
   const runId = `${runPrefix}stale`;
   await registerWorkflowRunAtRoot({ runsRoot, runId, claim: true, owner: 'alice', harness: 'generic', sessionId: 'session-a', leaseMs: 1_000, now: new Date('2026-06-01T10:00:00.000Z') });

@@ -81,6 +81,9 @@ test('issue 197: Orbita host watchdog instructions split bootstrap silence from 
   assert.match(skillText, /current work, inspected or changed surfaces, verification state, and the next bounded checkpoint/);
   assert.match(skillText, /continue that same worker and ask for the next bounded checkpoint/);
   assert.match(skillText, /Do not persist progress in baton, scrape transcripts, read private runner state, or add durable worker status storage/);
+  assert.match(skillText, /Allow 30 minutes for load\/progress/);
+  assert.match(skillText, /same 30\+2-minute bound/);
+  assert.doesNotMatch(skillText, /Allow 10 minutes|same 10\+2-minute bound/);
 });
 
 test('Orbita skill invokes bundled CLI entrypoints from the resolved skill root', () => {
@@ -90,6 +93,23 @@ test('Orbita skill invokes bundled CLI entrypoints from the resolved skill root'
   assert.match(skillText, /\$ORBITA_SKILL_ROOT\/lib\/entrypoints\/cli\/workflow-runs\.mjs/);
   assert.match(skillText, /\$ORBITA_SKILL_ROOT\/lib\/entrypoints\/cli\/workflow-runner\.mjs/);
   assert.doesNotMatch(skillText, /bun \.\/lib\/entrypoints\/cli\//);
+});
+
+test('Orbita skill stops on lease conflicts and offers only an approved forced takeover', () => {
+  const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
+  assert.match(skillText, /If claim reports `occupied` or `stale`, stop/);
+  assert.match(skillText, /rerunning\s+that exact claim command with `--takeover`/);
+  assert.match(skillText, /never force takeover without user\s+approval/);
+  assert.match(skillText, /takeover invalidates\s+the previous holder's token/);
+});
+
+test('Orbita skill explains direct rollback to state-bearing workflow predecessors', () => {
+  const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
+  assert.match(skillText, /every valid predecessor present in `baton\.state`/);
+  assert.match(skillText, /never derives navigation from debug history or offers downstream steps/);
+  assert.match(skillText, /target matching the request and move once/);
+  assert.match(skillText, /preserves baton state without extra acknowledgement/);
+  assert.doesNotMatch(skillText, /acknowledge-retained-state/);
 });
 
 test('Orbita skill stays bounded and delegates dynamic request protocol to runner stdout', () => {

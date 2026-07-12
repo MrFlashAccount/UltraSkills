@@ -59,6 +59,13 @@ Claim it:
 lease_token=$(bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" claim --run-id <run-id> --owner <owner> --harness <harness> --session-id <session-id> --print-lease-token)
 ```
 
+If claim reports `occupied` or `stale`, stop and tell the user that the run
+already has a lease from another holder. Offer a forced takeover by rerunning
+that exact claim command with `--takeover`; never force takeover without user
+approval.
+After approval, preserve the newly issued token because takeover invalidates
+the previous holder's token.
+
 Preserve exact `runId` and `lease_token`; never invent, shorten, expose, or retype them from memory. Missing token means claim again or report missing authority.
 
 Start new:
@@ -101,7 +108,7 @@ Use the longest supported event wait, not short polling. Accepted output, action
 
 Treat bootstrap/instruction-load silence separately from active implementation progress. Concrete progress must name current work, inspected or changed surfaces, verification state, and the next bounded checkpoint. If the worker shows that evidence, continue that same worker and ask for the next bounded checkpoint. Do not persist progress in baton, scrape transcripts, read private runner state, or add durable worker status storage.
 
-Allow 10 minutes for load/progress. None: interrupt once for focused status, then wait 2 minutes. Concrete progress: keep the worker. Vague/missed checkpoint: require immediate validating `write-output` or an exact non-blocking stop. Still nothing: close and retry the same request once with the same 10+2-minute bound. Retry failure: use the request's current `report-stop` command with the smallest concrete help request.
+Allow 30 minutes for load/progress. None: interrupt once for focused status, then wait 2 minutes. Concrete progress: keep the worker. Vague/missed checkpoint: require immediate validating `write-output` or an exact non-blocking stop. Still nothing: close and retry the same request once with the same 30+2-minute bound. Retry failure: use the request's current `report-stop` command with the smallest concrete help request.
 
 After every current request is accepted, run stdout's exact `continue` once with actual worker ids and safe debug value.
 
@@ -122,6 +129,6 @@ bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" list-pointer-tr
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" move-pointer --run-id <run-id> --transition-id <id> --lease-token "$lease_token"
 ```
 
-Choose a listed transition whose target cursor matches the request. Add `--acknowledge-retained-state` only when required and intentionally accepted. No matching transition: report available moves. Never edit baton/history.
+The list includes every valid predecessor present in `baton.state`, resolved through the workflow's current transition rules; it never derives navigation from debug history or offers downstream steps. Choose the target matching the request and move once. The move preserves baton state without extra acknowledgement. No matching target: report available moves and stop. Never edit baton/history.
 
 On `done`, stop and report the terminal embedded JSON using its workflow-specific baton/projection; do not assume a generic `result` field.
