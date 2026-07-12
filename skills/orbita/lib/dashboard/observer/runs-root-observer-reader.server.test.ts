@@ -14,12 +14,41 @@ async function fixture() {
   await mkdir(runsRoot, { recursive: true });
   const workflowPath = resolve('workflows/dev-harness/workflow.toml');
   const entries = {
-    healthy: { runId: 'healthy', workflow: { identity: 'dev-harness', path: workflowPath }, status: 'running', createdAt: '2026-07-12T00:00:00.000Z', updatedAt: '2026-07-12T00:02:00.000Z', workerLease: null, title: 'Healthy' },
-    corrupt: { runId: 'corrupt', workflow: { identity: 'dev-harness', path: workflowPath }, status: 'running', createdAt: '2026-07-12T00:00:00.000Z', updatedAt: '2026-07-12T00:01:00.000Z', workerLease: null, title: 'Corrupt' },
+    healthy: {
+      runId: 'healthy',
+      workflow: { identity: 'dev-harness', path: workflowPath },
+      status: 'running',
+      createdAt: '2026-07-12T00:00:00.000Z',
+      updatedAt: '2026-07-12T00:02:00.000Z',
+      workerLease: null,
+      title: 'Healthy',
+    },
+    corrupt: {
+      runId: 'corrupt',
+      workflow: { identity: 'dev-harness', path: workflowPath },
+      status: 'running',
+      createdAt: '2026-07-12T00:00:00.000Z',
+      updatedAt: '2026-07-12T00:01:00.000Z',
+      workerLease: null,
+      title: 'Corrupt',
+    },
   };
-  await writeFile(join(runsRoot, 'runs.json'), JSON.stringify({ schemaVersion: 1, topologyVersion: 'workflow-runs-v1', runs: entries }), { mode: 0o600 });
-  for (const runId of Object.keys(entries)) await mkdir(join(runsRoot, runId, '.workflow-runner'), { recursive: true });
-  await writeFile(join(runsRoot, 'healthy', 'baton.json'), JSON.stringify({ cursor: 'approval_gate', status: 'running', state: { artifacts: [], results: [] } }), { mode: 0o600 });
+  await writeFile(
+    join(runsRoot, 'runs.json'),
+    JSON.stringify({ schemaVersion: 1, topologyVersion: 'workflow-runs-v1', runs: entries }),
+    { mode: 0o600 },
+  );
+  for (const runId of Object.keys(entries))
+    await mkdir(join(runsRoot, runId, '.workflow-runner'), { recursive: true });
+  await writeFile(
+    join(runsRoot, 'healthy', 'baton.json'),
+    JSON.stringify({
+      cursor: 'approval_gate',
+      status: 'running',
+      state: { artifacts: [], results: [] },
+    }),
+    { mode: 0o600 },
+  );
   await writeFile(join(runsRoot, 'healthy', 'history.md'), 'safe history', { mode: 0o600 });
   await writeFile(join(runsRoot, 'corrupt', 'baton.json'), '{not json', { mode: 0o600 });
   await writeFile(join(runsRoot, 'corrupt', 'history.md'), '', { mode: 0o600 });

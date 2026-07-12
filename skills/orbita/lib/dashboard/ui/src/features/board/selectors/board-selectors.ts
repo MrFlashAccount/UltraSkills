@@ -1,4 +1,8 @@
-import { DASHBOARD_LANE_ORDER, type DashboardLaneId, type RunSummaryDTO } from '@dashboard-contracts';
+import {
+  DASHBOARD_LANE_ORDER,
+  type DashboardLaneId,
+  type RunSummaryDTO,
+} from '@dashboard-contracts';
 
 export type BoardFilters = { q: string; workflow?: string; lane?: DashboardLaneId };
 
@@ -16,12 +20,16 @@ export function filterRuns(runs: readonly RunSummaryDTO[], filters: BoardFilters
     if (filters.workflow && run.workflow !== filters.workflow) return false;
     if (filters.lane && run.laneId !== filters.lane) return false;
     if (!query) return true;
-    return [run.title.value, run.workflow, run.currentStep, run.reason?.value, run.runId].some((value) => value?.toLocaleLowerCase().includes(query));
+    return [run.title.value, run.workflow, run.currentStep, run.reason?.value, run.runId].some(
+      (value) => value?.toLocaleLowerCase().includes(query),
+    );
   });
 }
 
 export function groupRuns(runs: readonly RunSummaryDTO[]) {
-  return Object.fromEntries(DASHBOARD_LANE_ORDER.map((lane) => [lane, runs.filter((run) => run.laneId === lane)])) as Record<DashboardLaneId, RunSummaryDTO[]>;
+  return Object.fromEntries(
+    DASHBOARD_LANE_ORDER.map((lane) => [lane, runs.filter((run) => run.laneId === lane)]),
+  ) as Record<DashboardLaneId, RunSummaryDTO[]>;
 }
 
 export function workflowsFor(runs: readonly RunSummaryDTO[]): string[] {

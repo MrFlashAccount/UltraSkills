@@ -45,27 +45,46 @@ function truncate(value: string, codePointLimit: number, utf8ByteLimit: number):
   return accepted.join('').trim();
 }
 
-export function exposePublicText(source: PublicTextSource, value: unknown): PublicDisplayText | undefined {
+export function exposePublicText(
+  source: PublicTextSource,
+  value: unknown,
+): PublicDisplayText | undefined {
   const normalized = normalize(value);
   if (!normalized || FORBIDDEN.some((pattern) => pattern.test(normalized))) return undefined;
   const limits = PUBLIC_TEXT_LIMITS[source];
   const exposed = truncate(normalized, limits.codePoints, limits.utf8Bytes);
   if (!exposed) return undefined;
-  return PublicDisplayTextSchema.parse({ sourceClass: source, value: exposed, policyVersion: EXPOSURE_POLICY_VERSION });
+  return PublicDisplayTextSchema.parse({
+    sourceClass: source,
+    value: exposed,
+    policyVersion: EXPOSURE_POLICY_VERSION,
+  });
 }
 
-export function fixedPublicText(source: 'run_title' | 'public_diagnostic', value: string): PublicDisplayText {
+export function fixedPublicText(
+  source: 'run_title' | 'public_diagnostic',
+  value: string,
+): PublicDisplayText {
   const exposed = exposePublicText(source, value);
   if (!exposed) throw new Error('fixed public dashboard text violates the exposure policy');
   return exposed;
 }
 
-export function exposeIdentifier(source: 'workflow_identity' | 'step_id' | 'artifact_id' | 'result_ref', value: unknown): string | undefined {
+export function exposeIdentifier(
+  source: 'workflow_identity' | 'step_id' | 'artifact_id' | 'result_ref',
+  value: unknown,
+): string | undefined {
   const normalized = normalize(value);
   const max = source === 'workflow_identity' ? 120 : 160;
-  if (!normalized || Array.from(normalized).length > max || new TextEncoder().encode(normalized).byteLength > max * 2) return undefined;
-  const pattern = source === 'artifact_id' || source === 'result_ref'
-    ? /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u
-    : /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
+  if (
+    !normalized ||
+    Array.from(normalized).length > max ||
+    new TextEncoder().encode(normalized).byteLength > max * 2
+  )
+    return undefined;
+  const pattern =
+    source === 'artifact_id' || source === 'result_ref'
+      ? /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u
+      : /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
   return pattern.test(normalized) ? normalized : undefined;
 }

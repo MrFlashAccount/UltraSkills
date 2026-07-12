@@ -7,7 +7,10 @@ export type TransportState = 'connecting' | 'connected' | 'disconnected';
 const detailQueryPrefix = ['dashboard', 'run-detail'] as const;
 
 /** One EventSource owns invalidation; events are data-free and refetches coalesce to 100ms. */
-export function useDashboardEvents(authoritative?: { changeId: string; state: 'fresh' | 'stale' }, activeRunId?: string) {
+export function useDashboardEvents(
+  authoritative?: { changeId: string; state: 'fresh' | 'stale' },
+  activeRunId?: string,
+) {
   const queryClient = useQueryClient();
   const [transport, setTransport] = useState<TransportState>('connecting');
   const [observerStale, setObserverStale] = useState(false);
@@ -41,7 +44,11 @@ export function useDashboardEvents(authoritative?: { changeId: string; state: 'f
       timer.current = setTimeout(() => {
         timer.current = undefined;
         const selectedRunId = activeRunIdRef.current;
-        void queryClient.invalidateQueries({ predicate: ({ queryKey }) => sameQueryKey(queryKey, snapshotQueryKey) || Boolean(selectedRunId && sameQueryKey(queryKey, [...detailQueryPrefix, selectedRunId])) });
+        void queryClient.invalidateQueries({
+          predicate: ({ queryKey }) =>
+            sameQueryKey(queryKey, snapshotQueryKey) ||
+            Boolean(selectedRunId && sameQueryKey(queryKey, [...detailQueryPrefix, selectedRunId])),
+        });
       }, 100);
     };
     source.onopen = () => {
@@ -83,13 +90,23 @@ export function useDashboardEvents(authoritative?: { changeId: string; state: 'f
 }
 
 function parseChangeId(value: string) {
-  try { return BigInt(value); } catch { return undefined; }
+  try {
+    return BigInt(value);
+  } catch {
+    return undefined;
+  }
 }
 
 function parseEventData(value: string) {
-  try { return JSON.parse(value) as unknown; } catch { return undefined; }
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
 }
 
 function sameQueryKey(actual: readonly unknown[], expected: readonly unknown[]) {
-  return actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+  return (
+    actual.length === expected.length && actual.every((value, index) => value === expected[index])
+  );
 }

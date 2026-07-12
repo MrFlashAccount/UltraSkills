@@ -12,7 +12,13 @@ describe('board selectors', () => {
 
   it('keeps all five lanes including empty lanes', () => {
     const lanes = groupRuns(runs);
-    expect(Object.keys(lanes)).toEqual(['waiting_for_user', 'worker_running', 'needs_help', 'degraded', 'done']);
+    expect(Object.keys(lanes)).toEqual([
+      'waiting_for_user',
+      'worker_running',
+      'needs_help',
+      'degraded',
+      'done',
+    ]);
     expect(lanes.worker_running).toEqual([]);
   });
 

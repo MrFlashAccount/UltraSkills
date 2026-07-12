@@ -1,4 +1,8 @@
-import { DASHBOARD_LANE_ORDER, type DashboardLaneId, type RunSummaryDTO } from '@dashboard-contracts';
+import {
+  DASHBOARD_LANE_ORDER,
+  type DashboardLaneId,
+  type RunSummaryDTO,
+} from '@dashboard-contracts';
 import { AttentionSummary } from './AttentionSummary';
 import type { RovingRunFocus } from './hooks/use-roving-run-focus';
 import { Lane } from './Lane';
@@ -12,7 +16,21 @@ type BoardProps = {
 };
 
 export function Board({ lanes, counts, selectedId, onSelect, roving }: BoardProps) {
-  return <><AttentionSummary counts={counts} /><section className="board" aria-label="Runs by attention state">
-    {DASHBOARD_LANE_ORDER.map((lane) => <Lane key={lane} lane={lane} runs={lanes[lane]} selectedId={selectedId} onSelect={onSelect} roving={roving} />)}
-  </section></>;
+  return (
+    <>
+      <AttentionSummary counts={counts} />
+      <section className="board" aria-label="Runs by attention state">
+        {DASHBOARD_LANE_ORDER.map((lane) => (
+          <Lane
+            key={lane}
+            lane={lane}
+            runs={lanes[lane]}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            roving={roving}
+          />
+        ))}
+      </section>
+    </>
+  );
 }

@@ -10,7 +10,9 @@ const uiRoot = path.resolve(import.meta.dirname);
 
 export default defineConfig({
   root: uiRoot,
-  plugins: process.env.VITEST ? [tailwindcss(), react()] : [tanstackStart(), nitro({ preset: 'bun' }), tailwindcss(), react()],
+  plugins: process.env.VITEST
+    ? [tailwindcss(), react()]
+    : [tanstackStart(), nitro({ preset: 'bun' }), tailwindcss(), react()],
   resolve: {
     alias: {
       '@': path.resolve(uiRoot, 'src'),

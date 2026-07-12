@@ -16,7 +16,15 @@ const roving = {
 describe('board UI contracts', () => {
   it('renders one bounded selection target with approved anatomy', () => {
     const onSelect = vi.fn();
-    render(<RunCard run={makeRun()} selected={false} onSelect={onSelect} roving={roving} ensureVisible={() => {}} />);
+    render(
+      <RunCard
+        run={makeRun()}
+        selected={false}
+        onSelect={onSelect}
+        roving={roving}
+        ensureVisible={() => {}}
+      />,
+    );
     const card = screen.getByRole('button', { name: /Run 1 needs attention/ });
     expect(card).toHaveTextContent('Approval needed');
     expect(card).toHaveTextContent('dev-harness');
@@ -26,7 +34,15 @@ describe('board UI contracts', () => {
   });
 
   it('labels unsupported cursors without inventing branches', () => {
-    render(<RunCard run={{ ...makeRun(), cursor: { kind: 'unsupported' } }} selected roving={roving} ensureVisible={() => {}} onSelect={() => {}} />);
+    render(
+      <RunCard
+        run={{ ...makeRun(), cursor: { kind: 'unsupported' } }}
+        selected
+        roving={roving}
+        ensureVisible={() => {}}
+        onSelect={() => {}}
+      />,
+    );
     expect(screen.getByText('Unsupported cursor')).toBeVisible();
     expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'true');
   });

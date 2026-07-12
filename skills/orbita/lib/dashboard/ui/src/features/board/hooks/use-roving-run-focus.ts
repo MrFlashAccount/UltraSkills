@@ -14,8 +14,10 @@ export function useRovingRunFocus(runs: readonly RunSummaryDTO[]) {
 
   useEffect(() => {
     const activeIds = new Set(runs.map((run) => run.runId));
-    for (const runId of elements.current.keys()) if (!activeIds.has(runId)) elements.current.delete(runId);
-    for (const runId of ensureVisible.current.keys()) if (!activeIds.has(runId)) ensureVisible.current.delete(runId);
+    for (const runId of elements.current.keys())
+      if (!activeIds.has(runId)) elements.current.delete(runId);
+    for (const runId of ensureVisible.current.keys())
+      if (!activeIds.has(runId)) ensureVisible.current.delete(runId);
     if (current.current && !runs.some((run) => run.runId === current.current)) {
       const lane = lastLanes.current.get(current.current);
       current.current = undefined;
@@ -38,32 +40,44 @@ export function useRovingRunFocus(runs: readonly RunSummaryDTO[]) {
     event.preventDefault();
     const currentRuns = runsRef.current;
     const index = currentRuns.findIndex((run) => run.runId === runId);
-    const target = event.key === 'Home' ? currentRuns[0] : event.key === 'End' ? currentRuns.at(-1) : currentRuns[index + (event.key === 'ArrowDown' ? 1 : -1)];
+    const target =
+      event.key === 'Home'
+        ? currentRuns[0]
+        : event.key === 'End'
+          ? currentRuns.at(-1)
+          : currentRuns[index + (event.key === 'ArrowDown' ? 1 : -1)];
     if (target) focusWhenMounted(target.runId);
   }
 
-  return useMemo(() => ({
-    current,
-    focusRun: (runId: string, fallbackLane?: DashboardLaneId) => {
-      if (ensureVisible.current.has(runId)) {
-        focusWhenMounted(runId);
-        return;
-      }
-      laneHeaders.current.get(fallbackLane ?? lastLanes.current.get(runId)!)?.focus();
-    },
-    onCardKeyDown,
-    registerCard: (runId: string, element: HTMLButtonElement | null, ensure: EnsureVisible) => {
-      ensureVisible.current.set(runId, ensure);
-      if (element) {
-        elements.current.set(runId, element);
-        if (current.current === runId && document.activeElement === document.body) requestAnimationFrame(() => element.focus());
-      } else elements.current.delete(runId);
-    },
-    registerVirtualTarget: (runId: string, ensure: EnsureVisible) => { ensureVisible.current.set(runId, ensure); },
-    registerLaneHeader: (lane: DashboardLaneId, element: HTMLElement | null) => {
-      if (element) laneHeaders.current.set(lane, element); else laneHeaders.current.delete(lane);
-    },
-  }), []);
+  return useMemo(
+    () => ({
+      current,
+      focusRun: (runId: string, fallbackLane?: DashboardLaneId) => {
+        if (ensureVisible.current.has(runId)) {
+          focusWhenMounted(runId);
+          return;
+        }
+        laneHeaders.current.get(fallbackLane ?? lastLanes.current.get(runId)!)?.focus();
+      },
+      onCardKeyDown,
+      registerCard: (runId: string, element: HTMLButtonElement | null, ensure: EnsureVisible) => {
+        ensureVisible.current.set(runId, ensure);
+        if (element) {
+          elements.current.set(runId, element);
+          if (current.current === runId && document.activeElement === document.body)
+            requestAnimationFrame(() => element.focus());
+        } else elements.current.delete(runId);
+      },
+      registerVirtualTarget: (runId: string, ensure: EnsureVisible) => {
+        ensureVisible.current.set(runId, ensure);
+      },
+      registerLaneHeader: (lane: DashboardLaneId, element: HTMLElement | null) => {
+        if (element) laneHeaders.current.set(lane, element);
+        else laneHeaders.current.delete(lane);
+      },
+    }),
+    [],
+  );
 }
 
 export type RovingRunFocus = ReturnType<typeof useRovingRunFocus>;

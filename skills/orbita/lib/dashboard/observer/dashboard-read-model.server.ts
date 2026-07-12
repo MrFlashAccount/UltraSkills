@@ -10,7 +10,9 @@ import {
 } from '../contracts/browser';
 
 export class ObserverUnavailableError extends Error {
-  constructor() { super('Dashboard observer is unavailable'); }
+  constructor() {
+    super('Dashboard observer is unavailable');
+  }
 }
 
 type Reader = {
@@ -34,7 +36,10 @@ function freezeSnapshot(snapshot: SnapshotEnvelope): SnapshotEnvelope {
   return Object.freeze(snapshot);
 }
 
-function sameRuns(left: SnapshotEnvelope['runs'] | undefined, right: SnapshotEnvelope['runs']): boolean {
+function sameRuns(
+  left: SnapshotEnvelope['runs'] | undefined,
+  right: SnapshotEnvelope['runs'],
+): boolean {
   return left !== undefined && JSON.stringify(left) === JSON.stringify(right);
 }
 
@@ -59,11 +64,20 @@ export class DashboardReadModel {
   private pendingSnapshotInvalidation = false;
   private readonly subscribers = new Set<Subscriber>();
 
-  constructor(private readonly reader: Reader, private readonly options: Options = {}) {}
+  constructor(
+    private readonly reader: Reader,
+    private readonly options: Options = {},
+  ) {}
 
-  private get now(): () => Date { return this.options.now ?? (() => new Date()); }
-  private get pollMs(): number { return this.options.pollMs ?? 2_000; }
-  private get staleAfterMs(): number { return this.options.staleAfterMs ?? 10_000; }
+  private get now(): () => Date {
+    return this.options.now ?? (() => new Date());
+  }
+  private get pollMs(): number {
+    return this.options.pollMs ?? 2_000;
+  }
+  private get staleAfterMs(): number {
+    return this.options.staleAfterMs ?? 10_000;
+  }
 
   start(): void {
     if (this.closed || this.timer) return;
@@ -73,10 +87,15 @@ export class DashboardReadModel {
       try {
         this.watcher = watch(this.options.runsRoot, { persistent: false }, () => {
           if (this.watchTimer) clearTimeout(this.watchTimer);
-          this.watchTimer = setTimeout(() => void this.refresh().catch(() => {}), this.options.watchCoalesceMs ?? 100);
+          this.watchTimer = setTimeout(
+            () => void this.refresh().catch(() => {}),
+            this.options.watchCoalesceMs ?? 100,
+          );
           this.watchTimer.unref?.();
         });
-      } catch { this.watcher = undefined; }
+      } catch {
+        this.watcher = undefined;
+      }
     }
   }
 
@@ -100,7 +119,11 @@ export class DashboardReadModel {
       emittedAt: this.now().toISOString(),
     });
     for (const subscriber of this.subscribers) {
-      try { subscriber(event); } catch { /* observers cannot affect refresh */ }
+      try {
+        subscriber(event);
+      } catch {
+        /* observers cannot affect refresh */
+      }
     }
   }
 
@@ -121,13 +144,16 @@ export class DashboardReadModel {
     }
     this.pendingSnapshotInvalidation = true;
     if (this.invalidationTimer) return;
-    this.invalidationTimer = setTimeout(() => {
-      this.invalidationTimer = undefined;
-      if (!this.pendingSnapshotInvalidation || this.closed) return;
-      this.pendingSnapshotInvalidation = false;
-      this.lastSnapshotInvalidationAt = Date.now();
-      this.publishNow('snapshot_changed');
-    }, Math.max(0, coalesceMs - elapsed));
+    this.invalidationTimer = setTimeout(
+      () => {
+        this.invalidationTimer = undefined;
+        if (!this.pendingSnapshotInvalidation || this.closed) return;
+        this.pendingSnapshotInvalidation = false;
+        this.lastSnapshotInvalidationAt = Date.now();
+        this.publishNow('snapshot_changed');
+      },
+      Math.max(0, coalesceMs - elapsed),
+    );
     this.invalidationTimer.unref?.();
   }
 
@@ -142,18 +168,20 @@ export class DashboardReadModel {
     if (this.closed || !this.snapshot || this.snapshot.freshness.state === 'stale') return;
     const expiredAt = this.now().toISOString();
     const observerRevision = this.nextObserverRevision();
-    this.snapshot = freezeSnapshot(SnapshotEnvelopeSchema.parse({
-      ...this.snapshot,
-      generatedAt: expiredAt,
-      freshness: {
-        ...this.snapshot.freshness,
-        state: 'stale',
-        observerRevision,
-        staleSince: expiredAt,
-        failureCode: 'observer_refresh_timeout',
-        retryAt: after(expiredAt, this.pollMs),
-      },
-    }));
+    this.snapshot = freezeSnapshot(
+      SnapshotEnvelopeSchema.parse({
+        ...this.snapshot,
+        generatedAt: expiredAt,
+        freshness: {
+          ...this.snapshot.freshness,
+          state: 'stale',
+          observerRevision,
+          staleSince: expiredAt,
+          failureCode: 'observer_refresh_timeout',
+          retryAt: after(expiredAt, this.pollMs),
+        },
+      }),
+    );
     this.publish('observer_stale');
   }
 
@@ -207,13 +235,15 @@ export class DashboardReadModel {
         staleAfterMs: this.staleAfterMs,
         retryAt: null,
       };
-      this.snapshot = freezeSnapshot(SnapshotEnvelopeSchema.parse({
-        schemaVersion: '1',
-        snapshotVersion: String(this.snapshotVersion || 1),
-        generatedAt: attemptedAt,
-        freshness,
-        runs,
-      }));
+      this.snapshot = freezeSnapshot(
+        SnapshotEnvelopeSchema.parse({
+          schemaVersion: '1',
+          snapshotVersion: String(this.snapshotVersion || 1),
+          generatedAt: attemptedAt,
+          freshness,
+          runs,
+        }),
+      );
       this.scheduleStaleDeadline();
       this.publish(wasStale ? 'observer_recovered' : 'snapshot_changed');
     } catch {
@@ -221,20 +251,22 @@ export class DashboardReadModel {
       if (!this.snapshot) throw new ObserverUnavailableError();
       const previous = this.snapshot.freshness;
       const observerRevision = this.nextObserverRevision();
-      this.snapshot = freezeSnapshot(SnapshotEnvelopeSchema.parse({
-        ...this.snapshot,
-        generatedAt: attemptedAt,
-        freshness: {
-          state: 'stale',
-          observerRevision,
-          lastRefreshAttemptAt: attemptedAt,
-          lastSuccessfulRefreshAt: previous.lastSuccessfulRefreshAt,
-          staleSince: previous.staleSince ?? attemptedAt,
-          staleAfterMs: this.staleAfterMs,
-          failureCode: 'observer_refresh_failed',
-          retryAt: after(attemptedAt, this.pollMs),
-        },
-      }));
+      this.snapshot = freezeSnapshot(
+        SnapshotEnvelopeSchema.parse({
+          ...this.snapshot,
+          generatedAt: attemptedAt,
+          freshness: {
+            state: 'stale',
+            observerRevision,
+            lastRefreshAttemptAt: attemptedAt,
+            lastSuccessfulRefreshAt: previous.lastSuccessfulRefreshAt,
+            staleSince: previous.staleSince ?? attemptedAt,
+            staleAfterMs: this.staleAfterMs,
+            failureCode: 'observer_refresh_failed',
+            retryAt: after(attemptedAt, this.pollMs),
+          },
+        }),
+      );
       if (this.staleDeadlineTimer) clearTimeout(this.staleDeadlineTimer);
       this.staleDeadlineTimer = undefined;
       this.publish('observer_stale');

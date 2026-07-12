@@ -28,15 +28,15 @@ contracts, projection, observer, server composition, and browser imports.
 Configuration is read from the server process. Browser requests and URL search
 cannot choose the runs root or any filesystem path.
 
-| Variable | Default | Accepted value |
-| --- | --- | --- |
-| `ORBITA_DASHBOARD_RUNS_ROOT` | Orbita's standard workflow-runs root | Existing absolute directory |
-| `ORBITA_DASHBOARD_HOST` | `127.0.0.1` | Bounded host/address string; keep loopback unless exposure is intentional |
-| `ORBITA_DASHBOARD_PORT` | `3000` | Integer `0..65535` |
-| `ORBITA_DASHBOARD_POLL_MS` | `2000` | Integer `250..300000` |
-| `ORBITA_DASHBOARD_HEARTBEAT_MS` | `15000` | Integer `1000..120000` |
-| `ORBITA_DASHBOARD_STALE_MS` | `10000` | Integer `1000..600000`; caps the full reconciliation interval |
-| `ORBITA_DASHBOARD_COALESCE_MS` | `100` | Integer `10..1000`; coalesces filesystem-watch bursts |
+| Variable                        | Default                              | Accepted value                                                            |
+| ------------------------------- | ------------------------------------ | ------------------------------------------------------------------------- |
+| `ORBITA_DASHBOARD_RUNS_ROOT`    | Orbita's standard workflow-runs root | Existing absolute directory                                               |
+| `ORBITA_DASHBOARD_HOST`         | `127.0.0.1`                          | Bounded host/address string; keep loopback unless exposure is intentional |
+| `ORBITA_DASHBOARD_PORT`         | `3000`                               | Integer `0..65535`                                                        |
+| `ORBITA_DASHBOARD_POLL_MS`      | `2000`                               | Integer `250..300000`                                                     |
+| `ORBITA_DASHBOARD_HEARTBEAT_MS` | `15000`                              | Integer `1000..120000`                                                    |
+| `ORBITA_DASHBOARD_STALE_MS`     | `10000`                              | Integer `1000..600000`; caps the full reconciliation interval             |
+| `ORBITA_DASHBOARD_COALESCE_MS`  | `100`                                | Integer `10..1000`; coalesces filesystem-watch bursts                     |
 
 Invalid configuration fails server composition instead of accepting a browser-
 controlled or ambiguous fallback.

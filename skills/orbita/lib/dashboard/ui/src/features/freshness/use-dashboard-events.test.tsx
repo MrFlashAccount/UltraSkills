@@ -17,8 +17,19 @@ class EventSourceStub extends EventTarget {
   close() {}
 
   emit(reason: 'snapshot_changed' | 'observer_stale' | 'observer_recovered', changeId: number) {
-    const payload = { schemaVersion: '1', type: 'invalidation', reason, changeId: String(changeId), emittedAt: '2026-07-12T12:00:00.000Z' };
-    this.dispatchEvent(new MessageEvent('invalidation', { data: JSON.stringify(payload), lastEventId: String(changeId) }));
+    const payload = {
+      schemaVersion: '1',
+      type: 'invalidation',
+      reason,
+      changeId: String(changeId),
+      emittedAt: '2026-07-12T12:00:00.000Z',
+    };
+    this.dispatchEvent(
+      new MessageEvent('invalidation', {
+        data: JSON.stringify(payload),
+        lastEventId: String(changeId),
+      }),
+    );
   }
 }
 
@@ -58,10 +69,13 @@ describe('useDashboardEvents', () => {
     vi.stubGlobal('EventSource', EventSourceStub);
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
-    renderHook(() => useDashboardEvents({ changeId: '1', state: 'fresh' }, 'run-1'), { wrapper: withClient(client) });
+    renderHook(() => useDashboardEvents({ changeId: '1', state: 'fresh' }, 'run-1'), {
+      wrapper: withClient(client),
+    });
     const source = EventSourceStub.instances[0];
     act(() => {
-      for (let changeId = 2; changeId <= 101; changeId += 1) source.emit('snapshot_changed', changeId);
+      for (let changeId = 2; changeId <= 101; changeId += 1)
+        source.emit('snapshot_changed', changeId);
       vi.advanceTimersByTime(100);
     });
     expect(invalidate).toHaveBeenCalledTimes(1);

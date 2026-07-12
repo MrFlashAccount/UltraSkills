@@ -4,5 +4,11 @@ export const PopoverTrigger = Popover.Trigger;
 export const PopoverClose = Popover.Close;
 
 export function PopoverContent({ children, ...props }: Popover.PopoverContentProps) {
-  return <Popover.Portal><Popover.Content className="ui-popover" sideOffset={8} {...props}>{children}</Popover.Content></Popover.Portal>;
+  return (
+    <Popover.Portal>
+      <Popover.Content className="ui-popover" sideOffset={8} {...props}>
+        {children}
+      </Popover.Content>
+    </Popover.Portal>
+  );
 }

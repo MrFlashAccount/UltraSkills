@@ -13,12 +13,32 @@ describe('dashboard production lifecycle binding', () => {
     const reader = {
       listRuns: async (signal?: AbortSignal) => {
         calls++;
-        await new Promise<void>((_resolve, reject) => signal?.addEventListener('abort', () => { aborted = true; reject(signal.reason); }, { once: true }));
+        await new Promise<void>((_resolve, reject) =>
+          signal?.addEventListener(
+            'abort',
+            () => {
+              aborted = true;
+              reject(signal.reason);
+            },
+            { once: true },
+          ),
+        );
         return [];
       },
       getRun: async () => undefined,
     };
-    const composition = createDashboardComposition({ runsRoot, host: '127.0.0.1', port: 3000, pollMs: 60_000, heartbeatMs: 60_000, staleMs: 60_000, coalesceMs: 100 }, reader);
+    const composition = createDashboardComposition(
+      {
+        runsRoot,
+        host: '127.0.0.1',
+        port: 3000,
+        pollMs: 60_000,
+        heartbeatMs: 60_000,
+        staleMs: 60_000,
+        coalesceMs: 100,
+      },
+      reader,
+    );
     const model = composition.readModel;
     model.subscribe(() => {});
     void model.refresh();
@@ -26,8 +46,18 @@ describe('dashboard production lifecycle binding', () => {
 
     const processLifecycle = new EventEmitter();
     let closeHook!: () => Promise<void>;
-    const nitroHooks = { hook: (_name: 'close', callback: () => Promise<void>) => { closeHook = callback; return () => {}; } };
-    const unbind = bindDashboardLifecycle(processLifecycle as any, nitroHooks, () => {}, () => composition.close());
+    const nitroHooks = {
+      hook: (_name: 'close', callback: () => Promise<void>) => {
+        closeHook = callback;
+        return () => {};
+      },
+    };
+    const unbind = bindDashboardLifecycle(
+      processLifecycle as any,
+      nitroHooks,
+      () => {},
+      () => composition.close(),
+    );
     await closeHook();
 
     expect(aborted).toBe(true);
@@ -43,7 +73,12 @@ describe('dashboard production lifecycle binding', () => {
 
   test('binds Bun termination signals as lifecycle stops', () => {
     const processLifecycle = new EventEmitter();
-    const unbind = bindDashboardLifecycle(processLifecycle as any, undefined, () => {}, async () => {});
+    const unbind = bindDashboardLifecycle(
+      processLifecycle as any,
+      undefined,
+      () => {},
+      async () => {},
+    );
     expect(processLifecycle.listenerCount('SIGINT')).toBe(1);
     expect(processLifecycle.listenerCount('SIGTERM')).toBe(1);
     expect(processLifecycle.listenerCount('beforeExit')).toBe(1);

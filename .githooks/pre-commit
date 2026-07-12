@@ -1,5 +1,31 @@
 #!/bin/sh
 set -eu
+
+dashboard_files="$(mktemp)"
+trap 'rm -f "$dashboard_files"' EXIT
+
+git diff --cached --name-only --diff-filter=ACMR -z -- \
+  ':(glob)skills/orbita/lib/dashboard/**/*.cjs' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.css' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.html' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.js' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.json' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.jsonc' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.jsx' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.md' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.mjs' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.ts' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.tsx' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.yaml' \
+  ':(glob)skills/orbita/lib/dashboard/**/*.yml' \
+  ':(exclude)skills/orbita/lib/dashboard/ui/src/routeTree.gen.ts' > "$dashboard_files"
+
+if [ -s "$dashboard_files" ]; then
+  echo "Formatting staged dashboard files with oxfmt..."
+  xargs -0 ./node_modules/.bin/oxfmt --write --no-error-on-unmatched-pattern < "$dashboard_files"
+  xargs -0 git add -- < "$dashboard_files"
+fi
+
 echo "Bundling schema-validation vendor Ajv..."
 bun run schema-validation:bundle-vendor-ajv
 git add shared/scripts/schema-validation/vendor/ajv.mjs
