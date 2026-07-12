@@ -211,28 +211,34 @@ test('non-blocking stop sanitizer preserves public URLs and redacts delimiter-in
   }
 
   const privateValues = [
-    '[/home/alice/private.txt]',
-    'path=[/home/alice/private.txt]',
-    '<~alice/.ssh/id_ed25519>',
-    '[../../customer/private.csv]',
-    '[C:\\Users\\alice\\secret.txt]',
-    '[private file](/home/alice/private.txt)',
-    '"AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"',
-    "'AWS_SESSION_TOKEN': 'IQoJb3JpZ2luX2VjEJr//////////wEaCXVzLWVhc3QtMSJGMEQCID+a/b=='",
-    '{"service.auth.token":"abc/DEF+ghi=="}',
-    '`namespace_password` = `hunter2`',
+    { input: '[/home/alice/private.txt]', secret: '/home/alice/private.txt' },
+    { input: 'path=[/home/alice/private.txt]', secret: '/home/alice/private.txt' },
+    { input: 'source:/home/alice/private.txt', secret: '/home/alice/private.txt' },
+    { input: '<~alice/.ssh/id_ed25519>', secret: '~alice/.ssh/id_ed25519' },
+    { input: '[../../customer/private.csv]', secret: '../../customer/private.csv' },
+    { input: 'dir/../../customer/private.csv', secret: '../../customer/private.csv' },
+    { input: 'prefix/../private.txt', secret: '../private.txt' },
+    { input: '[C:\\Users\\alice\\secret.txt]', secret: 'C:\\Users\\alice\\secret.txt' },
+    { input: '[private file](/home/alice/private.txt)', secret: '/home/alice/private.txt' },
+    { input: '"AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"', secret: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' },
+    { input: "'AWS_SESSION_TOKEN': 'IQoJb3JpZ2luX2VjEJr//////////wEaCXVzLWVhc3QtMSJGMEQCID+a/b=='", secret: 'IQoJb3JpZ2luX2VjEJr//////////wEaCXVzLWVhc3QtMSJGMEQCID+a/b==' },
+    { input: '{"service.auth.token":"abc/DEF+ghi=="}', secret: 'abc/DEF+ghi==' },
+    { input: 'config["token"]="abc/DEF+ghi=="', secret: 'abc/DEF+ghi==' },
+    { input: '`namespace_password` = `hunter2`', secret: 'hunter2' },
+    { input: 'https://alice:hunter2@example.com/private', secret: 'hunter2' },
+    { input: 'https://example.com/help?access_token=abc%2FDEF%2Bghi', secret: 'abc%2FDEF%2Bghi' },
   ];
-  for (const value of privateValues) {
+  for (const { input, secret } of privateValues) {
     const stop = publicNonBlockingStopDetails({
       stop_id: '00000000-0000-4000-8000-000000000011',
-      summary: value,
-      needed: value,
+      summary: input,
+      needed: input,
     });
-    const resolution = publicStopResolutionDetails({ summary: value, decision: value });
-    assert.notEqual(stop.summary, value, `stop summary leaked: ${value}`);
-    assert.notEqual(stop.needed, value, `stop needed leaked: ${value}`);
-    assert.notEqual(resolution.summary, value, `resolution summary leaked: ${value}`);
-    assert.notEqual(resolution.decision, value, `resolution decision leaked: ${value}`);
+    const resolution = publicStopResolutionDetails({ summary: input, decision: input });
+    assert.doesNotMatch(stop.summary, new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `stop summary leaked: ${input}`);
+    assert.doesNotMatch(stop.needed, new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `stop needed leaked: ${input}`);
+    assert.doesNotMatch(resolution.summary, new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `resolution summary leaked: ${input}`);
+    assert.doesNotMatch(resolution.decision, new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `resolution decision leaked: ${input}`);
   }
 });
 

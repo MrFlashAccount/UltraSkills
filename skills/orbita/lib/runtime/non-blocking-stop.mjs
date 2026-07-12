@@ -1,6 +1,8 @@
 const MAX_TEXT_LENGTH = 512;
 const MAX_EVIDENCE_ITEMS = 5;
-const LOCAL_PATH_CANDIDATE = /(?:file:\/+[^\s'"`\[\]{}()<>,;!?]*|~(?:[^/\s'"`\[\]{}()<>,;!?]+)?\/[^\s'"`\[\]{}()<>,;!?]*|\.\.?\/[^\s'"`\[\]{}()<>,;!?]*|[A-Za-z]:[\\/][^\s'"`\[\]{}()<>,;!?]*|\/[^\s'"`\[\]{}()<>,;!?]*)/gi;
+const LOCAL_PATH_CANDIDATE = /(?:file:\/+[^\s'"`\[\]{}()<>,;!?]*|~(?:[^/\s'"`\[\]{}()<>,;!?]+)?\/[^\s'"`\[\]{}()<>,;!?]*|\.\.?\/[^\s'"`\[\]{}()<>,;!?]*|(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s'"`\[\]{}()<>,;!?]*|\/[^\s'"`\[\]{}()<>,;!?]*)/gi;
+const HTTP_URL_CANDIDATE = /https?:\/\/[^\s'"`<>\[\]{}()]+/gi;
+const SENSITIVE_KEY_NAME = /(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)/i;
 const TRAILING_PUNCTUATION = /[,:;.!?]+$/;
 
 function normalizeComparablePath(value) {
@@ -65,9 +67,34 @@ function redactPrivatePaths(value, options = {}) {
   const text = String(value);
   return text.replace(LOCAL_PATH_CANDIDATE, (candidate, offset) => {
     const previous = offset > 0 ? text[offset - 1] : '';
-    if ((/^[/.]/.test(candidate) || /^[A-Za-z]:[\\/]/.test(candidate)) && /[A-Za-z0-9]/.test(previous)) return candidate;
+    const embeddedTraversal = /^\/\.\.?[\\/]/.test(candidate);
+    if (/^[/.]/.test(candidate) && /[A-Za-z0-9]/.test(previous) && !embeddedTraversal) return candidate;
     if (candidate.startsWith('/') && /https?:$/i.test(text.slice(Math.max(0, offset - 6), offset))) return candidate;
     return redactPrivatePathToken(candidate, roots);
+  });
+}
+
+function redactHttpUrlCredentials(value) {
+  return String(value).replace(HTTP_URL_CANDIDATE, (candidate) => {
+    let parsed;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      return candidate;
+    }
+    let changed = false;
+    if (parsed.username || parsed.password) {
+      parsed.username = '';
+      parsed.password = '';
+      changed = true;
+    }
+    for (const [key, fieldValue] of parsed.searchParams) {
+      if (SENSITIVE_KEY_NAME.test(key) || replacementForLocalPath(fieldValue) || /\/\.\.?[\\/]/.test(fieldValue)) {
+        parsed.searchParams.set(key, '[redacted]');
+        changed = true;
+      }
+    }
+    return changed ? parsed.toString() : candidate;
   });
 }
 
@@ -77,13 +104,14 @@ function boundedText(value, fallback = '', options = {}) {
     .replaceAll('\r', '\n')
     .replaceAll('\0', '')
     .trim();
-  return redactSensitiveText(redactPrivatePaths(text, options)).slice(0, MAX_TEXT_LENGTH).trim();
+  return redactSensitiveText(redactPrivatePaths(redactHttpUrlCredentials(text), options)).slice(0, MAX_TEXT_LENGTH).trim();
 }
 
 function redactSensitiveText(value) {
   return String(value ?? '')
     .replace(/(--lease-token(?:=|\s+))(?:"[^"]*"|'[^']*'|[^\s'"]+)/g, '$1[redacted-lease-token]')
     .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[redacted-aws-access-key]')
+    .replace(/(\[\s*["'`][A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)[A-Za-z0-9_.-]*["'`]\s*\])\s*[:=]\s*(?:"[^"]*"|'[^']*'|`[^`]*`|[^\s,;}]+)/gi, '$1=[redacted]')
     .replace(/(["'`]?)((?:[A-Za-z][A-Za-z0-9_.-]*[_.-])?(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)(?:[_.-][A-Za-z0-9_.-]+)*)\1\s*[:=]\s*(?:"[^"]*"|'[^']*'|`[^`]*`|[^\s,;}]+)/gi, '$1$2$1=[redacted]')
     .replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[redacted-token]')
     .replace(/(?:[A-Za-z]:)?[^\s]*\.workflow-runner[^\s]*/g, '[redacted-workflow-runner-private-state]')
