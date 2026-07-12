@@ -468,44 +468,64 @@ runner status.
 
 ## Dashboard Observer Architecture
 
-The Orbita dashboard is a read-only observation surface over durable
-`workflow-runner` run state. It extends the adapter side of Orbita; it does not
-join the runner control protocol and does not become another host adapter.
+The Orbita dashboard is a read-only observer over durable `workflow-runner` run
+state. It is one small modular monolith deployed as a single TanStack Start
+application: Vite builds the React application and Nitro's Bun preset owns the
+only dashboard HTTP process. The dashboard is not a runner host adapter, a
+durable cache, or a control-plane participant.
 
-`skills/orbita/DESIGN.md` is the product/design input for the board, card,
-drawer, lane, mini-map, and no-control UI rules. This architecture section owns
-the backend/UI boundary that makes those design rules safe.
+`skills/orbita/DESIGN.md` owns the approved board, card, detail, focus,
+responsive, and motion laws. `lib/dashboard/CONTEXT.md` owns local placement and
+dependency rules. This section records the stable product architecture and
+routes readers to those local contracts.
 
-Target shape:
+Target request and dependency shape:
 
 ```text
-catalog ids + per-run authority/run-state -> observer reader -> safe projection -> dashboard API/events -> browser UI
+durable run files
+  -> observer read model (server only, ephemeral)
+  -> safe projection + exposure policy (server only)
+  -> versioned contracts
+  -> TanStack Start GET routes / invalidation SSE
+  -> React Query + browser view model
+  -> five-lane React board
 ```
 
-Intended source zones:
+There is no second API daemon, custom static server, generic repository port,
+or mixed client/server dashboard barrel. The concrete read-only observer and
+the versioned DTO boundary are the only justified seams.
 
-- `lib/dashboard/server/**` owns the local daemon/API shell, static UI serving,
-  SSE event stream, file-watch or polling loop, restart rebuild, and degraded
-  read isolation.
-- `lib/dashboard/projection/**` owns safe dashboard read models, lane
-  classification, history excerpt policy, workflow mini-map projection, and
-  redaction policy.
-- `lib/dashboard/contracts/**` owns browser-visible DTO schemas and examples
-  for list, detail, event, degraded diagnostic, artifact summary, cursor chip,
-  and mini-map surfaces.
-- `lib/dashboard/ui/**` owns browser rendering against those DTOs only.
+### Dashboard Source Zones
 
-If these zones become substantial, add `lib/dashboard/CONTEXT.md` in the same
-slice to record local ownership and forbidden dependencies. Do not create that
-context file for a placeholder-only or documentation-only change.
+- `lib/dashboard/contracts/**` owns strict runtime schemas, inferred
+  browser-safe types, schema versions, the five lane ids/order, public error and
+  invalidation enums, identifier bounds, `PublicDisplayText`, and adversarial
+  contract fixtures. It imports no dashboard implementation or Node-only code.
+- `lib/dashboard/projection/**` owns lane classification, source-specific
+  exposure policy, fixed public diagnostics, cursor cardinality enforcement,
+  safe summary/detail projection, bounded history, artifact/result facts, and
+  the bounded workflow mini-map projection. It is server-only even when helpers
+  are pure. `RunDetailDTO.miniMap` is an explicit available/unavailable
+  projection; its renderer remains browser-owned.
+- `lib/dashboard/observer/**` owns read-only durable adapters, bounded-concurrency
+  reads, per-run failure isolation, the process-local `DashboardReadModel`,
+  watcher/poll reconciliation, immutable snapshot replacement, freshness
+  lifecycle, invalidation subscriptions, and shutdown cleanup.
+- `lib/dashboard/ui/**` is the TanStack Start application root. Its explicit
+  `.server.ts` composition and API route files may reach the observer; its
+  client-reachable routes, features, components, hooks, and primitives may
+  import only browser-safe contracts and browser libraries.
+- `lib/entrypoints/**` does not export, wrap, or serve dashboard APIs. Root Bun
+  scripts are the supported development/build/start/check surface.
 
-### Dashboard Bounded Contexts
+These zones are real responsibility owners, not folder ceremony: deleting
+`contracts` duplicates the cross-runtime schema; deleting `projection` smears
+classification/disclosure into readers and routes; deleting `observer` smears
+durable reads and lifecycle into transport; deleting `ui` removes the product
+and Start deployment. Do not add a generic service/repository/shared-utility
+zone for one implementation.
 
-Dashboard backend is an observer-owned adapter context. It may read durable
-workflow-runner state through persistence/run-state adapters or explicit
-read-only filesystem adapters, then project the result into dashboard DTOs. It
-must isolate per-run read/parse failures as degraded dashboard records and must
-not persist those degraded records into workflow state.
+### Dashboard Records and Authority
 
 Dashboard projection is a read-model context. It owns allowlisted DTOs and
 classification policy for `Waiting for user`, `Worker running`, `Needs help`,
@@ -515,70 +535,175 @@ instructions, private prompts, token-bearing commands, hidden transcripts,
 instruction storage paths, preferred worker agent ids, worker binding flags, or
 unnecessary host control-plane metadata.
 
-Dashboard UI is a browser-only inspection context. It consumes safe DTOs from
-the daemon API/event surface and follows `DESIGN.md`. It must not read
-`~/.orbita` directly, infer runner state from filesystem paths, include
-drag/drop movement, or show controls that resemble `next`, `continue`,
-`write-output`, retry, repair, or manual lane movement.
+Durable run files remain the only authority. `SnapshotEnvelope`,
+`ObserverFreshnessDTO`, `RunSummaryDTO`, `RunDetailDTO`, `InvalidationEvent`,
+`PublicDisplayText`, and the browser board store are records/read models, not
+domain entities. `DashboardReadModel` has process identity and lifecycle but is
+ephemeral, immutable per published revision, fully rebuildable, and forbidden
+from writing cache data into run directories.
 
-### Dashboard Relationships
+The projection exposes exactly five observer lanes in stable order:
+
+1. `waiting_for_user`
+2. `worker_running`
+3. `needs_help`
+4. `degraded`
+5. `done`
+
+`Degraded` means observer/read health and is never persisted as workflow state.
+Current cursor cardinality is `0..1`. The DTO may retain an array shape, but a
+projection with more than one current step is an explicit bounded unsupported/
+degraded result, never fabricated fanout.
+
+All browser-visible prose must be produced by exposure policy version `1` for
+one of the implemented source classes: run title/summary, workflow identity,
+step id, artifact id/summary, result summary/ref, or history line. The policy
+normalizes with NFKC, replaces control characters with spaces, collapses
+whitespace, applies the source's 120/160/240-code-point ceiling, and omits the
+value when it matches an absolute path, secret/token/hash shape, runner/shell
+command, private-instruction marker, prompt, or transcript. The shared
+`PublicDisplayText` schema then enforces non-empty text with a maximum length of
+240. New prose source classes default to omission. Identifiers/enums use their
+dedicated bounded schemas; raw durable records and raw exception messages never
+cross the route boundary. The 1.5 MiB snapshot and 64 KiB detail response caps
+are the implemented aggregate UTF-8 byte boundaries; there is no separate
+per-field byte-limit contract.
+
+### Versioned HTTP and Reconciliation Contract
+
+The Start application exposes exactly three same-origin GET surfaces:
+
+- `/api/dashboard/v1/runs` returns one validated `SnapshotEnvelope` and supports
+  `ETag` / `If-None-Match` over both run data and observer freshness.
+- `/api/dashboard/v1/runs/:runId` returns one lazy validated `RunDetailDTO` or a
+  bounded closed-code error envelope.
+- `/api/dashboard/v1/events` streams data-free invalidation events with the
+  closed reasons `snapshot_changed`, `observer_stale`, and
+  `observer_recovered`, plus heartbeat comments.
+
+The server and browser contracts ship atomically under one schema version. SSE
+is a lossy hint, never a state transition or authority: events may be dropped,
+duplicated, delayed, reordered, or reset. The SSE frame carries the reason as
+its event name and the observer revision as `id`; it carries no run-state data.
+`snapshot_changed` publication is coalesced to the configured interval, while
+stale/recovered events publish immediately. The browser ignores invalid or
+non-increasing ids, coalesces query invalidation to one signal per 100ms, resets
+sequence tracking and refetches after reconnect, and also performs a normal
+validated snapshot GET every 15 seconds. `If-None-Match` remains a supported
+route contract for other same-origin callers; the current browser fetch adapter
+does not send a conditional header.
+
+`DashboardReadModel` owns both the last-good immutable runs and authoritative
+observer freshness. A successful refresh increments revision, atomically
+publishes a validated snapshot, records the attempt as the last success, resets
+the failure count, and emits `snapshot_changed` or `observer_recovered`. A
+failure before any good snapshot leaves no published revision and returns the
+bounded first-load error. A failure after a good snapshot increments revision,
+retains its runs and last-success time, preserves the original `staleSince`,
+increments `consecutiveFailures`, sets the fixed
+`observer_refresh_failed` diagnostic, advances the ETag, and emits
+`observer_stale`; only a later successful refresh clears stale.
+
+The browser may display Live only when authoritative observer freshness is
+`fresh`, no newer `observer_stale` event hint is pending reconciliation, and
+EventSource is connected. Connected EventSource alone is never proof of fresh
+data. `ORBITA_DASHBOARD_STALE_MS` bounds the server's full-refresh cadence by
+making the effective polling interval `min(POLL_MS, STALE_MS)`; the current
+browser does not derive freshness from elapsed age. Snapshot failure cannot
+render as empty success; detail failure remains local to the detail surface;
+one corrupt run becomes one Degraded summary without hiding healthy runs.
+
+Request authority is explicit. Process configuration alone selects the runs
+root. The validated snapshot revision owns summary/freshness state. The
+router's `run` search value owns detail selection; React Query keys detail data
+by that exact id, the fetch adapter URL-encodes it, and the route decodes and
+validates it before exact index lookup. Filtered or missing selection retains
+the id and never authorizes fallback to the first or neighboring run.
+
+### Relationships and Dependency Rules
 
 ```mermaid
 flowchart LR
-  runs[(Durable run state
-~/.orbita/workflow-runs/v1)]
-  observer[Dashboard observer reader
-read-only adapter]
-  projection[Safe dashboard projection
-allowlisted DTOs]
-  api[Dashboard daemon API
-list, detail, events, static UI]
-  sse[SSE-first event surface
-lossy updates]
-  ui[Browser dashboard UI
-board, drawer, mini-map]
-  design[DESIGN.md
-board/drawer input]
+  runs[(Durable run state)]
+  observer[Observer read model]
+  projection[Safe projection]
+  contracts[Versioned contracts]
+  server[Start server routes]
+  client[Query and event adapters]
+  board[React board]
+  design[DESIGN.md]
 
   runs -->|read only| observer
   observer --> projection
-  projection --> api
-  api --> sse
-  api --> ui
-  design --> ui
+  projection --> contracts
+  server -->|server composition| observer
+  server --> contracts
+  contracts --> client
+  client --> board
+  design --> board
 ```
 
-The dashboard daemon may rebuild projections by rereading durable state after
-restart or watcher loss. Event delivery is lossy and observational: SSE/poll
-recovery must never create backpressure into workflow execution, hold run
-leases, or delay `workflow-runner` control commands.
+Binding rules:
 
-### Dashboard Dependency Rules
+- Client-reachable UI modules must not import `observer/**`, `projection/**`,
+  persistence, entrypoints, runtime/use-cases/entities, Node built-ins, process
+  environment, or any `.server.ts` module.
+- `contracts/**` must not import a dashboard implementation zone or Node-only
+  module.
+- `projection/**` may import contracts and validated plain records; it must not
+  import filesystem/process APIs, Start routes, watchers, leases, writers,
+  runner mutation/control APIs, or UI modules.
+- `observer/**` may import approved read-only persistence, projection,
+  contracts, and read/watch APIs; it must not import writers, locks/leases,
+  mutation/control APIs, CLI shells, host lifecycle, or UI/browser modules.
+- Start server routes may reach observer code only through one explicit
+  server-only composition module. Routes do not classify lanes, redact values,
+  parse durable state, or expose raw errors.
+- No dashboard module may import or construct `next`, `continue`,
+  `write-output`, `instructions`, `movePointer`, `listPointerTransitions`,
+  claim/lease/bind-agent, repair/retry-run, or manual-move surfaces.
+- Tests cross the same contracts used by callers: schemas/projection, observer
+  service, HTTP routes, React behavior, and browser flows. Reaching through a
+  seam to private state is not a substitute.
 
-Binding rules for dashboard code:
+`.dependency-cruiser.cjs` and production client-bundle inspection are hard
+mechanical gates for these rules. The bundle must contain no Node, persistence,
+observer, projection, workflow-runner, lease/control, private environment,
+path, prompt, token, or transcript implementation material.
 
-- `lib/dashboard/**` must not import runner mutation/control entrypoints, CLI
-  command builders, lease authority, write-output/continue/next/
-  listPointerTransitions/movePointer API handlers, list-pointer-transitions/
-  move-pointer CLI modes, or host worker lifecycle code.
-- Browser UI code must depend only on dashboard DTO contracts and browser
-  platform APIs; it must not import persistence, filesystem helpers,
-  workflow-runner API shells, or Node-only modules.
-- Projection code may depend on DTO/schema/value helpers and read-only records,
-  but must not depend on CLI argument parsing, process environment, locks,
-  leases, or mutation use cases.
-- Dashboard server code may coordinate read-only IO and response formatting, but
-  workflow-domain decisions still belong in existing entities/use cases and
-  dashboard-specific display decisions belong in projection.
-- Dashboard artifacts, degraded diagnostics, bounded history excerpts, cursor
-  chips, and mini-map data are projections. They are not durable workflow state
-  and must not be written back into run directories.
+### Compatibility, Operations, and Architecture Memory
 
-Add mechanical boundary checks for these rules when dashboard code is added.
-At minimum, tests/checks must prove absence of lease tokens, token-bearing
-commands, raw instruction commands, private prompts, hidden transcripts, raw
-instruction paths, preferred agent ids, worker binding flags, and unnecessary
-host control-plane metadata in browser-visible DTOs.
+The prototype compatibility decision is `delete_now`. The final implementation
+contains no `listDashboardRuns`, `getDashboardRun`, `startDashboardServer`,
+`orbita-dashboard serve`, custom Node HTTP server, string renderer, direct
+dashboard assets, whole-snapshot SSE, `/api/runs`, `/api/events`, unversioned
+`/api/dashboard/*`, or redirects/wrappers for them. Durable workflow-runner
+formats and mutation/control APIs remain unchanged.
+
+Process configuration owns runs root, loopback host/port, poll/reconciliation,
+coalescing, and stale intervals. Browser routes cannot choose a filesystem path.
+The supported command and configuration surface is documented in
+`lib/dashboard/README.md`.
+
+Server composition is a process-local lazy singleton created by the first API
+request. Creation starts one watcher when available and one periodic refresh
+timer. `close()` is idempotent and clears the watcher, poll/watch/invalidation
+timers, and subscribers; the current composition registers that close on
+`beforeExit`. Each SSE request separately clears its heartbeat and unsubscribes
+on request abort or stream cancellation. Do not claim a broader signal-hook
+contract without production evidence for that hook.
+
+Architecture artifact decision: `update_existing`. This section,
+`lib/dashboard/CONTEXT.md`, `DESIGN.md`, and `.dependency-cruiser.cjs` must stay
+consistent with routes, schemas, tests, commands, and rendered behavior. No ADR
+is added because these existing owning artifacts already record the decision.
+Contract/docs drift is blocker-level.
+
+Source rollback restores the previous complete source revision; there is no
+merged dual server/UI fallback and no data migration because durable run formats
+do not change. Failure of Bun Start/SSE/shutdown, freshness truth, disclosure or
+bundle boundaries, accessibility/focus, or approved performance gates reopens
+the approved architecture rather than silently weakening it.
 
 ### Workflow Loop Policies
 

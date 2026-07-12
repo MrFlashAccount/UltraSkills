@@ -2,13 +2,17 @@
 
 ## Scope
 
-This document defines the design direction for the future read-only Orbita runs
-dashboard from GitHub issue #187.
+This document is the durable design contract for the read-only Orbita runs
+dashboard from issue #201. It applies to the dashboard board, toolbar, run
+cards, freshness/state surfaces, responsive detail, and supporting run-
+observation UI. It does not define visual style for other skills.
 
-It does not define the visual style for every skill in this repository. It is
-scoped to the `orbita dashboard` surface and any supporting run-observation UI.
+Implementation must also follow `ARCHITECTURE.md` and
+`lib/dashboard/CONTEXT.md`. The approved UI proposal remains the visual proof
+source; this document records the selected direction and stable laws rather
+than replacing that artifact.
 
-## Product Basis
+## User and Product Route
 
 Orbita dashboard is an operations surface for watching live `workflow-runner`
 and `dev-harness` runs.
@@ -22,19 +26,20 @@ Primary read:
 - which runs are waiting for a human, which are executing worker actions, which
   need help, are done, or are degraded
 
+The primary job is to identify Waiting, Needs help, and Degraded work in
+seconds, inspect one run, and return to the same board position without causing
+or implying mutation.
+
 Primary action:
-- inspect a run card
-- understand the current host action, current step, workflow provenance, and
-  artifacts without mutating run state
 
-Trust posture:
-- read-only, operational, compact, and predictable
-- no UI affordance may imply that the dashboard can advance, continue, move, or
-  repair a run
+- select one run for read-only inspection.
 
-## Chosen Direction
+Secondary actions:
 
-Use a Trello-like board as the primary model.
+- search and filter;
+- expand or collapse a lane on narrow layouts;
+- copy a policy-approved run id from detail;
+- close detail and return focus.
 
 Columns are host-action/status buckets, not workflow steps:
 - `Waiting for user`
@@ -43,117 +48,175 @@ Columns are host-action/status buckets, not workflow steps:
 - `Degraded`
 - `Done`
 
-Cards represent current run requests or terminal run records. The board exists
-to make attention obvious, not to model the workflow graph.
+Forbidden actions include retry, continue, repair, move, bind, write, drag/drop,
+manual lane movement, and every other runner-shaped control. The surface is not
+a table, chart wall, workflow editor, graph-first navigator, marketing page, or
+decorative cockpit.
 
-The workflow graph is secondary. It appears in the run detail drawer after a
-card is selected, with the current step highlighted.
+## Selected Direction
 
-Rejected directions:
-- graph-first workflow dashboard
-- observability wall with charts and panels as the primary surface
-- runway/control-tower metaphor
-- decorative or themed dashboard chrome
-- Jira-like light board styling
-- generic dark dashboard palettes without a named color system
+Use Direction B: an attention-weighted five-lane Kanban. Lanes are observer
+classification buckets, not mutable workflow steps, and remain in this order:
 
-## Layout Law
-
-The first viewport is a working board:
-- top bar: root/source indicator, filters, search, freshness, and run counts
-- main area: horizontally scrollable Kanban lanes
-- right side: slide-out detail drawer for the selected card
-
-Column order should optimize attention:
 1. `Waiting for user`
 2. `Worker running`
 3. `Needs help`
 4. `Degraded`
 5. `Done`
 
-If horizontal space is tight, keep `Waiting for user` and `Worker running`
-visible before terminal columns.
+Waiting and Running receive a modest width advantage without hiding or
+reordering any lane. Done remains present with lower border/surface emphasis,
+never reduced text readability. Lane placement and count must communicate
+status faster than repeated card copy.
 
-Do not put the board inside a decorative card. The board is the surface.
+Current runtime cursor truth is `0..1`. Cards and detail render at most one
+current step. An array-shaped DTO may remain internal, but multiple values are a
+bounded unsupported/degraded state, never parallel cursor chips or fanout
+semantics. A future durable multi-cursor runtime requires a separate approved
+design change.
+
+## First Read and Screen Zones
+
+The visual and semantic hierarchy is:
+
+1. freshness/connection only when unhealthy;
+2. stable lane order and counts, especially Waiting, Needs help, and Degraded;
+3. card status reason and bounded title;
+4. workflow, current step, and age;
+5. detail only after selection.
+
+Screen zones:
+
+- sticky compact top bar: Orbita identity, search, filters, quiet freshness,
+  and bounded run count;
+- board: five attention-weighted rails with sticky headers and independent
+  vertical scrolling/virtualization;
+- wide contextual right detail: complementary, non-modal inspection;
+- tablet/mobile detail: modal right or bottom sheet;
+- narrow attention summary and stacked lane disclosures;
+- global feedback/live region for load, connectivity, and reclassification.
+
+The board is the surface; do not wrap it in a decorative outer card.
+
+## Product Data Hierarchy
+
+Lane primary facts are stable label, semantic text/icon/color cue, and filtered
+count. Classification internals stay hidden.
+
+Run card primary facts are status/reason, policy-approved title, and age.
+Workflow identity and one current step are secondary. A shortened run id appears
+only when needed for disambiguation. Full id, artifacts/results/history,
+diagnostics, raw paths, commands, prompts, tokens, bindings, and host metadata
+do not belong on the card.
+
+Run detail primary facts are safe identity, lane/status, workflow, zero or one
+current step, and freshness. Secondary facts may include a policy-approved
+summary, bounded fact rows, artifact/result facts, bounded history, and fixed
+diagnostic codes. A read-only workflow mini-map provides bounded orientation:
+up to 24 safe step ids marked completed, current, or pending, with explicit
+truncation or an unavailable state. It never implies parallel execution or
+offers workflow control. Raw
+Baton/history/transcript, filesystem paths, token/hash or command text, and
+private host/worker metadata never render.
+
+Connection UI answers whether the board is trustworthy. Healthy/live is quiet;
+stale/reconnecting is explicit. Transport stack traces and raw events stay
+hidden.
 
 ## Card Law
 
-Cards are compact run summaries. They must be readable at scan speed.
+Each run card is one semantic selection target with this anatomy:
 
-Required card content:
-- short run title or prompt summary
-- run id, shortened but copyable in the detail drawer
-- workflow name
-- host action/status chip
-- current step id
-- updated age or last event time
-- cursor chips when `baton.cursor` has multiple active branches
-- owner/session hint when available
+- top line: status/reason chip and updated age; one line, chip at most 55%, age
+  never wraps;
+- title: policy-approved title or `Untitled run`; maximum two lines,
+  14px/600 at 1.3 line height;
+- facts: workflow and zero or one current step; two compact label/value rows,
+  values ellipsize;
+- optional footer: shortened run id only when needed; monospace and one line.
 
-The card title should answer "what is this run about?".
-The status chip should answer "what is it waiting on?".
-The step id should be secondary provenance, not the headline.
+Visual contract:
 
-Do not add drag handles, move affordances, primary action buttons, or controls
-that resemble `next`, `continue`, `write-output`, worker binding, or retry.
+- radius 7px;
+- padding 10–12px;
+- lane width 240–340px;
+- target card height 112–144px, with measured virtualization for exceptions;
+- hover changes surface/border;
+- selected uses `card selected` surface plus inset focus-color border;
+- focus-visible uses a distinct 2px outer focus ring with 2px offset and may
+  coexist with selection;
+- card minimum target is 44px.
 
-## Detail Drawer
+Do not use nested cards, accent-only left borders, raw debug dumps, full
+unbounded ids, arbitrary card growth, one-letter wraps, inline execution
+buttons, or index identity. `runId` is the card, selection, ordering, query, and
+virtual item identity.
 
-Selecting a card opens a right-side drawer.
+## Detail Law
 
-The board remains visible while the drawer is open. Opening details must feel
-like inspection in context, not navigation away from the board.
+No selection means no drawer/sheet and no reserved blank rail. The board uses
+the available width; a subtle toolbar hint may invite inspection.
 
-The drawer owns details that would overload the card:
-- full run id and workflow path/name
-- current host action and step
-- highlighted workflow mini-map
-- current request summary
-- artifact links or names
-- compact history excerpt
-- read/parse/degraded diagnostics when present
+- At 1100px and wider, detail is a non-modal complementary right region,
+  340–400px and at most 34vw, with internal scrolling. The board remains
+  visible, operable, and not inert. Focus enters the heading/close target but is
+  not trapped; normal navigation and Shift+Tab may return to the board.
+- From 760–1099px, detail is a modal right sheet sized `min(420px, 92vw)` with
+  backdrop, inert background, and inner scroll.
+- Below 760px, detail is a modal bottom sheet, full width, at most 88dvh, with
+  safe-area padding, sticky header, and inner scroll. Explicit close, Escape,
+  and backdrop dismissal are supported; swipe is never the only exit.
 
-The drawer may include copy/open/read-only utility actions, but no execution
-actions. If a future command affordance is proposed, it belongs outside this
-read-only dashboard contract and requires a separate product decision.
+Escape while focus is within detail or explicit close returns focus to the
+originating card. If that card vanished, focus returns to its lane header. A
+filtered or missing selection keeps its id and displays `This run is no longer
+in the current results`; it never selects a neighbor.
 
-The workflow mini-map inside the drawer is explanatory. It may highlight current
-and completed steps, but it must not become the primary navigation model or a
-control surface.
+Motion is 160ms ease-out translateX plus opacity for right detail and 180ms
+translateY for mobile detail. Missing-selection content may crossfade at most
+100ms. Reduced-motion mode changes visibility instantly without transforms.
 
-Keyboard and focus behavior should match the read-only model:
-- selecting a card moves focus into the drawer
-- closing the drawer returns focus to the selected card
-- `Esc` closes the drawer
-- focus states must be visible on cards, filters, and drawer controls
+## Responsive and Containment Law
+
+- At 1440px and wider, all five lanes are visible with detail closed. Direction
+  B attention widths apply.
+- From 1100–1439px, the first three or four lanes remain visible and the board,
+  not the page, may scroll horizontally.
+- From 760–1099px, lanes use stacked or two-column sections and selected detail
+  uses the modal right sheet.
+- Below 760px, lanes are one-column disclosures in the same order. Every
+  non-empty Waiting, Needs help, and Degraded lane starts expanded and is repeated
+  in an always-visible attention summary. Running and Done alone may start
+  collapsed. Selected detail uses the modal bottom sheet.
+
+Page-level horizontal overflow is forbidden. Counts remain visible for
+collapsed lanes. Secondary filters move into one Filter popover on narrow
+layouts.
+
+Buttons, tabs, segmented controls, status chips, badges, counts, and lane
+headers never wrap. Shorten or ellipsize, use an accessible named icon, or move
+secondary controls to overflow. Workflow, step, and short id use one line with
+ellipsis. Drawer prose wraps at words; bounded opaque values may break inside a
+contained code region.
 
 ## Visual System
 
-Palette:
-- use a high-contrast Catppuccin Mocha-derived dark palette, shifted away from
-  blue/cyan and toward warm violet graphite
-- the app foundation should match the near-solid background sample `#14131A`
-  unless implementation constraints require a close token
-- use Catppuccin accents sparingly for chips, focus, selected state, and
-  semantic status
-- do not flood column backgrounds, cards, or large panels with saturated accent
-  color
-- avoid a blue cast in large surfaces; blue and cyan must not define the product
-  mood
+Use a warm graphite, Catppuccin Mocha-derived dark system:
 
-Core tokens:
-- app background: `#14131A`
-- top bar / drawer: `#191720`
-- board column: `#201D29`
-- card: `#292632`
-- card selected / hover: `#332F40`
-- primary text: `#F4F0F7`
-- body text: `#F4F0F7`
-- metadata text: `#F4F0F7`
-- disabled/unavailable text only: `#AFA6BA`
-- divider / border: `#4A4357`
-- strong divider: `#5C536A`
-- focus / selected accent: `#CBA6F7`
+- app foundation: `#14131A`;
+- top bar/detail: `#191720`;
+- lane: `#201D29`;
+- card: `#292632`;
+- selected card: `#332F40`;
+- primary/body/metadata text: `#F4F0F7`;
+- disabled/unavailable text only: `#AFA6BA`;
+- border: `#4A4357`;
+- strong divider: `#5C536A`;
+- focus/running: `#CBA6F7`;
+- Waiting: `#FAB387`;
+- Needs help: `#F38BA8`;
+- Degraded: `#9A92A8`;
+- Done: `#A6E3A1`.
 
 State roles:
 - waiting for user: `#FAB387` or `#F9E2AF`
@@ -162,57 +225,51 @@ State roles:
 - degraded: `#9A92A8`
 - done: `#A6E3A1`
 
-The stock Catppuccin Mocha palette is the color source, but the dashboard uses
-warmer foundations, less blue, and brighter text for readability. If tokens are
-adjusted later, preserve these relationships:
-- page < top bar/drawer < column < card < selected card by brightness
-- text must stay clearly above stock Mocha `text` contrast when used on cards
-- accents must remain state markers, not decoration
-- worker color may be mauve/lavender, but should not make the whole interface
-  feel blue
+Foundation brightness progresses page < top/detail < lane < card < selected.
+Semantic color never carries meaning alone; pair it with text and an icon or
+shape. Accents are state markers, not decoration. Avoid blue/cyan as the product
+mood and preserve WCAG 2.2 AA contrast.
 
-Typography:
-- sans-first UI type
-- compact labels and chips
-- monospace only for run ids, step ids, and file/path-like content
-- no oversized hero typography
-- do not create hierarchy by lowering text contrast on small text
-- card and drawer metadata should use the same readable text color as body text
-  unless the value is disabled or unavailable
-- separate hierarchy with weight, size, casing, grouping, and position:
-  - title: larger or medium weight
-  - status chip: colored background/border plus medium weight
-  - metadata: smaller size, regular weight, same high-contrast text
-  - ids/paths: monospace, smaller size, same high-contrast text
+Typography is sans-first and dense: page 18–20px/700, lane 13px/700, card title
+14px/600 at 1.3, body 13px/1.45, metadata 11–12px at full readable contrast.
+Monospace is limited to ids and steps. Do not create hierarchy by dimming small
+text.
 
-Shape and containers:
-- cards and drawer panels use 6-8px radius
-- columns use light structure: background tint, border, or divider
-- avoid nested cards inside cards
-- avoid left-border accent cards as the only hierarchy device; use chip, title,
-  timestamp, and column placement together
+Use the 4/8/12/16/24px spacing scale, 10–12px lane gaps, and 6–8px radii. Avoid
+marketing spacing, large empty areas, saturated panels, novelty branding, and
+unused generated UI-kit components.
 
-Density:
-- dense repeat-use utility
-- avoid marketing spacing, large empty areas, and oversized cards
-- keep enough breathing room for cards to be individually scannable
+## UI Kit and Interaction Inventory
 
-Motion:
-- drawer slides in quickly and predictably
-- live updates should preserve card position where possible
-- use subtle freshness/activity indicators only when they clarify state
-- no looping decorative animations
-- support reduced motion with static indicators
+Use source-owned shadcn/ui components on approved Radix primitives, Tailwind
+CSS variables, and Lucide icons. Prefer semantic native controls. Add only
+primitives used by the product: Button, Input, Badge, Sheet/Dialog, Popover,
+Select, Tooltip, Skeleton, and Collapsible. Native overflow is preferred;
+ScrollArea requires concrete evidence that native overflow is insufficient.
 
-## Critical States
+Icon roles:
 
-Loading:
-- show board skeleton by column
-- do not block the first useful read behind animation
+- Search for search;
+- Filter for filter menu;
+- Wifi/WifiOff for transport state;
+- ChevronDown/Up for narrow disclosure;
+- X for close;
+- Copy for safe run id copy;
+- CircleAlert for Needs help/Degraded support;
+- Check for Done;
+- LoaderCircle for Running, static under reduced motion.
 
-Empty:
-- show empty columns explicitly
-- distinguish "no runs found" from "root not configured"
+Compact icon buttons have at least a 36px hit area and an accessible name.
+Keyboard order is toolbar, lanes/cards in visual order, then complementary
+detail. Virtualized navigation scrolls a logical offscreen run into the mounted
+range before focus; offscreen runs are never skipped. Live updates do not steal
+focus or selection. Reclassification keeps detail open, announces the new lane
+politely, and does not move keyboard focus.
+
+Only drawer/sheet orientation and 100–120ms surface/focus transitions animate.
+Live changes never pulse or loop. Reduced-motion indicators are static.
+
+## Required States and Copy
 
 Degraded:
 - one unreadable run must appear as degraded without crashing or hiding other
@@ -223,33 +280,73 @@ Needs help:
 - needs help is an active request lane, not a workflow terminal state
 - show the bounded non-blocking stop summary when available
 
-Done:
-- visually subdued
-- keep recent done runs discoverable without competing with active work
+Required distinct states:
 
-Parallel cursor:
-- show all active cursor branches as chips on the card
-- drawer mini-map highlights all active branches
+- stable lane-shell loading skeletons;
+- first-load failure: `Could not load runs` with transport-only `Try again`;
+- `Runs root is not configured`;
+- `No runs yet`;
+- `No runs match these filters` with `Clear filters`;
+- empty individual lane;
+- stale/reconnecting last-good board: `Reconnecting · last update {age}`;
+- one corrupt Degraded run among usable healthy runs;
+- drawer-local `Run details unavailable`;
+- missing/filtered selection with `Back to board`;
+- unsupported multiple-cursor input;
+- Done and zero-result states.
+
+Failed data never looks empty or successful. Stale state does not replace the
+last-good board with a destructive full-screen error. Avoid execution language
+such as `retry run`, `repair`, or `continue`.
+
+## Performance and Proof Contract
+
+Each expanded lane owns one independent vertical TanStack Virtual instance with
+stable runId keys, measured exceptional rows, and at most eight overscan items
+before and after the visible range.
+
+At 1,000 runs:
+
+- at most 150 RunCard elements are mounted;
+- the board becomes interactive within 2 seconds p95 after process readiness;
+- one validated snapshot reconciles within 100ms p95 on the main thread;
+- a 100-change burst introduces no task longer than 50ms.
+
+Proof fixtures include balanced lanes, 900 Waiting, 900 Done, long allowed
+text/id, rapid reclassification, detail open, and narrow layout.
+
+Required rendered evidence:
+
+- 1440x900, balanced distribution, detail closed and open;
+- 1024x768, selected run and filter open;
+- 390x844, attention summary, attention lanes expanded, Running/Done collapsed,
+  and bottom sheet;
+- pathological density;
+- initial error, empty root/result, stale/reconnect, corrupt run, detail failure,
+  and missing selection;
+- keyboard-only navigation and reduced motion.
+
+Acceptance requires visible focus, reachable virtual items, deterministic focus
+return, no page overflow, no clipped compact controls, no attention lane hidden
+by default on mobile, bounded mounted nodes, stable scroll/focus during updates,
+and fidelity to Direction B. Architecture or implementation conflict requires
+approved plan revision; do not silently redesign or weaken the proof gate.
 
 ## Hard Nos
 
-- no drag/drop
-- no manual column movement
-- no runner control buttons
-- no chart-first dashboard
-- no workflow graph as the primary screen
-- no novelty theme, aviation metaphor, or decorative cockpit UI
-- no fake metrics or fabricated run data in implementation previews
-- no browser-side direct reads from `~/.orbita`; UI consumes safe projections
+- no mutation/control affordance, drag/drop, or manual lane movement;
+- no automatic first/neighbor selection;
+- no parallel active cursor chips under the current runtime;
+- no raw debug/durable/private content;
+- no chart/graph/table as the primary surface;
+- no novelty theme, aviation metaphor, decorative outer card, or fake metric;
+- no page-level horizontal overflow, unbounded card, or index-keyed virtual row;
+- no browser-side run-root/filesystem read;
+- no looping decorative animation or motion-only meaning.
 
-## Downstream Use
+## Downstream Review
 
-Use this document before designing or reviewing:
-- `orbita dashboard`
-- run board cards
-- host-action lanes
-- run detail drawer
-- workflow mini-map inside the drawer
-
-Implementation must still follow the architecture contract in
-`skills/orbita/ARCHITECTURE.md` when dashboard code is added.
+Frontend implementation and frontend-taste review must inspect the approved UI
+proposal directly and compare rendered proof. Architecture review must compare
+this document, `ARCHITECTURE.md`, dashboard `CONTEXT.md`, routes/schemas/tests,
+and implementation. Contract drift is blocker-level.
