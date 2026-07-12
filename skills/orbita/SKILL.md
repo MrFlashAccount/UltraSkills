@@ -108,7 +108,7 @@ Use the longest supported event wait, not short polling. Accepted output, action
 
 Treat bootstrap/instruction-load silence separately from active implementation progress. Concrete progress must name current work, inspected or changed surfaces, verification state, and the next bounded checkpoint. If the worker shows that evidence, continue that same worker and ask for the next bounded checkpoint. Do not persist progress in baton, scrape transcripts, read private runner state, or add durable worker status storage.
 
-Allow 10 minutes for load/progress. None: interrupt once for focused status, then wait 2 minutes. Concrete progress: keep the worker. Vague/missed checkpoint: require immediate validating `write-output` or an exact non-blocking stop. Still nothing: close and retry the same request once with the same 10+2-minute bound. Retry failure: use the request's current `report-stop` command with the smallest concrete help request.
+Allow 30 minutes for load/progress. None: interrupt once for focused status, then wait 2 minutes. Concrete progress: keep the worker. Vague/missed checkpoint: require immediate validating `write-output` or an exact non-blocking stop. Still nothing: close and retry the same request once with the same 30+2-minute bound. Retry failure: use the request's current `report-stop` command with the smallest concrete help request.
 
 After every current request is accepted, run stdout's exact `continue` once with actual worker ids and safe debug value.
 
