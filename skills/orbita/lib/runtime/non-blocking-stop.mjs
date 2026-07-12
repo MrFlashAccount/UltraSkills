@@ -1,7 +1,6 @@
 const MAX_TEXT_LENGTH = 512;
 const MAX_EVIDENCE_ITEMS = 5;
-const PATH_TOKEN = /(?:^|[\s'"`(=,:])([^\s'"`)]+)/g;
-const LOCAL_PATH_AT_BOUNDARY = /(^|[\s'"`(=,:])((?:file:\/+|~(?:[^/\s]+)?\/|\.\.?\/|[A-Za-z]:[\\/]|\/)[^\s'"`),;]*)/gi;
+const LOCAL_PATH_CANDIDATE = /(?:file:\/+[^\s'"`\[\]{}()<>,;!?]*|~(?:[^/\s'"`\[\]{}()<>,;!?]+)?\/[^\s'"`\[\]{}()<>,;!?]*|\.\.?\/[^\s'"`\[\]{}()<>,;!?]*|[A-Za-z]:[\\/][^\s'"`\[\]{}()<>,;!?]*|\/[^\s'"`\[\]{}()<>,;!?]*)/gi;
 const TRAILING_PUNCTUATION = /[,:;.!?]+$/;
 
 function normalizeComparablePath(value) {
@@ -63,12 +62,12 @@ function redactPrivatePathToken(token, roots) {
 
 function redactPrivatePaths(value, options = {}) {
   const roots = privateRoots(options);
-  const boundaryRedacted = String(value).replace(LOCAL_PATH_AT_BOUNDARY, (_match, prefix, token) => {
-    return `${prefix}${redactPrivatePathToken(token, roots)}`;
-  });
-  return boundaryRedacted.replaceAll(PATH_TOKEN, (match, token) => {
-    const prefixLength = match.length - token.length;
-    return `${match.slice(0, prefixLength)}${redactPrivatePathToken(token, roots)}`;
+  const text = String(value);
+  return text.replace(LOCAL_PATH_CANDIDATE, (candidate, offset) => {
+    const previous = offset > 0 ? text[offset - 1] : '';
+    if ((/^[/.]/.test(candidate) || /^[A-Za-z]:[\\/]/.test(candidate)) && /[A-Za-z0-9]/.test(previous)) return candidate;
+    if (candidate.startsWith('/') && /https?:$/i.test(text.slice(Math.max(0, offset - 6), offset))) return candidate;
+    return redactPrivatePathToken(candidate, roots);
   });
 }
 
@@ -85,7 +84,7 @@ function redactSensitiveText(value) {
   return String(value ?? '')
     .replace(/(--lease-token(?:=|\s+))(?:"[^"]*"|'[^']*'|[^\s'"]+)/g, '$1[redacted-lease-token]')
     .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[redacted-aws-access-key]')
-    .replace(/\b((?:[A-Za-z][A-Za-z0-9_-]*[_-])?(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)(?:[_-][A-Za-z0-9_-]+)*)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, '$1=[redacted]')
+    .replace(/(["'`]?)((?:[A-Za-z][A-Za-z0-9_.-]*[_.-])?(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)(?:[_.-][A-Za-z0-9_.-]+)*)\1\s*[:=]\s*(?:"[^"]*"|'[^']*'|`[^`]*`|[^\s,;}]+)/gi, '$1$2$1=[redacted]')
     .replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[redacted-token]')
     .replace(/(?:[A-Za-z]:)?[^\s]*\.workflow-runner[^\s]*/g, '[redacted-workflow-runner-private-state]')
     .replace(/\/Users\/[^\s]*\.orbita\/workflow-runs[^\s]*/g, '[redacted-workflow-runs-private-state]');

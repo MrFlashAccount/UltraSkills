@@ -33,11 +33,12 @@ Collect or infer:
 - `task`: the work objective for each cycle.
 - `maxIterations`: default `3` unless the user gives another bound.
 - `successCriteria`: what counts as done or good enough.
-- `stopConditions`: max iterations, no progress, blocker, user stop, approval boundary, risk threshold, or success signal.
+- `stopConditions`: max iterations, executable saturation/no progress, user stop, risk threshold, or success signal.
+- `helpConditions`: missing orchestrator/user input, capability, permission, or approval boundary; these trigger `NON_BLOCKING_STOP`, not loop completion.
 - `verificationRequirements`: optional checks/review/tests that must run before considering a cycle successful.
 - `executorConstraints`: allowed tools, write permissions, external actions, target paths/repos, and reporting format.
 
-If the task is risky, destructive, external-writing, financial, privacy-sensitive, or under-specified in a way that changes safety, ask for approval or clarification before starting.
+If the task is risky, destructive, external-writing, financial, privacy-sensitive, or under-specified in a way that changes safety, report `NON_BLOCKING_STOP` with the smallest approval or clarification request before starting the iteration.
 
 ## State Baton
 
@@ -51,12 +52,14 @@ successCriteria:
   - "..."
 stopConditions:
   - "..."
+helpConditions:
+  - "..."
 verificationRequirements:
   - "..."
 lastResult: "none yet"
 nextAction: "start first cycle"
 noProgressCount: 0
-blocker: null
+openRisks: []
 artifacts:
   files: []
   prs: []
@@ -73,7 +76,7 @@ Minimum per-iteration state:
 - last result
 - next action
 - no-progress count
-- blocker, if any
+- open risks or unmet help conditions, if any
 - artifacts/PRs/issues/files, if any
 - verification result, if any
 - retry context for failures
@@ -85,9 +88,9 @@ Minimum per-iteration state:
 3. Executor performs one focused cycle, reports result, then stops.
 4. Main/orchestrator reports progress to the user.
 5. Main/orchestrator updates the state baton.
-6. Main/orchestrator decides: continue, retry with context, pause for approval, or stop.
+6. Main/orchestrator decides: continue, retry with context, finish, or report `NON_BLOCKING_STOP` and request help while preserving the current iteration.
 7. If continuing, start the next executor with the updated baton.
-8. Do not give a final answer until either the next iteration has been started or the loop has explicitly stopped.
+8. Do not give a final answer until either the next iteration has been started or the loop has explicitly finished. A `NON_BLOCKING_STOP` is not a final answer; resume the same iteration after resolution.
 
 ## Executor Protocol
 
@@ -100,7 +103,7 @@ Executor instructions must include:
 - what to inspect/change/run in this cycle
 - verification/review requirements for this cycle
 - approval and safety boundaries
-- required report fields: result, evidence, artifacts, verification, blocker, next recommended action
+- required report fields: result, evidence, artifacts, verification, open risks, next recommended action
 
 Executor must:
 
@@ -131,7 +134,7 @@ Final report must include:
 - iterations completed
 - results found or changes made
 - verification performed
-- open blockers/risks
+- open risks and any resolved help conditions
 - artifacts/PRs/issues/files touched, if any
 - recommended next step
 
@@ -153,7 +156,7 @@ Finish the loop when any are true:
 - verification proves the approach is failing
 - user asks to stop
 
-If the same blocker repeats without new information, or continuation requires approval for an external, destructive, risky, or privacy-sensitive action, report `NON_BLOCKING_STOP` instead of finishing. Request the smallest concrete orchestrator/user help, preserve the current iteration, and resume it after resolution.
+If the same unmet dependency repeats without new information, or continuation requires approval for an external, destructive, risky, or privacy-sensitive action, report `NON_BLOCKING_STOP` instead of finishing. Request the smallest concrete orchestrator/user help, preserve the current iteration, and resume it after resolution.
 
 ## Stability Mechanisms
 

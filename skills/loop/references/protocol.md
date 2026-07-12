@@ -27,7 +27,7 @@ lastResult:
   verification: []
 nextAction: "specific next cycle objective"
 noProgressCount: 0
-blocker: null
+openRisks: []
 retryContext: null
 approvalBoundaries:
   - "no remote push without approval"
@@ -57,7 +57,7 @@ Return:
 When continuation needs orchestrator or user help, emit `NON_BLOCKING_STOP` through the control channel instead of returning a terminal status. Resume the same iteration after resolution.
 - artifacts: files/PRs/issues/notes created or changed
 - verification: checks run and outcomes, or why not run
-- blocker:
+- open risks:
 - next: recommended next action
 ```
 
@@ -76,7 +76,7 @@ Next action: {specific next cycle objective, if continuing}
 
 Update `noProgressCount` as follows:
 
-- Reset to `0` when the executor finds a new useful result, lands an approved change, removes a blocker, or produces new evidence that changes the next action.
+- Reset to `0` when the executor finds a new useful result, lands an approved change, resolves an open risk/help condition, or produces new evidence that changes the next action.
 - Increment by `1` when an otherwise executable attempt repeats known information or produces no actionable evidence.
 - Do not increment for a missing decision, permission, capability, or external input. Report `NON_BLOCKING_STOP`, preserve the current iteration, and request the smallest concrete orchestrator/user help instead.
 - Finish at `noProgressCount >= 2` only for executable saturation unless the user explicitly requested a larger saturation window.

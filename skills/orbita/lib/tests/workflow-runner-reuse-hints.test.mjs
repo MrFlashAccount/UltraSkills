@@ -8,6 +8,7 @@ import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../runner/runn
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 import { readRunAuthority } from '../persistence/run-state/run-authority.mjs';
 import { registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
+import { publicNonBlockingStopDetails, publicStopResolutionDetails } from '../runtime/non-blocking-stop.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-reuse-hints-'));
 const testNow = new Date('2026-06-01T10:00:01.000Z');
@@ -193,6 +194,47 @@ function resolutionOutput(overrides = {}) {
     },
   };
 }
+
+test('non-blocking stop sanitizer preserves public URLs and redacts delimiter-independent private values', () => {
+  const publicUrls = [
+    'https://github.com/MrFlashAccount/UltraSkills/issues/252',
+    'http://localhost:3000/help?step=worker',
+  ];
+  for (const value of publicUrls) {
+    const stop = publicNonBlockingStopDetails({
+      stop_id: '00000000-0000-4000-8000-000000000010',
+      summary: value,
+      needed: value,
+    });
+    assert.equal(stop.summary, value);
+    assert.equal(stop.needed, value);
+  }
+
+  const privateValues = [
+    '[/home/alice/private.txt]',
+    'path=[/home/alice/private.txt]',
+    '<~alice/.ssh/id_ed25519>',
+    '[../../customer/private.csv]',
+    '[C:\\Users\\alice\\secret.txt]',
+    '[private file](/home/alice/private.txt)',
+    '"AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"',
+    "'AWS_SESSION_TOKEN': 'IQoJb3JpZ2luX2VjEJr//////////wEaCXVzLWVhc3QtMSJGMEQCID+a/b=='",
+    '{"service.auth.token":"abc/DEF+ghi=="}',
+    '`namespace_password` = `hunter2`',
+  ];
+  for (const value of privateValues) {
+    const stop = publicNonBlockingStopDetails({
+      stop_id: '00000000-0000-4000-8000-000000000011',
+      summary: value,
+      needed: value,
+    });
+    const resolution = publicStopResolutionDetails({ summary: value, decision: value });
+    assert.notEqual(stop.summary, value, `stop summary leaked: ${value}`);
+    assert.notEqual(stop.needed, value, `stop needed leaked: ${value}`);
+    assert.notEqual(resolution.summary, value, `resolution summary leaked: ${value}`);
+    assert.notEqual(resolution.decision, value, `resolution decision leaked: ${value}`);
+  }
+});
 
 function recoverableApprovalWorkflow() {
   return {
@@ -732,8 +774,8 @@ test('runner reuse hints: non-blocking stop redacts private fields and sensitive
     runsRoot,
     stepId: 'backend_implementation',
     json: JSON.stringify(stopOutput({
-      summary: `Need token --lease-token ${leaseToken} before continuing from ${customIndexPath} and ${desktopSecretPath}.`,
-      needed: `Inspect ${customBatonPath}, ${homeSecretPath}, ~/.ssh/id_ed25519, ~alice/.ssh/id_ed25519, file:///Users/alice/secret.txt, and see:../../private/customer.csv before proceeding.`,
+      summary: `See https://github.com/MrFlashAccount/UltraSkills before continuing with token --lease-token ${leaseToken} from ${customIndexPath} and ${desktopSecretPath}.`,
+      needed: `Inspect ${customBatonPath}, ${homeSecretPath}, [~/.ssh/id_ed25519], <~alice/.ssh/id_ed25519>, [file:///Users/alice/secret.txt], path[../../private/customer.csv], and [/home/alice/private.txt] before proceeding.`,
       evidence: [
         `${runDir}/.workflow-runner/durable-commit.json`,
         customHistoryPath,
@@ -741,7 +783,7 @@ test('runner reuse hints: non-blocking stop redacts private fields and sensitive
         '../../private/customer.csv',
         'AKIAIOSFODNN7EXAMPLE',
       ],
-      risk: `Leaking ${customRunsRoot}, /private/var/folders/secret, password=hunter2, AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY, or AWS_SESSION_TOKEN=abc+def/ghi would expose private run state.`,
+      risk: `Leaking ${customRunsRoot}, /private/var/folders/secret, password=hunter2, "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", 'AWS_SESSION_TOKEN': 'abc+def/ghi==', {"service.auth.token":"abc/DEF+ghi=="}, or \`namespace_password\` = \`hunter2\` would expose private run state.`,
       transcript: 'private transcript must not be projected',
       hidden_prompt: 'private prompt must not be projected',
       token: leaseToken,
@@ -765,7 +807,8 @@ test('runner reuse hints: non-blocking stop redacts private fields and sensitive
   assert.doesNotMatch(persistedText, /\/home\/sergey/);
   assert.doesNotMatch(persistedText, /\/tmp\/not-public/);
   assert.doesNotMatch(persistedText, /\/private\/var/);
-  assert.doesNotMatch(persistedText, /\.ssh|file:\/\/|\.\.\/\.\.\/private|AKIAIOSFODNN7EXAMPLE|hunter2|wJalrXUtnFEMI|abc\+def/);
+  assert.doesNotMatch(persistedText, /\.ssh|file:\/\/Users|\.\.\/\.\.\/private|\/home\/alice|AKIAIOSFODNN7EXAMPLE|hunter2|wJalrXUtnFEMI|abc\+def|abc\/DEF/);
+  assert.match(persistedText, /https:\/\/github\.com\/MrFlashAccount\/UltraSkills/);
   assert.match(persistedText, /local filesystem path/);
 
   const recovery = await continueRun({ runId, workflowPath, runsRoot, leaseToken, now });
@@ -785,6 +828,7 @@ test('runner reuse hints: non-blocking stop redacts private fields and sensitive
   assert.doesNotMatch(projectedText, /\/tmp\/not-public/);
   assert.doesNotMatch(projectedText, /\/private\/var/);
   assert.match(projected.summary, /\[redacted-lease-token\]/);
+  assert.match(projected.summary, /https:\/\/github\.com\/MrFlashAccount\/UltraSkills/);
   assert.match(projected.summary, /workflow runs index/);
   assert.match(projected.summary, /local filesystem path/);
   assert.match(projected.needed, /workflow baton private state/);
@@ -797,9 +841,9 @@ test('runner reuse hints: non-blocking stop redacts private fields and sensitive
     runsRoot,
     stepId: 'backend_implementation',
     json: JSON.stringify(resolutionOutput({
-      summary: `Resolved with ${desktopSecretPath}.`,
-      decision: `Continue after reading ${homeSecretPath}.`,
-      evidence: [tmpSecretPath],
+      summary: `Resolved via https://example.com/help after checking <${desktopSecretPath}>.`,
+      decision: `Continue after reading [${homeSecretPath}] with "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".`,
+      evidence: [`[${tmpSecretPath}]`, '[C:\\Users\\alice\\secret.txt]'],
     })),
     leaseToken,
     now,
@@ -810,9 +854,11 @@ test('runner reuse hints: non-blocking stop redacts private fields and sensitive
   assert.doesNotMatch(persistedResolutionText, /Desktop\/secret/);
   assert.doesNotMatch(persistedResolutionText, /\/home\/sergey/);
   assert.doesNotMatch(persistedResolutionText, /\/tmp\/not-public/);
+  assert.doesNotMatch(persistedResolutionText, /wJalrXUtnFEMI|C:\\Users/);
   assert.match(persistedResolutionText, /local filesystem path/);
+  assert.match(persistedResolutionText, /https:\/\/example\.com\/help/);
   const historyText = readFileSync(path.join(runDir, 'history.md'), 'utf8');
-  assert.doesNotMatch(historyText, /Need token|Inspect .*before proceeding|Resolved with|Continue after reading/);
+  assert.doesNotMatch(historyText, /See https|Inspect .*before proceeding|Resolved via|Continue after reading/);
 });
 
 test('runner reuse hints: write-output rejects binding metadata and preserves workerBindings', async () => {
