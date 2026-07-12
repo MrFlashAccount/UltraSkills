@@ -146,9 +146,15 @@ test('UI proposal contract rejects generic card-drawer routing and requires comp
     'ui-direction-c.png',
     'ui-direction-d.png',
     'ui-selected-desktop.png',
-    'ui-selected-mobile.png',
-    'ui-state-recovery.png',
+    'ui-flow-01.png',
+    'ui-flow-02.png',
+    'ui-flow-03.png',
+    'ui-flow-04.png',
+    'ui-state-loading.png',
+    'ui-state-empty.png',
+    'ui-state-error.png',
     'ui-state-pathological-data.png',
+    'ui-selected-mobile.png',
   ]);
   assert.doesNotMatch(uiProposalTemplate, /surface-placeholder/);
   assert.match(uiProposalTemplate, /Each direction needs its own rendered composition frame/);
@@ -161,9 +167,9 @@ test('UI proposal contract rejects generic card-drawer routing and requires comp
   ]) {
     assert.match(uiProposalTemplate, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
-  assert.match(sharedTemplatesReadme, /product\/surface routing, design-basis preflight, user decisions/);
+  assert.match(sharedTemplatesReadme, /REASONS visual-evidence chain/);
   assert.match(sharedTemplatesReadme, /sibling raster image artifacts/);
-  assert.match(sharedTemplatesReadme, /conditional selected-pattern contracts/);
+  assert.match(sharedTemplatesReadme, /selected-pattern contracts remain conditional/);
   assert.match(artifactDescription, /ready_for_attack or ready_for_approval/);
   assert.match(artifactUsage, /both ready_for_attack and ready_for_approval/);
   assert.match(artifactUsage, /linked raster image artifact/);
@@ -186,6 +192,66 @@ test('UI proposal contract rejects generic card-drawer routing and requires comp
   assert.match(frontendUiPrSmoke.steps.design_attack.input.prompt, /cross-view drift/);
   assert.doesNotMatch(draftPrompt, /return blocked|blocker\.source_step_id/);
   assert.doesNotMatch(frontendUiPrSmoke.steps.design_draft.input.prompt, /return blocked|blocker\.source_step_id/);
+});
+
+test('UI proposal template and design workers preserve the REASONS visual-evidence checkpoint', () => {
+  const devDraftPrompt = Array.isArray(devHarness.steps.ui_intent_draft.input.prompt)
+    ? devHarness.steps.ui_intent_draft.input.prompt.join('\n')
+    : devHarness.steps.ui_intent_draft.input.prompt;
+  const devAttackPrompt = Array.isArray(devHarness.steps.ui_intent_attack.input.prompt)
+    ? devHarness.steps.ui_intent_attack.input.prompt.join('\n')
+    : devHarness.steps.ui_intent_attack.input.prompt;
+  const smokeDraftPrompt = Array.isArray(frontendUiPrSmoke.steps.design_draft.input.prompt)
+    ? frontendUiPrSmoke.steps.design_draft.input.prompt.join('\n')
+    : frontendUiPrSmoke.steps.design_draft.input.prompt;
+  const smokeAttackPrompt = Array.isArray(frontendUiPrSmoke.steps.design_attack.input.prompt)
+    ? frontendUiPrSmoke.steps.design_attack.input.prompt.join('\n')
+    : frontendUiPrSmoke.steps.design_attack.input.prompt;
+  const expectedSections = [
+    'requirements',
+    'entities',
+    'approach',
+    'structure',
+    'operations',
+    'norms',
+    'safeguards',
+  ];
+  const templateViews = [...uiProposalTemplate.matchAll(/<section class="reason-view(?: active)?" id="([^"]+)">/g)]
+    .map((match) => match[1]);
+  const templateTabs = [...uiProposalTemplate.matchAll(/class="reason-tab" data-view="([^"]+)"/g)]
+    .map((match) => match[1]);
+
+  assert.deepEqual(templateViews, expectedSections);
+  assert.deepEqual(templateTabs, expectedSections);
+  assert.match(uiProposalTemplate, /What must become true\?/);
+  assert.match(uiProposalTemplate, /Domain map/);
+  assert.match(uiProposalTemplate, /Comparison contract:<\/strong> same content, scenario, state, selected object, and viewport/);
+  assert.match(uiProposalTemplate, /Composition anatomy/);
+  assert.match(uiProposalTemplate, /Behavior sequence/);
+  assert.match(uiProposalTemplate, /Interface constitution/);
+  assert.match(uiProposalTemplate, /Failure boundary/);
+  assert.match(uiProposalTemplate, /A flat image gallery without a stated trade-off and evidence link is invalid/);
+
+  for (const draftPrompt of [devDraftPrompt, smokeDraftPrompt]) {
+    assert.match(draftPrompt, /REASONS interface as the mandatory content architecture/);
+    assert.match(draftPrompt, /Requirements = one .*outcome, boundaries, and acceptance signals/);
+    assert.match(draftPrompt, /Entities = a domain-object relationship map/);
+    assert.match(draftPrompt, /Approach = controlled direction comparison/);
+    assert.match(draftPrompt, /Structure = annotated chosen-surface anatomy and containment/);
+    assert.match(draftPrompt, /Operations = a primary-scenario storyboard/);
+    assert.match(draftPrompt, /Norms = observable interface laws/);
+    assert.match(draftPrompt, /Safeguards = rendered stress cases and approval gates/);
+    assert.match(draftPrompt, /gallery/);
+  }
+
+  for (const attackPrompt of [devAttackPrompt, smokeAttackPrompt]) {
+    assert.match(attackPrompt, /full REASONS visual-evidence chain/);
+    assert.match(attackPrompt, /restyled .*Markdown document|Markdown-like document merely restyled/);
+    assert.match(attackPrompt, /proposal (?:made|that consists) primarily of .*direction images|proposal that consists mainly of 3-4 direction images/);
+    assert.match(attackPrompt, /Structure annotated anatomy/);
+    assert.match(attackPrompt, /Operations (?:a )?storyboard/);
+    assert.match(attackPrompt, /Safeguards rendered stress cases and approval gates/);
+  }
 });
 
 for (const gate of revisionGates) {

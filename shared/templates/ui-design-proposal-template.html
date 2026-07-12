@@ -6,366 +6,226 @@
   <title>&lt;Project/Issue&gt; UI Design Proposal - &lt;Surface&gt;</title>
   <style>
     :root {
-      color-scheme: light dark;
-      --bg: #0f1115;
-      --panel: #171a21;
-      --panel-2: #20242d;
-      --text: #f2f5f8;
-      --muted: #a8b0bd;
-      --line: #343946;
-      --accent: #7aa2f7;
-      --ok: #8bd5a5;
-      --warn: #f2c97d;
-      --danger: #f28f8f;
+      color-scheme: dark;
+      --bg: #0c0d10;
+      --panel: #15171c;
+      --panel-2: #1d2026;
+      --text: #f3f5f7;
+      --muted: #9299a4;
+      --line: #2d3139;
+      --accent: #d6ff52;
+      --ok: #55d69a;
+      --warn: #ffad68;
+      --danger: #ff7470;
     }
 
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
-    main { max-width: 1280px; margin: 0 auto; padding: 24px; }
-    section { margin: 28px 0; }
-    h1, h2, h3 { margin: 0 0 12px; line-height: 1.15; }
-    p { color: var(--muted); margin: 0 0 12px; }
-    .proposal-header, .frame, .spec, .flow, .annotation {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 8px;
-    }
-    .proposal-header { padding: 20px; }
-    .grid { display: grid; gap: 16px; }
-    .grid.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    .direction-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-    .direction-option { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 16px; }
-    .direction-option .frame { margin: 12px 0; }
-    .frame { margin: 0; overflow: hidden; }
-    .frame.mobile { max-width: 420px; }
+    html, body { min-height: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; }
+    button { color: inherit; font: inherit; }
+    .proposal { min-height: 100vh; display: grid; grid-template-rows: auto auto 1fr; }
+    .proposal-header { display: flex; align-items: center; gap: 20px; padding: 18px 24px; border-bottom: 1px solid var(--line); }
+    .proposal-header h1 { margin: 0; font-size: 17px; letter-spacing: -.025em; }
+    .proposal-header p { margin: 0; color: var(--muted); font-size: 11px; }
+    .proposal-status { margin-left: auto; white-space: nowrap; color: var(--warn); font: 700 10px/1 ui-monospace, monospace; }
+    .proposal-status::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: currentColor; }
+
+    .reasons-rail { position: sticky; top: 0; z-index: 10; display: grid; grid-template-columns: repeat(7, minmax(112px, 1fr)); gap: 6px; padding: 10px 18px; overflow-x: auto; border-bottom: 1px solid var(--line); background: rgba(12,13,16,.95); backdrop-filter: blur(16px); }
+    .reason-tab { min-width: 112px; padding: 10px; border: 1px solid transparent; border-radius: 10px; background: transparent; text-align: left; cursor: pointer; color: #747b86; }
+    .reason-tab:hover { color: var(--text); background: var(--panel); }
+    .reason-tab[aria-selected="true"] { color: var(--text); border-color: #3a3f49; background: var(--panel-2); }
+    .reason-letter { display: block; color: var(--accent); font: 850 17px/1 ui-monospace, monospace; }
+    .reason-name { display: block; margin-top: 6px; font-size: 10px; font-weight: 750; }
+    .reason-proof { display: block; margin-top: 3px; color: #666e79; font: 650 8px/1 ui-monospace, monospace; }
+
+    .reason-view { display: none; min-height: calc(100vh - 144px); padding: 22px 24px 30px; }
+    .reason-view.active { display: block; }
+    .view-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+    .view-head h2 { margin: 5px 0 0; font-size: clamp(26px, 4vw, 44px); line-height: 1; letter-spacing: -.045em; }
+    .view-kicker { color: var(--accent); font: 800 9px/1 ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; }
+    .view-purpose { max-width: 430px; margin: 0; color: var(--muted); font-size: 11px; text-align: right; }
+    .card, .frame, .spec, .annotation { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; }
+    .card, .spec, .annotation { padding: 17px; }
+    .label { color: #717987; font: 800 8px/1 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .grid { display: grid; gap: 12px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .proposal-image { display: block; width: 100%; height: auto; background: var(--panel-2); }
-    figcaption { padding: 10px 12px; color: var(--muted); border-top: 1px solid var(--line); }
-    .spec { padding: 16px; }
-    .spec table { width: 100%; border-collapse: collapse; }
-    .spec th, .spec td {
-      border-top: 1px solid var(--line);
-      padding: 8px;
-      text-align: left;
-      vertical-align: top;
-    }
-    .chip {
-      display: inline-flex;
-      max-width: 100%;
-      align-items: center;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 2px 8px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .token {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      overflow-wrap: anywhere;
-    }
-    .flow { padding: 16px; min-height: 160px; }
-    .annotation { padding: 12px; color: var(--muted); }
+    figcaption { padding: 9px 11px; color: var(--muted); border-top: 1px solid var(--line); font-size: 9px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 11px; }
+    th { color: #79818d; font: 750 8px/1 ui-monospace, monospace; text-transform: uppercase; }
     .must { color: var(--ok); }
     .risk { color: var(--warn); }
     .forbidden { color: var(--danger); }
-    @media (max-width: 760px) {
-      main { padding: 16px; }
-      .grid.two, .direction-grid { grid-template-columns: 1fr; }
+
+    .requirement-layout { display: grid; grid-template-columns: 1.35fr .85fr; gap: 12px; }
+    .requirement-statement { min-height: 250px; display: flex; flex-direction: column; justify-content: space-between; padding: 24px; background: #f0eee8; color: #111317; }
+    .requirement-statement strong { max-width: 780px; font-size: clamp(27px, 4vw, 56px); line-height: .98; letter-spacing: -.055em; }
+    .signals { display: grid; gap: 12px; }
+    .signal-card b { display: block; margin: 13px 0 5px; font-size: 17px; }
+    .signal-card p { margin: 0; color: var(--muted); font-size: 10px; }
+
+    .entity-layout { display: grid; grid-template-columns: 1.4fr .8fr; gap: 12px; }
+    .entity-map { min-height: 430px; position: relative; background: radial-gradient(circle at center, #20242b, #13151a 66%); }
+    .entity-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .entity-map line { stroke: #4c535f; stroke-width: 1.2; }
+    .entity-map line.primary { stroke: var(--accent); stroke-width: 1.8; }
+    .entity-node { position: absolute; width: 150px; padding: 13px; border: 1px solid #404651; border-radius: 11px; background: #1a1d23; }
+    .entity-node strong { display: block; font-size: 11px; }
+    .entity-node span { display: block; margin-top: 5px; color: #78808c; font: 650 8px/1.35 ui-monospace, monospace; }
+    .entity-node.primary { border-color: var(--accent); }
+    .entity-node:nth-child(1) { left: 6%; top: 41%; }
+    .entity-node:nth-child(2) { left: 38%; top: 13%; }
+    .entity-node:nth-child(3) { left: 42%; top: 48%; }
+    .entity-node:nth-child(4) { right: 7%; top: 23%; }
+    .entity-node:nth-child(5) { right: 9%; bottom: 8%; }
+    .entity-node:nth-child(6) { left: 14%; bottom: 8%; }
+
+    .direction-note { margin: 0 0 12px; color: var(--muted); font-size: 11px; }
+    .direction-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .direction-option { position: relative; display: grid; grid-template-rows: minmax(260px, 1fr) auto; min-width: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; }
+    .direction-option.recommended { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    .direction-option.recommended::after { content: "RECOMMENDED"; position: absolute; right: 9px; top: 9px; padding: 5px 7px; border-radius: 999px; background: var(--accent); color: #121507; font: 900 7px/1 ui-monospace, monospace; }
+    .direction-frame { min-height: 260px; margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: #deddd8; }
+    .direction-copy { padding: 13px; }
+    .direction-copy h3 { margin: 0 0 7px; font-size: 12px; }
+    .direction-copy p { margin: 5px 0; color: var(--muted); font-size: 9px; }
+
+    .anatomy-layout { display: grid; grid-template-columns: 1.4fr .75fr; gap: 12px; }
+    .anatomy-frame { min-height: 460px; margin: 0; background: #deddd8; }
+    .anatomy-list { display: grid; gap: 9px; }
+    .anatomy-item { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+    .anatomy-item b { width: 21px; height: 21px; display: grid; place-items: center; border-radius: 50%; background: #292d34; color: var(--accent); font: 800 8px/1 ui-monospace, monospace; }
+    .anatomy-item strong { display: block; font-size: 10px; }
+    .anatomy-item span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+
+    .storyboard { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; }
+    .moment { position: relative; min-width: 0; }
+    .moment:not(:last-child)::after { content: "→"; position: absolute; right: -17px; top: 40%; z-index: 2; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: #111; font-weight: 900; }
+    .moment .frame { min-height: 300px; margin: 0; background: #deddd8; }
+    .moment h3 { margin: 10px 0 3px; font-size: 11px; }
+    .moment p { margin: 0; color: var(--muted); font-size: 9px; }
+
+    .norm-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .norm-card { min-height: 160px; }
+    .norm-card h3 { margin: 17px 0 6px; font-size: 16px; }
+    .norm-card p { margin: 0; color: var(--muted); font-size: 10px; }
+    .norm-code { color: var(--accent); font: 800 9px/1 ui-monospace, monospace; }
+
+    .safeguard-layout { display: grid; grid-template-columns: 1fr 280px; gap: 12px; }
+    .stress-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+    .stress-card { min-height: 170px; display: flex; flex-direction: column; }
+    .stress-card header { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; font-weight: 750; }
+    .stress-card figure { margin: 10px 0; border-radius: 8px; }
+    .stress-card footer { margin-top: auto; color: var(--muted); font-size: 8px; }
+    .result-pass { color: var(--ok); }
+    .result-risk { color: var(--warn); }
+
+    @media (max-width: 980px) {
+      .direction-grid, .storyboard { grid-template-columns: repeat(2, 1fr); }
+      .norm-grid, .stress-grid { grid-template-columns: repeat(2, 1fr); }
+      .requirement-layout, .entity-layout, .anatomy-layout, .safeguard-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 620px) {
+      .proposal-header p, .view-purpose { display: none; }
+      .reason-view { padding: 16px; }
+      .direction-grid, .storyboard, .norm-grid, .stress-grid, .grid.two, .grid.three { grid-template-columns: 1fr; }
+      .moment:not(:last-child)::after { display: none; }
+    }
+    @media print {
+      .reasons-rail { display: none; }
+      .reason-view { display: block; min-height: 0; break-before: page; }
+      .reason-view:first-of-type { break-before: auto; }
     }
   </style>
 </head>
 <body>
-  <main>
+  <main class="proposal">
     <header class="proposal-header">
-      <h1>&lt;Project/Issue&gt; UI Design Proposal - &lt;Surface&gt;</h1>
-      <p>This HTML artifact and its sibling raster image artifacts form the first-class design proposal. The images carry the proposed screens; this document records their routed product surface, design basis, decisions, annotations, selected UI patterns, states, evidence, and proof expectations.</p>
-      <div class="grid two">
-        <div><strong>Owner:</strong> &lt;name&gt;</div>
-        <div><strong>Date:</strong> &lt;date&gt;</div>
-        <div><strong>Source artifacts:</strong> &lt;links/paths&gt;</div>
-        <div><strong>UI applicability:</strong> Applicable | Trivial / preserve existing UI | Not applicable</div>
-      </div>
+      <div><h1>&lt;Project/Issue&gt; UI Design Proposal — &lt;Surface&gt;</h1><p>Visual decision evidence derived from the approved REASONS research Canvas. This neutral viewer chrome is not product design law.</p></div>
+      <div class="proposal-status">&lt;ready / needs decision / blocked&gt;</div>
     </header>
 
-    <section>
-      <h2>UI Applicability And Product / Surface Route</h2>
-      <div class="spec">
-        <table>
-          <thead><tr><th>Decision</th><th>Route / evidence</th><th>Consequence</th></tr></thead>
-          <tbody>
-            <tr><td>UI applicability</td><td>&lt;why this needs a proposal, preserves existing UI, or is not applicable&gt;</td><td>&lt;proposal/review depth required&gt;</td></tr>
-            <tr><td>Product / surface route</td><td>&lt;application workflow, admin, form, table, document, navigation, marketing, mixed, etc. + repo evidence&gt;</td><td>&lt;which existing conventions apply&gt;</td></tr>
-          </tbody>
-        </table>
+    <nav class="reasons-rail" aria-label="REASONS proposal sections">
+      <button class="reason-tab" data-view="requirements" aria-selected="true"><span class="reason-letter">R</span><span class="reason-name">Requirements</span><span class="reason-proof">outcome · boundary · signal</span></button>
+      <button class="reason-tab" data-view="entities" aria-selected="false"><span class="reason-letter">E</span><span class="reason-name">Entities</span><span class="reason-proof">objects · relations · state</span></button>
+      <button class="reason-tab" data-view="approach" aria-selected="false"><span class="reason-letter">A</span><span class="reason-name">Approach</span><span class="reason-proof">options · trade-offs · choice</span></button>
+      <button class="reason-tab" data-view="structure" aria-selected="false"><span class="reason-letter">S</span><span class="reason-name">Structure</span><span class="reason-proof">anatomy · hierarchy · containment</span></button>
+      <button class="reason-tab" data-view="operations" aria-selected="false"><span class="reason-letter">O</span><span class="reason-name">Operations</span><span class="reason-proof">storyboard · trigger · result</span></button>
+      <button class="reason-tab" data-view="norms" aria-selected="false"><span class="reason-letter">N</span><span class="reason-name">Norms</span><span class="reason-proof">visual and behavior laws</span></button>
+      <button class="reason-tab" data-view="safeguards" aria-selected="false"><span class="reason-letter">S</span><span class="reason-name">Safeguards</span><span class="reason-proof">stress proof · blocker · gate</span></button>
+    </nav>
+
+    <section class="reason-view active" id="requirements">
+      <div class="view-head"><div><div class="view-kicker">R · Desired outcome</div><h2>What must become true?</h2></div><p class="view-purpose">Normalize the approved research into one falsifiable user outcome. Show boundaries and acceptance signals; do not turn this into a feature list.</p></div>
+      <div class="requirement-layout">
+        <div class="card requirement-statement"><span class="label">Core requirement</span><strong>&lt;One concise user-visible outcome in verb-phrase form.&gt;</strong><small>&lt;Why it matters and who benefits.&gt;</small></div>
+        <div class="signals">
+          <div class="card signal-card"><span class="label">Acceptance signal 01</span><b>&lt;Observable signal&gt;</b><p>&lt;What rendered evidence would prove it.&gt;</p></div>
+          <div class="card signal-card"><span class="label">Acceptance signal 02</span><b>&lt;Observable signal&gt;</b><p>&lt;Threshold or visible behavior.&gt;</p></div>
+          <div class="card signal-card"><span class="label">Boundary / non-goal</span><b>&lt;Must not widen into…&gt;</b><p>&lt;Compatibility, scope, and what stays untouched.&gt;</p></div>
+        </div>
+      </div>
+      <div class="grid two" style="margin-top:12px">
+        <div class="spec"><span class="label">Product / surface route and design basis</span><table><tr><th>Input</th><th>Evidence</th><th>Allowed inference</th><th>Must not invent</th></tr><tr><td>UI applicability</td><td>Applicable | Trivial / preserve existing UI | Not applicable + reason</td><td>&lt;required proposal depth&gt;</td><td>&lt;UI work outside the task&gt;</td></tr><tr><td>Product/surface type, DESIGN.md, current UI, screenshots/references</td><td>&lt;paths or captures&gt;</td><td>&lt;grounded design law&gt;</td><td>&lt;unsupported direction&gt;</td></tr></table></div>
+        <div class="spec"><span class="label">User questions / decisions</span><table><tr><th>Decision</th><th>Status</th><th>Impact if wrong</th></tr><tr><td>&lt;Concrete user-owned choice&gt;</td><td>Answered | Assumed | Needs approval</td><td>&lt;layout/action/risk impact&gt;</td></tr></table></div>
       </div>
     </section>
 
-    <section>
-      <h2>Design-Basis Preflight</h2>
-      <div class="spec">
-        <table>
-          <thead><tr><th>Basis</th><th>Status / evidence</th><th>Allowed inference</th><th>Must not be invented</th></tr></thead>
-          <tbody>
-            <tr><td>DESIGN.md / design memory</td><td>&lt;present, absent, or not applicable; cite path if present&gt;</td><td>&lt;approved visual law that can be used&gt;</td><td>&lt;law unavailable from evidence&gt;</td></tr>
-            <tr><td>Existing UI / screenshots / references</td><td>&lt;paths, captures, approved references&gt;</td><td>&lt;patterns and qualities they prove&gt;</td><td>&lt;unsupported extrapolations&gt;</td></tr>
-            <tr><td>Fallback basis</td><td>&lt;only for small conservative work&gt;</td><td>&lt;portable guidance allowed&gt;</td><td>&lt;new durable direction requiring user/create-design approval&gt;</td></tr>
-          </tbody>
-        </table>
+    <section class="reason-view" id="entities">
+      <div class="view-head"><div><div class="view-kicker">E · Domain map</div><h2>What exists, and what owns what?</h2></div><p class="view-purpose">Show user-visible domain objects, their relationships, cardinality or state, and the questions they answer. Do not promote them into code components.</p></div>
+      <div class="entity-layout">
+        <div class="card entity-map"><svg viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true"><line x1="145" y1="300" x2="450" y2="325" class="primary"/><line x1="455" y1="120" x2="490" y2="300"/><line x1="500" y1="320" x2="820" y2="170" class="primary"/><line x1="500" y1="330" x2="820" y2="500"/><line x1="470" y1="340" x2="230" y2="500"/></svg><div class="entity-node"><strong>&lt;Actor&gt;</strong><span>&lt;verb / intent&gt;</span></div><div class="entity-node"><strong>&lt;Work surface&gt;</strong><span>&lt;owns context&gt;</span></div><div class="entity-node primary"><strong>&lt;Core entity&gt;</strong><span>&lt;state + relationships&gt;</span></div><div class="entity-node"><strong>&lt;Related entity&gt;</strong><span>&lt;facts exposed&gt;</span></div><div class="entity-node"><strong>&lt;Metadata&gt;</strong><span>&lt;belongs to…&gt;</span></div><div class="entity-node"><strong>&lt;Presentation surface&gt;</strong><span>&lt;presents, owns nothing&gt;</span></div></div>
+        <div class="spec"><span class="label">Entity contract</span><table><tr><th>Entity</th><th>User question</th><th>Primary facts</th><th>Deferred facts</th><th>States</th></tr><tr><td>&lt;Entity&gt;</td><td>&lt;What the user needs to know&gt;</td><td>&lt;Visible first&gt;</td><td>&lt;On demand or hidden&gt;</td><td>&lt;Loading/empty/error/selected/etc.&gt;</td></tr></table><p class="risk">If the domain cannot be represented without raw debug metadata, the proposal is not ready.</p></div>
       </div>
     </section>
 
-    <section>
-      <h2>User, Task, And Actions</h2>
-      <div class="grid two">
-        <div class="spec"><h3>User / Task</h3><p>&lt;Who is acting, what they are trying to decide or complete, and the success signal.&gt;</p></div>
-        <div class="spec"><h3>Primary / Secondary Actions</h3><p>&lt;Name the primary action, secondary actions, destructive or deferred actions, and their priority.&gt;</p></div>
-      </div>
-    </section>
-
-    <section>
-      <h2>User Questions / Decisions</h2>
-      <div class="spec">
-        <table>
-          <thead><tr><th>Question / decision</th><th>Status</th><th>Answer / assumption</th><th>Layout or risk impact</th></tr></thead>
-          <tbody><tr><td>&lt;concrete user-facing decision&gt;</td><td>Answered | Assumed | Needs user approval</td><td>&lt;current answer&gt;</td><td>&lt;what changes if wrong&gt;</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <h2>First-Read Hierarchy And Screen Zones</h2>
-      <div class="grid two">
-        <div class="spec"><h3>First Read</h3><p>&lt;What must be understood first, second, and only on demand. Include the primary action and critical status/emphasis.&gt;</p></div>
-        <div class="spec"><h3>Screen / Zones</h3><p>&lt;Semantic zones needed for this surface: header, toolbar, form, table, document body, navigation, list, details, feedback, etc. Do not choose code files here.&gt;</p></div>
-      </div>
-    </section>
-
-    <section>
-      <h2>Direction Comparison — When Taste-Sensitive Or Materially New</h2>
-      <p>Compare 3-4 materially distinct, viable directions inside the available design basis. Each direction needs its own rendered composition frame and trade-off notes; four labels in one prose row are not a comparison. For conservative or trivial UI, mark this section not applicable and name the existing pattern being preserved.</p>
+    <section class="reason-view" id="approach">
+      <div class="view-head"><div><div class="view-kicker">A · Option space</div><h2>Which strategy satisfies the requirement?</h2></div><p class="view-purpose">Compare product-relevant structural directions with controlled inputs. Direction labels and prose are secondary to rendered evidence.</p></div>
+      <p class="direction-note"><strong>Comparison contract:</strong> same content, scenario, state, selected object, and viewport; only the direction changes. Each direction needs its own rendered composition frame. A flat image gallery without a stated trade-off and evidence link is invalid.</p>
       <div class="direction-grid">
-        <article class="direction-option" data-direction="A">
-          <h3>Direction A — &lt;name&gt;</h3>
-          <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
-          <figure class="frame direction-frame">
-            <img class="proposal-image" src="./ui-direction-a.png" alt="Direction A desktop UI mockup" width="1600" height="1000">
-            <figcaption>Generated raster mockup. Replace the filename and alt text only if the emitted image artifact uses a different stable name.</figcaption>
-          </figure>
-          <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
-          <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
-          <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
-        </article>
-        <article class="direction-option" data-direction="B">
-          <h3>Direction B — &lt;name&gt;</h3>
-          <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
-          <figure class="frame direction-frame">
-            <img class="proposal-image" src="./ui-direction-b.png" alt="Direction B desktop UI mockup" width="1600" height="1000">
-            <figcaption>Generated raster mockup. This must be a materially different composition, not a recolor of Direction A.</figcaption>
-          </figure>
-          <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
-          <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
-          <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
-        </article>
-        <article class="direction-option" data-direction="C">
-          <h3>Direction C — &lt;name&gt;</h3>
-          <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
-          <figure class="frame direction-frame">
-            <img class="proposal-image" src="./ui-direction-c.png" alt="Direction C desktop UI mockup" width="1600" height="1000">
-            <figcaption>Generated raster mockup. Keep only directions actually emitted as image artifacts.</figcaption>
-          </figure>
-          <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
-          <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
-          <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
-        </article>
-        <article class="direction-option" data-direction="D">
-          <h3>Direction D — &lt;name&gt;</h3>
-          <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
-          <figure class="frame direction-frame">
-            <img class="proposal-image" src="./ui-direction-d.png" alt="Direction D desktop UI mockup" width="1600" height="1000">
-            <figcaption>Generated raster mockup. Remove this option when only three viable directions are required.</figcaption>
-          </figure>
-          <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
-          <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
-          <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
-        </article>
+        <article class="direction-option" data-direction="A"><figure class="frame direction-frame"><img class="proposal-image" src="./ui-direction-a.png" alt="Direction A desktop UI mockup" width="1600" height="1000"><figcaption>Generated raster mockup using the shared scenario and content.</figcaption></figure><div class="direction-copy"><h3>A — &lt;working name&gt;</h3><p><strong>Product hypothesis:</strong> &lt;what this direction optimizes&gt;</p><p><strong>Trade-off:</strong> &lt;what it sacrifices&gt;</p><p><strong>Evidence:</strong> &lt;visible proof in frame&gt;</p></div></article>
+        <article class="direction-option" data-direction="B"><figure class="frame direction-frame"><img class="proposal-image" src="./ui-direction-b.png" alt="Direction B desktop UI mockup" width="1600" height="1000"><figcaption>Generated raster mockup; must be structurally distinct from A.</figcaption></figure><div class="direction-copy"><h3>B — &lt;working name&gt;</h3><p><strong>Product hypothesis:</strong> &lt;what this direction optimizes&gt;</p><p><strong>Trade-off:</strong> &lt;what it sacrifices&gt;</p><p><strong>Evidence:</strong> &lt;visible proof in frame&gt;</p></div></article>
+        <article class="direction-option" data-direction="C"><figure class="frame direction-frame"><img class="proposal-image" src="./ui-direction-c.png" alt="Direction C desktop UI mockup" width="1600" height="1000"><figcaption>Generated raster mockup; keep content and state controlled.</figcaption></figure><div class="direction-copy"><h3>C — &lt;working name&gt;</h3><p><strong>Product hypothesis:</strong> &lt;what this direction optimizes&gt;</p><p><strong>Trade-off:</strong> &lt;what it sacrifices&gt;</p><p><strong>Evidence:</strong> &lt;visible proof in frame&gt;</p></div></article>
+        <article class="direction-option recommended" data-direction="D"><figure class="frame direction-frame"><img class="proposal-image" src="./ui-direction-d.png" alt="Direction D desktop UI mockup" width="1600" height="1000"><figcaption>Generated raster mockup; remove when only three directions apply.</figcaption></figure><div class="direction-copy"><h3>D — &lt;working name&gt;</h3><p><strong>Product hypothesis:</strong> &lt;what this direction optimizes&gt;</p><p><strong>Trade-off:</strong> &lt;what it sacrifices&gt;</p><p><strong>Evidence:</strong> &lt;visible proof in frame&gt;</p></div></article>
       </div>
     </section>
 
-    <section>
-      <h2>Desktop Proposal</h2>
-      <figure class="frame">
-        <img class="proposal-image" src="./ui-selected-desktop.png" alt="Selected desktop UI proposal" width="1600" height="1000">
-        <figcaption>&lt;Viewport, represented state, first-read path, and annotations tied to this generated image.&gt;</figcaption>
-      </figure>
-    </section>
-
-    <section>
-      <h2>Mobile / Narrow Proposal</h2>
-      <figure class="frame mobile">
-        <img class="proposal-image" src="./ui-selected-mobile.png" alt="Selected 390px-class mobile UI proposal" width="780" height="1688">
-        <figcaption>&lt;Viewport, containment changes, action priority, and annotations tied to this generated image.&gt;</figcaption>
-      </figure>
-    </section>
-
-    <section>
-      <h2>States And Pathological Data</h2>
-      <div class="grid two">
-        <figure class="frame">
-          <img class="proposal-image" src="./ui-state-recovery.png" alt="Loading, empty, error, or degraded UI state" width="1600" height="1000">
-          <figcaption>&lt;Name the represented recovery state and expected action.&gt;</figcaption>
-        </figure>
-        <figure class="frame">
-          <img class="proposal-image" src="./ui-state-pathological-data.png" alt="UI with pathological long or dense data" width="1600" height="1000">
-          <figcaption>&lt;Name the long-label, dense-data, selection, or expanded-detail stress case.&gt;</figcaption>
-        </figure>
+    <section class="reason-view" id="structure">
+      <div class="view-head"><div><div class="view-kicker">S · Composition anatomy</div><h2>Where does each responsibility live?</h2></div><p class="view-purpose">Turn the chosen approach into an annotated surface map: reading order, hierarchy, containment, responsive morph, and pattern-specific responsibilities.</p></div>
+      <div class="anatomy-layout">
+        <figure class="frame anatomy-frame"><img class="proposal-image" src="./ui-selected-desktop.png" alt="Annotated selected desktop UI proposal" width="1600" height="1000"><figcaption>Generated selected-direction raster. Tie numbered anatomy notes to visible zones in this image.</figcaption></figure>
+        <div class="card anatomy-list"><span class="label">Surface contract</span><div class="anatomy-item"><b>1</b><div><strong>&lt;First-read zone&gt;</strong><span>&lt;content, priority, and responsibility&gt;</span></div></div><div class="anatomy-item"><b>2</b><div><strong>&lt;Primary work surface&gt;</strong><span>&lt;what remains visible and stable&gt;</span></div></div><div class="anatomy-item"><b>3</b><div><strong>&lt;Detail / secondary surface if selected&gt;</strong><span>&lt;placement, selection, containment, focus return&gt;</span></div></div><div class="anatomy-item"><b>4</b><div><strong>&lt;Actions / feedback&gt;</strong><span>&lt;priority, danger, and visibility&gt;</span></div></div></div>
       </div>
+      <div class="grid two" style="margin-top:12px"><div class="spec"><span class="label">Responsive containment</span><p>&lt;Show desktop and narrow morph only where behavior or hierarchy changes. Specify no-selection/open/closed states, inner scroll, safe-area, no page-level horizontal overflow, and compact-control containment.&gt;</p></div><div class="spec"><span class="label">Selected-pattern contract</span><p>&lt;Only for patterns actually chosen: card/list anatomy, drawer/sidebar/bottom-sheet placement, wrapping/truncation, focus, animation, and reduced-motion. Do not include generic pattern inventories.&gt;</p></div></div>
     </section>
 
-    <section>
-      <h2>Product-Level Data Hierarchy</h2>
-      <div class="spec">
-        <table>
-          <thead>
-            <tr><th>Product concept</th><th>User question answered</th><th>Primary facts</th><th>Secondary facts</th><th>Debug / detail-only facts</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>&lt;Run / item / object / account / task&gt;</td><td>&lt;what the user needs to decide&gt;</td><td>&lt;facts visible first&gt;</td><td>&lt;facts visible after scan&gt;</td><td>&lt;facts deferred to an applicable expanded-detail pattern or otherwise hidden&gt;</td></tr>
-          </tbody>
-        </table>
-      </div>
+    <section class="reason-view" id="operations">
+      <div class="view-head"><div><div class="view-kicker">O · Behavior sequence</div><h2>How does the experience unfold?</h2></div><p class="view-purpose">Use a visual storyboard for the primary scenario. Each moment must name its trigger, visible state change, focus result, and recovery path.</p></div>
+      <div class="storyboard"><article class="moment"><figure class="frame"><img class="proposal-image" src="./ui-flow-01.png" alt="Primary scenario starting state" width="1600" height="1000"></figure><h3>&lt;User sees / finds&gt;</h3><p>Trigger: &lt;input&gt; · Result: &lt;visible outcome&gt;</p></article><article class="moment"><figure class="frame"><img class="proposal-image" src="./ui-flow-02.png" alt="Primary scenario invocation state" width="1600" height="1000"></figure><h3>&lt;User invokes&gt;</h3><p>Trigger: &lt;input&gt; · Focus: &lt;target&gt;</p></article><article class="moment"><figure class="frame"><img class="proposal-image" src="./ui-flow-03.png" alt="Primary scenario inspection or edit state" width="1600" height="1000"></figure><h3>&lt;User understands / changes&gt;</h3><p>State: &lt;selected/loading/error/etc.&gt;</p></article><article class="moment"><figure class="frame"><img class="proposal-image" src="./ui-flow-04.png" alt="Primary scenario completion or recovery state" width="1600" height="1000"></figure><h3>&lt;User completes / recovers&gt;</h3><p>Result: &lt;success signal&gt; · Escape: &lt;path&gt;</p></article></div>
+      <div class="spec" style="margin-top:12px"><span class="label">Operation contract</span><table><tr><th>Moment</th><th>Trigger</th><th>Visible change</th><th>Focus / keyboard</th><th>Motion / reduced motion</th><th>Failure / recovery</th></tr><tr><td>&lt;01–04&gt;</td><td>&lt;click/tap/key/system&gt;</td><td>&lt;observable result&gt;</td><td>&lt;focus target and return&gt;</td><td>&lt;purposeful transition / equivalent&gt;</td><td>&lt;error and next action&gt;</td></tr></table></div>
     </section>
 
-    <section>
-      <h2>Conditional Pattern: Card / List Anatomy</h2>
-      <div class="grid two">
-        <div class="spec">
-          <h3>Applicability And Structure</h3>
-          <p><strong>Pattern status:</strong> Selected | Not selected. Complete the contract below only when cards or list rows are part of the approved direction; otherwise state why another pattern fits better.</p>
-          <table>
-            <thead>
-              <tr><th>Zone</th><th>Content</th><th>Visual rule</th><th>Interaction</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Header</td><td>&lt;primary label/title + status&gt;</td><td>&lt;single first-read line; no raw ids unless title&gt;</td><td>&lt;click/select target&gt;</td></tr>
-              <tr><td>Body</td><td>&lt;2-4 key facts&gt;</td><td>&lt;label/value rows, stable gaps, no debug dump&gt;</td><td>&lt;optional inline affordance&gt;</td></tr>
-              <tr><td>Footer/meta</td><td>&lt;timestamp, owner, secondary status&gt;</td><td>&lt;muted, compact, contained&gt;</td><td>&lt;secondary action if needed&gt;</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="spec">
-          <h3>Card Visual Contract</h3>
-          <p><span class="must">Must define:</span> radius, padding, min/max size, selected/unselected/hover/focus states, density, and what makes the card readable in two seconds.</p>
-          <p><span class="forbidden">Forbidden by default:</span> one-letter wraps, unbounded rounded pills around long text, raw technical dumps, accidental card growth from long ids, and hidden horizontal overflow.</p>
-        </div>
-      </div>
+    <section class="reason-view" id="norms">
+      <div class="view-head"><div><div class="view-kicker">N · Interface constitution</div><h2>Which rules must remain consistent?</h2></div><p class="view-purpose">Express reusable, reviewable laws. Every norm must be observable in at least one frame or state, not merely asserted in prose.</p></div>
+      <div class="norm-grid"><div class="card norm-card"><span class="norm-code">N-01</span><h3>Typography scale / rhythm</h3><p>&lt;Roles, measure, weights, line height, long-content behavior, and rendered proof.&gt;</p></div><div class="card norm-card"><span class="norm-code">N-02</span><h3>Spacing / composition</h3><p>&lt;Grid, alignment, density, whitespace intent, and containment proof.&gt;</p></div><div class="card norm-card"><span class="norm-code">N-03</span><h3>Color / emphasis / contrast</h3><p>&lt;Surface roles, semantic states, non-color cues, and contrast proof.&gt;</p></div><div class="card norm-card"><span class="norm-code">N-04</span><h3>Focus-visible / target affordance</h3><p>&lt;Keyboard path, focus treatment, hover/press distinction, and target floor.&gt;</p></div><div class="card norm-card"><span class="norm-code">N-05</span><h3>Motion / reduced-motion</h3><p>&lt;Purpose, properties, timing, cause/effect, and reduced-motion equivalent.&gt;</p></div><div class="card norm-card"><span class="norm-code">N-06</span><h3>Content / copy hierarchy</h3><p>&lt;Labels, statuses, wrapping/truncation, deferred metadata, empty/error copy, icon semantics.&gt;</p></div></div>
     </section>
 
-    <section>
-      <h2>Conditional Pattern: Drawer / Sidebar / Bottom Sheet</h2>
-      <div class="spec">
-        <p><strong>Pattern status:</strong> Selected | Not selected. Complete the state contract below only when an overlay or persistent detail surface is part of the approved direction. Placement follows the design basis; desktop-right/mobile-bottom is not a universal default.</p>
-        <table>
-          <thead>
-            <tr><th>Breakpoint / state</th><th>Placement</th><th>Size / containment</th><th>Behavior</th><th>Animation</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Desktop selected</td><td>&lt;approved placement from design basis&gt;</td><td>&lt;width, max-width, scroll zone&gt;</td><td>&lt;selected item details, close affordance, focus behavior&gt;</td><td>&lt;duration/easing/transform/opacity + reduced-motion fallback&gt;</td></tr>
-            <tr><td>Mobile selected</td><td>&lt;approved narrow-screen placement&gt;</td><td>&lt;height/width cap, safe-area, inner scrolling&gt;</td><td>&lt;header/handle if applicable, dismiss behavior&gt;</td><td>&lt;approved transition + reduced-motion fallback&gt;</td></tr>
-            <tr><td>No selection</td><td>&lt;hidden, empty panel, or instructional placeholder&gt;</td><td>&lt;reserved or collapsed space&gt;</td><td>&lt;what users see before selecting an item&gt;</td><td>&lt;no jarring layout shift&gt;</td></tr>
-            <tr><td>Deselection / close</td><td>&lt;where panel goes&gt;</td><td>&lt;initiating surface state after close&gt;</td><td>&lt;focus returns to selected trigger or sensible origin&gt;</td><td>&lt;exit animation and reduced-motion behavior&gt;</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <h2>Wrapping / Truncation Rules</h2>
-      <div class="spec">
-        <table>
-          <thead>
-            <tr><th>Element type</th><th>Wrapping policy</th><th>Overflow behavior</th><th>Notes</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Buttons / tabs / segmented controls</td><td>Forbidden to wrap</td><td>Short label, icon, menu, or approved truncation</td><td>No accidental multi-line controls.</td></tr>
-            <tr><td>Chips / badges / pills / status labels</td><td>Forbidden to wrap</td><td>Ellipsis or move full value to detail</td><td>No one-letter line breaks.</td></tr>
-            <tr><td>Selected content pattern</td><td>&lt;controlled policy by pattern&gt;</td><td>Clamp, truncate, scroll, or move detail deliberately</td><td>No debug dumps or accidental growth.</td></tr>
-            <tr><td>Expanded detail, only when selected as a pattern</td><td>Allowed for prose/diagnostics</td><td>Contain long ids/tokens</td><td>Keep label/value hierarchy.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <h2>Cross-Pattern Visual And Interaction Contract</h2>
-      <div class="spec">
-        <table>
-          <thead><tr><th>Quality dimension</th><th>Approved contract</th><th>Evidence / token source</th><th>Rendered proof</th></tr></thead>
-          <tbody>
-            <tr><td>Typography scale / rhythm</td><td>&lt;type roles, sizes, weights, line heights, measure, heading/body/meta rhythm&gt;</td><td>&lt;existing type tokens or reference&gt;</td><td>&lt;where hierarchy and dense/long text are shown&gt;</td></tr>
-            <tr><td>Spacing / composition</td><td>&lt;spacing scale, grid/alignment, zone relationships, density, whitespace intent&gt;</td><td>&lt;layout tokens or existing surface&gt;</td><td>&lt;desktop/narrow frame showing containment&gt;</td></tr>
-            <tr><td>Color / emphasis / contrast</td><td>&lt;surface levels, action/status emphasis, non-color cues, target contrast&gt;</td><td>&lt;semantic color tokens or approved reference&gt;</td><td>&lt;normal, selected, error, disabled, high-emphasis states&gt;</td></tr>
-            <tr><td>Focus-visible / target affordance</td><td>&lt;focus indicator, hover/press distinction, target size/spacing, keyboard reading order&gt;</td><td>&lt;control primitives or accessibility basis&gt;</td><td>&lt;focused primary/secondary/destructive controls and dense targets&gt;</td></tr>
-            <tr><td>Motion / reduced-motion</td><td>&lt;purpose, trigger, properties, direction, duration/easing; reduced-motion equivalent&gt;</td><td>&lt;existing motion tokens/pattern or conservative fallback&gt;</td><td>&lt;transition states and reduced-motion behavior&gt;</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <h2>Components, Icons, Colors, Copy</h2>
-      <div class="grid two">
-        <div class="spec"><h3>Component Inventory</h3><p>&lt;selected controls, layout, forms, tables, navigation, state surfaces; include card/list or overlay components only when those patterns are selected&gt;</p></div>
-        <div class="spec"><h3>Color / Token Map</h3><p>&lt;status colors, accents, selected state, danger/warning/neutral, surfaces, borders&gt;</p></div>
-        <div class="spec"><h3>Icon Map</h3><p>&lt;icon names and where they appear&gt;</p></div>
-        <div class="spec"><h3>Copy Map</h3><p>&lt;labels, headings, empty/error messages, button text&gt;</p></div>
-      </div>
-    </section>
-
-    <section>
-      <h2>Flow / Microinteractions</h2>
-      <div class="flow">
-        Draw or describe applicable transitions: primary action, navigation, selection/detail when selected, form submit, filter/result, error/recovery, loading/ready.
-        Specify interaction triggers, focus target, keyboard/escape behavior where applicable, animation properties, direction, duration/easing, and reduced-motion behavior.
-      </div>
-    </section>
-
-    <section>
-      <h2>Responsive Containment</h2>
-      <div class="annotation">
-        <p>Specify desktop, tablet, and mobile containment for the selected work-surface patterns, toolbar, forms, tables, navigation, controls, chips, buttons, tabs, segmented controls, and status labels. Include cards/rows or drawer/sidebar only when selected. No page-level horizontal overflow. Compact controls must stay single-line; move controls into menus, stacks, or secondary rows instead of wrapping labels.</p>
-      </div>
-    </section>
-
-    <section>
-      <h2>Evidence And Rendered-Proof Expectations</h2>
-      <div class="spec">
-        <table>
-          <thead><tr><th>Evidence / proof</th><th>What it proves</th><th>Implementation capture required</th><th>Fidelity comparison</th></tr></thead>
-          <tbody>
-            <tr><td>&lt;screenshot/reference/current UI/proof page&gt;</td><td>&lt;hierarchy, composition, typography, behavior, tone, etc.&gt;</td><td>&lt;viewport, state, interaction, pathological data&gt;</td><td>&lt;qualities that must match and permitted differences&gt;</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <h2>Open Tensions</h2>
-      <div class="annotation">
-        <p>&lt;List unresolved but non-blocking tensions that architecture and implementation must preserve. If a tension materially changes layout, primary action, risk, density, or visual direction, move it to User Questions / Decisions and request approval instead of guessing.&gt;</p>
-      </div>
-    </section>
-
-    <section>
-      <h2>Review Checklist</h2>
-      <div class="annotation">
-        <p>UI applicability, product/surface route, design basis, user/task/actions, user decisions, first-read hierarchy, screen zones, evidence/proof expectations, and open tensions are explicit. No wrapped compact controls or one-letter wraps. No raw debug dumps. Selected pattern contracts are complete; card/list and drawer/sidebar requirements apply only when those patterns are selected. No page-level horizontal overflow. Every applicable direction, desktop/mobile proposal, and important state is a generated raster image artifact embedded through a relative <code>&lt;img&gt;</code> source. Pathological data is represented. Content priority, typography/rhythm, spacing/composition, emphasis/contrast, focus affordance, motion/reduced-motion, and fidelity are reviewable.</p>
+    <section class="reason-view" id="safeguards">
+      <div class="view-head"><div><div class="view-kicker">S · Failure boundary</div><h2>Where must the proposal survive?</h2></div><p class="view-purpose">Turn constraints into rendered stress cases and approval gates. A missing critical proof is visible as a blocker, not buried in open-tensions prose.</p></div>
+      <div class="safeguard-layout">
+        <div class="stress-grid"><article class="card stress-card"><header><span>Loading / pending</span><span class="result-pass">PASS | RISK</span></header><figure class="frame"><img class="proposal-image" src="./ui-state-loading.png" alt="Loading or pending UI state" width="1600" height="1000"></figure><footer>&lt;rhythm, action, and stability expectation&gt;</footer></article><article class="card stress-card"><header><span>Empty / first use</span><span class="result-pass">PASS | RISK</span></header><figure class="frame"><img class="proposal-image" src="./ui-state-empty.png" alt="Empty or first-use UI state" width="1600" height="1000"></figure><footer>&lt;one clear next action&gt;</footer></article><article class="card stress-card"><header><span>Error / degraded data</span><span class="result-pass">PASS | RISK</span></header><figure class="frame"><img class="proposal-image" src="./ui-state-error.png" alt="Error or degraded-data UI state" width="1600" height="1000"></figure><footer>&lt;identity, explanation, and recovery&gt;</footer></article><article class="card stress-card"><header><span>Pathological content</span><span class="result-pass">PASS | RISK</span></header><figure class="frame"><img class="proposal-image" src="./ui-state-pathological-data.png" alt="UI with long labels, identifiers, or dense data" width="1600" height="1000"></figure><footer>&lt;wrapping/truncation/containment proof&gt;</footer></article><article class="card stress-card"><header><span>Narrow / touch</span><span class="result-risk">PASS | RISK</span></header><figure class="frame"><img class="proposal-image" src="./ui-selected-mobile.png" alt="Selected 390px-class touch UI proposal" width="780" height="1688"></figure><footer>&lt;reflow, targets, and hover parity&gt;</footer></article><article class="card stress-card"><header><span>Keyboard / reduced motion</span><span class="result-pass">PASS | RISK</span></header><div class="annotation">Tie this gate to the applicable selected, focus-visible, and transition frames above; do not invent another screen when the visual state is already represented.</div><footer>&lt;reading order and equivalent behavior&gt;</footer></article></div>
+        <div class="card"><span class="label">Approval gates</span><table><tr><th>Constraint</th><th>Evidence</th><th>Verdict</th></tr><tr><td>&lt;Functional / visual invariant&gt;</td><td>&lt;frame or capture&gt;</td><td>Pass | Risk | Blocker</td></tr><tr><td>&lt;Accessibility floor&gt;</td><td>&lt;focus/reflow/contrast proof&gt;</td><td>Pass | Risk | Blocker</td></tr><tr><td>&lt;Compatibility / no-scope-drift&gt;</td><td>&lt;preserved surface&gt;</td><td>Pass | Risk | Blocker</td></tr></table><p class="risk"><strong>Open decision:</strong> &lt;Only unresolved choices that materially change layout, action, density, risk, or direction.&gt;</p><p><strong>Implementation proof expected:</strong> &lt;desktop, narrow, states, interaction sequence, pathological data, and fidelity comparison.&gt;</p></div>
       </div>
     </section>
   </main>
+
+  <script>
+    document.querySelectorAll('.reason-tab').forEach((tab) => tab.addEventListener('click', () => {
+      document.querySelectorAll('.reason-tab').forEach((candidate) => candidate.setAttribute('aria-selected', String(candidate === tab)));
+      document.querySelectorAll('.reason-view').forEach((view) => view.classList.toggle('active', view.id === tab.dataset.view));
+    }));
+  </script>
 </body>
 </html>
