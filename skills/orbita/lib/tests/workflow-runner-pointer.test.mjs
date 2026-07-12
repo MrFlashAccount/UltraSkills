@@ -10,6 +10,7 @@ import {
   listPointerTransitions,
   movePointer,
   next,
+  reportStop,
   writeOutput,
 } from './helpers/orbita-production-api.mjs';
 import { registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
@@ -122,7 +123,7 @@ function rawRunFiles(paths) {
   };
 }
 
-test('runner pointer API lists adjacent transitions and moves pointer with retained-state acknowledgement', async () => {
+test('runner pointer API moves to an observed cursor while preserving replaceable state', async () => {
   const run = await createClaimedRun('api-retained');
   await next({ ...run, userPrompt: 'keep prompt marker', now: new Date('2026-06-01T10:00:01.000Z') });
   await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared' });
@@ -132,20 +133,12 @@ test('runner pointer API lists adjacent transitions and moves pointer with retai
   const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });
   assert.equal(listed.current.cursor, 'review');
   assert.deepEqual(listed.transitions.map((transition) => [transition.direction, transition.to.cursor]), [['backward', 'prepare']]);
-  assert.equal(listed.transitions[0].retainedState.acknowledgementRequired, true);
-  assert.deepEqual(listed.transitions[0].retainedState.stepIds, ['prepare']);
   assert.doesNotMatch(JSON.stringify(listed), /agent-prepare|keep prompt marker|workflow-runner-token|history\.md|baton\.json/);
-
-  await assert.rejects(
-    () => movePointer({ ...run, transitionId: listed.transitions[0].id, now: new Date('2026-06-01T10:04:00.000Z') }),
-    /requires retained state acknowledgement/,
-  );
 
   const moved = await movePointer({
     ...run,
     transitionId: listed.transitions[0].id,
-    acknowledgeRetainedState: true,
-    now: new Date('2026-06-01T10:05:00.000Z'),
+    now: new Date('2026-06-01T10:04:00.000Z'),
   });
   const afterMove = snapshot(run.paths);
 
@@ -160,8 +153,17 @@ test('runner pointer API lists adjacent transitions and moves pointer with retai
   assert.match(afterMove.history.slice(beforeMove.history.length), /pointer move:/);
   assert.match(afterMove.history.slice(beforeMove.history.length), /target position id:/);
   assert.match(afterMove.history.slice(beforeMove.history.length), /state preserved: true/);
-  assert.match(afterMove.history.slice(beforeMove.history.length), /retained output acknowledgement: required/);
   assert.equal(afterMove.authority.status, 'needs_host_actions');
+
+  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared again', now: new Date('2026-06-01T10:05:00.000Z') });
+  assert.equal(snapshot(run.paths).baton.state.prepare.results[0].summary, 'prepared again');
+  const stopped = await reportStop({
+    ...run,
+    stepId: 'prepare',
+    json: JSON.stringify({ non_blocking_stop: { stop_id: '00000000-0000-4000-8000-000000000099', summary: 'Need a decision.', needed: 'Choose how to proceed.' } }),
+    now: new Date('2026-06-01T10:06:00.000Z'),
+  });
+  assert.equal(stopped.reported, true);
 });
 
 test('runner pointer API list is read-only for claimed runs without persisted state', async () => {
@@ -219,7 +221,6 @@ test('runner pointer API move does not initialize missing state on rejected move
     () => movePointer({
       ...run,
       transitionId: 'ptr_missing',
-      acknowledgeRetainedState: true,
       now: new Date('2026-06-01T10:01:00.000Z'),
     }),
     /missing baton/,
@@ -237,12 +238,12 @@ test('runner pointer API rejects stale transition ids and wrong leases without m
   await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared stale' });
   await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
   const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });
-  await movePointer({ ...run, transitionId: listed.transitions[0].id, acknowledgeRetainedState: true, now: new Date('2026-06-01T10:04:00.000Z') });
+  await movePointer({ ...run, transitionId: listed.transitions[0].id, now: new Date('2026-06-01T10:04:00.000Z') });
   const beforeRejected = snapshot(run.paths);
 
   await assert.rejects(
-    () => movePointer({ ...run, transitionId: listed.transitions[0].id, acknowledgeRetainedState: true, now: new Date('2026-06-01T10:05:00.000Z') }),
-    /stale, non-adjacent, or not observed/,
+    () => movePointer({ ...run, transitionId: listed.transitions[0].id, now: new Date('2026-06-01T10:05:00.000Z') }),
+    /stale, unavailable, or not observed/,
   );
   const afterStaleRejected = snapshot(run.paths);
   assert.deepEqual(afterStaleRejected.baton, beforeRejected.baton);
@@ -272,16 +273,19 @@ test('runner pointer API allows rollback from terminal cursors', async () => {
   await continueRun({ ...terminalRun, now: new Date('2026-06-01T10:04:00.000Z') });
   const terminal = await listPointerTransitions({ ...terminalRun, now: new Date('2026-06-01T10:05:00.000Z') });
   assert.equal(terminal.unsupported, undefined);
-  assert.deepEqual(terminal.transitions.map((transition) => [transition.direction, transition.to.cursor]), [['backward', 'finalize']]);
-  assert.equal(terminal.transitions[0].retainedState.acknowledgementRequired, true);
-  assert.deepEqual(terminal.transitions[0].retainedState.stepIds, ['finalize']);
+  assert.deepEqual(terminal.transitions.map((transition) => [transition.direction, transition.to.cursor]), [
+    ['backward', 'finalize'],
+    ['backward', 'review'],
+    ['backward', 'prepare'],
+  ]);
+  const prepareMove = terminal.transitions.find((transition) => transition.to.cursor === 'prepare');
+  assert.ok(prepareMove);
   const terminalMoved = await movePointer({
     ...terminalRun,
-    transitionId: terminal.transitions[0].id,
-    acknowledgeRetainedState: true,
+    transitionId: prepareMove.id,
     now: new Date('2026-06-01T10:06:00.000Z'),
   });
-  assert.equal(terminalMoved.current.cursor, 'finalize');
+  assert.equal(terminalMoved.current.cursor, 'prepare');
   assert.equal(terminalMoved.current.status, 'running');
   assert.equal(snapshot(terminalRun.paths).authority.status, 'needs_host_actions');
 

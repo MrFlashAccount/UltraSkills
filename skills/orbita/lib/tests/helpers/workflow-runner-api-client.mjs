@@ -110,7 +110,6 @@ export async function runWorkflowRunnerApi(args, options = {}) {
       const response = await movePointer({
         ...common,
         transitionId: valueAfter(args, '--transition-id'),
-        acknowledgeRetainedState: hasFlag(args, '--acknowledge-retained-state'),
       });
       return { status: 0, stdout: jsonStdout(response), stderr: '' };
     }

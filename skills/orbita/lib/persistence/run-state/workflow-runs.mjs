@@ -176,7 +176,7 @@ async function claimWorkflowRunAtRootInternal({ runId, workflowPath, runsRoot = 
           else next.claimContext = { harness: canonicalHarness(harness) };
         }
       } else {
-        if (occupancy.state === 'occupied') {
+        if (occupancy.state === 'occupied' && !takeover) {
           const conflict = new Error(`workflow run is occupied: ${safeRunId}`);
           conflict.code = 'WORKFLOW_RUN_OCCUPIED';
           conflict.run = publicRun(existing, { now });

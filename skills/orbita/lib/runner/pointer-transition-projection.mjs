@@ -1,9 +1,9 @@
 /**
- * Runner-owned projection for adjacent pointer recovery transitions.
+ * Runner-owned projection for observed pointer recovery transitions.
  *
  * The projection intentionally exposes only bounded cursor/status metadata and
- * retained-output summaries. It never returns raw history, baton state values,
- * worker bindings, tokens, or file paths.
+ * It never returns raw history, baton state values, worker bindings, tokens, or
+ * file paths.
  */
 import { createHash } from 'node:crypto';
 import { WorkflowRuntimeError } from '../errors.mjs';
@@ -62,14 +62,34 @@ function parseObservedTransitions(historyText) {
   return transitions;
 }
 
-function retainedStateSummary(baton, cursor) {
-  const stepId = normalizeCursor(cursor);
-  const stepIds = Object.hasOwn(baton?.state ?? {}, stepId) ? [stepId] : [];
-  return {
-    hasAcceptedOutput: stepIds.length > 0,
-    stepIds,
-    acknowledgementRequired: stepIds.length > 0,
-  };
+function backwardObservedTransitions({ current, observedTransitions }) {
+  const incomingByCursor = new Map();
+  for (const observed of observedTransitions) {
+    const key = cursorKey(observed.to.cursor);
+    const incoming = incomingByCursor.get(key) ?? [];
+    incoming.push(observed);
+    incomingByCursor.set(key, incoming);
+  }
+
+  const currentKey = cursorKey(current.cursor);
+  const visited = new Set([currentKey]);
+  const queue = [current];
+  const transitions = [];
+  while (queue.length > 0) {
+    const position = queue.shift();
+    for (const observed of incomingByCursor.get(cursorKey(position.cursor)) ?? []) {
+      const targetKey = cursorKey(observed.from.cursor);
+      if (visited.has(targetKey)) continue;
+      visited.add(targetKey);
+      const transition = { direction: 'backward', from: current, to: observed.from };
+      transitions.push({
+        ...transition,
+        id: transitionId(transition),
+      });
+      queue.push(observed.from);
+    }
+  }
+  return transitions;
 }
 
 function transitionIsRunningSingleStep(workflow, transition) {
@@ -91,38 +111,28 @@ export function projectPointerTransitions({ workflow, baton, historyText } = {})
   new Baton(baton).validateAgainst(workflow);
   const current = pointerPosition(baton.cursor, baton.status);
   const currentKey = cursorKey(baton.cursor);
-  const adjacent = [];
-  for (const observed of parseObservedTransitions(historyText)) {
-    if (cursorKey(observed.to.cursor) === currentKey) {
-      adjacent.push({ direction: 'backward', from: current, to: observed.from });
-    }
+  const observedTransitions = parseObservedTransitions(historyText);
+  const projected = backwardObservedTransitions({ current, observedTransitions });
+  for (const observed of observedTransitions) {
     if (cursorKey(observed.from.cursor) === currentKey) {
-      adjacent.push({ direction: 'forward', from: current, to: observed.to });
+      const transition = { direction: 'forward', from: current, to: observed.to };
+      projected.push({
+        ...transition,
+        id: transitionId(transition),
+      });
     }
   }
 
-  const transitions = uniqueTransitions(adjacent
+  const transitions = uniqueTransitions(projected
     .filter((transition) => transitionIsRunningSingleStep(workflow, transition))
-    .map((transition) => {
-      const retainedState = retainedStateSummary(baton, transition.to.cursor);
-      return {
-        id: transitionId(transition),
-        direction: transition.direction,
-        from: transition.from,
-        to: transition.to,
-        retainedState,
-      };
-    }));
+  );
 
   return { current, transitions };
 }
 
-export function resolvePointerMove({ workflow, baton, historyText, transitionId: requestedTransitionId, acknowledgeRetainedState = false } = {}) {
+export function resolvePointerMove({ workflow, baton, historyText, transitionId: requestedTransitionId } = {}) {
   if (typeof requestedTransitionId !== 'string' || requestedTransitionId.length === 0) {
     throw new Error('pointer transition id is required');
-  }
-  if (acknowledgeRetainedState !== true && acknowledgeRetainedState !== false) {
-    throw new Error('acknowledgeRetainedState must be a boolean');
   }
   const projection = projectPointerTransitions({ workflow, baton, historyText });
   if (projection.unsupported) {
@@ -130,10 +140,7 @@ export function resolvePointerMove({ workflow, baton, historyText, transitionId:
   }
   const transition = projection.transitions.find((candidate) => candidate.id === requestedTransitionId);
   if (!transition) {
-    throw new Error('pointer transition is stale, non-adjacent, or not observed for the current cursor');
-  }
-  if (transition.retainedState.acknowledgementRequired && !acknowledgeRetainedState) {
-    throw new Error(`pointer transition requires retained state acknowledgement for step ${transition.retainedState.stepIds.join(', ')}`);
+    throw new Error('pointer transition is stale, unavailable, or not observed for the current cursor');
   }
   const nextBaton = structuredClone(baton);
   nextBaton.cursor = structuredClone(transition.to.cursor);
@@ -144,15 +151,10 @@ export function resolvePointerMove({ workflow, baton, historyText, transitionId:
 
 export function pointerMoveHistoryDetails({ transition } = {}) {
   if (!transition) throw new WorkflowRuntimeError('pointer move history requires a transition');
-  const retained = transition.retainedState.hasAcceptedOutput
-    ? `retained-output=${transition.retainedState.stepIds.join(',')}`
-    : 'retained-output=none';
   return [
     `- pointer move: id=${transition.id} direction=${transition.direction}`,
     `- target position id: ${transition.id}`,
     `- pointer move edge: cursor=${transition.from.display} status=${transition.from.status} -> cursor=${transition.to.display} status=${transition.to.status}`,
     '- state preserved: true',
-    `- retained state: ${retained}`,
-    `- retained output acknowledgement: ${transition.retainedState.acknowledgementRequired ? 'required' : 'not_required'}`,
   ];
 }

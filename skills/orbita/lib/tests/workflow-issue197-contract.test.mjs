@@ -92,6 +92,23 @@ test('Orbita skill invokes bundled CLI entrypoints from the resolved skill root'
   assert.doesNotMatch(skillText, /bun \.\/lib\/entrypoints\/cli\//);
 });
 
+test('Orbita skill stops on lease conflicts and offers only an approved forced takeover', () => {
+  const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
+  assert.match(skillText, /If claim reports `occupied` or `stale`, stop/);
+  assert.match(skillText, /rerunning\s+that exact claim command with `--takeover`/);
+  assert.match(skillText, /never force takeover without user\s+approval/);
+  assert.match(skillText, /takeover invalidates\s+the previous holder's token/);
+});
+
+test('Orbita skill explains direct rollback to any earlier observed cursor', () => {
+  const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
+  assert.match(skillText, /every valid earlier cursor observed in this run/);
+  assert.match(skillText, /not unvisited workflow steps/);
+  assert.match(skillText, /target matches the request and move once/);
+  assert.match(skillText, /preserves baton state without extra acknowledgement/);
+  assert.doesNotMatch(skillText, /acknowledge-retained-state/);
+});
+
 test('Orbita skill stays bounded and delegates dynamic request protocol to runner stdout', () => {
   const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
   assert.ok(Buffer.byteLength(skillText) <= 9_000, 'Orbita SKILL.md exceeded the 9 KB always-loaded budget');

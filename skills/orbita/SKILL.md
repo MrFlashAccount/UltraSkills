@@ -59,6 +59,13 @@ Claim it:
 lease_token=$(bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" claim --run-id <run-id> --owner <owner> --harness <harness> --session-id <session-id> --print-lease-token)
 ```
 
+If claim reports `occupied` or `stale`, stop and tell the user that the run
+already has a lease from another holder. Offer a forced takeover by rerunning
+that exact claim command with `--takeover`; never force takeover without user
+approval.
+After approval, preserve the newly issued token because takeover invalidates
+the previous holder's token.
+
 Preserve exact `runId` and `lease_token`; never invent, shorten, expose, or retype them from memory. Missing token means claim again or report missing authority.
 
 Start new:
@@ -122,6 +129,6 @@ bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" list-pointer-tr
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" move-pointer --run-id <run-id> --transition-id <id> --lease-token "$lease_token"
 ```
 
-Choose a listed transition whose target cursor matches the request. Add `--acknowledge-retained-state` only when required and intentionally accepted. No matching transition: report available moves. Never edit baton/history.
+The list includes every valid earlier cursor observed in this run, not unvisited workflow steps. Choose the backward transition whose target matches the request and move once. The move preserves baton state without extra acknowledgement. No matching target: report available moves and stop. Never edit baton/history.
 
 On `done`, stop and report the terminal embedded JSON using its workflow-specific baton/projection; do not assume a generic `result` field.

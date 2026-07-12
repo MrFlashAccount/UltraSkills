@@ -31,7 +31,8 @@ Binding rules:
 - Runner commands must validate authority before waiting on the per-run lock and
   re-read/revalidate it while holding that lock. Successful renewal writes only
   the per-run record atomically. Matching-token renewal preserves `tokenEpoch`;
-  a tokenless stale takeover increments it while rotating the token hash.
+  an explicit tokenless takeover of a stale or occupied lease increments it
+  while rotating the token hash.
 - `runs.json` is a discovery and list/dashboard projection. Once a valid per-run
   authority file exists, runner binding, claim context, lease checks, status,
   and task metadata must not trust a conflicting catalog copy. Warm runner

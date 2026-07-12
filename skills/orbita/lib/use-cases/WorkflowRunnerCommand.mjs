@@ -687,7 +687,7 @@ export function createWorkflowRunnerCommand({
     return publicApiCall(() => listPointerTransitionsInternal(options), { ...options, command: 'list-pointer-transitions', recordFailure: false });
   }
 
-  async function movePointerInternal({ runId, workflowPath, transitionId, acknowledgeRetainedState = false, leaseToken, now = new Date(), runsRoot } = {}) {
+  async function movePointerInternal({ runId, workflowPath, transitionId, leaseToken, now = new Date(), runsRoot } = {}) {
     await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
     const lockPaths = resolveRunPaths({ runId, runsRoot });
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
@@ -702,7 +702,6 @@ export function createWorkflowRunnerCommand({
         baton: runtime.baton,
         historyText: current.history?.text,
         transitionId,
-        acknowledgeRetainedState,
       });
       const { response } = await renderCurrentHostResponse(paths, resolved.baton, { leaseToken });
       await writePersistedRunStateUpdate(paths, {
@@ -967,9 +966,6 @@ export function createWorkflowRunnerCommand({
         throw new Error(`workflow request '${stepId}' cannot report a non-blocking stop while action is '${request.action}'`);
       }
       const requestId = stepIdForRequest(request);
-      if (Object.hasOwn(current.baton?.state ?? {}, requestId)) {
-        throw new Error(`workflow request '${requestId}' already has accepted completed output`);
-      }
       const stop = validateReportedStop(output, { stepId: requestId, runsRoot: paths.runsRoot });
       const existing = current.baton?.nonBlockingStops?.[requestId];
       if (existing) {
