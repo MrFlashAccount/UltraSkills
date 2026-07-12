@@ -449,8 +449,10 @@ Lifecycle:
 - `continue` projects an unresolved record as a
   `resolve_non_blocking_stop` host action. Completed siblings in fanout/shard
   batches remain accepted while the stopped request stays active.
-- `resolve-stop` persists the bounded orchestrator/user resolution on the same
-  control record.
+- `resolve-stop` requires the exact current `stop_id` and persists the bounded
+  orchestrator/user resolution on that control record. Exact retries are
+  idempotent; conflicting retries and stale resolutions for an older stop are
+  rejected without mutation.
 - `continue` renders the same request again with resolution context and the
   preferred worker hint when available. The record is cleared only after that
   request submits normal completed output through `write-output`.

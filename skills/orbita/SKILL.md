@@ -109,7 +109,7 @@ After every current request is accepted, run stdout's exact `continue` once with
 
 The current agent owns approvals and user-answerable blockers. If a worker asks before validated output, ask the user and return the answer to that same worker; do not replace it or infer the answer.
 
-Route `nonBlockingStop.needed` as a direct question. Resolve non-user capability blockers through the smallest safe action. Submit `{"resolution":{"summary":"...","decision":"...","evidence":[]}}` through stdout's current `resolveStopCommand`, then follow its continuation.
+Route `nonBlockingStop.needed` as a direct question. Resolve non-user capability blockers through the smallest safe action. Submit `{"stop_id":"<copy nonBlockingStop.stop_id>","resolution":{"summary":"...","decision":"...","evidence":[]}}` through stdout's current `resolveStopCommand`, then follow its continuation.
 
 For approval, the inline compiled prompt is complete. Read only `Required reads`. Render `Approval attachments` without opening them; inspect one only after an explicit user content question. Keep writer command and lease token internal. Normalize the answer to the requested strict JSON, submit it, then follow the new stdout.
 

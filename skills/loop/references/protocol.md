@@ -15,6 +15,8 @@ stopConditions:
   - "max iterations"
   - "success criteria met"
   - "noProgressCount >= 2"
+helpConditions:
+  - "missing orchestrator or user input"
   - "unapproved approval boundary"
 verificationRequirements:
   - "tests/checks/review to run when relevant"
@@ -65,7 +67,7 @@ When continuation needs orchestrator or user help, emit `NON_BLOCKING_STOP` thro
 Iteration {n} result: {one-line summary}
 Evidence: {key evidence}
 Verification: {check status}
-Decision: continue | retry-with-context | stop | pause-for-approval
+Decision: continue | retry-with-context | stop | non-blocking-stop
 Reason: {continuation/stop rule}
 Next action: {specific next cycle objective, if continuing}
 ```
@@ -75,8 +77,9 @@ Next action: {specific next cycle objective, if continuing}
 Update `noProgressCount` as follows:
 
 - Reset to `0` when the executor finds a new useful result, lands an approved change, removes a blocker, or produces new evidence that changes the next action.
-- Increment by `1` when the executor repeats known information, cannot act for the same reason, or produces no actionable evidence.
-- Stop at `noProgressCount >= 2` unless the user explicitly requested a larger saturation window.
+- Increment by `1` when an otherwise executable attempt repeats known information or produces no actionable evidence.
+- Do not increment for a missing decision, permission, capability, or external input. Report `NON_BLOCKING_STOP`, preserve the current iteration, and request the smallest concrete orchestrator/user help instead.
+- Finish at `noProgressCount >= 2` only for executable saturation unless the user explicitly requested a larger saturation window.
 
 ## Resume Checklist
 
@@ -85,4 +88,4 @@ Before resuming an interrupted loop:
 1. Read the last baton and final executor report.
 2. Inspect current artifacts/state; do not trust stale baton entries blindly.
 3. Re-run only cheap, relevant verification if state may have changed.
-4. Continue from the next safe iteration, or stop/pause if an approval boundary is now active.
+4. Continue from the next safe iteration. If an approval/help boundary is active, report `NON_BLOCKING_STOP` and resume this same iteration after resolution.

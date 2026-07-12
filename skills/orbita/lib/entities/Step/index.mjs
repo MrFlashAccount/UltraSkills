@@ -196,7 +196,6 @@ export class Step {
       cursor: transition.targetStepId,
       status: statusForStep(wf, transition.targetStepId, targetStep),
     };
-    delete updatedBaton.blocker;
     return { ...transition, targetStep, baton: updatedBaton };
   }
 }

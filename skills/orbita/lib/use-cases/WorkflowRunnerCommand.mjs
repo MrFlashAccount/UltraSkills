@@ -781,6 +781,10 @@ export function createWorkflowRunnerCommand({
   }
 
   function validateStopResolutionOutput(output, { runsRoot } = {}) {
+    const stopId = output?.stop_id;
+    if (typeof stopId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(stopId)) {
+      throw new Error('non-blocking stop resolution failed schema validation: /stop_id must be a UUID v4');
+    }
     const resolution = output?.resolution;
     if (!resolution || typeof resolution !== 'object' || Array.isArray(resolution)) {
       throw new Error('non-blocking stop resolution failed schema validation: /resolution must be object');
@@ -796,7 +800,7 @@ export function createWorkflowRunnerCommand({
     if ('evidence' in resolution && !Array.isArray(resolution.evidence)) {
       throw new Error('non-blocking stop resolution failed schema validation: /resolution/evidence must be array');
     }
-    return { resolution: publicStopResolutionDetails(output, { runsRoot }) };
+    return { stopId, resolution: publicStopResolutionDetails(output, { runsRoot }) };
   }
 
   function batonWithAcceptedOutput(baton, stepId, output) {
@@ -1017,13 +1021,23 @@ export function createWorkflowRunnerCommand({
       const { response } = await currentRuntimeAndResponse(paths, current, { leaseToken });
       const request = currentRequestForStep(response, stepId);
       if (!request) throw staleWorkflowCommandError(stepId, response);
-      if (request.action !== 'resolve_non_blocking_stop') {
-        throw new Error(`workflow request '${stepId}' does not have a non-blocking stop to resolve`);
-      }
       const requestId = stepIdForRequest(request);
       const existing = current.baton?.nonBlockingStops?.[requestId];
       if (!existing) throw new Error(`workflow request '${requestId}' has no reported non-blocking stop`);
-      const { resolution } = validateStopResolutionOutput(output, { runsRoot: paths.runsRoot });
+      const { stopId, resolution } = validateStopResolutionOutput(output, { runsRoot: paths.runsRoot });
+      if (stopId !== existing.stop_id) {
+        throw new Error(`stale non-blocking stop resolution '${stopId}' does not match current stop '${existing.stop_id}'`);
+      }
+      if (existing.resolution) {
+        if (JSON.stringify(existing.resolution) !== JSON.stringify(resolution)) {
+          throw new Error(`non-blocking stop resolution '${stopId}' conflicts with its previously accepted resolution`);
+        }
+        await persistRenewedRunAuthority(paths, authority, { leaseToken, now });
+        return { ok: true, runId: paths.runId, stepId: requestId, resolved: true, duplicate: true };
+      }
+      if (request.action !== 'resolve_non_blocking_stop') {
+        throw new Error(`workflow request '${stepId}' does not have a non-blocking stop to resolve`);
+      }
       const baton = structuredClone(current.baton);
       baton.nonBlockingStops[requestId] = { ...existing, resolution };
       await writePersistedRunStateUpdate(paths, {

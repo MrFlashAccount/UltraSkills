@@ -942,7 +942,7 @@ test('runner: fanout owner non-blocking stop resumes before downstream fanout re
 
   result = await runRunner(
     ['resolve-stop', '--run-id', runId, '--workflow', workflowPath, '--step-id', frontendBranchId],
-    { input: JSON.stringify({ resolution: { summary: 'Frontend approved.', decision: 'Proceed with frontend implementation.' } }) },
+    { input: JSON.stringify({ stop_id: '00000000-0000-4000-8000-000000000005', resolution: { summary: 'Frontend approved.', decision: 'Proceed with frontend implementation.' } }) },
   );
   assert.equal(result.status, 0, result.stderr);
   const resumedBranch = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'resume stopped fanout branch');
@@ -974,7 +974,7 @@ test('runner: fanout owner non-blocking stop resumes before downstream fanout re
 
   result = await runRunner(
     ['resolve-stop', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'implementation'],
-    { input: JSON.stringify({ resolution: { summary: 'Reviewer selected.', decision: 'Use backend_review.' } }) },
+    { input: JSON.stringify({ stop_id: '00000000-0000-4000-8000-000000000006', resolution: { summary: 'Reviewer selected.', decision: 'Use backend_review.' } }) },
   );
   assert.equal(result.status, 0, result.stderr);
   const resumed = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'resume implementation owner');
