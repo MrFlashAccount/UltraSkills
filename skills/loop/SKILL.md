@@ -123,7 +123,7 @@ After each executor result:
 - capture failures as `retryContext`
 - decide whether continuation criteria still allow another cycle
 - start the next executor if continuing
-- explicitly stop if done, saturated, blocked, unsafe, out of iterations, or waiting for approval
+- explicitly finish if done, saturated, unsafe, or out of iterations; if progress needs orchestrator/user help or approval, report `NON_BLOCKING_STOP` and resume the same iteration after resolution
 
 Final report must include:
 

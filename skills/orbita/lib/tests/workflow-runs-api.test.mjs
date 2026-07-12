@@ -735,7 +735,7 @@ test('workflow runs API rejects symlinked runs root for create without write esc
   await assertSymlinkedRunsRootRejected((symlinkedRunsRoot) => registerWorkflowRunAtRoot({
     runsRoot: symlinkedRunsRoot,
     runId: `${runPrefix}symlink-create`,
-    title: 'Blocked create',
+    title: 'Rejected create',
   }));
 });
 
@@ -751,7 +751,7 @@ test('workflow runs API rejects symlinked runs root for claim without write esca
 test('workflow runs index operations reject symlinked runs root without write escape', async () => {
   await assertSymlinkedRunsRootRejected((symlinkedRunsRoot) => createRunIndexEntry(
     resolveRunPaths({ runId: `${runPrefix}symlink-index`, workflowPath: defaultWorkflow, runsRoot: symlinkedRunsRoot }),
-    { title: 'Blocked index write' },
+    { title: 'Rejected index write' },
   ));
 });
 

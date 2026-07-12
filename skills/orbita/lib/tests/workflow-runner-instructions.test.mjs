@@ -261,7 +261,7 @@ test('runner: next uses semantic workflow validation and rejects schema-declared
     type: 'object',
     required: ['outcome', 'route'],
     properties: {
-      outcome: { enum: ['ready', 'blocked'] },
+      outcome: { const: 'ready' },
       route: { enum: ['done', 'missing_step'] },
     },
     additionalProperties: false,

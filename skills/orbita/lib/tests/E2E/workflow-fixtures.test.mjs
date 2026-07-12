@@ -212,8 +212,8 @@ test('E2E fixture: DevHarness-style artifact path is required-read context for d
   assert.doesNotMatch(reviewInstructions, /Concrete implementation artifact content for reviewer\./);
 });
 
-test('E2E fixture: match route covers retry loop and recoverable blocked output', async () => {
-  const workflow = fixture('route-retry-blocked.workflow.json');
+test('E2E fixture: match route covers retry loop', async () => {
+  const workflow = fixture('route-retry.workflow.json');
   const retryRun = runDir('route-retry');
 
   assert.deepEqual((await next(retryRun, workflow)).requests.map((request) => request.id), ['triage']);
@@ -228,19 +228,6 @@ test('E2E fixture: match route covers retry loop and recoverable blocked output'
   const done = await continueWith(retryRun, workflow, output('worker-ready.json'), 'continue resolve ready');
   assert.equal(done.status, 'done');
 
-  const blockedRun = runDir('route-blocked');
-  await next(blockedRun, workflow);
-  const blocked = await continueWith(blockedRun, workflow, output('triage-blocked.json'), 'continue triage blocked');
-  assert.equal(blocked.status, 'needs_host_actions');
-  assert.equal(blocked.baton.cursor, 'triage');
-  assert.deepEqual(blocked.baton.recoverableWorkerBlockers.triage, {
-    summary: 'missing decision',
-    source_step_id: 'triage',
-    needed: 'Provide the missing decision.',
-  });
-  assert.equal(blocked.requests[0].stepId, 'triage');
-  assert.match(readHistory(blockedRun), /blocker summary: missing decision/);
-  assert.match(readHistory(blockedRun), /action=resolve_worker_blocker/);
 });
 
 test('E2E fixture: fanout owner persists named branch outputs before owner completion', async () => {
@@ -343,7 +330,7 @@ test('E2E fixture: loopPolicies exhaust approval and implementation revision loo
 
   const exhaustedApproval = await continueWith(approvalRun, workflow, output('plan-ready.json'), 'continue approval revision exhaustion');
   assert.equal(exhaustedApproval.status, 'done');
-  assert.equal(exhaustedApproval.baton.cursor, 'blocked');
+  assert.equal(exhaustedApproval.baton.cursor, 'limit_reached');
   assert.deepEqual(exhaustedApproval.baton.state.$loopProgress, { approval_revision: 2 });
 
   const implementationRun = runDir('loop-policy-implementation-revision');
@@ -360,7 +347,7 @@ test('E2E fixture: loopPolicies exhaust approval and implementation revision loo
 
   const exhaustedImplementation = await continueWith(implementationRun, workflow, output('implement-v2.json'), 'continue implementation revision exhaustion');
   assert.equal(exhaustedImplementation.status, 'done');
-  assert.equal(exhaustedImplementation.baton.cursor, 'blocked');
+  assert.equal(exhaustedImplementation.baton.cursor, 'limit_reached');
   assert.deepEqual(exhaustedImplementation.baton.state.$loopProgress, { approval_revision: 1, implementation_revision: 2 });
 });
 
@@ -379,6 +366,6 @@ test('E2E fixture: loopPolicies exhaust self-loop workflow', async () => {
 
   const exhausted = await continueWith(run, workflow, output('self-retry.json'), 'continue self-loop exhaustion');
   assert.equal(exhausted.status, 'done');
-  assert.equal(exhausted.baton.cursor, 'blocked');
+  assert.equal(exhausted.baton.cursor, 'limit_reached');
   assert.deepEqual(exhausted.baton.state.$loopProgress, { self_check: 2 });
 });

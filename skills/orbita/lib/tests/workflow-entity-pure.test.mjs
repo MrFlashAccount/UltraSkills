@@ -8,7 +8,7 @@ const routeOutputSchema = {
   type: 'object',
   required: ['outcome', 'route', 'parallel_targets'],
   properties: {
-    outcome: { enum: ['ready', 'blocked'] },
+    outcome: { const: 'ready' },
     route: { enum: ['review'] },
     parallel_targets: {
       type: 'array',

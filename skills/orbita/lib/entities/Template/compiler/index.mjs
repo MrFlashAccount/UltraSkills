@@ -50,52 +50,52 @@ function requiredReadsForRender(items, { followUp = false } = {}) {
   return items.filter((item) => item?.source !== 'role-material');
 }
 
-function recoverableBlockerBlock({ baton, stepId }) {
-  const blocker = baton?.recoverableWorkerBlockers?.[stepId];
-  if (!blocker || typeof blocker !== 'object' || Array.isArray(blocker)) return '';
+function nonBlockingStopBlock({ baton, stepId }) {
+  const stop = baton?.nonBlockingStops?.[stepId];
+  if (!stop || typeof stop !== 'object' || Array.isArray(stop)) return '';
 
-  const lines = blocker.resolution && typeof blocker.resolution === 'object' && !Array.isArray(blocker.resolution)
+  const lines = stop.resolution && typeof stop.resolution === 'object' && !Array.isArray(stop.resolution)
     ? [
-        'The previous output for this same workflow step reported a recoverable blocker. The orchestrator has resolved that blocker. Continue your previous work from the blocked point; do not restart the step or repeat already completed work unless needed.',
+        'This same workflow request previously reported a non-blocking stop. The orchestrator has resolved it. Continue from the stopped point; do not restart or repeat completed work unless needed.',
       ]
     : [
-        'The previous output for this same workflow step reported a recoverable blocker. Wait for orchestrator resolution before continuing; do not restart or switch workflow steps.',
+        'The previous output for this same workflow step reported a non-blocking stop. Wait for orchestrator resolution before continuing; do not restart or switch workflow steps.',
       ];
   lines.push(
     '',
-    `Summary: ${blocker.summary}`,
-    `Needed: ${blocker.needed}`,
-    `Source step: ${blocker.source_step_id ?? stepId}`,
+    `Summary: ${stop.summary}`,
+    `Needed: ${stop.needed}`,
+    `Source step: ${stop.source_step_id ?? stepId}`,
   );
-  if (Array.isArray(blocker.evidence) && blocker.evidence.length > 0) {
+  if (Array.isArray(stop.evidence) && stop.evidence.length > 0) {
     lines.push('', 'Evidence:');
-    for (const item of blocker.evidence) lines.push(`- ${item}`);
+    for (const item of stop.evidence) lines.push(`- ${item}`);
   }
-  if (blocker.risk) lines.push('', `Risk: ${blocker.risk}`);
-  if (blocker.resolution && typeof blocker.resolution === 'object' && !Array.isArray(blocker.resolution)) {
+  if (stop.risk) lines.push('', `Risk: ${stop.risk}`);
+  if (stop.resolution && typeof stop.resolution === 'object' && !Array.isArray(stop.resolution)) {
     lines.push(
       '',
       'Resolution:',
-      `- Summary: ${blocker.resolution.summary}`,
-      `- Decision: ${blocker.resolution.decision}`,
+      `- Summary: ${stop.resolution.summary}`,
+      `- Decision: ${stop.resolution.decision}`,
     );
-    if (Array.isArray(blocker.resolution.evidence) && blocker.resolution.evidence.length > 0) {
+    if (Array.isArray(stop.resolution.evidence) && stop.resolution.evidence.length > 0) {
       lines.push('- Evidence:');
-      for (const item of blocker.resolution.evidence) lines.push(`  - ${item}`);
+      for (const item of stop.resolution.evidence) lines.push(`  - ${item}`);
     }
-    if (blocker.resolution.risk) lines.push(`- Risk: ${blocker.resolution.risk}`);
+    if (stop.resolution.risk) lines.push(`- Risk: ${stop.resolution.risk}`);
   }
   return lines.join('\n');
 }
 
-function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlock, requiredReads, approvalAttachments, recoverableBlocker, inlinePrompt, outputContract, userPrompt, finalReminder }) {
+function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlock, requiredReads, approvalAttachments, nonBlockingStop, inlinePrompt, outputContract, userPrompt, finalReminder }) {
   assertNoUnsupportedPlaceholders(promptLayer, templatePath);
   const parts = [trimStable(promptLayer)];
 
   if (workflowInstructionBlock) parts.push(section('Workflow instruction', workflowInstructionBlock).trimEnd());
   if (requiredReads) parts.push(section('Required reads', requiredReads).trimEnd());
   if (approvalAttachments) parts.push(section('Approval attachments', approvalAttachments).trimEnd());
-  if (recoverableBlocker) parts.push(section('Recoverable blocker', recoverableBlocker).trimEnd());
+  if (nonBlockingStop) parts.push(section('Non-blocking stop', nonBlockingStop).trimEnd());
   if (outputContract) parts.push(outputContract.trimEnd());
   if (inlinePrompt) parts.push(section('Workflow step prompt', inlinePrompt.trim()));
   if (typeof userPrompt === 'string' && userPrompt.trim().length > 0) parts.push(section('User prompt', userPrompt));
@@ -112,6 +112,7 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
   const outputContract = outputContractSection(outputTemplate.content, outputTemplate.metadataPath, outputSchema.content, outputSchema.metadataPath, outputSchema.schema, {
     schemaDefinitions: resources?.schemaDefinitions,
     validatingWriterCommand: resources?.validatingWriterCommand,
+    reportStopCommand: resources?.reportStopCommand,
     artifactOutputDir: resources?.artifactOutputDir,
     debugSummaryPath: resources?.debugSummaryPath,
     compactFollowUp: followUp === true,
@@ -129,7 +130,7 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
     workflowInstructionBlock,
     requiredReads: requiredReadsSection,
     approvalAttachments: approvalAttachmentsSection,
-    recoverableBlocker: recoverableBlockerBlock({ baton, stepId }),
+    nonBlockingStop: nonBlockingStopBlock({ baton, stepId }),
     inlinePrompt: interpolatePromptExpressions(normalizePromptText(input.prompt), { input: promptInput.value, ...(shard ? { shard } : {}) }),
     outputContract,
     userPrompt: ['worker', 'fanout', 'shard'].includes(step.kind) && userPromptInjected !== true ? userPrompt : undefined,

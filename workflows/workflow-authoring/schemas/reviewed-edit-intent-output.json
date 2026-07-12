@@ -8,8 +8,7 @@
   "properties": {
     "outcome": {
       "enum": [
-        "ready_for_implementation",
-        "blocked"
+        "ready_for_implementation"
       ]
     },
     "edit_intent": {
@@ -56,23 +55,6 @@
         }
       },
       "additionalProperties": true
-    },
-    "blocker": {
-      "type": "object",
-      "required": [
-        "summary"
-      ],
-      "properties": {
-        "summary": {
-          "type": "string",
-          "minLength": 1
-        },
-        "needed": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "additionalProperties": true
     }
   },
   "additionalProperties": true,
@@ -91,23 +73,6 @@
       "then": {
         "required": [
           "edit_intent"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "blocked"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "blocker"
         ]
       }
     }

@@ -15,7 +15,7 @@ Portable host adapter for `workflow-runner`. The runner owns state, navigation, 
 - `write-output` accepts one current request output; it does not navigate. Only the exact embedded `continue` advances after all current outputs are accepted. Never substitute `next`.
 - Orbita is not the task implementer. While a worker owns a request, do not independently inspect, implement, review, or test that task.
 - Runner state is the only durable workflow state. Do not create host registries, copied batons, transcripts, attempts, or output handoff files.
-- Only runner status `done` is terminal. Pending requests, accepted output, recoverable blockers, approvals, and `needs_host_actions` are not completion.
+- Only runner status `done` is terminal. Pending requests, accepted output, non-blocking stops, approvals, and `needs_host_actions` are not completion.
 - Before any Orbita command, set `ORBITA_SKILL_ROOT` to the directory containing this `SKILL.md`. Export it separately; a same-command assignment expands too late. Use these absolute entrypoints:
   - `$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-catalog.mjs`
   - `$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs`
@@ -101,7 +101,7 @@ Use the longest supported event wait, not short polling. Accepted output, action
 
 Treat bootstrap/instruction-load silence separately from active implementation progress. Concrete progress must name current work, inspected or changed surfaces, verification state, and the next bounded checkpoint. If the worker shows that evidence, continue that same worker and ask for the next bounded checkpoint. Do not persist progress in baton, scrape transcripts, read private runner state, or add durable worker status storage.
 
-Allow 10 minutes for load/progress. None: interrupt once for focused status, then wait 2 minutes. Concrete progress: keep the worker. Vague/missed checkpoint: require immediate validating `write-output` or exact blocker. Still nothing: close and retry the same request once with the same 10+2-minute bound. Retry failure: submit that request's validated blocked output when stdout provides a writer.
+Allow 10 minutes for load/progress. None: interrupt once for focused status, then wait 2 minutes. Concrete progress: keep the worker. Vague/missed checkpoint: require immediate validating `write-output` or an exact non-blocking stop. Still nothing: close and retry the same request once with the same 10+2-minute bound. Retry failure: use the request's current `report-stop` command with the smallest concrete help request.
 
 After every current request is accepted, run stdout's exact `continue` once with actual worker ids and safe debug value.
 
@@ -109,7 +109,7 @@ After every current request is accepted, run stdout's exact `continue` once with
 
 The current agent owns approvals and user-answerable blockers. If a worker asks before validated output, ask the user and return the answer to that same worker; do not replace it or infer the answer.
 
-Route `recoverableBlocker.needed` as a direct question. Resolve non-user capability blockers through the smallest safe action. Submit `{"resolution":{"summary":"...","decision":"...","evidence":[]}}` through stdout's current writer, then follow its continuation.
+Route `nonBlockingStop.needed` as a direct question. Resolve non-user capability blockers through the smallest safe action. Submit `{"resolution":{"summary":"...","decision":"...","evidence":[]}}` through stdout's current `resolveStopCommand`, then follow its continuation.
 
 For approval, the inline compiled prompt is complete. Read only `Required reads`. Render `Approval attachments` without opening them; inspect one only after an explicit user content question. Keep writer command and lease token internal. Normalize the answer to the requested strict JSON, submit it, then follow the new stdout.
 

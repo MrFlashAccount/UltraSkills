@@ -85,59 +85,41 @@ function redactSensitiveText(value) {
     .replace(/\/Users\/[^\s]*\.orbita\/workflow-runs[^\s]*/g, '[redacted-workflow-runs-private-state]');
 }
 
-export function isRecoverableBlockerStep(_workflow, _stepId, step) {
-  return step?.kind === 'worker' || step?.kind === 'approval';
-}
-
-export function isRecoverableBlockerOutput({ workflow, stepId, step, output } = {}) {
-  const blockedSignal = step?.kind === 'approval'
-    ? output?.approval === 'blocked'
-    : output?.outcome === 'blocked';
-  return isRecoverableBlockerStep(workflow, stepId, step) &&
-    blockedSignal &&
-    output?.blocker &&
-    typeof output.blocker === 'object' &&
-    !Array.isArray(output.blocker);
-}
-
-export const isRecoverableWorkerBlockerStep = isRecoverableBlockerStep;
-export const isRecoverableWorkerBlockerOutput = isRecoverableBlockerOutput;
-
-export function publicRecoverableBlockerDetails(blocker, { stepId, runsRoot } = {}) {
+export function publicNonBlockingStopDetails(stop, { stepId, runsRoot } = {}) {
   const options = { runsRoot };
-  const sourceStepId = boundedText(blocker?.source_step_id ?? stepId, stepId, options);
-  const needed = boundedText(blocker?.needed ?? blocker?.summary, 'Accepted worker output is required to continue.', options);
-  const summary = boundedText(blocker?.summary ?? needed, needed, options);
+  const sourceStepId = boundedText(stop?.source_step_id ?? stepId, stepId, options);
+  const needed = boundedText(stop?.needed ?? stop?.summary, 'Help is required before this request can continue.', options);
+  const summary = boundedText(stop?.summary ?? needed, needed, options);
   const details = {
     summary,
     source_step_id: sourceStepId,
     needed,
   };
 
-  if (Array.isArray(blocker?.evidence)) {
-    const evidence = blocker.evidence
+  if (Array.isArray(stop?.evidence)) {
+    const evidence = stop.evidence
       .slice(0, MAX_EVIDENCE_ITEMS)
       .map((entry) => boundedText(entry, '', options))
       .filter(Boolean);
     if (evidence.length > 0) details.evidence = evidence;
   }
 
-  const risk = boundedText(blocker?.risk, '', options);
+  const risk = boundedText(stop?.risk, '', options);
   if (risk) details.risk = risk;
 
-  if (blocker?.resolution && typeof blocker.resolution === 'object' && !Array.isArray(blocker.resolution)) {
-    details.resolution = publicRecoveryResolutionDetails(blocker.resolution, options);
+  if (stop?.resolution && typeof stop.resolution === 'object' && !Array.isArray(stop.resolution)) {
+    details.resolution = publicStopResolutionDetails(stop.resolution, options);
   }
 
   return details;
 }
 
-export function publicRecoveryResolutionDetails(output, { runsRoot } = {}) {
+export function publicStopResolutionDetails(output, { runsRoot } = {}) {
   const options = { runsRoot };
   const resolution = output?.resolution && typeof output.resolution === 'object' && !Array.isArray(output.resolution)
     ? output.resolution
     : output;
-  const summary = boundedText(resolution?.summary ?? resolution?.decision, 'The orchestrator resolved the blocker.', options);
+  const summary = boundedText(resolution?.summary ?? resolution?.decision, 'The orchestrator resolved the non-blocking stop.', options);
   const decision = boundedText(resolution?.decision ?? resolution?.answer ?? summary, summary, options);
   const details = { summary, decision };
 

@@ -252,7 +252,7 @@ test('runner: wait_for_approval request accepts request-specific host output JSO
     choose_path: {
       name: 'Choose path',
       kind: 'approval',
-      input: { prompt: 'Ask the user to choose option_a, option_b, or free-form blocked reason.' },
+      input: { prompt: 'Ask the user to choose option_a, option_b, or a free-form reason.' },
       next: { match: '${{ output.choice }}', cases: { option_a: 'done', option_b: 'join' } },
     },
     join: approvalWorkflow.steps.join,

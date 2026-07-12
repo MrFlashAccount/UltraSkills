@@ -38,11 +38,11 @@ Use this when review found must-fix or contract coverage gaps and the work must 
 
 - Treat every row listed above, plus any prior reviewer blocker referenced by those rows, as a regression gate for this fix pass.
 - Only fix the rows listed above.
-- Every listed gap id must be fixed or explicitly returned as `BLOCKED` with the exact gap id, reason, and smallest concrete re-planning question.
+- Every listed gap id must be fixed. If one cannot be fixed in scope, report `NON_BLOCKING_STOP` through the orchestrator/host control channel with the exact gap id, reason, and smallest concrete re-planning question; do not submit a completed handoff.
 - Do not introduce new architecture, workflow, API, or naming semantics unless the fix row explicitly requires it.
 - Do not downgrade exact source terms into alternate concepts without approved mapping.
 - Do not silently bypass, rename, or defer prior blocker rows.
-- If the fix requires scope expansion, stop as `BLOCKED` and explain the smallest re-planning question.
+- If the fix requires scope expansion, report `NON_BLOCKING_STOP` and explain the smallest re-planning question. Resume this same fix task after resolution.
 
 ## Verification expected from fix pass
 
@@ -57,7 +57,7 @@ Use this when review found must-fix or contract coverage gaps and the work must 
 Return:
 
 - summary
-- gap table with statuses: `fixed` or `blocked`
+- gap table with status `fixed` for every returned row
 - changed files
 - verification run + result
 - residual risks

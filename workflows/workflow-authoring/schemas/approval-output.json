@@ -9,11 +9,10 @@
     "approval": {
       "enum": [
         "approved",
-        "rejected",
-        "blocked"
+        "rejected"
       ],
       "description": "Human workflow-design gate decision.",
-      "x-usage": "Use approved to implement, rejected to revise workflow_design_draft, and blocked only when blocker explains why authoring must pause."
+      "x-usage": "Use approved to implement, rejected to revise workflow_design_draft, Report a non-blocking stop through the runner control channel when authoring needs external help."
     },
     "results": {
       "type": "array",
@@ -22,11 +21,6 @@
       },
       "description": "Optional compact summary of human approval feedback.",
       "x-usage": "Use as supporting approval context; do not route from this field."
-    },
-    "blocker": {
-      "type": "object",
-      "description": "Required when approval is blocked.",
-      "x-usage": "Surface this blocker before continuing; do not infer missing blocker details from prose."
     }
   },
   "additionalProperties": true

@@ -89,7 +89,7 @@ Follow colocation by default: keep a component's implementation, local types, st
 
 Before creating controls or layout primitives, identify the repo's existing UI kit, design-system primitives, tokens, and component conventions. Use them as the default implementation base. If no UI kit or suitable primitive exists, state that evidence in the handoff and use the approved primitive library or native semantic element rather than hand-rolling an incompatible local primitive.
 
-When the slice introduces or materially changes a named frontend framework, router, UI kit, accessibility primitive library, or build integration, inspect relevant current documentation before implementation/review. Prefer official docs or repo-local package docs/examples; if documentation cannot be accessed and the behavior is contract-significant, return blocked or record the explicit uncertainty instead of guessing.
+When the slice introduces or materially changes a named frontend framework, router, UI kit, accessibility primitive library, or build integration, inspect relevant current documentation before implementation/review. Prefer official docs or repo-local package docs/examples; if documentation cannot be accessed and the behavior is contract-significant, report `NON_BLOCKING_STOP` through the orchestrator/host control channel with the smallest concrete help request, or record the explicit uncertainty when the contract permits that, instead of guessing.
 
 Frontend functions/hooks should normally either perform side effects or compute/transform data. When a touched path must mix both, the reason should be local and explicit enough for review to verify.
 

@@ -13,7 +13,7 @@ import { readWorkflowDocument } from '../persistence/workflow-resources/workflow
 import { artifactPathBoundaryErrors } from '../persistence/workflow-resources/artifact-path-boundaries.mjs';
 import { writePersistedRunStateUpdate } from '../persistence/run-state/PersistedRunStateWriter.mjs';
 import { toHostResponse, workerBindingKeyForStep } from '../runner/host-requests.mjs';
-import { assertSafeStepId, writeOutputCommandForStep } from '../runner/runner-command-builder.mjs';
+import { assertSafeStepId, reportStopCommandForStep, resolveStopCommandForStep, writeOutputCommandForStep } from '../runner/runner-command-builder.mjs';
 import { readText } from '../persistence/run-state/atomic-file.mjs';
 import { assertFreshTokenAuthority, assertMatchingTokenAuthority, buildTokenLease, renewTokenLease } from '../persistence/run-state/lease-authority.mjs';
 import { appendHistoryOnce, recoverDurableCommit } from '../persistence/run-state/durable-commit.mjs';
@@ -27,8 +27,7 @@ import { publicErrorMessage } from '../public-error.mjs';
 import { assertAbsoluteWorkflowPath } from '../workflow-path-boundary.mjs';
 import { createWorkflowStartupValidator } from '../workflow-startup-validation.mjs';
 import { validateWorkflowFile } from './validate-workflow-file.mjs';
-import { isRecoverableWorkerBlockerOutput, publicRecoverableBlockerDetails, publicRecoveryResolutionDetails } from '../runtime/recoverable-worker-blocker.mjs';
-import { applyOutputToBatonState } from '../runtime/baton-state.mjs';
+import { publicNonBlockingStopDetails, publicStopResolutionDetails } from '../runtime/non-blocking-stop.mjs';
 
 const validateWorkflowStartup = createWorkflowStartupValidator({
   validateWorkflowFile,
@@ -60,6 +59,8 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   workerBindingKeyForStep,
   assertSafeStepId,
   writeOutputCommandForStep,
+  reportStopCommandForStep,
+  resolveStopCommandForStep,
   readText,
   assertFreshTokenAuthority,
   assertMatchingTokenAuthority,
@@ -82,10 +83,8 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   publicErrorMessage,
   assertAbsoluteWorkflowPath,
   validateWorkflowStartup,
-  isRecoverableWorkerBlockerOutput,
-  publicRecoverableBlockerDetails,
-  publicRecoveryResolutionDetails,
-  applyOutputToBatonState,
+  publicNonBlockingStopDetails,
+  publicStopResolutionDetails,
 });
 
 export const {
@@ -94,5 +93,7 @@ export const {
   loadInstructions,
   movePointer,
   next,
+  reportStop,
+  resolveStop,
   writeOutput,
 } = workflowRunnerCommand;

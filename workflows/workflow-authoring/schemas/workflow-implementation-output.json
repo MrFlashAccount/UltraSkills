@@ -8,8 +8,7 @@
   "properties": {
     "outcome": {
       "enum": [
-        "implemented",
-        "blocked"
+        "implemented"
       ]
     },
     "changed_files": {
@@ -79,9 +78,6 @@
         }
       },
       "additionalProperties": true
-    },
-    "blocker": {
-      "type": "object"
     }
   },
   "additionalProperties": true,
@@ -102,23 +98,6 @@
           "changed_files",
           "validation",
           "validation_evidence"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "blocked"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "blocker"
         ]
       }
     }

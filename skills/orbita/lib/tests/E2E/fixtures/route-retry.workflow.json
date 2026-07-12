@@ -1,5 +1,5 @@
 {
-  "name": "fixture-route-retry-blocked",
+  "name": "fixture-route-retry",
   "version": 1,
   "start": "triage",
   "done": "done",

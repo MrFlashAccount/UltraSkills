@@ -1,7 +1,7 @@
 export const dashboardLanes = [
   { id: 'waiting_for_user', label: 'Waiting for user', tone: 'waiting' },
   { id: 'worker_running', label: 'Worker running', tone: 'running' },
-  { id: 'blocked', label: 'Blocked', tone: 'blocked' },
+  { id: 'needs_help', label: 'Needs help', tone: 'needs-help' },
   { id: 'degraded', label: 'Degraded', tone: 'degraded' },
   { id: 'done', label: 'Done', tone: 'done' },
 ];

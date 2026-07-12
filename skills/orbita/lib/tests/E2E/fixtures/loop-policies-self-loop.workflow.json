@@ -3,14 +3,14 @@
   "version": 1,
   "start": "self_check",
   "done": "done",
-  "blocked": "blocked",
+  "limit_reached": "limit_reached",
   "loopPolicies": {
     "self_check": {
       "steps": [
         "self_check"
       ],
       "maxIterations": 2,
-      "onLimit": "blocked"
+      "onLimit": "limit_reached"
     }
   },
   "steps": {
@@ -39,8 +39,8 @@
         "prompt": "Finished."
       }
     },
-    "blocked": {
-      "name": "Blocked",
+    "limit_reached": {
+      "name": "Limit reached",
       "kind": "done",
       "input": {
         "prompt": "Loop limit reached."

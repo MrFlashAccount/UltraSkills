@@ -7,7 +7,7 @@ Use this as the expected worker answer format for critic/reviewer gates. Keep it
 - Reviewer:
 - Date:
 - Gate: research critic | architecture review | plan review | implementation review
-- Verdict: approved | needs_revision | passed | needs_changes | blocked
+- Verdict: approved | needs_revision | passed | needs_changes
 
 ## Summary
 
@@ -27,9 +27,10 @@ Use this as the expected worker answer format for critic/reviewer gates. Keep it
 
 ## Transition output
 
-- outcome: approved | needs_revision | ready_for_review | passed | needs_changes | blocked
-- blocker: <only when blocked>
+- outcome: approved | needs_revision | ready_for_review | passed | needs_changes
 - artifacts/results to carry forward: <refs or summaries>
+
+If the verdict cannot yet be produced without help, report `NON_BLOCKING_STOP` through the orchestrator/host control channel with the smallest concrete help request. Do not submit a terminal verdict; resume the same gate after resolution.
 
 ## Template rules
 

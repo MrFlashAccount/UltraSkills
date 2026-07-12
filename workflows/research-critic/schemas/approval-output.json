@@ -8,11 +8,10 @@
   "properties": {
     "approval": {
       "enum": [
-        "approved",
-        "blocked"
+        "approved"
       ],
       "description": "Human answer gate decision for the research questions step.",
-      "x-usage": "Use approved when user answers are ready for research_answered_draft, and blocked only when blocker explains why research must pause."
+      "x-usage": "Use approved when user answers are ready for research_answered_draft, Report a non-blocking stop through the runner control channel when research needs external help."
     },
     "answers": {
       "type": "array",
@@ -29,11 +28,6 @@
       },
       "description": "Optional compact summary of approved user answers.",
       "x-usage": "Use as supporting answer context; do not route from this field."
-    },
-    "blocker": {
-      "type": "object",
-      "description": "Required when approval is blocked.",
-      "x-usage": "Surface this blocker before continuing; do not infer missing blocker details from prose."
     }
   },
   "additionalProperties": true

@@ -8,8 +8,7 @@
     "outcome": {
       "enum": [
         "approved",
-        "needs_revision",
-        "blocked"
+        "needs_revision"
       ]
     },
     "verdict": {
@@ -20,9 +19,6 @@
       "items": {
         "type": "object"
       }
-    },
-    "blocker": {
-      "type": "object"
     }
   },
   "additionalProperties": true

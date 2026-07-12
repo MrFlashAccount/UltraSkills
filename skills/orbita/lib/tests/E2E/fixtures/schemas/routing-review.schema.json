@@ -9,12 +9,8 @@
     "outcome": {
       "enum": [
         "ready",
-        "retry",
-        "blocked"
+        "retry"
       ]
-    },
-    "blocker": {
-      "type": "object"
     },
     "results": {
       "type": "array",

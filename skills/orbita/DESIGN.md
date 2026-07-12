@@ -20,7 +20,7 @@ Audience:
 Primary read:
 - what needs attention right now
 - which runs are waiting for a human, which are executing worker actions, which
-  are blocked, done, or degraded
+  need help, are done, or are degraded
 
 Primary action:
 - inspect a run card
@@ -39,7 +39,7 @@ Use a Trello-like board as the primary model.
 Columns are host-action/status buckets, not workflow steps:
 - `Waiting for user`
 - `Worker running`
-- `Blocked`
+- `Needs help`
 - `Degraded`
 - `Done`
 
@@ -67,7 +67,7 @@ The first viewport is a working board:
 Column order should optimize attention:
 1. `Waiting for user`
 2. `Worker running`
-3. `Blocked`
+3. `Needs help`
 4. `Degraded`
 5. `Done`
 
@@ -158,7 +158,7 @@ Core tokens:
 State roles:
 - waiting for user: `#FAB387` or `#F9E2AF`
 - worker running: `#CBA6F7` or `#B4BEFE`, never cyan-first
-- blocked: `#F38BA8`
+- needs help: `#F38BA8`
 - degraded: `#9A92A8`
 - done: `#A6E3A1`
 
@@ -217,11 +217,11 @@ Empty:
 Degraded:
 - one unreadable run must appear as degraded without crashing or hiding other
   runs
-- degraded is observer/read health, not the same as workflow blocked
+- degraded is observer/read health, not the same as a workflow request needing help
 
-Blocked:
-- blocked is a recoverable active-work lane, not a workflow terminal state
-- show recoverable blocker summary when available
+Needs help:
+- needs help is an active request lane, not a workflow terminal state
+- show the bounded non-blocking stop summary when available
 
 Done:
 - visually subdued

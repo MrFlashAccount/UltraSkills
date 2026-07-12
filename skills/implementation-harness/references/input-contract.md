@@ -39,10 +39,10 @@ Input assumptions:
 - Execution planning is closed enough to implement from without re-negotiating ownership or scope.
 - When this harness applies, the parent/orchestrator session stays in orchestration mode and delegates implementation to worker/subagent implementers; speed or convenience does not justify manual in-orchestrator implementation.
 - Plain user action verbs like `fix`, `do`, `сделай`, or `исправь` do not count as permission for direct parent-session implementation; only an explicit request for direct in-session execution overrides the orchestrator default.
-- If required implementer delegation is unavailable, fails to start, or cannot be used, this stage stops as `blocked` instead of falling back to manual parent-session implementation.
+- If required implementer delegation is unavailable, fails to start, or cannot be used, this stage reports a `NON_BLOCKING_STOP` and requests help instead of falling back to manual parent-session implementation. Resume the same stage after resolution.
 - This skill owns development plus verification handoff, not the independent post-implementation review gate.
 - Transport layer may have come from GitHub, linear, docs, or chat; this skill stays transport-agnostic.
 
-If approval status is unclear, the execution-plan packet is missing, file ownership is still ambiguous, or an implementation-critical fact is still missing, stop and return `blocked`.
+If approval status is unclear, the execution-plan packet is missing, file ownership is still ambiguous, or an implementation-critical fact is still missing, report a `NON_BLOCKING_STOP` with the smallest concrete help request. Do not return a completed implementation result; resume the same stage after resolution.
 
 If Architect ran for architecture-sensitive work, block implementation when the handoff lacks any Architect-owned proof/handoff field triggered by the slice: `domain_source_proof_map`, `source_layout_owner_map`, `runtime_path_map`, `schema_domain_ownership_map`, `compatibility_surface_plan`, `deletion_migration_plan`, `forbidden_placements_imports`, `verification_surfaces`, or `reviewer_gates`. Non-triggered fields may be omitted or explicitly marked `not_applicable` / `n/a_with_reason`; do not infer or recreate missing triggered Architect decisions inside implementation.

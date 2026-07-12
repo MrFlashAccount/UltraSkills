@@ -48,7 +48,7 @@
             "enum": [
               "run_worker",
               "wait_for_approval",
-              "resolve_worker_blocker"
+              "resolve_non_blocking_stop"
             ]
           },
           "loadInstructionsCommand": {
@@ -97,12 +97,12 @@
             "type": "string",
             "minLength": 1
           },
-          "recoverableBlocker": {
-            "description": "Bounded public blocker details for a recoverable worker or approval pause. A resolve_worker_blocker request asks the host/orchestrator to resolve this blocker first; after accepted resolution, the same step receives resolved recovery context.",
-            "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/recoverableWorkerBlocker"
+          "nonBlockingStop": {
+            "description": "Bounded public details for a request-level non-blocking stop. A resolve_non_blocking_stop request asks the host or user for the missing help; after resolution, the same request resumes with that context.",
+            "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/nonBlockingStop"
           },
-          "writeResolutionCommand": {
-            "description": "Validating public runner command for writing the structured blocker resolution.",
+          "resolveStopCommand": {
+            "description": "Validating public runner command for writing the structured stop resolution.",
             "type": "string",
             "minLength": 1
           },
@@ -179,7 +179,7 @@
                   },
                   {
                     "required": [
-                      "recoverableBlocker"
+                      "nonBlockingStop"
                     ]
                   },
                   {
@@ -195,7 +195,7 @@
             "if": {
               "properties": {
                 "action": {
-                  "const": "resolve_worker_blocker"
+                  "const": "resolve_non_blocking_stop"
                 }
               },
               "required": [
@@ -204,8 +204,8 @@
             },
             "then": {
               "required": [
-                "recoverableBlocker",
-                "writeResolutionCommand"
+                "nonBlockingStop",
+                "resolveStopCommand"
               ],
               "not": {
                 "anyOf": [

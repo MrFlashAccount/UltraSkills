@@ -9,8 +9,7 @@
     "outcome": {
       "enum": [
         "compared",
-        "needs_revision",
-        "blocked"
+        "needs_revision"
       ]
     },
     "rerun_comparison": {
@@ -48,23 +47,6 @@
         }
       },
       "additionalProperties": true
-    },
-    "blocker": {
-      "type": "object",
-      "required": [
-        "summary"
-      ],
-      "properties": {
-        "summary": {
-          "type": "string",
-          "minLength": 1
-        },
-        "needed": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "additionalProperties": true
     }
   },
   "additionalProperties": true,
@@ -86,23 +68,6 @@
       "then": {
         "required": [
           "rerun_comparison"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "blocked"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "blocker"
         ]
       }
     }

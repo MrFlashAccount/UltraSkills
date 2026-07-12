@@ -126,7 +126,7 @@ test('dashboard projection exposes safe DTOs with lanes, scalar cursor, minimap,
   jsonDoesNotContainForbiddenValues(run);
 });
 
-test('dashboard projection treats resolved recoveries as worker continuation, not blocked', async () => {
+test('dashboard projection treats unresolved stops as needs-help and resolved stops as worker continuation', async () => {
   const runsRoot = await makeRunsRoot('resolved-recovery');
   const unresolvedId = `dashboard-unresolved-recovery-${process.pid}`;
   const resolvedId = `dashboard-resolved-recovery-${process.pid}`;
@@ -142,13 +142,13 @@ test('dashboard projection treats resolved recoveries as worker continuation, no
   await writeRunState(runsRoot, unresolvedId, {
     cursor: 'backend_implementation',
     status: 'running',
-    recoverableWorkerBlockers: { backend_implementation: recovery },
+    nonBlockingStops: { backend_implementation: recovery },
     state: { artifacts: [], results: [] },
   });
   await writeRunState(runsRoot, resolvedId, {
     cursor: 'backend_implementation',
     status: 'running',
-    recoverableWorkerBlockers: {
+    nonBlockingStops: {
       backend_implementation: {
         ...recovery,
         resolution: {
@@ -163,7 +163,7 @@ test('dashboard projection treats resolved recoveries as worker continuation, no
   const runs = await listDashboardRuns({ runsRoot });
   const byId = new Map(runs.map((run) => [run.runId, run]));
 
-  assert.equal(byId.get(unresolvedId).lane.id, 'blocked');
+  assert.equal(byId.get(unresolvedId).lane.id, 'needs_help');
   assert.equal(byId.get(resolvedId).lane.id, 'worker_running');
 });
 

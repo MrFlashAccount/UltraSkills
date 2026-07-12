@@ -8,11 +8,10 @@
   "properties": {
     "outcome": {
       "enum": [
-        "implemented",
-        "blocked"
+        "implemented"
       ],
-      "description": "Producer must emit the single enum value that reflects the completed stage state; use blocked only when blocker explains a concrete external or contract-level recoverable pause.",
-      "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when this says blocked or needs revision. Verification failures caused by the worker's own in-scope changes are implementation work to fix and rerun, not blockers by themselves."
+      "description": "Producer must emit the single enum value that reflects the completed stage state. Report concrete external or contract-level missing help through the runner non-blocking stop control channel, never as an output outcome.",
+      "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when it requires revision. Verification failures caused by the worker's own in-scope changes are implementation work to fix and rerun, not blockers by themselves."
     },
     "summary": {
       "type": "string",
@@ -76,51 +75,6 @@
           }
         }
       }
-    },
-    "blocker": {
-      "type": "object",
-      "required": [
-        "summary",
-        "source_step_id",
-        "needed"
-      ],
-      "properties": {
-        "summary": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Producer must summarize the relevant decision or handoff in concise human-readable form without adding new scope.",
-          "x-usage": "Use this as concise human-readable context only. Do not route, approve, or expand scope from this text."
-        },
-        "source_step_id": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Producer must name the workflow step id that found or owns this blocker or finding.",
-          "x-usage": "Use this to identify the step that found or owns the blocker/finding. Do not treat it as a retry target by itself."
-        },
-        "needed": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Producer must state the exact missing decision, permission, input, or evidence required to proceed.",
-          "x-usage": "Surface this exact missing input, permission, evidence, or decision before proceeding. Do not substitute assumptions for it."
-        },
-        "evidence": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "Producer should list concrete evidence references supporting this handoff, verdict, finding, or blocker.",
-          "x-usage": "Use these references to inspect or challenge the claim. Do not assume unreferenced surfaces were checked."
-        },
-        "risk": {
-          "type": "string",
-          "description": "Producer should describe the residual risk if this blocker or finding is ignored.",
-          "x-usage": "Use this to understand why ignoring the item is unsafe. Treat it as risk context unless paired with a blocked outcome."
-        }
-      },
-      "additionalProperties": false,
-      "description": "Producer must populate this when outcome is blocked, naming the recoverable pause reason, owning step, and specific missing input, permission, approved-contract change, redesign/plan decision, or unsafe repo/environment state.",
-      "x-usage": "Treat this as a recoverable pause. Surface the missing input or decision, then continue this same workflow step after it is resolved. Do not use blocker for red tests caused by the worker's own in-scope changes unless fixing them requires an external or contract-level recoverable pause."
     }
   },
   "additionalProperties": false,
@@ -144,23 +98,6 @@
           "changed_files",
           "verification",
           "artifacts"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "blocked"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "blocker"
         ]
       }
     }

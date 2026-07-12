@@ -48,9 +48,11 @@ Do exactly one cycle:
 4. Report compactly, then stop. Do not start the next iteration.
 
 Return:
-- status: completed | partial | blocked | no-progress
+- status: completed | partial | no-progress
 - result:
 - evidence: exact paths/commands/IDs/errors/findings
+
+When continuation needs orchestrator or user help, emit `NON_BLOCKING_STOP` through the control channel instead of returning a terminal status. Resume the same iteration after resolution.
 - artifacts: files/PRs/issues/notes created or changed
 - verification: checks run and outcomes, or why not run
 - blocker:

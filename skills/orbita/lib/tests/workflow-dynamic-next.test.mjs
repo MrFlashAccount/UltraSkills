@@ -14,10 +14,9 @@ function schemaDoc({ required = ['outcome'], properties = {} } = {}) {
     type: 'object',
     required,
     properties: {
-      outcome: { enum: ['ready', 'blocked'] },
+      outcome: { const: 'ready' },
       artifacts: { type: 'array' },
       results: { type: 'array' },
-      blocker: { type: 'object' },
       next: { enum: ['review_a', 'review_b', 'join'] },
       ...properties,
     },
@@ -155,9 +154,9 @@ function loopWorkflow(overrides = {}) {
     version: 1,
     start: 'review',
     done: 'done',
-    blocked: 'blocked',
+    limit_reached: 'limit_reached',
     loopPolicies: {
-      review_fix: { steps: ['review', 'fix'], maxIterations: 2, onLimit: 'blocked' },
+      review_fix: { steps: ['review', 'fix'], maxIterations: 2, onLimit: 'limit_reached' },
     },
     steps: {
       review: {
@@ -169,7 +168,7 @@ function loopWorkflow(overrides = {}) {
       },
       fix: { name: 'Fix', kind: 'worker', input: {}, output: outputContract(), next: 'review' },
       done: { name: 'Done', kind: 'done', input: { prompt: 'Done.' } },
-      blocked: { name: 'Blocked', kind: 'done', input: { prompt: 'Blocked.' } },
+      limit_reached: { name: 'Limit reached', kind: 'done', input: { prompt: 'Iteration limit reached.' } },
     },
     ...overrides,
   };
@@ -213,7 +212,7 @@ test('loopPolicies count selected internal route events and reroute to onLimit o
   assert.deepEqual(second.baton.state.$loopProgress, { review_fix: 2 });
 
   const exhausted = runApply('loop-exhausted', second.baton, { outcome: 'ready', route: 'fix' }, true, loopWorkflow());
-  assert.equal(exhausted.baton.cursor, 'blocked');
+  assert.equal(exhausted.baton.cursor, 'limit_reached');
   assert.equal(exhausted.baton.status, 'done');
   assert.deepEqual(exhausted.baton.state.$loopProgress, { review_fix: 2 });
 

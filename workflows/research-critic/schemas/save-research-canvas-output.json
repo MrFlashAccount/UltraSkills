@@ -5,13 +5,15 @@
   "description": "Neutral reusable output contract for final research Canvas persistence metadata.",
   "type": "object",
   "required": [
-    "outcome"
+    "outcome",
+    "saved",
+    "artifacts",
+    "results"
   ],
   "properties": {
     "outcome": {
       "enum": [
-        "saved",
-        "blocked"
+        "saved"
       ],
       "description": "Authoritative routing state for final persistence."
     },
@@ -58,47 +60,9 @@
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
       },
       "minItems": 1
-    },
-    "blocker": {
-      "$ref": "#/$defs/blocker"
     }
   },
   "additionalProperties": false,
-  "$defs": {
-    "blocker": {
-      "type": "object",
-      "required": [
-        "summary",
-        "source_step_id",
-        "needed"
-      ],
-      "properties": {
-        "summary": {
-          "type": "string",
-          "minLength": 1
-        },
-        "source_step_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "needed": {
-          "type": "string",
-          "minLength": 1
-        },
-        "evidence": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "risk": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    }
-  },
   "allOf": [
     {
       "if": {
@@ -116,48 +80,7 @@
           "saved",
           "artifacts",
           "results"
-        ],
-        "not": {
-          "required": [
-            "blocker"
-          ]
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "blocked"
-          }
-        },
-        "required": [
-          "outcome"
         ]
-      },
-      "then": {
-        "required": [
-          "blocker"
-        ],
-        "not": {
-          "anyOf": [
-            {
-              "required": [
-                "saved"
-              ]
-            },
-            {
-              "required": [
-                "artifacts"
-              ]
-            },
-            {
-              "required": [
-                "results"
-              ]
-            }
-          ]
-        }
       }
     }
   ]

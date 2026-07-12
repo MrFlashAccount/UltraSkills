@@ -9,11 +9,10 @@
     "approval": {
       "enum": [
         "approved",
-        "rejected",
-        "blocked"
+        "rejected"
       ],
       "description": "Human gate decision for the current DevHarness approval step.",
-      "x-usage": "Use approved to continue, rejected to revise the gated draft step, and blocked only when blocker explains why the run must pause recoverably."
+      "x-usage": "Use approved to continue, rejected to revise the gated draft step, Report a non-blocking stop through the runner control channel when the request needs external help."
     },
     "results": {
       "type": "array",
@@ -30,11 +29,6 @@
       },
       "description": "Optional artifacts attached by the approval gate.",
       "x-usage": "Use only when the approval gate explicitly attaches artifacts."
-    },
-    "blocker": {
-      "type": "object",
-      "description": "Required when approval is blocked.",
-      "x-usage": "Surface this blocker before continuing; do not infer missing blocker details from prose."
     }
   },
   "additionalProperties": true

@@ -245,8 +245,7 @@ test('runner: approval host instruction lists prompt input artifacts as attachme
     type: 'object',
     required: ['approval'],
     properties: {
-      approval: { enum: ['approved', 'rejected', 'blocked'] },
-      blocker: { type: 'object' },
+      approval: { enum: ['approved', 'rejected'] },
     },
     additionalProperties: false,
   });
@@ -729,7 +728,7 @@ test('runner: write-output rejects invalid JSON/schema without accepting output'
 
   const continued = await runRunner(['continue', '--run-id', runId, '--workflow', workflowPath]);
   assert.notEqual(continued.status, 0);
-  assert.match(continued.stderr, /missing accepted host output for workflow step prepare/);
+  assert.match(continued.stderr, /missing completed output or non-blocking stop for workflow request prepare/);
 });
 
 test('runner: worker instructions include prefilled validating write-output command', async () => {
@@ -854,6 +853,144 @@ test('runner: fanout persists owner phase and synthetic branch requests through 
   const completed = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'complete fanout owner');
   assert.equal(completed.status, 'done');
   assert.equal(completed.baton.state.fanouts.review.phase, 'completed');
+});
+
+test('runner: fanout owner non-blocking stop resumes before downstream fanout reads owner fields', async () => {
+  const { runId } = await runCase('fanout-owner-stop-resume');
+  const workflowPath = path.join(tempDir, 'fanout-owner-stop-resume.workflow.json');
+  const branchSchemaPath = path.join(tempDir, 'fanout-owner-stop-branch.schema.json');
+  const ownerSchemaPath = path.join(tempDir, 'fanout-owner-stop-owner.schema.json');
+  writeJson(branchSchemaPath, {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome'],
+    properties: { outcome: { const: 'ready' }, results: { type: 'array' } },
+    additionalProperties: false,
+  });
+  writeJson(ownerSchemaPath, {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome', 'review_branches'],
+    properties: {
+      outcome: { const: 'ready_for_review' },
+      review_branches: {
+        type: 'array',
+        minItems: 1,
+        uniqueItems: true,
+        items: { enum: ['backend_review'] },
+      },
+    },
+    additionalProperties: false,
+  });
+  const branchOutput = { template: 'output.md', schema: path.basename(branchSchemaPath) };
+  writeJson(workflowPath, {
+    name: 'fanout-owner-stop-resume',
+    version: 1,
+    start: 'implementation',
+    done: 'done',
+    steps: {
+      implementation: {
+        name: 'Implementation owner',
+        kind: 'fanout',
+        input: { branches: ['backend_implementation', 'frontend_implementation'], prompt: 'Aggregate implementation.' },
+        output: { template: 'output.md', schema: path.basename(ownerSchemaPath) },
+        branches: {
+          backend_implementation: { input: { prompt: 'Implement backend.' }, output: branchOutput },
+          frontend_implementation: { input: { prompt: 'Implement frontend.' }, output: branchOutput },
+        },
+        next: 'review',
+      },
+      review: {
+        name: 'Review owner',
+        kind: 'fanout',
+        input: {
+          branches: '${{ input.implementation.review_branches }}',
+          prompt: 'Aggregate review.',
+        },
+        output: branchOutput,
+        branches: {
+          backend_review: { input: { prompt: 'Review backend.' }, output: branchOutput },
+        },
+        next: 'done',
+      },
+      done: { name: 'Done', kind: 'done' },
+    },
+  });
+
+  const branches = await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'start implementation fanout');
+  const backendBranchId = branches.requests.find((request) => request.fanout.branch_id === 'backend_implementation').stepId;
+  const frontendBranchId = branches.requests.find((request) => request.fanout.branch_id === 'frontend_implementation').stepId;
+  let result = await runRunner(
+    ['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', backendBranchId],
+    { input: JSON.stringify(workerOutput('backend implemented')), debugSummary: true },
+  );
+  assert.equal(result.status, 0, result.stderr);
+
+  result = await runRunner(
+    ['report-stop', '--run-id', runId, '--workflow', workflowPath, '--step-id', frontendBranchId],
+    { input: JSON.stringify({ non_blocking_stop: { summary: 'Need frontend permission.', needed: 'Approve frontend implementation.' } }) },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const branchHelp = await expectRunner([
+    'continue', '--run-id', runId, '--workflow', workflowPath,
+    '--bind-agent', `${backendBranchId}=backend-worker`,
+    '--bind-agent', `${frontendBranchId}=frontend-worker`,
+  ], 'request fanout branch help');
+  assert.deepEqual(branchHelp.requests.map((request) => request.stepId), [frontendBranchId]);
+  assert.equal(branchHelp.requests[0].action, 'resolve_non_blocking_stop');
+  assert.equal(branchHelp.baton.state.backend_implementation.results[0].summary, 'backend implemented');
+
+  result = await runRunner(
+    ['resolve-stop', '--run-id', runId, '--workflow', workflowPath, '--step-id', frontendBranchId],
+    { input: JSON.stringify({ resolution: { summary: 'Frontend approved.', decision: 'Proceed with frontend implementation.' } }) },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const resumedBranch = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'resume stopped fanout branch');
+  assert.deepEqual(resumedBranch.requests.map((request) => request.stepId), [frontendBranchId]);
+  assert.equal(resumedBranch.requests[0].action, 'run_worker');
+  assert.equal(resumedBranch.requests[0].preferredAgentId, 'frontend-worker');
+
+  result = await runRunner(
+    ['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', frontendBranchId],
+    { input: JSON.stringify(workerOutput('frontend implemented')), debugSummary: true },
+  );
+  assert.equal(result.status, 0, result.stderr);
+
+  const owner = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'enter implementation owner');
+  assert.equal(owner.requests[0].stepId, 'implementation');
+  result = await runRunner(
+    ['report-stop', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'implementation'],
+    { input: JSON.stringify({ non_blocking_stop: { summary: 'Need reviewer choice.', needed: 'Choose the required reviewer.' } }) },
+  );
+  assert.equal(result.status, 0, result.stderr);
+
+  const help = await expectRunner([
+    'continue', '--run-id', runId, '--workflow', workflowPath,
+    '--bind-agent', 'implementation=implementation-worker',
+  ], 'request owner help');
+  assert.equal(help.baton.cursor, 'implementation');
+  assert.equal(help.baton.state.implementation, undefined);
+  assert.equal(help.requests[0].action, 'resolve_non_blocking_stop');
+
+  result = await runRunner(
+    ['resolve-stop', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'implementation'],
+    { input: JSON.stringify({ resolution: { summary: 'Reviewer selected.', decision: 'Use backend_review.' } }) },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const resumed = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'resume implementation owner');
+  assert.equal(resumed.requests[0].stepId, 'implementation');
+  assert.equal(resumed.requests[0].action, 'run_worker');
+  assert.equal(resumed.requests[0].preferredAgentId, 'implementation-worker');
+  assert.equal(resumed.requests[0].nonBlockingStop.resolution.decision, 'Use backend_review.');
+
+  result = await runRunner(
+    ['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'implementation'],
+    { input: JSON.stringify({ outcome: 'ready_for_review', review_branches: ['backend_review'] }), debugSummary: true },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const review = await expectRunner(['continue', '--run-id', runId, '--workflow', workflowPath], 'start downstream review fanout');
+  assert.equal(review.baton.cursor, 'review');
+  assert.deepEqual(review.requests.map((request) => request.fanout.branch_id), ['backend_review']);
 });
 
 test('runner: shard persists batches and runs the genuine final step worker', async () => {

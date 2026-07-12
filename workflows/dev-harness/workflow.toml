@@ -15,10 +15,10 @@ role = "researcher"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Before creating the research artifact or moving toward a proposal, run a user dialogue solution exploration pass when the feature/task is under-specified, has meaningful product/API/architecture choices, or would otherwise force hidden assumptions:
 - Inspect the codebase first for questions answerable from existing code, docs, tests, contracts, or prior artifacts.
-- When multiple plausible solution directions remain, return outcome blocked with blocker.source_step_id = research_draft and a user-facing discussion prompt in blocker.needed for the orchestrator to discuss with the user through the recoverable blocker flow.
+- When multiple plausible solution directions remain, report a non-blocking stop with non_blocking_stop.source_step_id = research_draft and a user-facing discussion prompt in non_blocking_stop.needed for the orchestrator to discuss with the user through the non-blocking stop flow.
 - The discussion prompt must present the main solution options, trade-offs, edge cases, failure modes, migration/compatibility impact, operational cost, and your recommended direction.
 - Ask one focused discussion question at a time. After the orchestrator resolves it, continue the same research step and either ask the next needed discussion question or proceed only when the solution direction, edge cases, and scope decisions are resolved.
-- Phrase every user-answerable blocker.needed as a direct user-facing question; the orchestrator must route it to the user as a question, not answer it from inference or convert it into a summary.
+- Phrase every user-answerable non_blocking_stop.needed as a direct user-facing question; the orchestrator must route it to the user as a question, not answer it from inference or convert it into a summary.
 Do not create `reasons-canvas-research` before the needed user dialogue is complete or evidence shows no user dialogue is needed.
 Read the task context, gather local/project evidence, identify constraints, risks, open questions, and architecture-sensitive pressure.
 Create exactly one first-class human-facing research artifact named `reasons-canvas-research`. Do not create any separate legacy research artifact or structured legacy output.
@@ -26,12 +26,12 @@ Fill only the research-owned depth in `reasons-canvas-research`: evidence-backed
 Emit a compact output.summary as the human-facing research proposal state for approval gates. Summarize the artifact's current proposal state, major decisions, unresolved tensions, and why it is ready for attack/approval without embedding the artifact body.
 Do not create arbitrary temp/export files for handoff; the artifact metadata/path accepted into baton is the source of truth.
 Return outcome ready_for_attack when the initial draft or a research_attack-requested revision is ready for attack.
-When missing implementation-critical input is answerable by the user, return a recoverable blocked output with blocker.source_step_id = research_draft and the smallest concrete question or permission needed.
-For any user-answerable research blocker, blocker.needed must be the exact user-facing question to ask.
-Return blocked for non-user-answerable unsafe or impossible progress as well, but make blocker.needed distinguish the external blocker from a user decision.
+When missing implementation-critical input is answerable by the user, report a non-blocking stop with non_blocking_stop.source_step_id = research_draft and the smallest concrete question or permission needed.
+For any user-answerable research non-blocking stop, non_blocking_stop.needed must be the exact user-facing question to ask.
+Report a non-blocking stop for non-user-answerable unsafe or impossible progress as well, but make non_blocking_stop.needed distinguish the external non-blocking stop from a user decision.
 When revising after research_attack feedback or approve_research rejection, read feedback from input.research_attack and input.approve_research and address it explicitly while preserving approved constraints. If the latest approve_research output is rejected, return ready_for_approval after the correction; do not send that user-requested revision through research_attack again.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
-If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = research_draft and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
+If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = research_draft and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
 Input context:
 - Previous research artifacts: ${{ input.research_draft.artifacts | default: "No previous research artifacts in input context." }}
@@ -58,10 +58,10 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 [steps.research_attack.input]
 role = "researcher"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Start from a hostile prior: assume the change, proposal, draft, or Canvas is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
+Start from a hostile prior: assume the change, proposal, draft, or Canvas is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed must-fix finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
 Read artifact `reasons-canvas-research` from `research_draft` and attack it for missing evidence, unsafe assumptions, scope drift, sensitive surfaces, unclear approval questions, and fake architecture/implementation certainty. Treat a missing `reasons-canvas-research` artifact as a blocking research failure.
-Return approved, needs_revision, or blocked.
-If blocked, set blocker.source_step_id = research_attack.
+Return approved or needs_revision as completed output; otherwise report a non-blocking stop.
+When reporting it, set non_blocking_stop.source_step_id = research_attack.
 
 Input context:
 - Research artifacts: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}'''
@@ -87,7 +87,7 @@ Read research_draft.summary as the human-facing research proposal state and atta
 Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
 If the user asks for a packet/proposal file, retrieve/export the existing artifact referenced by baton/output artifacts; do not ask a worker to recreate it in a temp path.
 Continue only after explicit approval.
-Return approval approved to continue to architecture_draft, rejected to revise research_draft, or blocked with a blocker.
+Return approval approved to continue to architecture_draft or rejected to revise research_draft as completed output; otherwise report a non-blocking stop.
 
 Input context:
 - Research summary for approval: ${{ input.research_draft.summary }}
@@ -117,16 +117,16 @@ prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artif
 Read the approved/current `reasons-canvas-research` artifact from `research_draft` as the research source of truth and strictly follow it.
 Produce the minimal architecture decision or structural contract required by the approved research in the `reasons-canvas-architecture` artifact and a compact output.summary as the human-facing architecture proposal state for approval gates. Do not embed the architecture artifact body in JSON.
 Before finalizing output.summary or `reasons-canvas-architecture`, explicitly identify the public contract and API surfaces affected by the task: exported APIs, CLI/user-facing commands, schemas, workflow interfaces, integration boundaries, compatibility promises, and observable behavior. If code, docs, or existing contracts answer a question, inspect them instead of asking the user.
-When user-owned choices remain about public contract shape, API compatibility, naming, migration behavior, or accepted breakage, return outcome blocked with blocker.source_step_id = architecture_draft and the smallest focused blocker.needed question for the orchestrator to resolve through the recoverable blocker flow; include your recommended answer in blocker.summary or blocker.needed.
-For any user-answerable architecture blocker, blocker.needed must be the exact user-facing question to ask; the orchestrator must route it to the user as a question, not answer it from inference or convert it into a summary.
-After the orchestrator resolves the recoverable blocker, continue the same architecture step from the resolved public contract/API decision and proceed only when the needed decisions are resolved or evidence shows no such discussion is needed.
+When user-owned choices remain about public contract shape, API compatibility, naming, migration behavior, or accepted breakage, report a non-blocking stop with non_blocking_stop.source_step_id = architecture_draft and the smallest focused non_blocking_stop.needed question for the orchestrator to resolve through the non-blocking stop flow; include your recommended answer in non_blocking_stop.summary or non_blocking_stop.needed.
+For any user-answerable architecture non-blocking stop, non_blocking_stop.needed must be the exact user-facing question to ask; the orchestrator must route it to the user as a question, not answer it from inference or convert it into a summary.
+After the orchestrator resolves the recoverable non-blocking stop, continue the same architecture step from the resolved public contract/API decision and proceed only when the needed decisions are resolved or evidence shows no such discussion is needed.
 When `reasons-canvas-research` exists, derive one new immutable human-facing workflow artifact named `reasons-canvas-architecture`. Copy forward research-owned Requirements and observed domain Entities as frozen input unless new evidence proves a conflict; record any correction in the new architecture artifact instead of editing the research artifact. Own the architecture-depth sections: structural Entities, Approach, Structure, Operations at planning depth, Norms, Safeguards, and remaining open tensions.
 Do not create arbitrary temp/export files for handoff; the artifact metadata/path accepted into baton is the source of truth.
 If architecture work is minimal, record the explicit minimal/no-structural-change decision in `reasons-canvas-architecture` and output.summary.
-Return ready_for_attack for the initial draft or an architecture_attack-requested revision, or blocked with blocker.source_step_id = architecture_draft.
+Return ready_for_attack for the initial draft or an architecture_attack-requested revision as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = architecture_draft.
 When revising after architecture_attack feedback or approve_architecture rejection, read feedback from input.architecture_attack and input.approve_architecture and address it explicitly while preserving frozen research inputs and approved architecture constraints. If the latest approve_architecture output is rejected, return ready_for_approval after the correction; do not send that user-requested revision through architecture_attack again.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
-If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = architecture_draft and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
+If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = architecture_draft and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
 Input context:
 - Research artifacts, including required `reasons-canvas-research`: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}
@@ -156,10 +156,10 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 [steps.architecture_attack.input]
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Start from a hostile prior: assume the change, proposal, draft, or packet is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
+Start from a hostile prior: assume the change, proposal, draft, or packet is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed must-fix finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
 Attack the required `reasons-canvas-architecture` artifact for ownership seams, dependency direction, contract surfaces, frozen research carry-forward, architecture-owned decisions, operations clarity, and compatibility risk. Treat a missing `reasons-canvas-architecture` artifact as a blocking architecture failure.
-Return approved, needs_revision, or blocked.
-If blocked, set blocker.source_step_id = architecture_attack.
+Return approved or needs_revision as completed output; otherwise report a non-blocking stop.
+When reporting it, set non_blocking_stop.source_step_id = architecture_attack.
 
 Input context:
 - Architecture artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}'''
@@ -185,7 +185,7 @@ Read architecture_draft.summary as the human-facing architecture proposal state 
 Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
 If the user asks for an architecture file, retrieve/export the existing artifact referenced by baton/output artifacts, limited to `reasons-canvas-architecture`. Do not ask a worker to recreate it in a temp path.
 Continue only after explicit approval when the slice is non-trivial or architecture-sensitive.
-Return approval approved to continue to planning_draft, rejected to revise architecture_draft, or blocked with a blocker.
+Return approval approved to continue to planning_draft or rejected to revise architecture_draft as completed output; otherwise report a non-blocking stop.
 
 Input context:
 - Architecture summary for approval: ${{ input.architecture_draft.summary }}
@@ -217,13 +217,13 @@ Create exactly one first-class human-facing implementation plan artifact named `
 Emit a compact output.summary as the human-facing plan proposal state for approval gates. Summarize the artifact's current plan state, selected implementation route, selected reviewers, main risks, and verification/rollback shape without embedding the full plan body.
 The step id remains planning_draft for compatibility, but once approve_plan approves this output, downstream steps must treat it as the final approved plan contract. selected_implementation_steps must contain only unique canonical implementation branch ids needed for the plan: backend_implementation, frontend_implementation, architecture_artifact_update.
 Collapse overlapping same-role work into one canonical task; do not create duplicate backend/frontend/architecture workers.
-If duplicate same-role work cannot be safely collapsed, return blocked with blocker.source_step_id = planning_draft. selected_review_steps must explicitly contain the unique reviewers that must run after implementation; implementation must not invent or recompute reviewers.
+If duplicate same-role work cannot be safely collapsed, report a non-blocking stop with non_blocking_stop.source_step_id = planning_draft. selected_review_steps must explicitly contain the unique reviewers that must run after implementation; implementation must not invent or recompute reviewers.
 Keep review_plan.reviewers aligned with selected_review_steps.
 Reviewer fan-out budget: default to one independent reviewer, use two when two independent material risk classes are touched, use three for structural/runtime plus verification-heavy work, and select more than three only with review_escalation explaining the independent risk classes. selected_review_steps means "run these reviewers"; do not include optional, informational, or absence-confirmation reviewers. Record considered-but-skipped reviewers in skipped_review_steps with an evidence-backed reason instead.
-Return ready_for_attack for the initial plan or a planning_attack-requested revision, or blocked with blocker.source_step_id = planning_draft.
+Return ready_for_attack for the initial plan or a planning_attack-requested revision as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = planning_draft.
 When revising after planning_attack feedback or approve_plan rejection, read feedback from input.planning_attack and input.approve_plan and address it explicitly while preserving the approved architecture constraints. If the latest approve_plan output is rejected, return ready_for_approval after the correction; do not send that user-requested revision through planning_attack again.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
-If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = planning_draft and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
+If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = planning_draft and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
 Input context:
 - Architecture artifacts, including `reasons-canvas-architecture` when present: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}
@@ -253,8 +253,8 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 role = "critic"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read artifact `implementation-plan` from `planning_draft` and challenge it plus selected_implementation_steps, selected_review_steps, review_plan, skipped_review_steps, and review_escalation for faithful conversion from approved architecture artifacts and immutable `reasons-canvas-architecture` when present into workstreams, unique canonical task selection, explicit final reviewer selection, no duplicate same-role workers, entity coverage, one-owner-per-file-zone, project baseline, architecture artifact manifest, verification/rollback surfaces, sensitive surfaces, request-path/contract touchpoints, and max-detail leaks. Treat a missing `implementation-plan` artifact as a blocking planning failure.
-Return approved, needs_revision, or blocked.
-If selected tasks contain duplicate/overlapping same-role work that cannot collapse to one canonical step, if selected_review_steps includes reviewers only to confirm absence of a surface, if optional reviewers are selected instead of recorded in skipped_review_steps, if selected_review_steps has more than three entries without strong review_escalation, or if reviewers are missing/recomputed outside planning, return blocked with blocker.source_step_id = planning_attack.
+Return approved or needs_revision as completed output; otherwise report a non-blocking stop.
+If selected tasks contain duplicate/overlapping same-role work that cannot collapse to one canonical step, if selected_review_steps includes reviewers only to confirm absence of a surface, if optional reviewers are selected instead of recorded in skipped_review_steps, if selected_review_steps has more than three entries without strong review_escalation, or if reviewers are missing/recomputed outside planning, report a non-blocking stop with non_blocking_stop.source_step_id = planning_attack.
 
 Input context:
 - Implementation plan artifacts under review: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
@@ -284,7 +284,7 @@ prompt = '''This is a non-implementation approval phase. Do not inspect code, di
 Read planning_draft.summary as the human-facing plan proposal state and attach the `implementation-plan` artifact from planning_draft. On the first visit, include planning_attack.verdict. After a user-rejected plan is corrected, return directly to this gate and treat the old attack verdict only as evidence about the previous version; do not present it as critique of the revised artifact.
 Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
 If the user asks for a plan/proposal file, retrieve/export the existing artifact referenced by baton/output artifacts; do not ask a worker to recreate it in a temp path.
-Return approval approved only for explicit approval, rejected for requested plan changes, or blocked with a blocker.
+Return approval approved only for explicit approval or rejected for requested plan changes as completed output; otherwise report a non-blocking stop.
 After approval, planning_draft is the final approved plan contract.
 Do not encode selected implementation roles or reviewers in approval; selected work and reviewers are planning_draft.selected_implementation_steps and planning_draft.selected_review_steps. skipped_review_steps are planning evidence only and must not be selected without later material surface evidence.
 
@@ -324,7 +324,7 @@ Confirm every selected branch completed, supplied verification evidence, and sta
 On the first pass, planning_draft.selected_review_steps is the mandatory review baseline. After rework, review.review_branches is the mandatory re-review baseline.
 You may widen that baseline when actual changed files or touched surfaces require another planned or previously skipped reviewer. Never remove a mandatory reviewer.
 Return outcome ready_for_review with review_branches as the exact next review fanout and one reviewer_handoffs.<review_branch_id> entry per selected reviewer.
-If incomplete, return blocked with blocker.source_step_id = implementation.
+If incomplete, report a non-blocking stop with non_blocking_stop.source_step_id = implementation.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
@@ -347,20 +347,20 @@ agent_runtime.codex = { model = "gpt-5.6-terra", thinking_level = "high" }
 [steps.implementation.branches.backend_implementation.input]
 role = "backend"
 prompt = '''Implement only the backend slice selected in the approved plan contract planning_draft.selected_implementation_steps.
-Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this implementation slice. Treat a missing `implementation-plan` artifact as a blocker.
+Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this implementation slice. Treat a missing `implementation-plan` artifact as a non-blocking stop.
 This workflow supports at most one backend_implementation worker; handle all backend work for the approved plan here and do not spawn duplicate backend workers.
 Read prior step outputs from input.<step_id> fields only; do not rely on artifacts/results globals.
 Preserve frozen research, architecture, execution plan, and user constraints.
 Treat the approved proposal, plan, and source-contract rows assigned to backend_implementation as mandatory hard gates. Do not approximate, rename, or improvise around them without an approved mapping in the input context.
 Treat red tests, lint failures, typecheck failures, or other verification failures caused by this worker's own in-scope backend changes as implementation work to fix and rerun, not as blockers by themselves.
-Return blocked only when fixing the failure requires missing external input, permission, an approved-contract change, a redesign/plan decision, or when repo/environment state makes continued work unsafe.
-If a required source row cannot be satisfied in the assigned backend scope, or if implementation requires a deviation or exposes a contradiction in the approved contract, return blocked with the smallest concrete approval question instead of redesigning silently.
-Treat the approved implementation plan as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the plan, return blocked or request an approved plan revision.
-Return implemented or blocked with blocker.source_step_id = backend_implementation.
+Report a non-blocking stop only when fixing the failure requires missing external input, permission, an approved-contract change, a redesign/plan decision, or when repo/environment state makes continued work unsafe.
+If a required source row cannot be satisfied in the assigned backend scope, or if implementation requires a deviation or exposes a contradiction in the approved contract, report a non-blocking stop with the smallest concrete approval question instead of redesigning silently.
+Treat the approved implementation plan as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the plan, report a non-blocking stop or request an approved plan revision.
+Return implemented as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = backend_implementation.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
 When rerun from review needs_changes, consume only input.review.implementer_handoffs.backend_implementation as actionable rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
-If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = backend_implementation and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
+If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = backend_implementation and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
@@ -383,26 +383,26 @@ agent_runtime.codex = { model = "gpt-5.6-terra", thinking_level = "high" }
 [steps.implementation.branches.frontend_implementation.input]
 role = "frontend"
 prompt = '''Implement only the frontend slice selected in the approved plan contract planning_draft.selected_implementation_steps.
-Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this implementation slice. Treat a missing `implementation-plan` artifact as a blocker.
+Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this implementation slice. Treat a missing `implementation-plan` artifact as a non-blocking stop.
 This workflow supports at most one frontend_implementation worker; handle all frontend work for the approved plan here and do not spawn duplicate frontend workers.
 Read prior step outputs from input.<step_id> fields only; do not rely on artifacts/results globals.
 Preserve frozen research, architecture, execution plan, and user constraints.
 Treat the approved proposal, plan, and source-contract rows assigned to frontend_implementation as mandatory hard gates. Do not approximate, rename, or improvise around them without an approved mapping in the input context.
-Before implementing named frontend frameworks, routers, UI kits, accessibility primitive libraries, or build/runtime integrations, inspect relevant current docs or repo-local package examples and record the docs/examples used in the implementer handoff. If the needed documentation cannot be accessed and the behavior is contract-significant, return blocked instead of guessing.
+Before implementing named frontend frameworks, routers, UI kits, accessibility primitive libraries, or build/runtime integrations, inspect relevant current docs or repo-local package examples and record the docs/examples used in the implementer handoff. If the needed documentation cannot be accessed and the behavior is contract-significant, report a non-blocking stop instead of guessing.
 For user-facing UI, decompose the slice into named, reviewable components/hooks/selectors; do not leave page composition, lists/cards, overlays/drawers/dialogs, detail sections, loading/error surfaces, and focus/interaction policy in one large component unless the approved plan grants an explicit exception.
 Follow component colocation by default: keep component implementation, component-local types, styles, tests/stories/fixtures when present, and component-specific helpers near that component. Use shared contracts/types only for genuinely shared DTOs or cross-component APIs.
 Identify the repo's UI kit/design-system primitives, tokens, and component conventions before creating controls or layout primitives. Use them by default; if none exists or none fits, record that evidence and use the approved primitive library or semantic native element.
 Name every reusable component introduced or materially changed in the implementer handoff with its purpose, boundary, expected inputs/outputs, and intended reuse scope.
 Treat red tests, lint failures, typecheck failures, or other verification failures caused by this worker's own in-scope frontend changes as implementation work to fix and rerun, not as blockers by themselves.
-Return blocked only when fixing the failure requires missing external input, permission, an approved-contract change, a redesign/plan decision, or when repo/environment state makes continued work unsafe.
-If a required source row cannot be satisfied in the assigned frontend scope, or if implementation requires a deviation or exposes a contradiction in the approved contract, return blocked with the smallest concrete approval question instead of redesigning silently.
-Treat the approved implementation plan as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the plan, return blocked or request an approved plan revision.
-Return implemented or blocked with blocker.source_step_id = frontend_implementation.
+Report a non-blocking stop only when fixing the failure requires missing external input, permission, an approved-contract change, a redesign/plan decision, or when repo/environment state makes continued work unsafe.
+If a required source row cannot be satisfied in the assigned frontend scope, or if implementation requires a deviation or exposes a contradiction in the approved contract, report a non-blocking stop with the smallest concrete approval question instead of redesigning silently.
+Treat the approved implementation plan as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the plan, report a non-blocking stop or request an approved plan revision.
+Return implemented as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = frontend_implementation.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
 When rerun from review needs_changes, consume only input.review.implementer_handoffs.frontend_implementation as actionable rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
 Treat `must_fix` and `should_fix` review findings routed to frontend_implementation as mandatory rework. Do not leave actionable current-scope `should_fix` items unresolved in the next handoff.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
-If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = frontend_implementation and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
+If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = frontend_implementation and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
@@ -425,16 +425,16 @@ agent_runtime.codex = { model = "gpt-5.6-luna", thinking_level = "xhigh" }
 [steps.implementation.branches.architecture_artifact_update.input]
 role = "architect"
 prompt = '''Update only approved architecture artifacts selected in the approved plan contract planning_draft.selected_implementation_steps.
-Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this architecture artifact update slice. Treat a missing `implementation-plan` artifact as a blocker.
+Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this architecture artifact update slice. Treat a missing `implementation-plan` artifact as a non-blocking stop.
 This workflow supports at most one architecture_artifact_update worker; collapse all approved architecture artifact work into this step.
 Do not redesign.
 Do not edit, complete, or reinterpret REASONS artifacts unless the approved implementation plan explicitly selects an architecture artifact update for that exact artifact; otherwise treat them as immutable inputs.
 Read prior step outputs from input.<step_id> fields only.
-Return implemented or blocked with blocker.source_step_id = architecture_artifact_update.
+Return implemented as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = architecture_artifact_update.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
 When rerun from review needs_changes, consume only input.review.implementer_handoffs.architecture_artifact_update as actionable rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
-If concise clarification is needed, do not ask the user directly; return a recoverable blocked output with blocker.source_step_id = architecture_artifact_update and put the user-facing clarification prompt in blocker.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
+If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = architecture_artifact_update and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
@@ -464,7 +464,7 @@ Use the `implementation-plan` artifact from `planning_draft` and reviewer output
 If every selected reviewer passed with no actionable current-scope must-fix or should-fix findings, return outcome passed and next done.
 If changes are required, return outcome needs_changes, next implementation, exact implementation_branches, one implementer_handoffs.<implementation_branch_id> per branch, and review_branches as the mandatory re-review baseline.
 The re-review baseline must include failed reviewers and reviewers whose owned surfaces must be touched by the prescribed rework. The next implementation owner may widen this baseline after actual changes but may not narrow it.
-If review cannot finish safely, return blocked with blocker.source_step_id = review and omit next.
+If review cannot finish safely, report a non-blocking stop with non_blocking_stop.source_step_id = review and omit next.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
@@ -490,9 +490,9 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review implementation against approved architecture decision, ownership seams, dependency direction, compatibility surfaces, and artifact obligations.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a blocker.
+Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
 Do not approve unapproved semantic substitutions for named architecture/runtime/framework decisions. If the approved contract names a specific framework/runtime/build architecture, implementation must use that architecture directly or carry explicit human-approved mapping in the input context.
-Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = architect_review.
+Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = architect_review.
 Read architecture_draft, architecture_attack, and approve_architecture when present; fail on drift between the approved architecture artifact and implementation/review evidence.
 
 Input context:
@@ -522,8 +522,8 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 role = "backend"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review backend correctness, contracts, data flow, validation, failure handling, permissions, rollout safety, observability, and tests for the slice selected by the approved plan contract.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a blocker.
-Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = backend_review.
+Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = backend_review.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
@@ -549,11 +549,11 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 role = "frontend"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review frontend correctness, data flow, state handling, accessibility-relevant behavior, and tests for the slice selected by the approved plan contract.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a blocker.
+Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
 For named frontend frameworks, routers, UI kits, accessibility primitive libraries, or build/runtime integrations, verify that relevant current docs or repo-local examples were inspected and that implementation follows the documented integration shape rather than a close-sounding substitution.
 For user-facing UI, review component decomposition, reusable-component handoff notes, colocation of component code/types/styles/tests where practical, and use of existing UI kit/design-system primitives before local hand-rolled primitives.
 Return passed only when there are no actionable current-scope `must_fix` or `should_fix` findings. Return needs_changes with required_implementation_steps for any actionable current-scope issue, including component architecture, documentation/best-practice evidence, colocation, UI-kit primitive usage, accessibility-relevant interaction behavior, or maintainability debt introduced or left in touched frontend zones. Use can-delay notes only for explicit future cleanup outside the approved slice.
-Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = frontend_review.
+Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = frontend_review.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
@@ -579,8 +579,8 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 role = "frontend-taste"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review visual/product taste, copy fit, interaction polish, and user-facing coherence for frontend-relevant changes.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a blocker.
-Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = frontend_taste_review.
+Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = frontend_taste_review.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
@@ -606,8 +606,8 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 role = "security"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review trust boundaries, injection surfaces, secret handling, permission assumptions, and unsafe automation paths for the slice selected by the approved plan contract.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a blocker.
-Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = security_review.
+Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = security_review.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
@@ -633,8 +633,8 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 role = "privacy-data-safety"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review data minimization, sensitive content exposure, durable memory/logging risk, and user-context handling for the slice selected by the approved plan contract.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a blocker.
-Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = privacy_review.
+Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = privacy_review.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
@@ -660,8 +660,8 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 role = "qa-reliability"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review verification depth, regression risk, edge cases, deterministic runtime behavior, and handoff quality for the slice selected by the approved plan contract.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a blocker.
-Return passed, needs_changes with required_implementation_steps, or blocked with blocker.source_step_id = qa_review.
+Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = qa_review.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}

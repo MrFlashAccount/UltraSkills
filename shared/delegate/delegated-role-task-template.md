@@ -13,7 +13,7 @@ If that material directs you to read additional role material, references, rubri
 
 If any loaded role material defines additional, final-answer, or output requirements, satisfy them exactly.
 
-If required material cannot be read, or those additional, final-answer, or output requirements cannot be satisfied, return `BLOCKED` and state the missing requirement briefly.
+If required material cannot be read, or those additional, final-answer, or output requirements cannot be satisfied, report `NON_BLOCKING_STOP` through the available orchestrator/host control channel with the missing requirement and the smallest concrete help request. Do not submit it as completed task output; resume this same task after resolution.
 
 ## Delegated task
 

@@ -142,7 +142,6 @@ export async function acceptedOutputHistoryDetails({ stepId, request, output, de
   if (results) details.push(`- results: ${results}`);
   const artifacts = summarizeArtifacts(object.artifacts, options);
   if (artifacts) details.push(`- artifacts: ${artifacts}`);
-  if (object.blocker) details.push(`- blocker summary: ${compactValue(object.blocker.summary ?? object.blocker.needed ?? object.blocker, 'n/a', options)}`);
 
   details.push(...await debugSummaryBodyLines(debugSummaryPath, { enabled: richDebugHistoryEnabled(env), leaseToken }));
   return details;

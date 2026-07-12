@@ -91,3 +91,25 @@ export function writeOutputCommandForStep(
     "JSON",
   ].join("\n");
 }
+
+function controlJsonCommandForStep(mode, runId, stepId, { runsRoot, leaseToken } = {}) {
+  assertSafeStepId(stepId);
+  const runsRootArg = runsRoot ? ` --runs-root ${shellQuote(runsRoot)}` : "";
+  const token =
+    typeof leaseToken === "string" && leaseToken.length > 0
+      ? shellQuote(leaseToken)
+      : "<lease-token>";
+  return [
+    `${WORKFLOW_RUNNER_COMMAND} ${mode} --run-id ${shellQuote(runId)} --step-id ${shellQuote(stepId)}${runsRootArg} --lease-token ${token} <<'JSON'`,
+    "<paste strict JSON here>",
+    "JSON",
+  ].join("\n");
+}
+
+export function reportStopCommandForStep(runId, stepId, options = {}) {
+  return controlJsonCommandForStep("report-stop", runId, stepId, options);
+}
+
+export function resolveStopCommandForStep(runId, stepId, options = {}) {
+  return controlJsonCommandForStep("resolve-stop", runId, stepId, options);
+}

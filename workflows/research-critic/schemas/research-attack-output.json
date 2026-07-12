@@ -12,8 +12,7 @@
       "enum": [
         "approved",
         "needs_revision",
-        "needs_input",
-        "blocked"
+        "needs_input"
       ],
       "description": "Authoritative routing state for the researcher attack."
     },
@@ -70,48 +69,9 @@
       "items": {
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
       }
-    },
-    "blocker": {
-      "$ref": "#/$defs/blocker"
     }
   },
   "additionalProperties": false,
-  "$defs": {
-    "blocker": {
-      "type": "object",
-      "required": [
-        "summary",
-        "source_step_id",
-        "needed"
-      ],
-      "properties": {
-        "summary": {
-          "type": "string",
-          "minLength": 1
-        },
-        "source_step_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "needed": {
-          "type": "string",
-          "minLength": 1,
-          "x-usage": "When this is user-answerable, route it to the user as a question. Do not answer it from orchestrator inference or collapse it into a summary."
-        },
-        "evidence": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "risk": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    }
-  },
   "allOf": [
     {
       "if": {
@@ -147,23 +107,6 @@
       "then": {
         "required": [
           "questions"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "blocked"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "blocker"
         ]
       }
     }

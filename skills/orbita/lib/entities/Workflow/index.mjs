@@ -197,6 +197,13 @@ function normalizeSchemaForSemanticIntrospection(schema, rootSchema = schema, re
   return normalized;
 }
 
+function schemaDeclaresStringValue(schema, value) {
+  if (!schema || typeof schema !== 'object') return false;
+  if (Array.isArray(schema)) return schema.some((entry) => schemaDeclaresStringValue(entry, value));
+  if (schema.const === value || (Array.isArray(schema.enum) && schema.enum.includes(value))) return true;
+  return Object.values(schema).some((entry) => schemaDeclaresStringValue(entry, value));
+}
+
 function validateOutputSchemaDocument(schema, schemaRef, workflow, _runtimeContext, warnings, { stepId, step, requireWorkerOutcomeContract = true, externalSchemas = [] } = {}) {
   let validation;
   try {
@@ -208,6 +215,12 @@ function validateOutputSchemaDocument(schema, schemaRef, workflow, _runtimeConte
   void validation;
 
   const normalizedSchema = normalizeSchemaForSemanticIntrospection(schema);
+  if (schemaDeclaresStringValue(normalizedSchema, 'blocked')) {
+    fail(`step '${stepId}' output.schema must not declare legacy terminal value 'blocked'; use the runner non-blocking stop control channel`);
+  }
+  if (normalizedSchema?.properties && Object.hasOwn(normalizedSchema.properties, 'blocker')) {
+    fail(`step '${stepId}' output.schema must not declare legacy control field 'blocker'; use the runner non-blocking stop control channel`);
+  }
   if (requireWorkerOutcomeContract && ['worker', 'fanout', 'shard'].includes(step?.kind)) assertWorkerOutputContract({ stepId, schema: normalizedSchema });
   if (isExternalWorkflowOutputSchema(schemaRef, schema)) collectFieldAnnotationWarnings(schema, schemaRef, warnings);
   return normalizedSchema;
@@ -306,34 +319,9 @@ function schemaAllowsNonString(schema) {
 }
 
 function assertSchemaRequiresExpressionPath({ stepId, expression, field, rootSchema, pathSegments = expression.path }) {
-  if (!schemaRequiresPath(rootSchema, pathSegments) && !recoverableBlockedVariantAllowsMissingPath(rootSchema, pathSegments)) {
+  if (!schemaRequiresPath(rootSchema, pathSegments)) {
     fail(`step '${stepId}' ${field} expression ${expression.source} must reference a required output.schema path`);
   }
-}
-
-function branchRequiresPathForDiscriminatorValue(rootSchema, discriminator, value, pathSegments) {
-  if (!Array.isArray(rootSchema?.allOf)) return false;
-  return rootSchema.allOf.some((branch) => {
-    const branchValue = branch?.if?.properties?.[discriminator]?.const;
-    return branchValue === value && schemaRequiresPath(branch.then, pathSegments);
-  });
-}
-
-function recoverableBlockedVariantAllowsMissingPath(rootSchema, pathSegments) {
-  if (pathSegments.length === 0) return false;
-
-  for (const discriminator of ['outcome', 'approval']) {
-    const values = collectStringValues({ anyOf: schemaForPath(rootSchema, [discriminator]) });
-    if (!values.has('blocked')) continue;
-
-    const nonBlockedValues = [...values].filter((value) => value !== 'blocked');
-    if (nonBlockedValues.length === 0) continue;
-    if (nonBlockedValues.every((value) => branchRequiresPathForDiscriminatorValue(rootSchema, discriminator, value, pathSegments))) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function assertWorkerOutputContract({ stepId, schema }) {
@@ -516,7 +504,6 @@ function assertDynamicTargetSchema({ workflow, schemasByStep, stepId, step, expr
     throw error;
   }
 
-  if (recoverableBlockedOutputSelector(step, expression)) aggregate.directValues.delete('blocked');
   for (const target of aggregate.directValues) {
     if (!Object.hasOwn(workflow.steps, target)) fail(`step '${stepId}' ${field} expression ${expression.source} schema allows unknown target '${target}'`);
   }
@@ -535,9 +522,7 @@ function assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descrip
     if (allowOpenTransitionSchemas && error instanceof WorkflowRuntimeError) return undefined;
     throw error;
   }
-  const transitionCaseKeys = recoverableBlockedOutputSelector(step, descriptor.expression)
-    ? new Set([...possibleCaseKeys].filter((key) => key !== 'blocked'))
-    : possibleCaseKeys;
+  const transitionCaseKeys = possibleCaseKeys;
   for (const key of transitionCaseKeys) {
     if (!Object.hasOwn(descriptor.cases, key)) fail(`step '${stepId}' ${field}.cases is missing schema-declared case '${key}'`);
   }
@@ -548,13 +533,6 @@ function assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descrip
   }
 
   return transitionCaseKeys;
-}
-
-function recoverableBlockedOutputSelector(step, expression) {
-  return expression?.root === 'output' &&
-    expression.path?.length === 1 &&
-    ((step.kind === 'worker' && expression.path[0] === 'outcome') ||
-      (step.kind === 'approval' && expression.path[0] === 'approval'));
 }
 
 function targetSetsForMatchCases(possibleCaseKeys, cases) {

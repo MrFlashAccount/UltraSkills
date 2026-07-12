@@ -9,11 +9,10 @@
     "approval": {
       "enum": [
         "approved",
-        "rejected",
-        "blocked"
+        "rejected"
       ],
       "description": "Human reviewed-improvement gate decision.",
-      "x-usage": "Use approved to capture reviewed_edit_intent, rejected to skip improvement edits and continue to workflow_implementation_attack, and blocked only when blocker explains why authoring must pause."
+      "x-usage": "Use approved to capture reviewed_edit_intent, rejected to skip improvement edits and continue to workflow_implementation_attack, Report a non-blocking stop through the runner control channel when authoring needs external help."
     },
     "results": {
       "type": "array",
@@ -22,11 +21,6 @@
       },
       "description": "Optional compact summary of human reviewed-improvement approval feedback.",
       "x-usage": "Use as supporting approval context; do not route from this field."
-    },
-    "blocker": {
-      "type": "object",
-      "description": "Required when approval is blocked.",
-      "x-usage": "Surface this blocker before continuing; do not infer missing blocker details from prose."
     }
   },
   "additionalProperties": true

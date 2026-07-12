@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
-import { continueRun, loadInstructions, next, writeOutput } from './helpers/orbita-production-api.mjs';
+import { continueRun, loadInstructions, next, reportStop, resolveStop, writeOutput } from './helpers/orbita-production-api.mjs';
 import { WORKFLOW_RUNNER_COMMAND as workflowRunnerCommand } from '../runner/runner-command-builder.mjs';
 import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 import { readRunAuthority } from '../persistence/run-state/run-authority.mjs';
@@ -103,11 +103,10 @@ function devHarnessImplementationSchema() {
     type: 'object',
     required: ['outcome'],
     properties: {
-      outcome: { enum: ['implemented', 'blocked'] },
+      outcome: { enum: ['implemented'] },
       summary: { type: 'string' },
       changed_files: { type: 'array' },
       verification: { type: 'array' },
-      blocker: { type: 'object', additionalProperties: true },
       artifacts: { type: 'array' },
     },
     additionalProperties: false,
@@ -168,10 +167,9 @@ function implementedOutput(summary, { artifactPath, ...extra } = {}) {
   };
 }
 
-function blockedOutput(overrides = {}) {
+function stopOutput(overrides = {}) {
   return {
-    outcome: 'blocked',
-    blocker: {
+    non_blocking_stop: {
       summary: 'Need approval before continuing.',
       source_step_id: 'backend_implementation',
       needed: 'Approve the smallest recovery question.',
@@ -270,6 +268,8 @@ test('runner reuse hints: follow-up instructions preserve validating output cont
   assert.doesNotMatch(followUp, /"required": \[/);
   assert.doesNotMatch(followUp, /Return markdown\./);
   assert.match(followUp, /workflow-runner\.mjs' write-output --run-id/);
+  assert.match(fresh, /workflow-runner\.mjs' report-stop --run-id/);
+  assert.match(followUp, /workflow-runner\.mjs' report-stop --run-id/);
   assert.match(followUp, /--step-id 'prepare'/);
   assert.match(followUp, /--lease-token '[^']+'/);
   assert.doesNotMatch(followUp, /write-output[^\n]*--only-instructions/);
@@ -360,18 +360,17 @@ test('runner reuse hints: continue bind-agent renews stale matching worker lease
 });
 
 
-test('runner reuse hints: recoverable implementation blocker keeps host work active with same-worker follow-up', async () => {
+test('runner reuse hints: non-blocking stop keeps host work active with same-worker follow-up', async () => {
   const workflow = devHarnessImplementationWorkflow();
-  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('recoverable-blocker-same-worker', workflow);
+  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('non-blocking-stop-same-worker', workflow);
 
   const first = await next({ runId, workflowPath, leaseToken, now });
   assert.equal(first.requests[0].stepId, 'backend_implementation');
-  await writeOutput({
+  await reportStop({
     runId,
     workflowPath,
     stepId: 'backend_implementation',
-    json: JSON.stringify(blockedOutput()),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'backend_implementation'),
+    json: JSON.stringify(stopOutput()),
     leaseToken,
     now,
   });
@@ -381,15 +380,14 @@ test('runner reuse hints: recoverable implementation blocker keeps host work act
   assert.equal(recovery.status, 'needs_host_actions');
   assert.equal(recovery.baton.status, 'running');
   assert.equal(recovery.baton.cursor, 'backend_implementation');
-  assert.equal(recovery.baton.blocker, undefined);
   assert.equal(recovery.baton.state.backend_implementation, undefined);
   assert.equal(recovery.requests[0].stepId, 'backend_implementation');
-  assert.equal(recovery.requests[0].action, 'resolve_worker_blocker');
-  assert.match(recovery.requests[0].writeResolutionCommand, /workflow-runner\.mjs' write-output --run-id/);
-  assert.equal(recovery.requests[0].recoverableBlocker.source_step_id, 'backend_implementation');
-  assert.equal(recovery.requests[0].recoverableBlocker.needed, 'Approve the smallest recovery question.');
+  assert.equal(recovery.requests[0].action, 'resolve_non_blocking_stop');
+  assert.match(recovery.requests[0].resolveStopCommand, /workflow-runner\.mjs' resolve-stop --run-id/);
+  assert.equal(recovery.requests[0].nonBlockingStop.source_step_id, 'backend_implementation');
+  assert.equal(recovery.requests[0].nonBlockingStop.needed, 'Approve the smallest recovery question.');
 
-  await writeOutput({
+  await resolveStop({
     runId,
     workflowPath,
     stepId: 'backend_implementation',
@@ -399,11 +397,11 @@ test('runner reuse hints: recoverable implementation blocker keeps host work act
   });
   const batonAfterResolutionWrite = readBaton(runDir);
   assert.equal(
-    batonAfterResolutionWrite.state.backend_implementation.resolution.decision,
+    batonAfterResolutionWrite.nonBlockingStops.backend_implementation.resolution.decision,
     'Proceed with the smallest recovery question approved.',
   );
   assert.equal(
-    batonAfterResolutionWrite.recoverableWorkerBlockers.backend_implementation.resolution,
+    batonAfterResolutionWrite.state.backend_implementation,
     undefined,
   );
   const resolved = await continueRun({ runId, workflowPath, leaseToken, now });
@@ -411,11 +409,11 @@ test('runner reuse hints: recoverable implementation blocker keeps host work act
   assert.equal(resolved.requests[0].preferredAgentId, 'backend-worker-1');
   assert.match(resolved.requests[0].loadInstructionsCommand, /workflow-runner\.mjs' instructions --run-id/);
   assert.match(resolved.requests[0].loadFollowupInstructionsCommand, /instructions --follow-up --run-id/);
-  assert.equal(resolved.requests[0].recoverableBlocker.resolution.decision, 'Proceed with the smallest recovery question approved.');
+  assert.equal(resolved.requests[0].nonBlockingStop.resolution.decision, 'Proceed with the smallest recovery question approved.');
 
   const followUpInstructions = await loadInstructions({ runId, workflowPath, stepId: 'backend_implementation', followUp: true, leaseToken, now });
   assert.match(followUpInstructions, /Implement backend\./);
-  assert.match(followUpInstructions, /orchestrator has resolved that blocker/i);
+  assert.match(followUpInstructions, /orchestrator has resolved it/i);
   assert.match(followUpInstructions, /Proceed with the smallest recovery question approved\./);
 
   await writeOutput({
@@ -446,25 +444,54 @@ test('runner reuse hints: recoverable implementation blocker keeps host work act
   assert.equal(done.status, 'done');
 });
 
-test('runner reuse hints: any worker blocked output is recoverable at the same step', async () => {
+test('runner reuse hints: any worker can report a non-blocking stop at the same request', async () => {
   const workflow = schemaCoveredWorkflow({ prepare: { next: 'done' } });
-  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('recoverable-blocker-generic-worker', workflow);
+  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('non-blocking-stop-generic-worker', workflow);
 
   const first = await next({ runId, workflowPath, leaseToken, now });
   assert.equal(first.requests[0].stepId, 'prepare');
-  await writeOutput({
+  await assert.rejects(
+    () => writeOutput({
+      runId,
+      workflowPath,
+      stepId: 'prepare',
+      json: JSON.stringify({ outcome: 'blocked' }),
+      debugSummaryFile: debugSummaryFileFor(runDir, 'prepare'),
+      leaseToken,
+      now,
+    }),
+    /removed stop-as-output contract/,
+  );
+  assert.equal(readBaton(runDir).state.prepare, undefined);
+  await assert.rejects(
+    () => reportStop({
+      runId,
+      workflowPath,
+      stepId: 'prepare',
+      json: JSON.stringify({
+        non_blocking_stop: {
+          summary: 'Need a decision before continuing.',
+          needed: 'Provide the missing decision.',
+          resolution: { summary: 'Self-resolved.', decision: 'Continue.' },
+        },
+      }),
+      leaseToken,
+      now,
+    }),
+    /must not include resolution/,
+  );
+  assert.equal(readBaton(runDir).nonBlockingStops, undefined);
+  await reportStop({
     runId,
     workflowPath,
     stepId: 'prepare',
     json: JSON.stringify({
-      outcome: 'blocked',
-      blocker: {
+      non_blocking_stop: {
         summary: 'Need a decision before continuing.',
         source_step_id: 'prepare',
         needed: 'Provide the missing decision.',
       },
     }),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'prepare'),
     leaseToken,
     now,
   });
@@ -476,32 +503,31 @@ test('runner reuse hints: any worker blocked output is recoverable at the same s
   assert.equal(recovery.baton.cursor, 'prepare');
   assert.equal(recovery.baton.state.prepare, undefined);
   assert.equal(recovery.requests[0].stepId, 'prepare');
-  assert.equal(recovery.requests[0].action, 'resolve_worker_blocker');
-  assert.equal(recovery.requests[0].recoverableBlocker.source_step_id, 'prepare');
-  assert.equal(recovery.requests[0].recoverableBlocker.needed, 'Provide the missing decision.');
+  assert.equal(recovery.requests[0].action, 'resolve_non_blocking_stop');
+  assert.equal(recovery.requests[0].nonBlockingStop.source_step_id, 'prepare');
+  assert.equal(recovery.requests[0].nonBlockingStop.needed, 'Provide the missing decision.');
 });
 
-test('runner reuse hints: recoverable implementation blocker has fresh-worker fallback without preferred worker', async () => {
+test('runner reuse hints: non-blocking stop has fresh-worker fallback without preferred worker', async () => {
   const workflow = devHarnessImplementationWorkflow();
-  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('recoverable-blocker-fresh-worker', workflow);
+  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('non-blocking-stop-fresh-worker', workflow);
 
   await next({ runId, workflowPath, leaseToken, now });
-  await writeOutput({
+  await reportStop({
     runId,
     workflowPath,
     stepId: 'backend_implementation',
-    json: JSON.stringify(blockedOutput()),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'backend_implementation'),
+    json: JSON.stringify(stopOutput()),
     leaseToken,
     now,
   });
 
   const recovery = await continueRun({ runId, workflowPath, leaseToken, now });
 
-  assert.equal(recovery.requests[0].action, 'resolve_worker_blocker');
-  assert.equal(recovery.requests[0].recoverableBlocker.summary, 'Need approval before continuing.');
+  assert.equal(recovery.requests[0].action, 'resolve_non_blocking_stop');
+  assert.equal(recovery.requests[0].nonBlockingStop.summary, 'Need approval before continuing.');
 
-  await writeOutput({
+  await resolveStop({
     runId,
     workflowPath,
     stepId: 'backend_implementation',
@@ -516,29 +542,29 @@ test('runner reuse hints: recoverable implementation blocker has fresh-worker fa
   assert.match(resolved.requests[0].loadFollowupInstructionsCommand, /instructions --follow-up --run-id/);
 
   const freshInstructions = await loadInstructions({ runId, workflowPath, stepId: 'backend_implementation', leaseToken, now });
-  assert.match(freshInstructions, /## Recoverable blocker/);
+  assert.match(freshInstructions, /## Non-blocking stop/);
   assert.match(freshInstructions, /Approve the smallest recovery question\./);
   assert.match(freshInstructions, /bounded public evidence/);
-  assert.match(freshInstructions, /The orchestrator has resolved that blocker/);
+  assert.match(freshInstructions, /The orchestrator has resolved it/);
   assert.match(freshInstructions, /Proceed with the smallest recovery question approved\./);
 });
 
 
-test('runner reuse hints: recoverable approval blocker waits for orchestrator resolution before approval resumes', async () => {
+test('runner reuse hints: approval non-blocking stop waits for orchestrator resolution before approval resumes', async () => {
   const workflow = recoverableApprovalWorkflow();
-  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('recoverable-blocker-approval', workflow);
+  const { runId, runDir, workflowPath, leaseToken, now } = await runCase('non-blocking-stop-approval', workflow);
 
   const first = await next({ runId, workflowPath, leaseToken, now });
   assert.equal(first.requests[0].stepId, 'approval_gate');
   assert.equal(first.requests[0].action, 'wait_for_approval');
+  assert.match(first.orchestratorInstruction, /workflow-runner\.mjs' report-stop --run-id/);
 
-  await writeOutput({
+  await reportStop({
     runId,
     workflowPath,
     stepId: 'approval_gate',
     json: JSON.stringify({
-      approval: 'blocked',
-      blocker: {
+      non_blocking_stop: {
         summary: 'Need orchestrator decision before approval can continue.',
         source_step_id: 'approval_gate',
         needed: 'Resolve approval concern.',
@@ -548,17 +574,17 @@ test('runner reuse hints: recoverable approval blocker waits for orchestrator re
     now,
   });
 
-  const persistedAfterWrite = readBaton(runDir).state.approval_gate;
-  assert.deepEqual(Object.keys(persistedAfterWrite).sort(), ['approval', 'blocker'].sort());
-  assert.equal(persistedAfterWrite.approval, 'blocked');
+  const persistedAfterWrite = readBaton(runDir);
+  assert.equal(persistedAfterWrite.state.approval_gate, undefined);
+  assert.equal(persistedAfterWrite.nonBlockingStops.approval_gate.needed, 'Resolve approval concern.');
 
   const recovery = await continueRun({ runId, workflowPath, leaseToken, now });
   assert.equal(recovery.status, 'needs_host_actions');
   assert.equal(recovery.requests[0].stepId, 'approval_gate');
-  assert.equal(recovery.requests[0].action, 'resolve_worker_blocker');
-  assert.equal(recovery.requests[0].recoverableBlocker.needed, 'Resolve approval concern.');
+  assert.equal(recovery.requests[0].action, 'resolve_non_blocking_stop');
+  assert.equal(recovery.requests[0].nonBlockingStop.needed, 'Resolve approval concern.');
 
-  await writeOutput({
+  await resolveStop({
     runId,
     workflowPath,
     stepId: 'approval_gate',
@@ -577,10 +603,10 @@ test('runner reuse hints: recoverable approval blocker waits for orchestrator re
   assert.match(resolved.orchestratorInstruction, /Ask for approval again with the resolved concern\./);
 });
 
-test('runner reuse hints: recoverable blocker request redacts private fields and sensitive text', async () => {
+test('runner reuse hints: non-blocking stop redacts private fields and sensitive text', async () => {
   const workflow = devHarnessImplementationWorkflow();
-  const customRunsRoot = path.join(tempDir, 'recoverable-blocker-custom-runs-root');
-  const { runId, runDir, workflowPath, runsRoot, leaseToken, now } = await runCase('recoverable-blocker-redaction', workflow, { runsRoot: customRunsRoot });
+  const customRunsRoot = path.join(tempDir, 'non-blocking-stop-custom-runs-root');
+  const { runId, runDir, workflowPath, runsRoot, leaseToken, now } = await runCase('non-blocking-stop-redaction', workflow, { runsRoot: customRunsRoot });
   const customIndexPath = path.join(customRunsRoot, 'runs.json');
   const customBatonPath = path.join(runDir, 'baton.json');
   const customHistoryPath = path.join(runDir, 'history.md');
@@ -589,12 +615,12 @@ test('runner reuse hints: recoverable blocker request redacts private fields and
   const tmpSecretPath = '/tmp/not-public/evidence.txt';
 
   await next({ runId, workflowPath, runsRoot, leaseToken, now });
-  await writeOutput({
+  await reportStop({
     runId,
     workflowPath,
     runsRoot,
     stepId: 'backend_implementation',
-    json: JSON.stringify(blockedOutput({
+    json: JSON.stringify(stopOutput({
       summary: `Need token --lease-token ${leaseToken} before continuing from ${customIndexPath} and ${desktopSecretPath}.`,
       needed: `Inspect ${customBatonPath} and ${homeSecretPath} before proceeding.`,
       evidence: [
@@ -608,19 +634,18 @@ test('runner reuse hints: recoverable blocker request redacts private fields and
       hidden_prompt: 'private prompt must not be projected',
       token: leaseToken,
     })),
-    debugSummaryFile: debugSummaryFileFor(runDir, 'backend_implementation'),
     leaseToken,
     now,
   });
 
-  const persistedAfterWrite = readBaton(runDir).state.backend_implementation;
+  const persistedAfterWrite = readBaton(runDir).nonBlockingStops.backend_implementation;
   const persistedText = JSON.stringify(persistedAfterWrite);
-  assert.deepEqual(Object.keys(persistedAfterWrite).sort(), ['blocker', 'outcome'].sort());
+  assert.deepEqual(Object.keys(persistedAfterWrite).sort(), ['evidence', 'needed', 'risk', 'source_step_id', 'summary'].sort());
   assert.doesNotMatch(persistedText, new RegExp(leaseToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.doesNotMatch(persistedText, /private transcript/);
   assert.doesNotMatch(persistedText, /private prompt/);
   assert.doesNotMatch(persistedText, /\.workflow-runner/);
-  assert.doesNotMatch(persistedText, /recoverable-blocker-custom-runs-root/);
+  assert.doesNotMatch(persistedText, /non-blocking-stop-custom-runs-root/);
   assert.doesNotMatch(persistedText, /runs\.json/);
   assert.doesNotMatch(persistedText, /baton\.json/);
   assert.doesNotMatch(persistedText, /history\.md/);
@@ -631,14 +656,14 @@ test('runner reuse hints: recoverable blocker request redacts private fields and
   assert.match(persistedText, /local filesystem path/);
 
   const recovery = await continueRun({ runId, workflowPath, runsRoot, leaseToken, now });
-  const projected = recovery.requests[0].recoverableBlocker;
+  const projected = recovery.requests[0].nonBlockingStop;
   const projectedText = JSON.stringify(projected);
 
   assert.doesNotMatch(projectedText, new RegExp(leaseToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.doesNotMatch(projectedText, /private transcript/);
   assert.doesNotMatch(projectedText, /private prompt/);
   assert.doesNotMatch(projectedText, /\.workflow-runner/);
-  assert.doesNotMatch(projectedText, /recoverable-blocker-custom-runs-root/);
+  assert.doesNotMatch(projectedText, /non-blocking-stop-custom-runs-root/);
   assert.doesNotMatch(projectedText, /runs\.json/);
   assert.doesNotMatch(projectedText, /baton\.json/);
   assert.doesNotMatch(projectedText, /history\.md/);
@@ -653,7 +678,7 @@ test('runner reuse hints: recoverable blocker request redacts private fields and
   assert.match(projected.evidence.join(' '), /workflow history private state/);
   assert.deepEqual(Object.keys(projected).sort(), ['evidence', 'needed', 'risk', 'source_step_id', 'summary'].sort());
 
-  await writeOutput({
+  await resolveStop({
     runId,
     workflowPath,
     runsRoot,
@@ -667,7 +692,7 @@ test('runner reuse hints: recoverable blocker request redacts private fields and
     now,
   });
 
-  const persistedResolutionAfterWrite = readBaton(runDir).state.backend_implementation;
+  const persistedResolutionAfterWrite = readBaton(runDir).nonBlockingStops.backend_implementation.resolution;
   const persistedResolutionText = JSON.stringify(persistedResolutionAfterWrite);
   assert.doesNotMatch(persistedResolutionText, /Desktop\/secret/);
   assert.doesNotMatch(persistedResolutionText, /\/home\/sergey/);

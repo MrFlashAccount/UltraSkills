@@ -3,7 +3,7 @@
   "version": 1,
   "start": "plan",
   "done": "done",
-  "blocked": "blocked",
+  "limit_reached": "limit_reached",
   "loopPolicies": {
     "approval_revision": {
       "steps": [
@@ -11,7 +11,7 @@
         "approval_gate"
       ],
       "maxIterations": 2,
-      "onLimit": "blocked"
+      "onLimit": "limit_reached"
     },
     "implementation_revision": {
       "steps": [
@@ -19,7 +19,7 @@
         "review"
       ],
       "maxIterations": 2,
-      "onLimit": "blocked"
+      "onLimit": "limit_reached"
     }
   },
   "steps": {
@@ -104,8 +104,8 @@
         "prompt": "Finished."
       }
     },
-    "blocked": {
-      "name": "Blocked",
+    "limit_reached": {
+      "name": "Limit reached",
       "kind": "done",
       "input": {
         "prompt": "Loop limit reached."

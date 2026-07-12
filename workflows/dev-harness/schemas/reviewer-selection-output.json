@@ -12,8 +12,8 @@
     "outcome": {
       "type": "string",
       "minLength": 1,
-      "description": "Producer must emit the single enum or const value that reflects the completed stage state; use blocked only when blocker explains the recoverable pause.",
-      "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when this says blocked or needs revision."
+      "description": "Producer must emit the single enum or const value that reflects the completed stage state. Report missing help through the runner non-blocking stop control channel, never as an output outcome.",
+      "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when it requires revision."
     },
     "artifacts": {
       "type": "array",
@@ -29,12 +29,7 @@
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
       },
       "description": "Producer may emit compact structured results, decisions, or evidence summaries created by this stage.",
-      "x-usage": "Use these as supporting evidence or compact summaries. Do not let them override outcome, selected steps, blockers, or approved contracts."
-    },
-    "blocker": {
-      "type": "object",
-      "description": "Producer must populate this when outcome is blocked, naming the recoverable pause reason, owning step, and specific missing input or permission.",
-      "x-usage": "Treat this as a recoverable pause. Surface the missing input or decision, then continue this same workflow step after it is resolved."
+      "x-usage": "Use these as supporting evidence or compact summaries. Do not let them override outcome, selected steps or approved contracts."
     },
     "review_plan": {
       "type": "object",

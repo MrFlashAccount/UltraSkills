@@ -1,7 +1,7 @@
 export const DASHBOARD_LANES = Object.freeze({
   WAITING_FOR_USER: 'waiting_for_user',
   WORKER_RUNNING: 'worker_running',
-  BLOCKED: 'blocked',
+  NEEDS_HELP: 'needs_help',
   DEGRADED: 'degraded',
   DONE: 'done',
 });

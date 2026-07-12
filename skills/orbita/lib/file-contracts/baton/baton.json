@@ -99,12 +99,12 @@
         "minLength": 1
       }
     },
-    "recoverableWorkerBlockers": {
-      "description": "Runner-owned public recovery state for recoverable worker or approval blockers. Keys are workflow step ids; values without resolution are awaiting orchestrator resolution; values with resolution are resolved and waiting for the owning step to emit normal output. This is not a transcript, token, prompt, private runtime path, session, or lifecycle registry.",
+    "nonBlockingStops": {
+      "description": "Runner-owned control-plane state for request-level non-blocking stops. Keys are active request ids; unresolved values await orchestrator help, and resolved values are rendered back into the same request. These records never complete a step or advance the cursor.",
       "type": "object",
       "patternProperties": {
         "^[A-Za-z_][A-Za-z0-9_-]*$": {
-          "$ref": "#/$defs/recoverableWorkerBlocker"
+          "$ref": "#/$defs/nonBlockingStop"
         }
       },
       "additionalProperties": false
@@ -206,7 +206,7 @@
       },
       "additionalProperties": false
     },
-    "recoverableWorkerBlocker": {
+    "nonBlockingStop": {
       "type": "object",
       "required": [
         "summary",

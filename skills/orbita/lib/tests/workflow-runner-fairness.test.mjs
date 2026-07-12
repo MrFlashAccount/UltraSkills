@@ -304,7 +304,7 @@ test('runner fairness: missing host output does not mutate lifecycle status befo
 
   await assert.rejects(
     () => runnerContinue({ runId, leaseToken: claim.leaseToken, now: new Date('2026-06-01T10:00:03.000Z') }),
-    /missing accepted host output/,
+    /missing completed output or non-blocking stop/,
   );
 
   const after = snapshotRunState(paths);
@@ -317,7 +317,7 @@ test('runner fairness: missing host output does not mutate lifecycle status befo
   const failureEntry = after.history.slice(before.history.length);
   assert.match(failureEntry, /source: workflow-runner-failure/);
   assert.match(failureEntry, /public failure: command=continue/);
-  assert.match(failureEntry, /missing accepted host output for workflow step prepare/);
+  assert.match(failureEntry, /missing completed output or non-blocking stop for workflow request prepare/);
 });
 
 test('runner fairness: canonical per-run authority keeps hot commands off a corrupt catalog', async () => {

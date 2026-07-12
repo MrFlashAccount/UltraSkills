@@ -48,7 +48,7 @@ uses `../../DESIGN.md` as the board/drawer UI input.
   shells, CLI modules, use cases, or entity internals.
 - Degraded dashboard state describes observer/read health only. It must stay
   ephemeral and must not be persisted as workflow state or represented as a
-  workflow blocked result unless durable state is actually blocked.
+  terminal workflow result unless durable state is actually terminal.
 - SSE updates are observational and lossy. Connected clients must not create
   backpressure into workflow execution or make runner writes depend on UI state.
 
