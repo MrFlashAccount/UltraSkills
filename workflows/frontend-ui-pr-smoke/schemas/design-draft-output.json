@@ -10,7 +10,7 @@
     "artifacts": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 1,
+      "maxItems": 16,
       "contains": {
         "type": "object",
         "required": ["id", "content_type"],
@@ -19,6 +19,33 @@
           "content_type": { "const": "text/html" }
         }
       },
+      "minContains": 1,
+      "maxContains": 1,
+      "allOf": [
+        {
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["id", "content_type"],
+                "properties": {
+                  "id": { "const": "ui-design-proposal" },
+                  "content_type": { "const": "text/html" }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["content_type"],
+                "properties": {
+                  "content_type": {
+                    "enum": ["image/png", "image/jpeg", "image/webp"]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
       "items": { "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact" }
     },
     "blocker": {

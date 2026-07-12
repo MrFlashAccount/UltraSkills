@@ -15,6 +15,7 @@ const workflowAuthoring = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/w
 const uiProposalTemplate = readFileSync(path.join(REPO_ROOT, 'shared/templates/ui-design-proposal-template.html'), 'utf8');
 const sharedTemplatesReadme = readFileSync(path.join(REPO_ROOT, 'shared/templates/README.md'), 'utf8');
 const devUiDraftSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/dev-harness/schemas/ui-intent-draft-output.json'), 'utf8'));
+const smokeDesignDraftSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/frontend-ui-pr-smoke/schemas/design-draft-output.json'), 'utf8'));
 
 const catalogWorkflows = readdirSync(WORKFLOWS_ROOT, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -126,6 +127,7 @@ test('UI proposal contract rejects generic card-drawer routing and requires comp
     : devHarness.steps.ui_intent_draft.input.prompt;
   const directionFrames = [...uiProposalTemplate.matchAll(/class="frame direction-frame"/g)];
   const directionIds = [...uiProposalTemplate.matchAll(/data-direction="([A-D])"/g)].map((match) => match[1]);
+  const proposalImages = [...uiProposalTemplate.matchAll(/<img class="proposal-image" src="\.\/([^"]+)"/g)].map((match) => match[1]);
   const artifactDescription = devUiDraftSchema.properties.artifacts.description;
   const artifactUsage = devUiDraftSchema.properties.artifacts['x-usage'];
 
@@ -135,6 +137,17 @@ test('UI proposal contract rejects generic card-drawer routing and requires comp
   assert.doesNotMatch(uiProposalTemplate, /buttons, icon buttons, chips, badges, cards, drawers, tables/);
   assert.deepEqual(directionIds, ['A', 'B', 'C', 'D']);
   assert.equal(directionFrames.length, 4);
+  assert.deepEqual(proposalImages, [
+    'ui-direction-a.png',
+    'ui-direction-b.png',
+    'ui-direction-c.png',
+    'ui-direction-d.png',
+    'ui-selected-desktop.png',
+    'ui-selected-mobile.png',
+    'ui-state-recovery.png',
+    'ui-state-pathological-data.png',
+  ]);
+  assert.doesNotMatch(uiProposalTemplate, /surface-placeholder/);
   assert.match(uiProposalTemplate, /Each direction needs its own rendered composition frame/);
   for (const field of [
     'Typography scale / rhythm',
@@ -146,9 +159,25 @@ test('UI proposal contract rejects generic card-drawer routing and requires comp
     assert.match(uiProposalTemplate, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
   assert.match(sharedTemplatesReadme, /product\/surface routing, design-basis preflight, user decisions/);
+  assert.match(sharedTemplatesReadme, /sibling raster image artifacts/);
   assert.match(sharedTemplatesReadme, /conditional selected-pattern contracts/);
   assert.match(artifactDescription, /ready_for_attack or ready_for_approval/);
   assert.match(artifactUsage, /both ready_for_attack and ready_for_approval/);
+  assert.match(artifactUsage, /linked raster image artifact/);
+  assert.equal(devUiDraftSchema.properties.artifacts.maxItems, 16);
+  assert.equal(smokeDesignDraftSchema.properties.artifacts.maxItems, 16);
+  for (const schema of [devUiDraftSchema, smokeDesignDraftSchema]) {
+    const imageContentTypes = schema.properties.artifacts.allOf[0].items.anyOf[1].properties.content_type.enum;
+    assert.deepEqual(imageContentTypes, ['image/png', 'image/jpeg', 'image/webp']);
+    assert.equal(schema.properties.artifacts.maxContains, 1);
+  }
+  assert.match(draftPrompt, /host's built-in image generation tool/);
+  assert.match(draftPrompt, /shared visual brief/);
+  assert.match(draftPrompt, /generated gibberish/);
+  assert.match(draftPrompt, /never return only the HTML artifact|never return only HTML/);
+  assert.match(frontendUiPrSmoke.steps.design_draft.input.prompt, /host's built-in image generation tool/);
+  assert.match(frontendUiPrSmoke.steps.design_attack.input.prompt, /renders proposed screens with HTML\/CSS\/SVG\/canvas instead of ordinary raster image artifacts/);
+  assert.match(frontendUiPrSmoke.steps.design_attack.input.prompt, /cross-view drift/);
 });
 
 for (const gate of revisionGates) {

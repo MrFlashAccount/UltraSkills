@@ -40,20 +40,11 @@
     .grid.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
     .direction-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
     .direction-option { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 16px; }
-    .direction-option .frame { min-height: 260px; margin: 12px 0; }
-    .direction-option .surface-placeholder { min-height: 220px; }
-    .frame { min-height: 360px; padding: 16px; overflow: hidden; }
+    .direction-option .frame { margin: 12px 0; }
+    .frame { margin: 0; overflow: hidden; }
     .frame.mobile { max-width: 420px; }
-    .surface-placeholder {
-      min-height: 280px;
-      border: 1px dashed var(--line);
-      border-radius: 6px;
-      display: grid;
-      place-items: center;
-      color: var(--muted);
-      text-align: center;
-      padding: 24px;
-    }
+    .proposal-image { display: block; width: 100%; height: auto; background: var(--panel-2); }
+    figcaption { padding: 10px 12px; color: var(--muted); border-top: 1px solid var(--line); }
     .spec { padding: 16px; }
     .spec table { width: 100%; border-collapse: collapse; }
     .spec th, .spec td {
@@ -92,7 +83,7 @@
   <main>
     <header class="proposal-header">
       <h1>&lt;Project/Issue&gt; UI Design Proposal - &lt;Surface&gt;</h1>
-      <p>This HTML artifact is the first-class design proposal. It records the routed product surface, design basis, decisions, visual direction, selected UI patterns, states, evidence, and proof expectations that implementation and review must inspect directly.</p>
+      <p>This HTML artifact and its sibling raster image artifacts form the first-class design proposal. The images carry the proposed screens; this document records their routed product surface, design basis, decisions, annotations, selected UI patterns, states, evidence, and proof expectations.</p>
       <div class="grid two">
         <div><strong>Owner:</strong> &lt;name&gt;</div>
         <div><strong>Date:</strong> &lt;date&gt;</div>
@@ -161,7 +152,10 @@
         <article class="direction-option" data-direction="A">
           <h3>Direction A — &lt;name&gt;</h3>
           <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
-          <div class="frame direction-frame"><div class="surface-placeholder">Build Direction A as a real-ish visual/composition frame.</div></div>
+          <figure class="frame direction-frame">
+            <img class="proposal-image" src="./ui-direction-a.png" alt="Direction A desktop UI mockup" width="1600" height="1000">
+            <figcaption>Generated raster mockup. Replace the filename and alt text only if the emitted image artifact uses a different stable name.</figcaption>
+          </figure>
           <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
           <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
           <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
@@ -169,7 +163,10 @@
         <article class="direction-option" data-direction="B">
           <h3>Direction B — &lt;name&gt;</h3>
           <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
-          <div class="frame direction-frame"><div class="surface-placeholder">Build Direction B as a real-ish visual/composition frame.</div></div>
+          <figure class="frame direction-frame">
+            <img class="proposal-image" src="./ui-direction-b.png" alt="Direction B desktop UI mockup" width="1600" height="1000">
+            <figcaption>Generated raster mockup. This must be a materially different composition, not a recolor of Direction A.</figcaption>
+          </figure>
           <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
           <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
           <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
@@ -177,7 +174,10 @@
         <article class="direction-option" data-direction="C">
           <h3>Direction C — &lt;name&gt;</h3>
           <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
-          <div class="frame direction-frame"><div class="surface-placeholder">Build Direction C as a real-ish visual/composition frame.</div></div>
+          <figure class="frame direction-frame">
+            <img class="proposal-image" src="./ui-direction-c.png" alt="Direction C desktop UI mockup" width="1600" height="1000">
+            <figcaption>Generated raster mockup. Keep only directions actually emitted as image artifacts.</figcaption>
+          </figure>
           <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
           <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
           <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
@@ -185,7 +185,10 @@
         <article class="direction-option" data-direction="D">
           <h3>Direction D — &lt;name&gt;</h3>
           <p><strong>Status:</strong> Recommended | Viable alternative | Rejected</p>
-          <div class="frame direction-frame"><div class="surface-placeholder">Build Direction D as a real-ish visual/composition frame.</div></div>
+          <figure class="frame direction-frame">
+            <img class="proposal-image" src="./ui-direction-d.png" alt="Direction D desktop UI mockup" width="1600" height="1000">
+            <figcaption>Generated raster mockup. Remove this option when only three viable directions are required.</figcaption>
+          </figure>
           <p><strong>Basis fit:</strong> &lt;evidence this direction preserves&gt;</p>
           <p><strong>Trade-off:</strong> &lt;hierarchy, density, rhythm, action clarity&gt;</p>
           <p><strong>Risk:</strong> &lt;quality or implementation risk&gt;</p>
@@ -195,23 +198,31 @@
 
     <section>
       <h2>Desktop Proposal</h2>
-      <div class="frame">
-        <div class="surface-placeholder">Replace with a real-ish desktop mock surface, not a prose-only description.</div>
-      </div>
+      <figure class="frame">
+        <img class="proposal-image" src="./ui-selected-desktop.png" alt="Selected desktop UI proposal" width="1600" height="1000">
+        <figcaption>&lt;Viewport, represented state, first-read path, and annotations tied to this generated image.&gt;</figcaption>
+      </figure>
     </section>
 
     <section>
       <h2>Mobile / Narrow Proposal</h2>
-      <div class="frame mobile">
-        <div class="surface-placeholder">Replace with a 390px-class mobile/narrow mock surface.</div>
-      </div>
+      <figure class="frame mobile">
+        <img class="proposal-image" src="./ui-selected-mobile.png" alt="Selected 390px-class mobile UI proposal" width="780" height="1688">
+        <figcaption>&lt;Viewport, containment changes, action priority, and annotations tied to this generated image.&gt;</figcaption>
+      </figure>
     </section>
 
     <section>
       <h2>States And Pathological Data</h2>
       <div class="grid two">
-        <div class="frame"><div class="surface-placeholder">Loading / empty / error / degraded state</div></div>
-        <div class="frame"><div class="surface-placeholder">Long ids, long labels, dense data, selection or expanded detail when applicable</div></div>
+        <figure class="frame">
+          <img class="proposal-image" src="./ui-state-recovery.png" alt="Loading, empty, error, or degraded UI state" width="1600" height="1000">
+          <figcaption>&lt;Name the represented recovery state and expected action.&gt;</figcaption>
+        </figure>
+        <figure class="frame">
+          <img class="proposal-image" src="./ui-state-pathological-data.png" alt="UI with pathological long or dense data" width="1600" height="1000">
+          <figcaption>&lt;Name the long-label, dense-data, selection, or expanded-detail stress case.&gt;</figcaption>
+        </figure>
       </div>
     </section>
 
@@ -352,7 +363,7 @@
     <section>
       <h2>Review Checklist</h2>
       <div class="annotation">
-        <p>UI applicability, product/surface route, design basis, user/task/actions, user decisions, first-read hierarchy, screen zones, evidence/proof expectations, and open tensions are explicit. No wrapped compact controls or one-letter wraps. No raw debug dumps. Selected pattern contracts are complete; card/list and drawer/sidebar requirements apply only when those patterns are selected. No page-level horizontal overflow. Desktop and mobile frames are inspectable. Pathological data is represented. Content priority, typography/rhythm, spacing/composition, emphasis/contrast, focus affordance, motion/reduced-motion, and fidelity are reviewable.</p>
+        <p>UI applicability, product/surface route, design basis, user/task/actions, user decisions, first-read hierarchy, screen zones, evidence/proof expectations, and open tensions are explicit. No wrapped compact controls or one-letter wraps. No raw debug dumps. Selected pattern contracts are complete; card/list and drawer/sidebar requirements apply only when those patterns are selected. No page-level horizontal overflow. Every applicable direction, desktop/mobile proposal, and important state is a generated raster image artifact embedded through a relative <code>&lt;img&gt;</code> source. Pathological data is represented. Content priority, typography/rhythm, spacing/composition, emphasis/contrast, focus affordance, motion/reduced-motion, and fidelity are reviewable.</p>
       </div>
     </section>
   </main>

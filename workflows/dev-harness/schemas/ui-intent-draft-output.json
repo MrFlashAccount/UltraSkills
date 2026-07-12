@@ -26,10 +26,10 @@
       "items": {
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
       },
-      "description": "Producer must emit artifact metadata for the required immutable ui-design-proposal HTML artifact when outcome is ready_for_attack or ready_for_approval.",
-      "x-usage": "For both ready_for_attack and ready_for_approval, emit only the required immutable ui-design-proposal artifact with content_type text/html. Exact artifact field semantics come from the shared baton artifact schema.",
+      "description": "Producer must emit artifact metadata for the required immutable ui-design-proposal HTML artifact and every raster image it embeds when outcome is ready_for_attack or ready_for_approval.",
+      "x-usage": "For both ready_for_attack and ready_for_approval, emit the required immutable ui-design-proposal artifact with content_type text/html plus every linked raster image artifact. Non-trivial applicable proposals must not return HTML alone. Exact artifact field semantics come from the shared baton artifact schema.",
       "minItems": 1,
-      "maxItems": 1,
+      "maxItems": 16,
       "contains": {
         "type": "object",
         "required": [
@@ -44,7 +44,34 @@
             "const": "text/html"
           }
         }
-      }
+      },
+      "minContains": 1,
+      "maxContains": 1,
+      "allOf": [
+        {
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["id", "content_type"],
+                "properties": {
+                  "id": { "const": "ui-design-proposal" },
+                  "content_type": { "const": "text/html" }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["content_type"],
+                "properties": {
+                  "content_type": {
+                    "enum": ["image/png", "image/jpeg", "image/webp"]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
     },
     "results": {
       "type": "array",
