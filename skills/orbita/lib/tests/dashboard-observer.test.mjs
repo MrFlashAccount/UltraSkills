@@ -135,6 +135,7 @@ test('dashboard projection treats unresolved stops as needs-help and resolved st
     [resolvedId]: indexRun(resolvedId, { title: 'Resolved recovery' }),
   });
   const recovery = {
+    stop_id: '00000000-0000-4000-8000-000000000007',
     summary: 'Need approval before continuing.',
     source_step_id: 'backend_implementation',
     needed: 'Approve the smallest recovery question.',

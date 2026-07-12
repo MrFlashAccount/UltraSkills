@@ -187,7 +187,7 @@ A CLI failure is an execution error and should be reported by the host adapter i
 
 ## Output capture
 
-The host wrapper writes each request result through `workflow-runner write-output`. The command validates strict JSON against the current request/step output schema and accepts the normalized value directly into baton/state. For `resolve_non_blocking_stop`, the accepted value is a structured `resolution` object and is applied only as recovery metadata; it does not advance the workflow step. For `run_worker` requests, the same command also requires the generated `--debug-summary-file` path and reads that side-channel only after the JSON output validates. It is a pure task-output path: it must not accept, store, emit, or mutate worker binding/control-plane metadata. There is no output-path handoff from worker to orchestrator, and `workflow-runner continue` does not accept output paths.
+The host wrapper writes completed `run_worker` and `wait_for_approval` results through `workflow-runner write-output`. The command validates strict JSON against the current request/step output schema and accepts the normalized value directly into baton/state. A `resolve_non_blocking_stop` request is control-plane work instead: submit its structured `resolution` object through the generated `resolveStopCommand` / `workflow-runner resolve-stop`; it records recovery metadata without advancing the workflow step. For `run_worker` requests, `write-output` also requires the generated `--debug-summary-file` path and reads that side-channel only after the JSON output validates. It is a pure task-output path: it must not accept, store, emit, or mutate worker binding/control-plane metadata. There is no output-path handoff from worker to orchestrator, and `workflow-runner continue` does not accept output paths.
 
 Retained accepted-output detection for pointer recovery uses the same per-step
 accepted-output surface in `baton.state[stepId]` that `continue` reads. Pointer
@@ -199,7 +199,7 @@ preserve current `continue` reuse semantics.
 
 Accepted-output history uses two layers:
 
-- A compact fallback summary derived from public accepted output fields such as `outcome`, `approval`, `artifacts`, `results`, `blocker`, and the accepted step id. This fallback remains enabled for compatible existing worker outputs and for debug-history disabled mode.
+- A compact fallback summary derived from public accepted output fields such as `outcome`, `approval`, `artifacts`, `results`, and the accepted step id. This fallback remains enabled for compatible existing worker outputs and for debug-history disabled mode.
 - A required rich body side-channel for `run_worker` requests, passed through the exact generated `--debug-summary-file` path. Generated worker instructions tell workers to write a concise operational rationale to that file before running the validating writer command. The file is not part of the JSON output, is not stored in baton/state, and does not depend on the worker output schema shape. Rich body ingestion requires the exact expected path, a non-empty regular file, reads only a bounded prefix before normalization, is suppressible by debug-history disabled mode, and is bounded after normalization to 4 KiB or 80 lines, whichever limit is hit first. Truncated rich bodies must include an explicit truncation marker.
 - A host/orchestrator debug note passed through `continue --orchestrator-debug-json` or `--orchestrator-debug-file`, used to preserve why the host chose a worker reuse/fresh spawn path, which host actions and commands/tools ran, what evidence was observed, and remaining risks before `continue` advances. This note is bounded, redacted, deduplicated, and never written by direct host file access.
 
@@ -232,6 +232,7 @@ After bounded automatic recovery fails, missing host capability is reported thro
 ```json
 {
   "non_blocking_stop": {
+    "stop_id": "123e4567-e89b-42d3-a456-426614174000",
     "summary": "Missing host capability",
     "needed": "Provide a worker-capable host"
   }
@@ -239,6 +240,7 @@ After bounded automatic recovery fails, missing host capability is reported thro
 ```
 
 Submit that object through the request's generated `report-stop` command. Do not send it to `write-output`.
+Generate one UUID v4 `stop_id` for each genuinely new stop. Retrying the exact report with the same id is idempotent; reusing an id with different content is rejected, and replaying a resolved report cannot erase its resolution. Managed history stores only this id for report/resolve lifecycle entries, not stop or resolution free text.
 
 For each requested step, accept output first:
 

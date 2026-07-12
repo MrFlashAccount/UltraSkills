@@ -170,6 +170,7 @@ function implementedOutput(summary, { artifactPath, ...extra } = {}) {
 function stopOutput(overrides = {}) {
   return {
     non_blocking_stop: {
+      stop_id: '00000000-0000-4000-8000-000000000001',
       summary: 'Need approval before continuing.',
       source_step_id: 'backend_implementation',
       needed: 'Approve the smallest recovery question.',
@@ -366,14 +367,37 @@ test('runner reuse hints: non-blocking stop keeps host work active with same-wor
 
   const first = await next({ runId, workflowPath, leaseToken, now });
   assert.equal(first.requests[0].stepId, 'backend_implementation');
+  const reportedStopJson = JSON.stringify(stopOutput());
   await reportStop({
     runId,
     workflowPath,
     stepId: 'backend_implementation',
-    json: JSON.stringify(stopOutput()),
+    json: reportedStopJson,
     leaseToken,
     now,
   });
+  const historyAfterFirstReport = readFileSync(path.join(runDir, 'history.md'), 'utf8');
+  const duplicateBeforeResolution = await reportStop({
+    runId,
+    workflowPath,
+    stepId: 'backend_implementation',
+    json: reportedStopJson,
+    leaseToken,
+    now,
+  });
+  assert.equal(duplicateBeforeResolution.duplicate, true);
+  assert.equal(readFileSync(path.join(runDir, 'history.md'), 'utf8'), historyAfterFirstReport);
+  await assert.rejects(
+    () => reportStop({
+      runId,
+      workflowPath,
+      stepId: 'backend_implementation',
+      json: JSON.stringify(stopOutput({ summary: 'Conflicting retry under the same stop id.' })),
+      leaseToken,
+      now,
+    }),
+    /conflicts with its previously accepted report/,
+  );
 
   const recovery = await continueRun({ runId, workflowPath, bindAgents: ['backend_implementation=backend-worker-1'], leaseToken, now });
 
@@ -410,6 +434,22 @@ test('runner reuse hints: non-blocking stop keeps host work active with same-wor
   assert.match(resolved.requests[0].loadInstructionsCommand, /workflow-runner\.mjs' instructions --run-id/);
   assert.match(resolved.requests[0].loadFollowupInstructionsCommand, /instructions --follow-up --run-id/);
   assert.equal(resolved.requests[0].nonBlockingStop.resolution.decision, 'Proceed with the smallest recovery question approved.');
+
+  const historyAfterResolution = readFileSync(path.join(runDir, 'history.md'), 'utf8');
+  const delayedReplay = await reportStop({
+    runId,
+    workflowPath,
+    stepId: 'backend_implementation',
+    json: reportedStopJson,
+    leaseToken,
+    now,
+  });
+  assert.equal(delayedReplay.duplicate, true);
+  assert.equal(readFileSync(path.join(runDir, 'history.md'), 'utf8'), historyAfterResolution);
+  assert.equal(
+    readBaton(runDir).nonBlockingStops.backend_implementation.resolution.decision,
+    'Proceed with the smallest recovery question approved.',
+  );
 
   const followUpInstructions = await loadInstructions({ runId, workflowPath, stepId: 'backend_implementation', followUp: true, leaseToken, now });
   assert.match(followUpInstructions, /Implement backend\./);
@@ -470,6 +510,7 @@ test('runner reuse hints: any worker can report a non-blocking stop at the same 
       stepId: 'prepare',
       json: JSON.stringify({
         non_blocking_stop: {
+          stop_id: '00000000-0000-4000-8000-000000000002',
           summary: 'Need a decision before continuing.',
           needed: 'Provide the missing decision.',
           resolution: { summary: 'Self-resolved.', decision: 'Continue.' },
@@ -487,6 +528,7 @@ test('runner reuse hints: any worker can report a non-blocking stop at the same 
     stepId: 'prepare',
     json: JSON.stringify({
       non_blocking_stop: {
+        stop_id: '00000000-0000-4000-8000-000000000003',
         summary: 'Need a decision before continuing.',
         source_step_id: 'prepare',
         needed: 'Provide the missing decision.',
@@ -565,6 +607,7 @@ test('runner reuse hints: approval non-blocking stop waits for orchestrator reso
     stepId: 'approval_gate',
     json: JSON.stringify({
       non_blocking_stop: {
+        stop_id: '00000000-0000-4000-8000-000000000004',
         summary: 'Need orchestrator decision before approval can continue.',
         source_step_id: 'approval_gate',
         needed: 'Resolve approval concern.',
@@ -622,14 +665,15 @@ test('runner reuse hints: non-blocking stop redacts private fields and sensitive
     stepId: 'backend_implementation',
     json: JSON.stringify(stopOutput({
       summary: `Need token --lease-token ${leaseToken} before continuing from ${customIndexPath} and ${desktopSecretPath}.`,
-      needed: `Inspect ${customBatonPath} and ${homeSecretPath} before proceeding.`,
+      needed: `Inspect ${customBatonPath}, ${homeSecretPath}, ~/.ssh/id_ed25519, and file:///Users/alice/secret.txt before proceeding.`,
       evidence: [
         `${runDir}/.workflow-runner/durable-commit.json`,
         customHistoryPath,
         tmpSecretPath,
-        'safe public evidence',
+        '../../private/customer.csv',
+        'AKIAIOSFODNN7EXAMPLE',
       ],
-      risk: `Leaking ${customRunsRoot} or /private/var/folders/secret would expose private run state.`,
+      risk: `Leaking ${customRunsRoot}, /private/var/folders/secret, or password=hunter2 would expose private run state.`,
       transcript: 'private transcript must not be projected',
       hidden_prompt: 'private prompt must not be projected',
       token: leaseToken,
@@ -640,7 +684,7 @@ test('runner reuse hints: non-blocking stop redacts private fields and sensitive
 
   const persistedAfterWrite = readBaton(runDir).nonBlockingStops.backend_implementation;
   const persistedText = JSON.stringify(persistedAfterWrite);
-  assert.deepEqual(Object.keys(persistedAfterWrite).sort(), ['evidence', 'needed', 'risk', 'source_step_id', 'summary'].sort());
+  assert.deepEqual(Object.keys(persistedAfterWrite).sort(), ['evidence', 'needed', 'risk', 'source_step_id', 'stop_id', 'summary'].sort());
   assert.doesNotMatch(persistedText, new RegExp(leaseToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.doesNotMatch(persistedText, /private transcript/);
   assert.doesNotMatch(persistedText, /private prompt/);
@@ -653,6 +697,7 @@ test('runner reuse hints: non-blocking stop redacts private fields and sensitive
   assert.doesNotMatch(persistedText, /\/home\/sergey/);
   assert.doesNotMatch(persistedText, /\/tmp\/not-public/);
   assert.doesNotMatch(persistedText, /\/private\/var/);
+  assert.doesNotMatch(persistedText, /\.ssh|file:\/\/|\.\.\/\.\.\/private|AKIAIOSFODNN7EXAMPLE|hunter2/);
   assert.match(persistedText, /local filesystem path/);
 
   const recovery = await continueRun({ runId, workflowPath, runsRoot, leaseToken, now });
@@ -676,7 +721,7 @@ test('runner reuse hints: non-blocking stop redacts private fields and sensitive
   assert.match(projected.summary, /local filesystem path/);
   assert.match(projected.needed, /workflow baton private state/);
   assert.match(projected.evidence.join(' '), /workflow history private state/);
-  assert.deepEqual(Object.keys(projected).sort(), ['evidence', 'needed', 'risk', 'source_step_id', 'summary'].sort());
+  assert.deepEqual(Object.keys(projected).sort(), ['evidence', 'needed', 'risk', 'source_step_id', 'stop_id', 'summary'].sort());
 
   await resolveStop({
     runId,
@@ -698,6 +743,8 @@ test('runner reuse hints: non-blocking stop redacts private fields and sensitive
   assert.doesNotMatch(persistedResolutionText, /\/home\/sergey/);
   assert.doesNotMatch(persistedResolutionText, /\/tmp\/not-public/);
   assert.match(persistedResolutionText, /local filesystem path/);
+  const historyText = readFileSync(path.join(runDir, 'history.md'), 'utf8');
+  assert.doesNotMatch(historyText, /Need token|Inspect .*before proceeding|Resolved with|Continue after reading/);
 });
 
 test('runner reuse hints: write-output rejects binding metadata and preserves workerBindings', async () => {

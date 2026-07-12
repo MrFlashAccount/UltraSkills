@@ -134,3 +134,33 @@ test('Workflow.validate requires worker output schemas to expose a required stri
     { outputSchemas: new Map([['route.schema.json', missingOutcomeSchema]]) },
   );
 });
+
+test('Workflow.validate rejects blocked only as a root lifecycle value and preserves nested domain vocabulary', () => {
+  const nestedDomainSchema = {
+    ...routeOutputSchema,
+    properties: {
+      ...routeOutputSchema.properties,
+      dependency: {
+        type: 'object',
+        required: ['status'],
+        properties: { status: { enum: ['ready', 'blocked'] } },
+        additionalProperties: false,
+      },
+    },
+  };
+  assert.deepEqual(validate(pureWorkflow(), { outputSchemas: new Map([['route.schema.json', nestedDomainSchema]]) }), {
+    ok: true,
+    workflow: 'pure-entity-fixture',
+    steps: Object.keys(pureWorkflow().steps).length,
+  });
+
+  const rootBlockedSchema = {
+    ...routeOutputSchema,
+    properties: { ...routeOutputSchema.properties, outcome: { enum: ['ready', 'blocked'] } },
+  };
+  assertWorkflowFailure(
+    pureWorkflow(),
+    /must not declare legacy terminal value 'blocked'/,
+    { outputSchemas: new Map([['route.schema.json', rootBlockedSchema]]) },
+  );
+});

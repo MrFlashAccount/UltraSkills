@@ -145,15 +145,15 @@ Continue only when all are true:
 - the last cycle made progress, or the retry context changes the next attempt materially
 - no new approval boundary is required before the next action
 
-Stop when any are true:
+Finish the loop when any are true:
 
 - success criteria are met
 - max iterations reached
 - `noProgressCount >= 2` by default
-- the same blocker repeats without new information
 - verification proves the approach is failing
-- continuation would require unapproved external, destructive, risky, or privacy-sensitive action
 - user asks to stop
+
+If the same blocker repeats without new information, or continuation requires approval for an external, destructive, risky, or privacy-sensitive action, report `NON_BLOCKING_STOP` instead of finishing. Request the smallest concrete orchestrator/user help, preserve the current iteration, and resume it after resolution.
 
 ## Stability Mechanisms
 

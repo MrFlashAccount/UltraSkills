@@ -192,7 +192,7 @@ surface in `baton.state[stepId]` that `continue` uses; if extracted, it remains 
 small runner-owned helper with tests for current `continue` reuse semantics.
 
 Non-blocking stop helpers under `lib/runtime/**` own public shaping and
-redaction of blocker/resolution records. They must receive path facts from the
+redaction of stop/resolution records. They must receive path facts from the
 caller and must not discover workflow-run storage through persistence imports.
 
 Shard runtime helpers own IO-free activation projection, shard output application, bounded batching, and final-worker readiness. They may consume
@@ -432,14 +432,20 @@ completion output, or separate completion worker.
 `baton.nonBlockingStops` is runner-owned durable control-plane state. It is
 keyed by active request id and stores only public, bounded stop and resolution
 records. It must not contain transcripts, hidden prompts, lease tokens, raw
-worker/approval outputs, private workflow-run paths, or arbitrary local paths.
+worker/approval outputs, private workflow-run paths, arbitrary local paths,
+credential assignments, or recognizable access keys. Public stop/resolution
+text uses a bounded sanitizer that covers absolute, home-relative,
+traversal-relative, and `file://` path forms before persistence or projection.
 
 Lifecycle:
 
 - `write-output` accepts only schema-valid completed step output.
 - After safe automatic recovery is exhausted, `report-stop` persists a
   sanitized `non_blocking_stop` record without completing the request or
-  advancing the cursor.
+  advancing the cursor. Every new stop carries a worker-generated UUID v4
+  `stop_id`. Repeating the exact report with the same id is idempotent;
+  conflicting reuse is rejected. A delayed report for a resolved id cannot
+  erase its resolution, while a genuinely new stop must use a new id.
 - `continue` projects an unresolved record as a
   `resolve_non_blocking_stop` host action. Completed siblings in fanout/shard
   batches remain accepted while the stopped request stays active.
@@ -448,6 +454,11 @@ Lifecycle:
 - `continue` renders the same request again with resolution context and the
   preferred worker hint when available. The record is cleared only after that
   request submits normal completed output through `write-output`.
+
+Managed history records only the stop id for report/resolve lifecycle events;
+it never copies the free-text stop or resolution fields. Those bounded fields
+live only in the active Baton control record and are deleted with that record
+after normal completed output is accepted.
 
 The final runner statuses remain `needs_host_actions` and `done`. A non-blocking
 stop is a host-action pause, never a step outcome, transition value, or terminal

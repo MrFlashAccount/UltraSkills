@@ -197,11 +197,27 @@ function normalizeSchemaForSemanticIntrospection(schema, rootSchema = schema, re
   return normalized;
 }
 
-function schemaDeclaresStringValue(schema, value) {
-  if (!schema || typeof schema !== 'object') return false;
-  if (Array.isArray(schema)) return schema.some((entry) => schemaDeclaresStringValue(entry, value));
-  if (schema.const === value || (Array.isArray(schema.enum) && schema.enum.includes(value))) return true;
-  return Object.values(schema).some((entry) => schemaDeclaresStringValue(entry, value));
+function rootSchemaBranches(schema) {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return [];
+  const branches = [schema];
+  for (const keyword of ['allOf', 'anyOf', 'oneOf']) {
+    for (const branch of schema[keyword] ?? []) branches.push(...rootSchemaBranches(branch));
+  }
+  for (const keyword of ['if', 'then', 'else']) {
+    if (schema[keyword]) branches.push(...rootSchemaBranches(schema[keyword]));
+  }
+  return branches;
+}
+
+function rootPropertyDeclaresStringValue(schema, propertyName, value) {
+  return rootSchemaBranches(schema).some((branch) => {
+    const propertySchema = branch.properties?.[propertyName];
+    return propertySchema?.const === value || (Array.isArray(propertySchema?.enum) && propertySchema.enum.includes(value));
+  });
+}
+
+function rootSchemaDeclaresProperty(schema, propertyName) {
+  return rootSchemaBranches(schema).some((branch) => Object.hasOwn(branch.properties ?? {}, propertyName));
 }
 
 function validateOutputSchemaDocument(schema, schemaRef, workflow, _runtimeContext, warnings, { stepId, step, requireWorkerOutcomeContract = true, externalSchemas = [] } = {}) {
@@ -215,10 +231,13 @@ function validateOutputSchemaDocument(schema, schemaRef, workflow, _runtimeConte
   void validation;
 
   const normalizedSchema = normalizeSchemaForSemanticIntrospection(schema);
-  if (schemaDeclaresStringValue(normalizedSchema, 'blocked')) {
+  if (
+    rootPropertyDeclaresStringValue(normalizedSchema, 'outcome', 'blocked') ||
+    rootPropertyDeclaresStringValue(normalizedSchema, 'approval', 'blocked')
+  ) {
     fail(`step '${stepId}' output.schema must not declare legacy terminal value 'blocked'; use the runner non-blocking stop control channel`);
   }
-  if (normalizedSchema?.properties && Object.hasOwn(normalizedSchema.properties, 'blocker')) {
+  if (rootSchemaDeclaresProperty(normalizedSchema, 'blocker')) {
     fail(`step '${stepId}' output.schema must not declare legacy control field 'blocker'; use the runner non-blocking stop control channel`);
   }
   if (requireWorkerOutcomeContract && ['worker', 'fanout', 'shard'].includes(step?.kind)) assertWorkerOutputContract({ stepId, schema: normalizedSchema });

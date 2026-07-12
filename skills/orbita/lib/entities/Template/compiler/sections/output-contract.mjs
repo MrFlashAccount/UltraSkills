@@ -42,7 +42,8 @@ function nonBlockingStopProtocol(command) {
     trimmedCommand,
     '```',
     '',
-    'Replace the JSON body with {"non_blocking_stop":{"summary":"...","needed":"...","source_step_id":"...","evidence":[],"risk":"..."}}.',
+    'Replace the JSON body with {"non_blocking_stop":{"stop_id":"<new UUID v4 for this stop>","summary":"...","needed":"...","source_step_id":"...","evidence":[],"risk":"..."}}.',
+    'Reuse the same stop_id only when retrying the exact same report. Generate a new UUID v4 for a genuinely new stop after an earlier one was resolved.',
     'Use needed for the smallest concrete help required. The orchestrator will try to resolve it safely and will ask the user only when a user decision, permission, or missing input is required.',
   ].join('\n');
 }

@@ -100,7 +100,7 @@
       }
     },
     "nonBlockingStops": {
-      "description": "Runner-owned control-plane state for request-level non-blocking stops. Keys are active request ids; unresolved values await orchestrator help, and resolved values are rendered back into the same request. These records never complete a step or advance the cursor.",
+      "description": "Runner-owned control-plane state for request-level non-blocking stops. Keys are active request ids; each stop_id is a worker-generated UUID v4 used for idempotent report retries and stale replay rejection. Unresolved values await orchestrator help, and resolved values are rendered back into the same request. These records never complete a step or advance the cursor.",
       "type": "object",
       "patternProperties": {
         "^[A-Za-z_][A-Za-z0-9_-]*$": {
@@ -209,11 +209,16 @@
     "nonBlockingStop": {
       "type": "object",
       "required": [
+        "stop_id",
         "summary",
         "source_step_id",
         "needed"
       ],
       "properties": {
+        "stop_id": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-4[0-9A-Fa-f]{3}-[89AaBb][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$"
+        },
         "summary": {
           "type": "string",
           "minLength": 1,

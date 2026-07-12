@@ -11,8 +11,7 @@
     "outcome": {
       "enum": [
         "approved",
-        "needs_revision",
-        "needs_input"
+        "needs_revision"
       ],
       "description": "Authoritative routing state for the researcher attack."
     },
@@ -48,16 +47,6 @@
       },
       "additionalProperties": true
     },
-    "questions": {
-      "type": "array",
-      "description": "Blocking user questions when outcome is needs_input.",
-      "x-usage": "Route these strings to the user as questions. Do not answer them from orchestrator inference or collapse them into a summary.",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "minItems": 1
-    },
     "artifacts": {
       "type": "array",
       "items": {
@@ -90,23 +79,6 @@
       "then": {
         "required": [
           "verdict"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "needs_input"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "questions"
         ]
       }
     }

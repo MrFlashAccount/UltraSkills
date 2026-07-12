@@ -6,7 +6,7 @@ Use this when review found must-fix or contract coverage gaps and the work must 
 
 - Owner:
 - Date:
-- State: Ready for fix pass | In progress | Fixed | Blocked
+- State: Ready for fix pass | In progress | Fixed
 - Repo / branch:
 - Issue / PR:
 - Review source:

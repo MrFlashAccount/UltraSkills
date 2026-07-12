@@ -120,9 +120,9 @@ test('research-critic schemas keep every completed variant satisfiable after sto
     artifacts: [artifact],
   }, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(researchDraftOutputSchema, {
-    outcome: 'needs_input',
+    outcome: 'ready_for_attack',
     questions: ['Which public contract should be preserved?'],
-  }, { schemas: runtimeSchemas }).ok, true);
+  }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(researchAttackOutputSchema, {
     outcome: 'approved',
     verdict: { summary: ['PASS'], evidence_checked: [], findings: [] },
@@ -322,6 +322,7 @@ test('runner host response schema enforces action-conditional reuse hint fields'
       ...validRunWorker.baton,
       nonBlockingStops: {
         worker_step: {
+          stop_id: '00000000-0000-4000-8000-000000000008',
           summary: 'Need a decision.',
           source_step_id: 'worker_step',
           needed: 'Provide approved input.',
@@ -334,6 +335,7 @@ test('runner host response schema enforces action-conditional reuse hint fields'
       {
         ...validRunWorker.requests[0],
         nonBlockingStop: {
+          stop_id: '00000000-0000-4000-8000-000000000008',
           summary: 'Need a decision.',
           source_step_id: 'worker_step',
           needed: 'Provide approved input.',

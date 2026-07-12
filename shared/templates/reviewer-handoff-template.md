@@ -6,7 +6,7 @@ Use this as the format/context packet passed to a reviewer. The reviewer must ju
 
 - Owner:
 - Date:
-- State: Ready for review | In review | Passed | Failed | Blocked
+- State: Ready for review | In review | Passed | Failed
 - Repo / branch:
 - Issue / PR:
 - Base comparison:

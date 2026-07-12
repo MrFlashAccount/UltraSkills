@@ -46,7 +46,7 @@ function replacementForPrivatePath(relativePath) {
 
 function replacementForLocalPath(pathname) {
   const normalized = normalizeComparablePath(pathname);
-  if (/^(?:[a-z]:\/|\/)/i.test(normalized)) return 'local filesystem path';
+  if (/^(?:file:\/|~\/|\.\.?\/|[a-z]:\/|\/)/i.test(normalized)) return 'local filesystem path';
   return undefined;
 }
 
@@ -80,6 +80,8 @@ function boundedText(value, fallback = '', options = {}) {
 function redactSensitiveText(value) {
   return String(value ?? '')
     .replace(/(--lease-token(?:=|\s+))(?:"[^"]*"|'[^']*'|[^\s'"]+)/g, '$1[redacted-lease-token]')
+    .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[redacted-aws-access-key]')
+    .replace(/\b(password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,'";]+)/gi, '$1=[redacted]')
     .replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[redacted-token]')
     .replace(/(?:[A-Za-z]:)?[^\s]*\.workflow-runner[^\s]*/g, '[redacted-workflow-runner-private-state]')
     .replace(/\/Users\/[^\s]*\.orbita\/workflow-runs[^\s]*/g, '[redacted-workflow-runs-private-state]');
@@ -87,10 +89,12 @@ function redactSensitiveText(value) {
 
 export function publicNonBlockingStopDetails(stop, { stepId, runsRoot } = {}) {
   const options = { runsRoot };
+  const stopId = String(stop?.stop_id ?? '');
   const sourceStepId = boundedText(stop?.source_step_id ?? stepId, stepId, options);
   const needed = boundedText(stop?.needed ?? stop?.summary, 'Help is required before this request can continue.', options);
   const summary = boundedText(stop?.summary ?? needed, needed, options);
   const details = {
+    stop_id: stopId,
     summary,
     source_step_id: sourceStepId,
     needed,

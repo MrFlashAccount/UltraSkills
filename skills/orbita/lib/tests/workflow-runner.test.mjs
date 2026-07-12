@@ -928,7 +928,7 @@ test('runner: fanout owner non-blocking stop resumes before downstream fanout re
 
   result = await runRunner(
     ['report-stop', '--run-id', runId, '--workflow', workflowPath, '--step-id', frontendBranchId],
-    { input: JSON.stringify({ non_blocking_stop: { summary: 'Need frontend permission.', needed: 'Approve frontend implementation.' } }) },
+    { input: JSON.stringify({ non_blocking_stop: { stop_id: '00000000-0000-4000-8000-000000000005', summary: 'Need frontend permission.', needed: 'Approve frontend implementation.' } }) },
   );
   assert.equal(result.status, 0, result.stderr);
   const branchHelp = await expectRunner([
@@ -960,7 +960,7 @@ test('runner: fanout owner non-blocking stop resumes before downstream fanout re
   assert.equal(owner.requests[0].stepId, 'implementation');
   result = await runRunner(
     ['report-stop', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'implementation'],
-    { input: JSON.stringify({ non_blocking_stop: { summary: 'Need reviewer choice.', needed: 'Choose the required reviewer.' } }) },
+    { input: JSON.stringify({ non_blocking_stop: { stop_id: '00000000-0000-4000-8000-000000000006', summary: 'Need reviewer choice.', needed: 'Choose the required reviewer.' } }) },
   );
   assert.equal(result.status, 0, result.stderr);
 
