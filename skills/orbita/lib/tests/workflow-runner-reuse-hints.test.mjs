@@ -227,6 +227,10 @@ test('non-blocking stop sanitizer preserves public URLs and redacts delimiter-in
     { input: '`namespace_password` = `hunter2`', secret: 'hunter2' },
     { input: 'https://alice:hunter2@example.com/private', secret: 'hunter2' },
     { input: 'https://example.com/help?access_token=abc%2FDEF%2Bghi', secret: 'abc%2FDEF%2Bghi' },
+    { input: 'https://example.com/help?sig=shortsecret', secret: 'shortsecret' },
+    { input: 'https://example.com/help?signature=anothersecret', secret: 'anothersecret' },
+    { input: 'https://example.com/help?x-amz-signature=awssecret', secret: 'awssecret' },
+    { input: 'https://example.com/help?x-goog-signature=googsecret', secret: 'googsecret' },
   ];
   for (const { input, secret } of privateValues) {
     const stop = publicNonBlockingStopDetails({

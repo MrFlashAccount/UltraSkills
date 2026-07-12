@@ -2,7 +2,7 @@ const MAX_TEXT_LENGTH = 512;
 const MAX_EVIDENCE_ITEMS = 5;
 const LOCAL_PATH_CANDIDATE = /(?:file:\/+[^\s'"`\[\]{}()<>,;!?]*|~(?:[^/\s'"`\[\]{}()<>,;!?]+)?\/[^\s'"`\[\]{}()<>,;!?]*|\.\.?\/[^\s'"`\[\]{}()<>,;!?]*|(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s'"`\[\]{}()<>,;!?]*|\/[^\s'"`\[\]{}()<>,;!?]*)/gi;
 const HTTP_URL_CANDIDATE = /https?:\/\/[^\s'"`<>\[\]{}()]+/gi;
-const SENSITIVE_KEY_NAME = /(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)/i;
+const SENSITIVE_KEY_NAME = /(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|(?:^|[_-])(?:sig(?:nature)?|credential|authorization|auth)(?:$|[_-]))/i;
 const TRAILING_PUNCTUATION = /[,:;.!?]+$/;
 
 function normalizeComparablePath(value) {
