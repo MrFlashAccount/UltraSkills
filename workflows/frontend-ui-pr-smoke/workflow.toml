@@ -32,7 +32,7 @@ When revising after design_attack feedback or approve_design rejection, read inp
 Input context:
 - Previous design artifacts: ${{ input.design_draft.artifacts | default: "No previous design artifact." }}
 - Hostile design feedback: ${{ input.design_attack.verdict | default: "No prior hostile design feedback." }}
-- Human design decision: ${{ input.approve_design | default: "No prior human design decision." }}
+- Human design feedback: ${{ input.approve_design.feedback | default: "No prior human design feedback." }}
 '''
 
 [steps.design_draft.output]
@@ -80,18 +80,17 @@ name = "Approve UI design proposal"
 kind = "approval"
 
 [steps.approve_design.input]
-prompt = '''Review design_draft.summary, attach the exact `ui-design-proposal` HTML artifact plus every linked raster image artifact, and include design_attack.verdict on the first visit. Continue only after explicit human approval.
-After a user-rejected proposal is corrected, return directly to this gate and treat the old attack verdict only as evidence about the previous version. Do not call the revised draft attacked or approved until the user decides.
-Return approval approved to continue to implementation or rejected to revise design_draft as completed output; otherwise report a non-blocking stop with the smallest concrete missing input.
+summary = "${{ input.design_draft.summary }}"
+artifacts = ["${{ input.design_draft.artifacts }}"]
 
-Input context:
-- UI design proposal summary: ${{ input.design_draft.summary }}
-- UI design proposal artifacts: ${{ input.design_draft.artifacts | default: "No design artifact is available." }}
-- Hostile design verdict: ${{ input.design_attack.verdict | default: "No prior hostile design verdict." }}
-- Previous human design decision: ${{ input.approve_design | default: "No previous human design decision." }}'''
+[steps.approve_design.input.verdict]
+outcome = "${{ input.design_attack.outcome }}"
+summary = "${{ input.design_attack.verdict.summary }}"
+findings = "${{ input.design_attack.verdict.findings }}"
 
-[steps.approve_design.output]
-schema = "../dev-harness/schemas/approval-output.json"
+[steps.approve_design.input.verdict.include_when]
+selector = "${{ input.design_draft.outcome }}"
+equals = "ready_for_attack"
 
 [steps.approve_design.next]
 match = "${{ output.approval }}"

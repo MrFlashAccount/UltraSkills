@@ -13,12 +13,14 @@ import { readWorkflowDocument } from '../persistence/workflow-resources/workflow
 import { artifactPathBoundaryErrors } from '../persistence/workflow-resources/artifact-path-boundaries.mjs';
 import { writePersistedRunStateUpdate } from '../persistence/run-state/PersistedRunStateWriter.mjs';
 import { toHostResponse, workerBindingKeyForStep } from '../runner/host-requests.mjs';
+import { renderCurrentRequestInstructions } from '../runner/current-request-instructions.mjs';
+import { assertRunnerHostResponseSchema } from '../persistence/run-state/schema/runner-host-response-schema.mjs';
 import { assertSafeStepId, reportStopCommandForStep, resolveStopCommandForStep, writeOutputCommandForStep } from '../runner/runner-command-builder.mjs';
 import { readText } from '../persistence/run-state/atomic-file.mjs';
 import { assertFreshTokenAuthority, assertMatchingTokenAuthority, buildTokenLease, renewTokenLease } from '../persistence/run-state/lease-authority.mjs';
 import { appendHistoryOnce, recoverDurableCommit } from '../persistence/run-state/durable-commit.mjs';
 import { readPersistedRunState } from '../persistence/run-state/PersistedRunStateReader.mjs';
-import { ensureRunFiles, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../persistence/run-state/paths.mjs';
+import { ensureRunDirectories, ensureRunFiles, initialRunBaton, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../persistence/run-state/paths.mjs';
 import { createRunIndexEntry, upsertRunIndexEntry } from '../persistence/run-state/run-index.mjs';
 import { readRunAuthorityWithLegacyFallback, runAuthorityFromIndexEntry, writeRunAuthority } from '../persistence/run-state/run-authority.mjs';
 import { durableFileSignature } from '../persistence/run-state/file-signature.mjs';
@@ -56,6 +58,8 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   artifactPathBoundaryErrors,
   writePersistedRunStateUpdate,
   toHostResponse,
+  renderCurrentRequestInstructions,
+  assertRunnerHostResponseSchema,
   workerBindingKeyForStep,
   assertSafeStepId,
   writeOutputCommandForStep,
@@ -69,7 +73,9 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   appendHistoryOnce,
   recoverDurableCommit,
   readPersistedRunState,
+  ensureRunDirectories,
   ensureRunFiles,
+  initialRunBaton,
   migrateLegacyWorkflowRunsRootIfNeeded,
   pathExists,
   resolveRunPaths,

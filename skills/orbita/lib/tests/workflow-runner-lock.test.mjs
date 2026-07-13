@@ -12,6 +12,7 @@ import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-lock-'));
 const runsRoot = path.join(tempDir, '.workflow-runs');
+writeFileSync(path.join(tempDir, 'output.md'), '## Output contract\nReturn markdown.\n');
 
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
@@ -29,13 +30,19 @@ function workflowDoc() {
       prepare: {
         name: 'Prepare',
         kind: 'worker',
-        input: { template: 'missing-input-template.md', prompt: 'This render would fail without the lock.' },
+        input: { prompt: 'Render only after the lock is acquired.' },
         output: { template: 'output.md' },
         next: 'done',
       },
       done: { name: 'Done', kind: 'done' },
     },
   };
+}
+
+function invalidWorkflowDoc() {
+  const workflow = workflowDoc();
+  workflow.steps.prepare.next = 'missing_step';
+  return workflow;
 }
 
 test('runner: API next waits on a fresh run-state lock before loading and rendering current state', async () => {
@@ -63,10 +70,8 @@ test('runner: API next recovers stale run-state lock left by killed process', as
   mkdirSync(paths.runnerDir, { recursive: true });
   writeFileSync(paths.continueLockPath, `${JSON.stringify({ pid: process.pid + 1_000_000, createdAt: '1970-01-01T00:00:00.000Z' })}\n`);
 
-  await assert.rejects(
-    runnerNext({ runId, workflowPath, runsRoot, leaseToken: `stale-run-lock-token-${process.pid}` }),
-    /workflow prompt render failed|missing-input-template/,
-  );
+  const response = await runnerNext({ runId, workflowPath, runsRoot, leaseToken: `stale-run-lock-token-${process.pid}` });
+  assert.equal(response.status, 'needs_host_actions');
   assert.equal(existsSync(paths.continueLockPath), false);
 });
 
@@ -79,20 +84,18 @@ test('runner: API next recovers missed-heartbeat run-state lock even when owner 
   mkdirSync(paths.runnerDir, { recursive: true });
   writeFileSync(paths.continueLockPath, `${JSON.stringify({ lockId: 'missed-heartbeat', pid: process.pid, createdAt: '1970-01-01T00:00:00.000Z', heartbeatAt: '1970-01-01T00:00:00.000Z' })}\n`);
 
-  await assert.rejects(
-    runnerNext({ runId, workflowPath, runsRoot, leaseToken: `missed-heartbeat-run-lock-token-${process.pid}` }),
-    /workflow prompt render failed|missing-input-template/,
-  );
+  const response = await runnerNext({ runId, workflowPath, runsRoot, leaseToken: `missed-heartbeat-run-lock-token-${process.pid}` });
+  assert.equal(response.status, 'needs_host_actions');
   assert.equal(existsSync(paths.continueLockPath), false);
 });
 
-test('runner: API next render failure does not overwrite existing index lifecycle status', async () => {
+test('runner: API next startup validation failure does not overwrite existing index lifecycle status', async () => {
   const runId = `lock-${process.pid}-api-next-render-failure-preserves-index-status`;
   const workflowPath = path.join(tempDir, 'api-next-render-failure-preserves-index-status-workflow.json');
   const paths = resolveRunPaths({ runId, workflowPath, runsRoot });
   const leaseToken = `render-failure-preserves-index-status-${process.pid}`;
   rmSync(paths.runDir, { recursive: true, force: true });
-  writeJson(workflowPath, workflowDoc());
+  writeJson(workflowPath, invalidWorkflowDoc());
   await createRunIndexEntry(paths, {
     status: 'done',
     workflowPath,
@@ -101,7 +104,7 @@ test('runner: API next render failure does not overwrite existing index lifecycl
 
   await assert.rejects(
     runnerNext({ runId, workflowPath, runsRoot, leaseToken, now: new Date('2026-06-01T10:00:01.000Z') }),
-    /workflow prompt render failed|missing-input-template/,
+    /transition 'next' target not found: missing_step/,
   );
 
   const index = await readRunsIndex(runsIndexPathsForRoot(paths.runsRoot));
@@ -109,22 +112,21 @@ test('runner: API next render failure does not overwrite existing index lifecycl
 });
 
 
-test('runner: API next render failure marks newly indexed run failed and clears lease', async () => {
+test('runner: API next startup validation failure does not create a run index entry or lease', async () => {
   const runId = `lock-${process.pid}-api-next-new-run-render-failure-clears-lease`;
   const workflowPath = path.join(tempDir, 'api-next-new-run-render-failure-clears-lease-workflow.json');
   const paths = resolveRunPaths({ runId, workflowPath, runsRoot });
   const leaseToken = `new-run-render-failure-clears-lease-${process.pid}`;
   rmSync(paths.runDir, { recursive: true, force: true });
-  writeJson(workflowPath, workflowDoc());
+  writeJson(workflowPath, invalidWorkflowDoc());
 
   await assert.rejects(
     runnerNext({ runId, workflowPath, runsRoot, leaseToken, now: new Date('2026-06-01T10:00:01.000Z') }),
-    /workflow prompt render failed|missing-input-template/,
+    /transition 'next' target not found: missing_step/,
   );
 
   const index = await readRunsIndex(runsIndexPathsForRoot(paths.runsRoot));
-  assert.equal(index.runs[runId].status, 'failed');
-  assert.equal(index.runs[runId].workerLease, null);
+  assert.equal(index.runs[runId], undefined);
 });
 
 

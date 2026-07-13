@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 import { assertWorkflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import { applyWorkflowOutput } from '../runtime/workflow-output/apply.mjs';
+import { renderWorkerInstructions } from '../runtime/render-worker-instructions.mjs';
 import { runNext } from '../use-cases/RunNext.mjs';
 import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
 
@@ -311,7 +312,9 @@ test('fanout freezes one activation selection and hides stale unselected branch 
     resources,
   });
   const renderedOwner = runNext({ workflowDoc, batonDoc: ownerResponse.baton, resources });
-  assert.match(renderedOwner.steps[0].compiledPrompt.prompt, /CURRENT_BRANCH_A_VALUE/);
-  assert.doesNotMatch(renderedOwner.steps[0].compiledPrompt.prompt, /STALE_BRANCH_B_VALUE/);
-  assert.match(renderedOwner.steps[0].compiledPrompt.prompt, /not selected/);
+  const instructions = renderWorkerInstructions({ workflow: workflowDoc, baton: renderedOwner.baton, entry: renderedOwner.steps[0], resources });
+  assert.match(instructions, /CURRENT_BRANCH_A_VALUE/);
+  assert.doesNotMatch(instructions, /STALE_BRANCH_B_VALUE/);
+  assert.match(instructions, /not selected/);
+  assert.equal(Object.hasOwn(renderedOwner.steps[0], 'compiledPrompt'), false);
 });

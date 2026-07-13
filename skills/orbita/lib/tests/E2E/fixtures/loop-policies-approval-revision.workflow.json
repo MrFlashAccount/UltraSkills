@@ -43,23 +43,14 @@
       "name": "Approval Gate",
       "kind": "approval",
       "input": {
-        "prompt": [
-          "Approve the plan.",
-          "",
-          "Plan result:",
-          "${{ input.plan.results }}"
-        ]
+        "summary": "${{ input.plan.outcome }}"
       },
       "next": {
         "match": "${{ output.approval }}",
         "cases": {
           "approved": "implement",
-          "rejected": "plan",
-          "limit_reached": "limit_reached"
+          "rejected": "plan"
         }
-      },
-      "output": {
-        "schema": "schemas/loop-approval.schema.json"
       }
     },
     "implement": {

@@ -359,6 +359,7 @@
       "required": [
         "name",
         "kind",
+        "input",
         "next"
       ],
       "properties": {
@@ -370,13 +371,79 @@
           "const": "approval"
         },
         "input": {
-          "$ref": "#/$defs/input"
-        },
-        "output": {
-          "$ref": "#/$defs/approvalOutput"
+          "$ref": "#/$defs/approvalInput"
         },
         "next": {
           "$ref": "#/$defs/next"
+        },
+        "onReject": {
+          "description": "Optional static revision target used when the runner-owned approval decision is rejected. When present, next describes only the approved route.",
+          "$ref": "#/$defs/nextCaseTarget"
+        }
+      },
+      "additionalProperties": false
+    },
+    "approvalInput": {
+      "description": "Runner-owned typed approval projection. Every selector is a whole-string path expression rooted at input; approval prompt/template and output schema authoring are intentionally unsupported.",
+      "type": "object",
+      "required": [
+        "summary"
+      ],
+      "properties": {
+        "summary": {
+          "$ref": "#/$defs/approvalSelector"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/approvalSelector"
+          }
+        },
+        "verdict": {
+          "$ref": "#/$defs/approvalVerdict"
+        }
+      },
+      "additionalProperties": false
+    },
+    "approvalSelector": {
+      "description": "A whole-string input path selector such as ${{ input.research_draft.summary }}.",
+      "type": "string",
+      "minLength": 1
+    },
+    "approvalVerdict": {
+      "type": "object",
+      "required": [
+        "outcome",
+        "summary",
+        "findings",
+        "include_when"
+      ],
+      "properties": {
+        "outcome": {
+          "$ref": "#/$defs/approvalSelector"
+        },
+        "summary": {
+          "$ref": "#/$defs/approvalSelector"
+        },
+        "findings": {
+          "$ref": "#/$defs/approvalSelector"
+        },
+        "include_when": {
+          "type": "object",
+          "required": [
+            "selector",
+            "equals"
+          ],
+          "properties": {
+            "selector": {
+              "$ref": "#/$defs/approvalSelector"
+            },
+            "equals": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -467,19 +534,6 @@
           "type": "string",
           "minLength": 1
         },
-        "schema": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "additionalProperties": false
-    },
-    "approvalOutput": {
-      "type": "object",
-      "required": [
-        "schema"
-      ],
-      "properties": {
         "schema": {
           "type": "string",
           "minLength": 1

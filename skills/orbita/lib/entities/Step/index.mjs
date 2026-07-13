@@ -43,7 +43,8 @@ function staleCurrentRequestMessage(stepId, requests = []) {
 function validateOutputKind(step, output, stepId) {
   if (step.kind === 'approval') {
     invariant(!('outcome' in output), `approval cursor '${stepId}' must use host/user output fields, not outcome`);
-    if ('approval' in output) invariant(typeof output.approval === 'string', `approval cursor '${stepId}' field approval must be a string`);
+    invariant(['approved', 'rejected'].includes(output.approval), `approval cursor '${stepId}' field approval must be approved or rejected`);
+    if ('feedback' in output) invariant(typeof output.feedback === 'string' && output.feedback.trim().length > 0, `approval cursor '${stepId}' field feedback must be a non-blank string`);
     return;
   }
 
@@ -110,7 +111,10 @@ export function resolveTransition({ workflow, baton, stepId, step, output }) {
   invariant(step.kind !== 'done', `cursor '${stepId}' is terminal and cannot be applied`);
   validateOutputKind(step, output, stepId);
 
-  const descriptor = normalizeTransitionNext(step.next);
+  const next = step.kind === 'approval' && output.approval === 'rejected' && step.onReject
+    ? step.onReject
+    : step.next;
+  const descriptor = normalizeTransitionNext(next);
   if (descriptor.kind === NEXT_KIND.STATIC_TARGET) return { targetStepId: descriptor.target };
   if (descriptor.kind === NEXT_KIND.DYNAMIC_TARGET) return resolveDynamicDescriptor({ workflow: wf, baton, stepId, step, output, descriptor });
   if (descriptor.kind === NEXT_KIND.MATCH_CASES) return resolveMatchCasesDescriptor({ workflow: wf, baton, stepId, step, output, descriptor });
@@ -149,6 +153,7 @@ export class Step {
 
   validateForRun({ workflow } = {}) {
     if (workflow && Object.hasOwn(this.data, 'next')) assertTransitionDescriptorTargets(workflow, this.id, normalizeTransitionNext(this.data.next));
+    if (workflow && Object.hasOwn(this.data, 'onReject')) assertTransitionDescriptorTargets(workflow, this.id, normalizeTransitionNext(this.data.onReject), 'onReject');
     return { ok: true };
   }
 

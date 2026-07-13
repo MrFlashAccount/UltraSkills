@@ -1,4 +1,4 @@
-import { finalOutputReminder, outputContractSection, readOutputSchema, readOutputTemplate, supportsCompactApprovalSchema } from './sections/output-contract.mjs';
+import { finalOutputReminder, outputContractSection, readOutputSchema, readOutputTemplate } from './sections/output-contract.mjs';
 import { interpolatePromptExpressions } from './sections/prompt-interpolation.mjs';
 import { normalizePromptText } from '../../../runtime/prompt-text.mjs';
 import { section, trimStable } from './utils.mjs';
@@ -24,24 +24,6 @@ function requiredReadsBlock(items = []) {
     lines.push(`${index + 1}. ${item.label}${suffix}: \`${item.path}\``);
   });
   lines.push('', 'Do not proceed until all required reads are complete.');
-  return lines.join('\n');
-}
-
-function approvalAttachmentsBlock(items = []) {
-  if (items.length === 0) return '';
-  const lines = [
-    'Attach these files to the user-facing approval request without opening or reading their contents:',
-    '',
-  ];
-  items.forEach((item, index) => {
-    const suffix = item.contentType ? ` (${item.contentType})` : '';
-    lines.push(`${index + 1}. ${item.label}${suffix}: \`${item.path}\``);
-  });
-  lines.push(
-    '',
-    'Attachments are not required reads. Open one only after an explicit user content question.',
-    'In Codex/Codex Desktop, render each as an absolute Markdown file link. Never substitute a summary, plain path, or inline body; if links are unavailable, state the gap and affected path.',
-  );
   return lines.join('\n');
 }
 
@@ -88,13 +70,12 @@ function nonBlockingStopBlock({ baton, stepId }) {
   return lines.join('\n');
 }
 
-function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlock, requiredReads, approvalAttachments, nonBlockingStop, inlinePrompt, outputContract, userPrompt, finalReminder }) {
+function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlock, requiredReads, nonBlockingStop, inlinePrompt, outputContract, userPrompt, finalReminder }) {
   assertNoUnsupportedPlaceholders(promptLayer, templatePath);
   const parts = [trimStable(promptLayer)];
 
   if (workflowInstructionBlock) parts.push(section('Workflow instruction', workflowInstructionBlock).trimEnd());
   if (requiredReads) parts.push(section('Required reads', requiredReads).trimEnd());
-  if (approvalAttachments) parts.push(section('Approval attachments', approvalAttachments).trimEnd());
   if (nonBlockingStop) parts.push(section('Non-blocking stop', nonBlockingStop).trimEnd());
   if (outputContract) parts.push(outputContract.trimEnd());
   if (inlinePrompt) parts.push(section('Workflow step prompt', inlinePrompt.trim()));
@@ -104,14 +85,11 @@ function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlo
   return `${parts.filter(Boolean).join('\n\n')}\n`;
 }
 
-export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources, promptInput = { value: {}, keys: [] }, shard, requiredReads = [], approvalAttachments = [], roleMetadataPaths = [], includeDiagnostics = false, userPrompt, userPromptInjected = false, followUp = false } = {}) {
+export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources, promptInput = { value: {}, keys: [] }, shard, requiredReads = [], roleMetadataPaths = [], includeDiagnostics = false, userPrompt, userPromptInjected = false, followUp = false } = {}) {
   const input = step.input ?? {};
   const inputTemplate = readInputTemplate({ input, resources });
   const outputTemplate = readOutputTemplate({ step, resources });
   const outputSchema = readOutputSchema({ workflow, step, resources });
-  const compactApproval = step.kind === 'approval'
-    && !outputTemplate.content
-    && supportsCompactApprovalSchema(outputSchema.schema);
   const outputContract = outputContractSection(outputTemplate.content, outputTemplate.metadataPath, outputSchema.content, outputSchema.metadataPath, outputSchema.schema, {
     schemaDefinitions: resources?.schemaDefinitions,
     validatingWriterCommand: resources?.validatingWriterCommand,
@@ -119,27 +97,22 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
     artifactOutputDir: resources?.artifactOutputDir,
     debugSummaryPath: resources?.debugSummaryPath,
     compactFollowUp: followUp === true,
-    compactApproval,
   });
   const workflowInstructionBlock = workflowInstruction({ workflow });
-  const finalReminder = compactApproval ? '' : finalOutputReminder(outputContract);
+  const finalReminder = finalOutputReminder(outputContract);
 
   const usesDefaultPrompt = inputTemplate.content === undefined;
   const promptLayer = usesDefaultPrompt ? defaultPrompt({ step, input }) : inputTemplate.content;
   const requiredReadsSection = requiredReadsBlock(requiredReadsForRender(requiredReads, { followUp }));
-  const approvalAttachmentsSection = approvalAttachmentsBlock(approvalAttachments);
-  const attachedArtifactStepIds = new Set(approvalAttachments.map((item) => item.sourceStepId).filter(Boolean));
   const prompt = assembleFixedPrompt({
     promptLayer,
     templatePath: inputTemplate.metadataPath,
     workflowInstructionBlock,
     requiredReads: requiredReadsSection,
-    approvalAttachments: approvalAttachmentsSection,
     nonBlockingStop: nonBlockingStopBlock({ baton, stepId }),
     inlinePrompt: interpolatePromptExpressions(
       normalizePromptText(input.prompt),
       { input: promptInput.value, ...(shard ? { shard } : {}) },
-      { attachedArtifactStepIds },
     ),
     outputContract,
     userPrompt: ['worker', 'fanout', 'shard'].includes(step.kind) && userPromptInjected !== true ? userPrompt : undefined,

@@ -227,27 +227,17 @@ test('runner: next returns a single host action request with load command only',
 test('runner: approval host instruction lists prompt input artifacts as attachment-only', async () => {
   const { runId, runDir } = await runCase('approval-inline-instructions');
   const workflowPath = path.join(tempDir, 'approval-inline-instructions-workflow.json');
-  const schemaPath = path.join(tempDir, 'approval-inline-instructions.schema.json');
   const prepareSchemaPath = path.join(tempDir, 'approval-inline-prepare-output.schema.json');
   writeJson(prepareSchemaPath, {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     type: 'object',
-    required: ['outcome'],
+    required: ['outcome', 'artifacts'],
     properties: {
       outcome: { type: 'string' },
       artifacts: { type: 'array' },
       results: { type: 'array' },
     },
     additionalProperties: true,
-  });
-  writeJson(schemaPath, {
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    type: 'object',
-    required: ['approval'],
-    properties: {
-      approval: { enum: ['approved', 'rejected'] },
-    },
-    additionalProperties: false,
   });
   const approvalWorkflow = structuredClone(workflowDoc);
   approvalWorkflow.steps.prepare.next = 'approve';
@@ -256,9 +246,9 @@ test('runner: approval host instruction lists prompt input artifacts as attachme
     name: 'Approve research',
     kind: 'approval',
     input: {
-      prompt: 'Present artifact `reasons-canvas-research` from prepare to the user before asking for approval.\n\nArtifacts:\n${{ input.prepare.artifacts }}',
+      summary: '${{ input.prepare.outcome }}',
+      artifacts: ['${{ input.prepare.artifacts }}'],
     },
-    output: { schema: path.basename(schemaPath) },
     next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'prepare' } },
   };
   writeJson(workflowPath, approvalWorkflow);
@@ -286,36 +276,19 @@ test('runner: approval host instruction lists prompt input artifacts as attachme
 
   assert.equal(response.status, 'needs_host_actions');
   assert.equal(response.requests[0].action, 'wait_for_approval');
-  assert.deepEqual(Object.keys(response.requests[0]).sort(), ['action', 'id', 'loadInstructionsCommand', 'outputSchema', 'resolvedOutputSchema', 'stepId'].sort());
-  assert.match(response.orchestratorInstruction, /Approval request: approve/);
-  assert.match(response.orchestratorInstruction, /The orchestrator must execute this approval instruction itself\./);
-  assert.match(response.orchestratorInstruction, /The compiled prompt below is the complete user-facing source\./);
-  assert.match(response.orchestratorInstruction, /Do not inspect workflow source, runner internals, schema files, or CLI help to reconstruct approval output\./);
+  assert.deepEqual(Object.keys(response.requests[0]).sort(), ['action', 'id', 'loadInstructionsCommand', 'stepId'].sort());
+  assert.match(response.orchestratorInstruction, /# Approval — Approve research/);
   const writerPattern = new RegExp(`workflow-runner\\.mjs' write-output --run-id '${runId}' --step-id 'approve' --runs-root '${resolveRunPaths({ runId }).runsRoot}' --lease-token '${leaseToken}' <<'JSON'`, 'g');
   assert.equal(response.orchestratorInstruction.match(writerPattern)?.length, 1);
   assert.match(response.orchestratorInstruction, /<paste strict JSON here>/);
-  assert.match(response.orchestratorInstruction, /# Approve research/);
-  assert.doesNotMatch(response.orchestratorInstruction, /## Required reads/);
   assert.match(response.orchestratorInstruction, /## Approval attachments/);
-  assert.match(response.orchestratorInstruction, /Attachments are not required reads\. Open one only after an explicit user content question\./);
-  assert.match(response.orchestratorInstruction, /render each as an absolute Markdown file link/);
-  assert.match(response.orchestratorInstruction, /Never substitute a summary, plain path, or inline body/);
-  assert.match(response.orchestratorInstruction, /Prompt input artifact 'reasons-canvas-research' from 'prepare' \(text\/markdown\):/);
+  assert.match(response.orchestratorInstruction, /\[reasons-canvas-research\]\(<.*prepare\/artifacts\/reasons-canvas-research\.md>\)/);
   assert.match(response.orchestratorInstruction, /prepare\/artifacts\/reasons-canvas-research\.md/);
-  assert.match(response.orchestratorInstruction, /## Approval response/);
-  assert.match(response.orchestratorInstruction, /Response schema: `approval-inline-instructions\.schema\.json`/);
-  assert.match(response.orchestratorInstruction, /`approval` \(required\): one of `"approved"`, `"rejected"`/);
-  assert.doesNotMatch(response.orchestratorInstruction, /Schema-derived artifact field notes/);
-  assert.doesNotMatch(response.orchestratorInstruction, /Artifact output directory for this step/);
-  assert.doesNotMatch(response.orchestratorInstruction, /"\$schema": "https:\/\/json-schema\.org/);
-  assert.doesNotMatch(response.orchestratorInstruction, /If this request cannot continue after you exhaust safe/);
-  assert.match(response.orchestratorInstruction, /If the gate cannot be completed, report a non-blocking stop/);
-  assert.ok(Buffer.byteLength(response.orchestratorInstruction) <= 6_000, 'approval stdout exceeded the 6 KB compact-envelope budget');
-  assert.doesNotMatch(response.orchestratorInstruction, /## Prompt input context/);
-  assert.doesNotMatch(response.orchestratorInstruction, /### Prompt input artifact content/);
+  assert.match(response.orchestratorInstruction, /## Decision required/);
+  assert.match(response.orchestratorInstruction, /\{ "approval": "approved" \}/);
+  assert.doesNotMatch(response.orchestratorInstruction, /output schema|resolvedOutputSchema|compiled prompt/i);
+  assert.ok(Buffer.byteLength(response.orchestratorInstruction) <= 6_000, 'approval stdout exceeded the bounded compact-envelope budget');
   assert.doesNotMatch(response.orchestratorInstruction, /Full Canvas body for approval\./);
-  assert.match(response.orchestratorInstruction, /## Workflow step prompt/);
-  assert.match(response.orchestratorInstruction, /Present artifact `reasons-canvas-research`/);
   assert.match(response.orchestratorInstruction, new RegExp(`--lease-token '${leaseToken}'`));
 
 });
@@ -504,7 +477,7 @@ test('runner: CLI resume ignores deleted startup user prompt file and preserves 
   assert.equal(JSON.parse(readFileSync(path.join(runDir, 'baton.json'), 'utf8')).user_prompt, 'original file prompt');
 });
 
-test('runner: user prompt is included in first worker when workflow starts with approval step', async () => {
+test('runner: approval-first workflow is rejected because typed approval summary must come from an upstream producer', async () => {
   const { runId, runDir } = await runCase('user-prompt-control-start');
   const workflowPath = path.join(tempDir, 'user-prompt-control-start-workflow.json');
   const approvalFirstWorkflow = structuredClone(workflowDoc);
@@ -513,36 +486,15 @@ test('runner: user prompt is included in first worker when workflow starts with 
     gate: {
       name: 'Gate',
       kind: 'approval',
-      input: { prompt: 'Approve startup task.' },
-      next: { match: '${{ output.approval }}', cases: { approved: 'prepare', retry: 'prepare' } },
+      input: { summary: '${{ input.prepare.outcome }}' },
+      next: { match: '${{ output.approval }}', cases: { approved: 'prepare', rejected: 'prepare' } },
     },
     ...approvalFirstWorkflow.steps,
   };
   writeJson(workflowPath, approvalFirstWorkflow);
-  const rawPrompt = 'Raw task must reach first worker after approval.';
-
-  const initialGate = await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath, '--user-prompt', rawPrompt], 'next approval-first with user prompt');
-  assert.equal(initialGate.orchestratorInstruction.split(' write-output --run-id ').length - 1, 1);
-  const gateInstructions = await runRunner(['instructions', '--run-id', runId, '--step-id', 'gate']);
-  assert.equal(gateInstructions.status, 0, gateInstructions.stderr);
-  assert.doesNotMatch(gateInstructions.stdout, /## User prompt/);
-  assert.equal(gateInstructions.stdout.includes(rawPrompt), false);
-
-  const approvalOutput = path.join(runDir, 'gate-output.json');
-  writeJson(approvalOutput, { approval: 'approved' });
-  await continueWithOutputs({ runId, runDir, workflowPath, refs: approvalOutput, label: 'continue approval-first gate' });
-  const firstWorkerInstructions = await runRunner(['instructions', '--run-id', runId, '--step-id', 'prepare']);
-  assert.equal(firstWorkerInstructions.status, 0, firstWorkerInstructions.stderr);
-  assert.match(firstWorkerInstructions.stdout, /## User prompt/);
-  assert.equal(firstWorkerInstructions.stdout.includes(rawPrompt), true);
-
-  const prepareOutput = path.join(runDir, 'prepare-output.json');
-  writeJson(prepareOutput, workerOutput('prepared'));
-  await continueWithOutputs({ runId, runDir, workflowPath, refs: prepareOutput, label: 'continue approval-first prepare' });
-  const laterInstructions = await runRunner(['instructions', '--run-id', runId, '--step-id', 'branch_a']);
-  assert.equal(laterInstructions.status, 0, laterInstructions.stderr);
-  assert.doesNotMatch(laterInstructions.stdout, /## User prompt/);
-  assert.equal(laterInstructions.stdout.includes(rawPrompt), false);
+  const result = await runRunner(['next', '--run-id', runId, '--workflow', workflowPath, '--user-prompt', 'Raw task.']);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /input\.summary expression .* has no schema-covered path|input\.summary selector producer 'prepare' is not upstream/);
 });
 
 test('runner: startup prompt target rejects match-cases with worker and terminal branches', async () => {
@@ -554,7 +506,7 @@ test('runner: startup prompt target rejects match-cases with worker and terminal
     gate: {
       name: 'Gate',
       kind: 'approval',
-      input: { prompt: 'Approve startup task.' },
+      input: { summary: '${{ input.prepare.outcome }}' },
       next: { match: '${{ output.approval }}', cases: { approved: 'prepare', rejected: 'done' } },
     },
     ...approvalFirstWorkflow.steps,
@@ -564,10 +516,10 @@ test('runner: startup prompt target rejects match-cases with worker and terminal
   const result = await runRunner(['next', '--run-id', runId, '--workflow', workflowPath, '--user-prompt', 'Prompt must not be dropped.']);
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /cannot determine stable startup user prompt target: workflow step 'gate' has a match\/cases branch with no worker target/);
+  assert.match(result.stderr, /input\.summary expression .* has no schema-covered path|input\.summary selector producer 'prepare' is not upstream/);
 });
 
-test('runner: startup prompt target rejects a selected match-cases branch that no longer renders the target', async () => {
+test('runner: typed approval rejects an unavailable summary selector before startup prompt selection', async () => {
   const { runId, runDir } = await runCase('user-prompt-match-selected-target-missing');
   const workflowPath = path.join(tempDir, 'user-prompt-match-selected-target-missing.json');
   const approvalFirstWorkflow = structuredClone(workflowDoc);
@@ -576,25 +528,43 @@ test('runner: startup prompt target rejects a selected match-cases branch that n
     gate: {
       name: 'Gate',
       kind: 'approval',
-      input: { prompt: 'Choose startup route.' },
-      next: { match: '${{ output.choice }}', cases: { approved: 'prepare', retry: 'prepare' } },
+      input: { summary: '${{ input.prepare.outcome }}' },
+      next: { match: '${{ output.approval }}', cases: { approved: 'prepare', rejected: 'prepare' } },
     },
     ...approvalFirstWorkflow.steps,
   };
   writeJson(workflowPath, approvalFirstWorkflow);
 
-  const initial = await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath, '--user-prompt', 'Prompt must reach prepare.'], 'next stable match-cases');
-  assert.equal(initial.baton.user_prompt_target, 'prepare');
-
-  const approvalOutput = path.join(runDir, 'gate-output.json');
-  writeJson(approvalOutput, { choice: 'approved' });
-  await writeOutputFile({ runId, runDir, workflowPath, stepId: 'gate', filePath: approvalOutput, label: 'write selected target missing output' });
-  approvalFirstWorkflow.steps.gate.next = { match: '${{ output.choice }}', cases: { approved: 'done', retry: 'prepare' } };
-  writeJson(workflowPath, approvalFirstWorkflow);
-  const result = await runRunner(['continue', '--run-id', runId, '--workflow', workflowPath]);
-
+  const result = await runRunner(['next', '--run-id', runId, '--workflow', workflowPath, '--user-prompt', 'Prompt must reach prepare.']);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /startup user prompt target 'prepare' is not renderable in the current workflow response/);
+  assert.match(result.stderr, /input\.summary expression .* has no schema-covered path|input\.summary selector producer 'prepare' is not upstream/);
+});
+
+test('runner: typed approval requires runner-owned output.approval routing', async () => {
+  const { runId } = await runCase('approval-runner-owned-routing');
+  const workflowPath = path.join(tempDir, 'approval-runner-owned-routing.json');
+  const schemaPath = path.join(tempDir, 'approval-runner-owned-routing.schema.json');
+  writeJson(schemaPath, {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome'],
+    properties: { outcome: { type: 'string' } },
+    additionalProperties: true,
+  });
+  const workflow = structuredClone(workflowDoc);
+  workflow.steps.prepare.output.schema = path.basename(schemaPath);
+  workflow.steps.prepare.next = 'gate';
+  workflow.steps.gate = {
+    name: 'Gate',
+    kind: 'approval',
+    input: { summary: '${{ input.prepare.outcome }}' },
+    next: { match: '${{ output.choice }}', cases: { approved: 'done', rejected: 'prepare' } },
+  };
+  writeJson(workflowPath, workflow);
+
+  const result = await runRunner(['next', '--run-id', runId, '--workflow', workflowPath]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /approval next must match \$\{\{ output\.approval \}\} with approved and rejected cases/);
 });
 
 test('runner: startup validation rejects legacy array next before prompt selection', async () => {
@@ -606,7 +576,7 @@ test('runner: startup validation rejects legacy array next before prompt selecti
     choose_path: {
       name: 'Choose path',
       kind: 'approval',
-      input: { prompt: 'Ask whether to fan out.' },
+      input: { summary: '${{ input.branch_a.outcome }}' },
       next: ['branch_a', '${{ output.extra_branch }}'],
     },
     branch_a: approvalWorkflow.steps.branch_a,

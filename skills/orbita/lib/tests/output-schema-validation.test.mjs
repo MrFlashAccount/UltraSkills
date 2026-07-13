@@ -9,6 +9,7 @@ import { SchemaValidationError } from '../../../../shared/scripts/schema-validat
 import { validateAgainstOutputSchema as validateLoadedOutputSchema } from '../runtime/output/output-schema-validation.mjs';
 import { loadWorkflowResources } from '../persistence/workflow-resources/runtime-reader.mjs';
 import { artifactPathBoundaryErrors } from '../persistence/workflow-resources/artifact-path-boundaries.mjs';
+import { validateApprovalDecision } from '../runtime/approval-contract.mjs';
 import { validateWorkflowFile } from './helpers/orbita-production-api.mjs';
 import { runWorkflowRuntimeApi } from './helpers/workflow-runtime-api-client.mjs';
 
@@ -38,9 +39,10 @@ const workflowDoc = {
       },
       consumer_step: {
         name: 'Consumer step',
-        kind: 'approval',
+        kind: 'worker',
         input: { prompt: 'Use prior worker output.' },
-        next: { match: '${{ output.approval }}', cases: { approved: 'done' } },
+        output: { template: 'output.md' },
+        next: 'done',
       },
       done: { name: 'Done', kind: 'done' },
     },
@@ -334,54 +336,25 @@ test('output.schema: valid structured output passes and is stored by step id', (
 });
 
 
-test('output.schema: approval output validates normalized user answer and is stored by step id', () => {
-  const schemaPath = writeJson('approval-choice.schema.json', {
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    type: 'object',
-    required: ['choice'],
-    properties: {
-      choice: { enum: ['ship', 'revise'] },
-      note: { type: 'string' },
-    },
-    additionalProperties: false,
-  });
-  const doc = structuredClone(workflowDoc);
-  doc.start = 'consumer_step';
-  doc.steps.consumer_step.input = { prompt: 'Capture normalized approval answer.' };
-  doc.steps.consumer_step.output = { schema: path.basename(schemaPath) };
-  doc.steps.consumer_step.next = { match: '${{ output.choice }}', cases: { ship: 'done', revise: 'worker_step' } };
-
-  const response = runApply('output-schema-approval-valid-stored', baton({ cursor: 'consumer_step' }), {
-    choice: 'ship',
-    note: 'Approved by user.',
-  }, true, doc);
-
-  assert.equal(response.baton.cursor, 'done');
-  assert.deepEqual(response.baton.state.consumer_step, { choice: 'ship', note: 'Approved by user.' });
+test('approval contract: closed decision accepts only approved/rejected with bounded optional feedback', () => {
+  assert.deepEqual(validateApprovalDecision({ approval: 'approved' }), { approval: 'approved' });
+  assert.deepEqual(
+    validateApprovalDecision({ approval: 'rejected', feedback: 'Revise the contract.' }),
+    { approval: 'rejected', feedback: 'Revise the contract.' },
+  );
+  assert.throws(() => validateApprovalDecision({ choice: 'ship' }), /choice is not allowed/);
+  assert.throws(() => validateApprovalDecision({ approval: 'maybe' }), /allowed values/);
+  assert.throws(() => validateApprovalDecision({ approval: 'rejected', feedback: '   ' }), /non-blank/);
+  assert.throws(() => validateApprovalDecision({ approval: 'rejected', feedback: 'x'.repeat(4001) }), /more than 4000/);
+  assert.throws(() => validateApprovalDecision({ approval: 'approved', artifacts: [] }), /artifacts is not allowed/);
+  assert.throws(() => validateApprovalDecision({ approval: 'approved', results: [] }), /results is not allowed/);
 });
 
-test('output.schema: invalid approval output retries the approval step with schema feedback', () => {
-  const schemaPath = writeJson('approval-retry.schema.json', {
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    type: 'object',
-    required: ['approval'],
-    properties: {
-      approval: { const: 'approved' },
-    },
-    additionalProperties: false,
-  });
-  const doc = structuredClone(workflowDoc);
-  doc.start = 'consumer_step';
-  doc.steps.consumer_step.output = { schema: path.basename(schemaPath) };
-  doc.steps.consumer_step.next.cases = { approved: 'done' };
-
-  const retry = runApply('output-schema-approval-invalid-retry', baton({ cursor: 'consumer_step' }), { approval: 'rejected' }, true, doc);
-
-  assert.equal(retry.baton.cursor, 'consumer_step');
-  assert.equal(retry.steps[0].action, 'wait_for_approval');
-  assert.equal(retry.baton.state.attempts['consumer_step:output.schema'], 1);
-  assert.match(retry.steps[0].step.input.prompt, /Previous output failed output\.schema validation/);
-  assert.match(retry.steps[0].step.input.prompt, /must be equal to constant/);
+test('approval contract: invalid decisions fail directly instead of entering worker schema retry', () => {
+  assert.throws(
+    () => validateApprovalDecision({ approval: 'blocked' }),
+    /approval output failed schema validation/,
+  );
 });
 
 
@@ -482,19 +455,21 @@ test('output.schema: structured step output is available by step id in downstrea
   assert.equal(applyResponse.baton.cursor, 'consumer_step');
   mkdirSync(path.join(tempDir, 'worker_step', 'artifacts'), { recursive: true });
   writeFileSync(path.join(tempDir, 'worker_step', 'artifacts', 'packet.md'), 'Structured prompt input artifact body.\n');
-  const batonPath = writeJson('output-schema-structured-project-baton.json', applyResponse.baton);
   const workflowPath = writeJson('output-schema-structured-project-workflow.json', doc);
-  const renderResponse = runWorkflowCommand('output-schema-structured-project-render', {
-    mode: 'render',
+  const renderResponse = renderPromptWithResources({
     workflowPath,
-    batonPath,
+    workflow: doc,
+    baton: applyResponse.baton,
+    stepId: 'consumer_step',
+    step: doc.steps.consumer_step,
+    repositoryRoot: tempDir,
   });
 
-  assert.doesNotMatch(renderResponse.steps[0].compiledPrompt.prompt, /## Prompt input context/);
-  assert.match(renderResponse.steps[0].compiledPrompt.prompt, /Use prior worker payload:/);
-  assert.match(renderResponse.steps[0].compiledPrompt.prompt, /"ok":true/);
-  assert.doesNotMatch(renderResponse.steps[0].compiledPrompt.prompt, /Field notes for prompt input step outputs/);
-  assert.doesNotMatch(renderResponse.steps[0].compiledPrompt.prompt, /\[object Object\]/);
+  assert.doesNotMatch(renderResponse.prompt, /## Prompt input context/);
+  assert.match(renderResponse.prompt, /Use prior worker payload:/);
+  assert.match(renderResponse.prompt, /"ok":true/);
+  assert.doesNotMatch(renderResponse.prompt, /Field notes for prompt input step outputs/);
+  assert.doesNotMatch(renderResponse.prompt, /\[object Object\]/);
 });
 
 test('output.schema: inline prompt input structured output omits automatic schema field notes', () => {

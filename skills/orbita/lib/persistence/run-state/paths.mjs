@@ -228,22 +228,33 @@ function workflowStart(workflowDoc, workflowPath) {
   return start;
 }
 
-export async function ensureRunFiles(paths, { userPrompt, userPromptTarget } = {}) {
+/** Creates only the managed directory shell; it never creates durable run-state files. */
+export async function ensureRunDirectories(paths) {
   await createManagedDirectory(paths.runsRoot, 'workflow runs root');
   await createManagedDirectory(paths.runDir, 'workflow run directory');
   await createManagedDirectory(paths.runnerDir, 'workflow runner directory');
   await createManagedDirectory(paths.instructionsDir, 'workflow runner instructions directory');
+}
+
+/** Builds the first baton in memory so consumers can render before persistence begins. */
+export function initialRunBaton(paths, { userPrompt, userPromptTarget } = {}) {
+  const workflowDoc = readWorkflowDocument(paths.workflowPath, 'workflow');
+  const start = workflowStart(workflowDoc, paths.workflowPath);
+  const baton = { cursor: start, status: 'running', state: { artifacts: [], results: [] } };
+  if (typeof userPrompt === 'string') {
+    baton.user_prompt = userPrompt;
+    if (typeof userPromptTarget === 'string') baton.user_prompt_target = userPromptTarget;
+  }
+  return baton;
+}
+
+export async function ensureRunFiles(paths, { userPrompt, userPromptTarget } = {}) {
+  await ensureRunDirectories(paths);
 
   const batonExists = await exists(paths.batonPath);
   if (batonExists) await assertManagedRunStateFile(paths.batonPath, 'workflow baton');
   if (!batonExists) {
-    const workflowDoc = readWorkflowDocument(paths.workflowPath, 'workflow');
-    const start = workflowStart(workflowDoc, paths.workflowPath);
-    const initialBaton = { cursor: start, status: 'running', state: { artifacts: [], results: [] } };
-    if (typeof userPrompt === 'string') {
-      initialBaton.user_prompt = userPrompt;
-      if (typeof userPromptTarget === 'string') initialBaton.user_prompt_target = userPromptTarget;
-    }
+    const initialBaton = initialRunBaton(paths, { userPrompt, userPromptTarget });
     await writeFile(paths.batonPath, `${JSON.stringify(initialBaton, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
   }
 

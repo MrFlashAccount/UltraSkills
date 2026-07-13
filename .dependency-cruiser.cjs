@@ -2,6 +2,40 @@
 module.exports = {
   forbidden: [
     {
+      name: 'orbita-host-action-plan-stays-pure',
+      severity: 'error',
+      comment: 'Effective host-action selection is a pure runtime projection over executable entries and baton control state.',
+      from: { path: '^skills/orbita/lib/runtime/host-action-plan[.]mjs$' },
+      to: {
+        path: '^(?:skills/orbita/lib/(?:persistence|entrypoints|entities/Template)/|skills/orbita/lib/runner/runner-command-builder[.]mjs$|(?:node:)?(?:fs|path|url|util)(?:/|$))',
+      },
+    },
+    {
+      name: 'orbita-approval-contract-stays-runtime-owned',
+      severity: 'error',
+      comment: 'Approval selection/rendering owns no Template, output-schema loader, persistence, entrypoint, or Node IO dependency.',
+      from: { path: '^skills/orbita/lib/runtime/approval-contract[.]mjs$' },
+      to: {
+        path: '^(?:skills/orbita/lib/(?:persistence|entrypoints|entities/Template)/|skills/orbita/lib/runtime/output/output-schema-validation[.]mjs$|(?:node:)?(?:fs|path|url|util)(?:/|$))',
+      },
+    },
+    {
+      name: 'orbita-entrypoints-not-to-renderers',
+      severity: 'error',
+      comment: 'All production entrypoints dispatch public runner boundaries and never select runtime renderers directly.',
+      from: { path: '^skills/orbita/lib/entrypoints/' },
+      to: { path: '^skills/orbita/lib/runtime/(?:render-worker-instructions|approval-contract|host-action-plan)[.]mjs$' },
+    },
+    {
+      name: 'orbita-stop-terminal-owner-not-to-consumer-renderers',
+      severity: 'error',
+      comment: 'The host response owner projects stop and terminal actions without Template or workflow output-schema loaders.',
+      from: { path: '^skills/orbita/lib/runner/host-requests[.]mjs$' },
+      to: {
+        path: '^(?:skills/orbita/lib/entities/Template/|skills/orbita/lib/runtime/render-worker-instructions[.]mjs$|skills/orbita/lib/(?:runtime/output/output-schema-validation|persistence/workflow-resources/output-schema-loader)[.]mjs$)',
+      },
+    },
+    {
       name: 'orbita-entrypoints-not-to-runtime-internals',
       severity: 'error',
       comment: 'Entrypoints must call use-case APIs instead of reaching into runtime internals.',

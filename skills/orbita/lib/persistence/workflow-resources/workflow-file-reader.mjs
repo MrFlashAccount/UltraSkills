@@ -16,6 +16,7 @@ export function readOutputSchemas({ workflow, workflowPath, repositoryRoot = def
   const doc = typeof workflow?.toJSON === 'function' ? workflow.toJSON() : workflow;
   const outputSchemas = new Map();
   for (const [stepId, step] of Object.entries(doc.steps ?? {})) {
+    if (step.kind === 'approval') continue;
     const schemaEntries = [
       [stepId, step.output?.schema],
       [`${stepId}.worker`, step.worker?.output?.schema],

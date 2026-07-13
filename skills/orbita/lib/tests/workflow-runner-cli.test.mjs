@@ -130,12 +130,6 @@ function workerOutput(summary) {
   return { outcome: 'ready', results: [{ type: 'check', summary }] };
 }
 
-function terminalResponseFromOrchestratorInstruction(instruction) {
-  const match = instruction.match(/\nStop now\. Do not call another runner command\. Terminal response JSON: (.+)\nReport /);
-  assert.ok(match, instruction);
-  return JSON.parse(match[1]);
-}
-
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
 
 test('runner CLI: generated load-instructions command works from another cwd', async () => {
@@ -252,6 +246,8 @@ test('runner CLI: continue accepts bind-agent and orchestrator debug flags', asy
   const response = JSON.parse(continued.stdout);
   assert.equal(response.status, 'done');
   assert.deepEqual(response.baton.workerBindings, { prepare: 'cli-worker-1' });
+  assert.equal(Object.hasOwn(response, 'requests'), false);
+  assert.equal((continued.stdout.match(/"baton"\s*:/g) ?? []).length, 1);
   const history = readFileSync(path.join(runDir, 'history.md'), 'utf8');
   assert.match(history, /source: workflow-runner-continue-bind-agent/);
   assert.match(history, /cli combined continue/);
@@ -273,9 +269,8 @@ test('runner CLI: continue --only-instructions prints terminal instruction text'
   assert.equal(continued.status, 0, continued.stderr);
   assert.throws(() => JSON.parse(continued.stdout));
   assert.match(continued.stdout, /^Supersedes all previous workflow-runner stdout\./);
-  assert.match(continued.stdout, /Stop now/);
-  const terminalResponse = terminalResponseFromOrchestratorInstruction(continued.stdout);
-  assert.equal(terminalResponse.status, 'done');
+  assert.match(continued.stdout, /Stop now\. The workflow run is complete\./);
+  assert.doesNotMatch(continued.stdout, /Terminal response JSON|\"baton\"|workflow-runner\.mjs' continue/);
 });
 
 test('runner CLI: write-output rejects --only-instructions', async () => {

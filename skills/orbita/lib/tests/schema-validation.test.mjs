@@ -210,6 +210,27 @@ test('workflow schema accepts prompt arrays for multiline authoring', () => {
   })));
 });
 
+test('workflow schema gives direct migration guidance for removed approval authoring', () => {
+  const legacyPrompt = minimalWorkflowDoc();
+  legacyPrompt.steps.worker_step = {
+    name: 'Approval',
+    kind: 'approval',
+    input: { prompt: 'Approve this.' },
+    next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'done' } },
+  };
+  assert.throws(() => assertWorkflowSchema(legacyPrompt), /approval prompt\/template authoring was removed; use typed input\.summary/);
+
+  const legacyOutput = minimalWorkflowDoc();
+  legacyOutput.steps.worker_step = {
+    name: 'Approval',
+    kind: 'approval',
+    input: { summary: '${{ input.producer.summary }}' },
+    output: { schema: 'approval-output.json' },
+    next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'done' } },
+  };
+  assert.throws(() => assertWorkflowSchema(legacyOutput), /approval output\/schema authoring was removed; output is runner-owned/);
+});
+
 test('workflow schema accepts exact per-harness agent runtime profiles only with an explicit source agent', () => {
   const profile = { codex: { model: 'gpt-5.5', thinking_level: 'high' } };
   const worker = minimalWorkflowDoc();
@@ -376,6 +397,7 @@ test('runner host response schema enforces action-conditional reuse hint fields'
         id: 'approval_step',
         stepId: 'approval_step',
         action: 'wait_for_approval',
+        loadInstructionsCommand: 'bun workflow-runner.mjs instructions',
       },
     ],
   };
@@ -411,12 +433,24 @@ test('runner host response schema enforces action-conditional reuse hint fields'
       },
     ],
   };
+  const validDone = {
+    status: 'done',
+    orchestratorInstruction: 'Stop now. The workflow run is complete.',
+    baton: {
+      cursor: 'done',
+      status: 'done',
+      state: { artifacts: [], results: [] },
+    },
+  };
 
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validRunWorker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validStoppedRunWorker, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validApproval, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validResolveStop, { schemas: runtimeSchemas }).ok, true);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, validShardRunWorker, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, validDone, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, { ...validDone, requests: [] }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(runnerHostResponseSchema, { ...validRunWorker, requests: [] }, { schemas: runtimeSchemas }).ok, false);
   assert.equal(validateJsonSchema(runnerHostResponseSchema, {
     ...validRunWorker,
     requests: [{ ...validRunWorker.requests[0], preferredAgentId: undefined }],

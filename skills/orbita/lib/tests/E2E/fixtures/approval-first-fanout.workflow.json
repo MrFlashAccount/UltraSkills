@@ -1,16 +1,22 @@
 {
   "name": "fixture-approval-first-fanout",
   "version": 1,
-  "start": "intake_approval",
+  "start": "prepare",
   "done": "done",
   "steps": {
     "intake_approval": {
       "name": "Intake Approval",
       "kind": "approval",
       "input": {
-        "prompt": "Accept the startup request before worker execution."
+        "summary": "${{ input.prepare.outcome }}"
       },
-      "next": "prepare"
+      "next": {
+        "match": "${{ output.approval }}",
+        "cases": {
+          "approved": "implementation",
+          "rejected": "prepare"
+        }
+      }
     },
     "prepare": {
       "name": "Prepare",
@@ -22,7 +28,7 @@
         "template": "output.md",
         "schema": "schemas/routing-ready.schema.json"
       },
-      "next": "implementation"
+      "next": "intake_approval"
     },
     "implementation": {
       "name": "Implementation owner",
@@ -55,17 +61,13 @@
       "name": "Final Approval",
       "kind": "approval",
       "input": {
-        "prompt": [
-          "Approve final result.",
-          "",
-          "Implementation result:",
-          "${{ input.implementation.results }}"
-        ]
+        "summary": "${{ input.implementation.outcome }}"
       },
       "next": {
         "match": "${{ output.approval }}",
         "cases": {
-          "approved": "done"
+          "approved": "done",
+          "rejected": "implementation"
         }
       }
     },

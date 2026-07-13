@@ -119,13 +119,20 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
   assert.deepEqual(validate(valid), { ok: true, workflow: 'loop-policy-validation-fixture', steps: Object.keys(valid.steps).length });
 
   const schemaLessApprovalRoute = syntheticWorkflow((doc) => {
+    doc.start = 'approval_source';
     doc.steps.producer.next = 'consumer';
     doc.steps.consumer.next = { match: '${{ output.outcome }}', cases: { ready: 'producer', limit_reached: 'limit_reached' } };
     doc.steps.untyped_approval = {
       name: 'Untyped Approval',
       kind: 'approval',
-      input: {},
+      input: { summary: '${{ input.approval_source.outcome }}' },
       next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'limit_reached' } },
+    };
+    doc.steps.approval_source = {
+      name: 'Approval Source',
+      kind: 'worker',
+      output: outputContract(),
+      next: 'untyped_approval',
     };
     doc.loopPolicies = {
       producer_consumer: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: '${{ output.limit_target }}' },

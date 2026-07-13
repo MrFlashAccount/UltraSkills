@@ -80,15 +80,12 @@ export function prepareWorkflowPromptContext({ baton, stepId, step, resources } 
   const promptInput = { value: selectedState.value, keys: selectedState.selectedKeys };
   const inputRole = readInputRole({ input, resources });
   const promptInputArtifacts = promptInputArtifactItems(promptInput, resources, artifactSelectors);
-  const approvalAttachments = step?.kind === 'approval' ? promptInputArtifacts : [];
-  const artifactRequiredReads = step?.kind === 'approval' ? [] : promptInputArtifacts;
   return {
     promptInput,
     requiredReads: [
       ...inputRole.readItems,
-      ...artifactRequiredReads,
+      ...promptInputArtifacts,
     ],
-    approvalAttachments,
     roleMetadataPaths: inputRole.metadataPaths,
   };
 }

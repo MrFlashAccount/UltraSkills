@@ -75,20 +75,7 @@ function renderPromptValue(value) {
   return fencedJson(value).trimEnd();
 }
 
-function renderPromptValueWithAttachments(value, expression, attachedArtifactStepIds) {
-  if (expression.root !== 'input' || !attachedArtifactStepIds?.has(expression.path[0])) {
-    return renderPromptValue(value);
-  }
-  if (expression.path[1] === 'artifacts' && Array.isArray(value) && value.length > 0) {
-    return 'See Approval attachments above.';
-  }
-  if (expression.path.length === 1 && value && typeof value === 'object' && !Array.isArray(value) && Array.isArray(value.artifacts) && value.artifacts.length > 0) {
-    return renderPromptValue({ ...value, artifacts: '[attached above]' });
-  }
-  return renderPromptValue(value);
-}
-
-export function interpolatePromptExpressions(prompt, inputContext = {}, { attachedArtifactStepIds } = {}) {
+export function interpolatePromptExpressions(prompt, inputContext = {}) {
   if (typeof prompt !== 'string' || !prompt.includes('${{')) return prompt;
 
   assertPromptInterpolationWellFormed(prompt);
@@ -100,6 +87,6 @@ export function interpolatePromptExpressions(prompt, inputContext = {}, { attach
       if (interpolation.hasDefault) return renderPromptValue(interpolation.defaultValue);
       throw new WorkflowRuntimeError(`workflow prompt render failed: ${missingPathMessage(interpolation.expression, result.missingPath)}`);
     }
-    return renderPromptValueWithAttachments(result.value, interpolation.expression, attachedArtifactStepIds);
+    return renderPromptValue(result.value);
   });
 }

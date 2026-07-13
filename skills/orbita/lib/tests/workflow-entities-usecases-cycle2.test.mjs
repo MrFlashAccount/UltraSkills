@@ -307,15 +307,40 @@ test('applyWorkflowOutput throws after the final output schema retry attempt is 
   assertWorkflowError(() => applyWorkflowOutput({ workflowDoc: workflowDoc(), batonDoc: baton, resources: { outputSchemas }, outputValue: { outcome: 42, route: 'direct', targets: ['branch_a'] } }), /output schema validation failed for step 'producer' after 3 attempts/);
 });
 
-test('applyWorkflowOutput validates generic approval output shape when no approval schema is declared', () => {
+test('applyWorkflowOutput validates the closed runner-owned approval output shape', () => {
   const doc = workflowDoc((workflow) => {
-    workflow.start = 'approve';
-    workflow.steps.approve = { name: 'Approve', kind: 'approval', next: 'done' };
+    workflow.steps.producer.next = { match: '${{ output.route }}', cases: { direct: 'approve', split: 'approve' } };
+    workflow.steps.approve = {
+      name: 'Approve',
+      kind: 'approval',
+      input: { summary: '${{ input.producer.outcome }}' },
+      next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'done' } },
+    };
     return workflow;
   });
+  const approvalBaton = batonDoc({ cursor: 'approve', state: { artifacts: [], results: [], producer: { outcome: 'ready' } } });
 
-  assertWorkflowError(() => applyWorkflowOutput({ workflowDoc: doc, batonDoc: batonDoc({ cursor: 'approve' }), resources: { outputSchemas }, outputValue: { approval: 'approved', artifacts: {} } }), /approval output failed schema validation: \/artifacts must be array/);
-  assertWorkflowError(() => applyWorkflowOutput({ workflowDoc: doc, batonDoc: batonDoc({ cursor: 'approve' }), resources: { outputSchemas }, outputValue: { approval: 'approved', artifacts: [{ id: 'packet', content_type: 'text/plain', foo: 'legacy leak' }] } }), /approval output failed schema validation: \/artifacts\/0\/foo is not allowed/);
+  assertWorkflowError(() => applyWorkflowOutput({ workflowDoc: doc, batonDoc: approvalBaton, resources: { outputSchemas }, outputValue: { approval: 'approved', artifacts: {} } }), /approval output failed schema validation: \/artifacts is not allowed/);
+  assertWorkflowError(() => applyWorkflowOutput({ workflowDoc: doc, batonDoc: approvalBaton, resources: { outputSchemas }, outputValue: { approval: 'approved', foo: 'legacy leak' } }), /approval output failed schema validation: \/foo is not allowed/);
+});
+
+test('approval onReject preserves a dynamic approved route without advancing rejected decisions', () => {
+  const doc = workflowDoc((workflow) => {
+    workflow.steps.producer.next = 'approve';
+    workflow.steps.approve = {
+      name: 'Approve',
+      kind: 'approval',
+      input: { summary: '${{ input.producer.outcome }}' },
+      next: '${{ input.producer.next_step }}',
+      onReject: 'producer',
+    };
+    return workflow;
+  });
+  const step = new Step({ id: 'approve', step: doc.steps.approve });
+  const baton = batonDoc({ cursor: 'approve', state: { artifacts: [], results: [], producer: { outcome: 'ready', next_step: 'done' } } });
+
+  assert.equal(step.resolveConcreteTargets(baton, doc, { approval: 'approved' }).targetStepId, 'done');
+  assert.equal(step.resolveConcreteTargets(baton, doc, { approval: 'rejected', feedback: 'Revise it.' }).targetStepId, 'producer');
 });
 
 test('applyWorkflowOutput rejects no-schema worker artifacts with fields outside the central artifact contract', () => {

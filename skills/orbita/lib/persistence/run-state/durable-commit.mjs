@@ -2,7 +2,11 @@ import { constants } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { access, open, readFile, rm, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { assertPersistedRunState } from './persisted-state-schema.mjs';
+import {
+  PERSISTED_RUN_STATE_TOPOLOGY,
+  PERSISTED_RUN_STATE_VERSION,
+  assertPersistedRunState,
+} from './persisted-state-schema.mjs';
 import {
   attachPersistedRunStateFileSnapshot,
   persistedRunStateFileSnapshot,
@@ -31,6 +35,24 @@ async function fileSizeIfExists(pathname) {
 
 function jsonFileContent(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+/** Supplies the absent-file snapshot used by the first atomic durable commit. */
+function initialPersistedRunState(paths, baton) {
+  return attachPersistedRunStateFileSnapshot({
+    version: PERSISTED_RUN_STATE_VERSION,
+    storageTopology: PERSISTED_RUN_STATE_TOPOLOGY,
+    run: { runDir: paths.runDir, workflowPath: paths.workflowPath, repositoryRoot: paths.repositoryRoot },
+    baton,
+    instructions: [],
+    history: { mode: 'file-ref', path: paths.historyPath },
+    currentRequests: undefined,
+    commit: undefined,
+  }, paths, {
+    history: { exists: false, content: undefined, size: 0 },
+    baton: { exists: false, content: undefined },
+    currentRequests: { exists: false, content: undefined },
+  });
 }
 
 function historyEntry({ source, baton, requests, steps, output, decision, details }, { transactionId } = {}) {
@@ -303,8 +325,13 @@ export async function commitDurableRunState(paths, { baton, history, currentRequ
   const recovery = await recoverDurableCommitState(paths, { includeHistoryText });
   const current = recovery.state
     ?? (currentState === undefined
-      ? await readPersistedRunState(paths, { includeHistoryText })
+      ? (await exists(paths.batonPath)
+        ? await readPersistedRunState(paths, { includeHistoryText })
+        : initialPersistedRunState(paths, baton))
       : assertCurrentStateForPaths(currentState, paths));
+  if (!(await exists(paths.batonPath)) && !writeBaton) {
+    throw new Error('initial durable workflow commit must write the baton');
+  }
   const currentFiles = persistedRunStateFileSnapshot(current);
   const historyBaseSize = currentFiles?.history?.size ?? await fileSizeIfExists(paths.historyPath);
   const historyBaseExists = currentFiles?.history?.exists ?? await exists(paths.historyPath);
@@ -313,7 +340,7 @@ export async function commitDurableRunState(paths, { baton, history, currentRequ
   const currentRequestsWorkflowSignature = currentRequests !== undefined
     ? await durableFileSignature(paths.workflowPath)
     : undefined;
-  const currentRequestsBatonSignature = currentRequests !== undefined
+  const currentRequestsBatonSignature = currentRequests !== undefined && await exists(paths.batonPath)
     ? await durableFileSignature(paths.batonPath)
     : undefined;
   const commit = {
