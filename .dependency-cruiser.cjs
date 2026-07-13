@@ -125,6 +125,64 @@ module.exports = {
         pathNot: '^skills/orbita/lib/dtos/$1(?:[.]mjs$|/)',
       },
     },
+    {
+      name: 'orbita-dashboard-contracts-are-browser-safe',
+      severity: 'error',
+      comment: 'Dashboard contracts are the browser-safe schema boundary and must not depend on implementation or Node-only modules.',
+      from: { path: '^skills/orbita/lib/dashboard/contracts/' },
+      to: {
+        path: '^(?:skills/orbita/lib/dashboard/(?:projection|observer|ui)/|skills/orbita/lib/(?:persistence|entrypoints|use-cases|entities)/|(?:node:)?(?:fs|path|http|https|os|util|url|stream|events)(?:/|$))',
+      },
+    },
+    {
+      name: 'orbita-dashboard-projection-stays-pure-server-policy',
+      severity: 'error',
+      comment: 'Projection owns classification and disclosure policy, not IO, transport, observer lifecycle, runner control, or browser rendering.',
+      from: { path: '^skills/orbita/lib/dashboard/projection/' },
+      to: {
+        path: '^(?:skills/orbita/lib/dashboard/(?:observer|ui)/|skills/orbita/lib/(?:persistence|entrypoints|use-cases)/|(?:node:)?(?:fs|path|http|https|os|util|url|stream|events)(?:/|$))',
+      },
+    },
+    {
+      name: 'orbita-dashboard-observer-not-to-ui-or-control',
+      severity: 'error',
+      comment: 'Observer may read durable state but must not depend on UI, entrypoints, runner mutation/control, writers, locks, or lease ownership.',
+      from: { path: '^skills/orbita/lib/dashboard/observer/' },
+      to: {
+        path: '^(?:skills/orbita/lib/dashboard/ui/|skills/orbita/lib/entrypoints/|skills/orbita/lib/use-cases/(?:runtime/)?(?:Continue|Next|WriteOutput|Claim|Heartbeat|Move|Repair|Retry)|skills/orbita/lib/persistence/run-state/(?:PersistedRunStateWriter|lease-authority|lock-metadata|lock)[.]mjs$)',
+      },
+    },
+    {
+      name: 'orbita-dashboard-server-composition-is-the-observer-seam',
+      severity: 'error',
+      comment: 'Dashboard server helpers and transport may reach observer modules only through dashboard-composition.server.ts.',
+      from: {
+        path: '^skills/orbita/lib/dashboard/ui/src/server/',
+        pathNot: '^skills/orbita/lib/dashboard/ui/src/server/dashboard-composition[.]server[.]ts$',
+      },
+      to: { path: '^skills/orbita/lib/dashboard/observer/' },
+    },
+    {
+      name: 'orbita-dashboard-api-routes-use-server-composition-only',
+      severity: 'error',
+      comment: 'Versioned Start API routes frame transport and may not reach observer, projection, or persistence directly.',
+      from: { path: '^skills/orbita/lib/dashboard/ui/src/routes/api[.]dashboard[.]v1[.]' },
+      to: {
+        path: '^(?:skills/orbita/lib/dashboard/(?:observer|projection)/|skills/orbita/lib/persistence/)',
+      },
+    },
+    {
+      name: 'orbita-dashboard-browser-not-to-server',
+      severity: 'error',
+      comment: 'Client-reachable dashboard modules may import browser-safe contracts, never server, projection, observer, persistence, runner internals, or entrypoints.',
+      from: {
+        path: '^skills/orbita/lib/dashboard/ui/src/',
+        pathNot: '^skills/orbita/lib/dashboard/ui/src/(?:server/|routes/api[.]dashboard[.]v1[.])',
+      },
+      to: {
+        path: '^(?:skills/orbita/lib/dashboard/(?:observer|projection)/|skills/orbita/lib/dashboard/ui/src/server/|skills/orbita/lib/(?:persistence|entrypoints|use-cases|entities)/|.*[.]server[.](?:ts|tsx)$|(?:node:)?(?:fs|path|http|https|os|util|url|stream|events)(?:/|$))',
+      },
+    },
   ],
   options: {
     doNotFollow: {
@@ -139,7 +197,7 @@ module.exports = {
       ],
     },
     enhancedResolveOptions: {
-      extensions: ['.mjs', '.js', '.json'],
+      extensions: ['.ts', '.tsx', '.mjs', '.js', '.json'],
     },
     progress: { type: 'none' },
   },

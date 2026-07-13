@@ -16,6 +16,14 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      - name: Check dashboard formatting
+        run: bun run dashboard:format:check
+      - name: Lint dashboard
+        run: bun run dashboard:lint
+      - name: Check dashboard types
+        run: bun run dashboard:typecheck
+      - name: Build dashboard with React Compiler
+        run: bun run dashboard:build
       - name: Validate workflows and generated artifacts
         run: |
           bun run depcruise:check
