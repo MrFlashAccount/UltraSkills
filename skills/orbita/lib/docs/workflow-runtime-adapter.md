@@ -28,9 +28,11 @@ Each policy declares one `entry` and one `boundary` inside its validated
 SCC/self-loop region. `maxIterations` counts completed traversals from that
 entry to that boundary, not individual internal edges. It does not count
 malformed output.schema retry attempts. When the boundary selects the repeat
-target after the configured number of traversals has completed, the runner uses
-the boundary's already-declared external `onLimit` target. It never manufactures
-an edge outside the workflow's `next` graph. Any step in the loop may still
+target after the configured number of traversals has completed, the runner
+resolves `onLimit` with the same static, dynamic-expression, or `match/cases`
+transition semantics and output/input context as `next`. Every possible result
+must be an external target already declared by the boundary's `next`; runtime
+never manufactures an edge outside that graph. Any step in the loop may still
 select one of its declared external targets for a normal early exit; an
 incomplete traversal does not advance the counter.
 

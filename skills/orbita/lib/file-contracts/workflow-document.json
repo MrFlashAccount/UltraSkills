@@ -545,8 +545,8 @@
           "minimum": 1
         },
         "onLimit": {
-          "type": "string",
-          "minLength": 1
+          "description": "A transition descriptor with the same syntax and output/input context as step.next. Every validation-proven target must already be a declared external target of the boundary step.",
+          "$ref": "#/$defs/next"
         }
       },
       "additionalProperties": false

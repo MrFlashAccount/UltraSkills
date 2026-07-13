@@ -598,8 +598,9 @@ The intended shape is static-graph first:
 - runtime increments progress once when a complete entry-to-boundary traversal
   finishes, not for each internal edge;
 - after `maxIterations` complete traversals, a selected boundary-to-entry repeat
-  uses `onLimit`, which must already be a declared external target of the
-  boundary step; runtime never creates a synthetic workflow edge;
+  resolves `onLimit` with the same transition descriptor semantics and context
+  as `next`; every possible result must already be a declared external target
+  of the boundary step, so runtime never creates a synthetic workflow edge;
 - any declared external target selected before the boundary repeat remains a
   normal early exit; an incomplete traversal does not advance progress;
 - baton stores only loop progress counters in a loop-specific namespace, never

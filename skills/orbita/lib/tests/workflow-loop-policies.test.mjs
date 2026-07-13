@@ -6,10 +6,11 @@ import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
 const routeSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   type: 'object',
-  required: ['outcome', 'route', 'next_steps'],
+  required: ['outcome', 'route', 'next_steps', 'limit_target'],
   properties: {
     outcome: { enum: ['ready', 'limit_reached'] },
     route: { enum: ['review', 'limit_reached'] },
+    limit_target: { const: 'limit_reached' },
     next_steps: {
       type: 'array',
       minItems: 1,
@@ -101,7 +102,16 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
     doc.steps.producer.next = { match: '${{ output.outcome }}', cases: { ready: 'consumer', limit_reached: 'done' } };
     doc.steps.consumer.next = { match: '${{ output.outcome }}', cases: { ready: 'producer', limit_reached: 'limit_reached' } };
     doc.loopPolicies = {
-      producer_consumer: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: 'limit_reached' },
+      producer_consumer: {
+        steps: ['producer', 'consumer'],
+        entry: 'producer',
+        boundary: 'consumer',
+        maxIterations: 2,
+        onLimit: {
+          match: '${{ output.outcome }}',
+          cases: { ready: 'limit_reached', limit_reached: 'limit_reached' },
+        },
+      },
     };
     return doc;
   });
@@ -117,7 +127,7 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
       next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'limit_reached' } },
     };
     doc.loopPolicies = {
-      producer_consumer: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: 'limit_reached' },
+      producer_consumer: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: '${{ output.limit_target }}' },
     };
     return doc;
   });

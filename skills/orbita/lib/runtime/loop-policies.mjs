@@ -106,8 +106,12 @@ function reachesAny(adjacency, start, targets) {
   return false;
 }
 
-function retargetSingleTransition(transition, targetStepId) {
-  return { ...transition, targetStepId };
+function resolveOnLimitTransition(policy, transition, resolver) {
+  if (typeof resolver !== 'function') {
+    throw new WorkflowRuntimeError('loop policy transition requires an onLimit resolver');
+  }
+  const resolved = resolver(policy.onLimit);
+  return { ...transition, targetStepId: resolved.targetStepId };
 }
 
 function policyEdges(edges, region) {
@@ -118,7 +122,18 @@ function policyEdges(edges, region) {
   };
 }
 
-export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow)) {
+function collectStaticOnLimitEdges(workflow) {
+  const edges = [];
+  for (const [policyId, policy] of Object.entries(workflow.loopPolicies ?? {})) {
+    const { targetSets } = transitionTargetsForDescriptor(normalizeTransitionNext(policy.onLimit));
+    for (const targets of targetSets) {
+      for (const target of targets) edges.push({ policyId, from: policy.boundary, to: target, fanout: targets.length > 1 });
+    }
+  }
+  return edges;
+}
+
+export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow), onLimitEdges = collectStaticOnLimitEdges(workflow)) {
   const policies = workflow.loopPolicies;
   if (policies === undefined) return;
   if (!policies || typeof policies !== 'object' || Array.isArray(policies)) fail('loopPolicies must be an object keyed by policy id');
@@ -134,9 +149,6 @@ export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow
       if (claimedSteps.has(stepId)) fail(`loopPolicy '${policyId}' overlaps with loopPolicy '${claimedSteps.get(stepId)}' at step '${stepId}'`);
       claimedSteps.set(stepId, policyId);
     }
-
-    if (!Object.hasOwn(workflow.steps, policy.onLimit)) fail(`loopPolicy '${policyId}' onLimit target not found: ${policy.onLimit}`);
-    if (steps.includes(policy.onLimit)) fail(`loopPolicy '${policyId}' onLimit target '${policy.onLimit}' stays inside the exhausted loop region`);
 
     const matches = regions.filter((region) => sameMembers(region, steps));
     if (matches.length !== 1) {
@@ -167,11 +179,20 @@ export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow
     if (ambiguousBoundaryRoute) {
       fail(`loopPolicy '${policyId}' boundary '${policy.boundary}' has ambiguous internal target '${ambiguousBoundaryRoute.to}'`);
     }
-    if (!external.some((edge) => edge.from === policy.boundary && edge.to === policy.onLimit)) {
-      fail(`loopPolicy '${policyId}' onLimit target '${policy.onLimit}' must be a declared external target of boundary '${policy.boundary}'`);
+    const policyLimitEdges = onLimitEdges.filter((edge) => edge.policyId === policyId);
+    if (policyLimitEdges.length === 0) {
+      fail(`loopPolicy '${policyId}' onLimit must resolve to at least one validation-proven target`);
     }
-    if (reachesAny(adjacency, policy.onLimit, region)) {
-      fail(`loopPolicy '${policyId}' onLimit target '${policy.onLimit}' routes back into the exhausted loop region`);
+    for (const limitEdge of policyLimitEdges) {
+      if (region.has(limitEdge.to)) {
+        fail(`loopPolicy '${policyId}' onLimit target '${limitEdge.to}' stays inside the exhausted loop region`);
+      }
+      if (!external.some((edge) => edge.from === policy.boundary && edge.to === limitEdge.to)) {
+        fail(`loopPolicy '${policyId}' onLimit target '${limitEdge.to}' must be a declared external target of boundary '${policy.boundary}'`);
+      }
+      if (reachesAny(adjacency, limitEdge.to, region)) {
+        fail(`loopPolicy '${policyId}' onLimit target '${limitEdge.to}' routes back into the exhausted loop region`);
+      }
     }
 
     for (const edge of edges) {
@@ -180,7 +201,7 @@ export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow
   }
 }
 
-export function applyLoopPolicyTransition({ workflow, baton, stepId, transition }) {
+export function applyLoopPolicyTransition({ workflow, baton, stepId, transition, resolveOnLimitTransition: resolveLimit }) {
   const policies = workflow.loopPolicies;
   const targetStepId = transition.targetStepId;
   if (!policies || !targetStepId) return { transition };
@@ -198,14 +219,14 @@ export function applyLoopPolicyTransition({ workflow, baton, stepId, transition 
     const completedCount = Math.min(currentCount + 1, policy.maxIterations);
     const loopProgress = { ...currentProgress, [policyId]: completedCount };
     if (targetStepId === policy.entry && completedCount >= policy.maxIterations) {
-      return { transition: retargetSingleTransition(transition, policy.onLimit), loopProgress };
+      return { transition: resolveOnLimitTransition(policy, transition, resolveLimit), loopProgress };
     }
     return { transition, loopProgress };
   }
 
   if (stepId === policy.boundary && targetStepId === policy.entry && currentCount >= policy.maxIterations) {
     const loopProgress = { ...currentProgress, [policyId]: currentCount };
-    return { transition: retargetSingleTransition(transition, policy.onLimit), loopProgress };
+    return { transition: resolveOnLimitTransition(policy, transition, resolveLimit), loopProgress };
   }
 
   if (policy.steps.includes(stepId) && targetStepId === policy.boundary) {

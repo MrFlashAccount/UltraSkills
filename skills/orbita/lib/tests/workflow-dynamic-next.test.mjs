@@ -156,7 +156,16 @@ function loopWorkflow(overrides = {}) {
     done: 'done',
     limit_reached: 'limit_reached',
     loopPolicies: {
-      review_fix: { steps: ['review', 'fix'], entry: 'fix', boundary: 'review', maxIterations: 2, onLimit: 'limit_reached' },
+      review_fix: {
+        steps: ['review', 'fix'],
+        entry: 'fix',
+        boundary: 'review',
+        maxIterations: 2,
+        onLimit: {
+          match: '${{ output.route }}',
+          cases: { fix: 'limit_reached', done: 'done', limit_reached: 'limit_reached' },
+        },
+      },
     },
     steps: {
       review: {
