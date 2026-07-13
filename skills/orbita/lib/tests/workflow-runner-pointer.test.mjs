@@ -202,10 +202,7 @@ test('pointer projection uses the runtime loop-limit exit and offers only state-
         entry: 'implement',
         boundary: 'review',
         maxIterations: 2,
-        onLimit: {
-          match: '${{ output.route }}',
-          cases: { retry: 'limit_reached', ready: 'done', limit_reached: 'limit_reached' },
-        },
+        onLimit: '${{ output.limit_target }}',
       },
     },
     steps: {
@@ -227,7 +224,7 @@ test('pointer projection uses the runtime loop-limit exit and offers only state-
       results: [],
       $loopProgress: { implementation_review: 2 },
       implement: { outcome: 'ready' },
-      review: { outcome: 'ready', route: 'retry' },
+      review: { outcome: 'ready', route: 'retry', limit_target: 'limit_reached' },
       done: { outcome: 'ready' },
     },
   };

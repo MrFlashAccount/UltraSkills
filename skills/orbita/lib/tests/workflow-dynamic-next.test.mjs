@@ -58,10 +58,11 @@ const outputSchemas = {
     },
   }),
   'loop-route-output-schema.json': schemaDoc({
-    required: ['outcome', 'route'],
+    required: ['outcome', 'route', 'limit_target'],
     properties: {
       outcome: { const: 'ready' },
       route: { enum: ['fix', 'done', 'limit_reached'] },
+      limit_target: { const: 'limit_reached' },
     },
   }),
 };
@@ -161,10 +162,7 @@ function loopWorkflow(overrides = {}) {
         entry: 'fix',
         boundary: 'review',
         maxIterations: 2,
-        onLimit: {
-          match: '${{ output.route }}',
-          cases: { fix: 'limit_reached', done: 'done', limit_reached: 'limit_reached' },
-        },
+        onLimit: '${{ output.limit_target }}',
       },
     },
     steps: {
@@ -216,11 +214,11 @@ test('loopPolicies count complete traversals, preserve early exits, and use the 
   assert.equal(first.baton.cursor, 'review');
   assert.deepEqual(first.baton.state.$loopProgress, { review_fix: 1 });
 
-  const earlyExit = runApply('loop-early-exit', first.baton, { outcome: 'ready', route: 'done' }, true, loopWorkflow());
+  const earlyExit = runApply('loop-early-exit', first.baton, { outcome: 'ready', route: 'done', limit_target: 'limit_reached' }, true, loopWorkflow());
   assert.equal(earlyExit.baton.cursor, 'done');
   assert.deepEqual(earlyExit.baton.state.$loopProgress, { review_fix: 1 });
 
-  const repeat = runApply('loop-review-to-fix-2', first.baton, { outcome: 'ready', route: 'fix' }, true, loopWorkflow());
+  const repeat = runApply('loop-review-to-fix-2', first.baton, { outcome: 'ready', route: 'fix', limit_target: 'limit_reached' }, true, loopWorkflow());
   assert.equal(repeat.baton.cursor, 'fix');
   assert.deepEqual(repeat.baton.state.$loopProgress, { review_fix: 1 });
 
@@ -228,7 +226,7 @@ test('loopPolicies count complete traversals, preserve early exits, and use the 
   assert.equal(second.baton.cursor, 'review');
   assert.deepEqual(second.baton.state.$loopProgress, { review_fix: 2 });
 
-  const exhausted = runApply('loop-exhausted-at-boundary', second.baton, { outcome: 'ready', route: 'fix' }, true, loopWorkflow());
+  const exhausted = runApply('loop-exhausted-at-boundary', second.baton, { outcome: 'ready', route: 'fix', limit_target: 'limit_reached' }, true, loopWorkflow());
   assert.equal(exhausted.baton.cursor, 'limit_reached');
   assert.equal(exhausted.baton.status, 'done');
   assert.deepEqual(exhausted.baton.state.$loopProgress, { review_fix: 2 });
@@ -242,7 +240,7 @@ test('output schema retries do not increment loop policy progress', () => {
   assert.deepEqual(retry.baton.state.attempts, { 'review:output.schema': 1 });
   assert.equal(retry.baton.state.$loopProgress, undefined);
 
-  const valid = runApply('loop-valid-after-retry', retry.baton, { outcome: 'ready', route: 'fix' }, true, loopWorkflow());
+  const valid = runApply('loop-valid-after-retry', retry.baton, { outcome: 'ready', route: 'fix', limit_target: 'limit_reached' }, true, loopWorkflow());
   assert.equal(valid.baton.cursor, 'fix');
   assert.equal(valid.baton.state.$loopProgress, undefined);
 });

@@ -48,8 +48,8 @@ MVP policy identity and fields:
 - `boundary`: the single step that completes an iteration and owns repeat/exit
   routing (`entry` and `boundary` are the same step for a self-loop);
 - `maxIterations`: positive count of complete entry-to-boundary traversals;
-- `onLimit`: a transition descriptor with the same static, dynamic-expression,
-  or `match/cases` forms and boundary output/input context as `next`; every
+- `onLimit`: one literal target or path-only dynamic target expression using the
+  boundary output/input context; it does not accept `match/cases`, and every
   validation-proven result must be an external target already declared by the
   boundary step and is used when another repeat would exceed the limit.
 

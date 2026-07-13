@@ -545,8 +545,9 @@
           "minimum": 1
         },
         "onLimit": {
-          "description": "A transition descriptor with the same syntax and output/input context as step.next. Every validation-proven target must already be a declared external target of the boundary step.",
-          "$ref": "#/$defs/next"
+          "description": "One literal step id or path-only dynamic target expression resolved with the boundary step's output/input context. Every validation-proven target must already be a declared external target of the boundary step.",
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false
