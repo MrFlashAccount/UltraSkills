@@ -13,6 +13,7 @@ const frontendUiPrSmoke = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/f
 const researchCritic = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/research-critic/workflow.toml'));
 const workflowAuthoring = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/workflow-authoring/workflow.json'));
 const uiProposalTemplate = readFileSync(path.join(REPO_ROOT, 'shared/templates/ui-design-proposal-template.html'), 'utf8');
+const implementationPlanTemplate = readFileSync(path.join(REPO_ROOT, 'shared/templates/implementation-plan-template.md'), 'utf8');
 const sharedTemplatesReadme = readFileSync(path.join(REPO_ROOT, 'shared/templates/README.md'), 'utf8');
 const devUiDraftSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/dev-harness/schemas/ui-intent-draft-output.json'), 'utf8'));
 const smokeDesignDraftSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/frontend-ui-pr-smoke/schemas/design-draft-output.json'), 'utf8'));
@@ -192,6 +193,8 @@ test('UI proposal contract rejects generic card-drawer routing and requires comp
   assert.match(frontendUiPrSmoke.steps.design_attack.input.prompt, /cross-view drift/);
   assert.doesNotMatch(draftPrompt, /return blocked|blocker\.source_step_id/);
   assert.doesNotMatch(frontendUiPrSmoke.steps.design_draft.input.prompt, /return blocked|blocker\.source_step_id/);
+  assert.doesNotMatch(implementationPlanTemplate, /return blocked|blocker\.source_step_id/);
+  assert.match(implementationPlanTemplate, /report a non-blocking stop through the runner control channel requesting plan revision/);
 });
 
 test('UI proposal template and design workers preserve the REASONS visual-evidence checkpoint', () => {

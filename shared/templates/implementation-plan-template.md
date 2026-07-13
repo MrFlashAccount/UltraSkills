@@ -72,7 +72,7 @@ Complete this section when an approved `ui-design-proposal` is applicable. If th
 UI design proposal gates:
 - Preserve the approved UI design proposal; do not rewrite visual hierarchy, density, tone, or screen semantics in implementation planning.
 - Card/list and drawer/sidebar/bottom-sheet details are required only when those patterns are selected by the approved HTML artifact. Do not introduce them as generic composition defaults.
-- If architecture or implementation reality conflicts with approved UI design proposal, return blocked or request plan revision instead of silently changing the interface.
+- If architecture or implementation reality conflicts with approved UI design proposal, report a non-blocking stop through the runner control channel requesting plan revision instead of silently changing the interface.
 - Keep file/component architecture in the Frontend composition plan, not in this section.
 - The plan is a routing translation, not a substitute for the approved `ui-design-proposal` HTML artifact or its human approval evidence. Frontend implementation and frontend-taste review must inspect both directly and compare rendered proof for fidelity.
 
