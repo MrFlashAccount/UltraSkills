@@ -190,6 +190,54 @@ test('pointer projection handles resolved cycles using baton membership', () => 
   assert.deepEqual(projected.transitions.map((transition) => transition.to.cursor), ['b', 'a']);
 });
 
+test('pointer projection uses the runtime loop-limit exit and offers only state-bearing predecessors', () => {
+  const workflow = {
+    name: 'pointer-loop-limit',
+    version: 1,
+    start: 'implement',
+    done: 'done',
+    loopPolicies: {
+      implementation_review: {
+        steps: ['implement', 'review'],
+        entry: 'implement',
+        boundary: 'review',
+        maxIterations: 2,
+        onLimit: {
+          match: '${{ output.limit_reason }}',
+          cases: { hard: 'limit_reached', soft: 'done' },
+        },
+      },
+    },
+    steps: {
+      implement: { name: 'Implement', kind: 'worker', next: 'review' },
+      review: {
+        name: 'Review',
+        kind: 'worker',
+        next: { match: '${{ output.route }}', cases: { retry: 'implement', ready: 'done', limit_reached: 'limit_reached' } },
+      },
+      done: { name: 'Done', kind: 'done' },
+      limit_reached: { name: 'Limit reached', kind: 'done' },
+    },
+  };
+  const baton = {
+    cursor: 'limit_reached',
+    status: 'done',
+    state: {
+      artifacts: [],
+      results: [],
+      $loopProgress: { implementation_review: 2 },
+      implement: { outcome: 'ready' },
+      review: { outcome: 'ready', route: 'retry', limit_reason: 'hard' },
+      done: { outcome: 'ready' },
+    },
+  };
+
+  const projected = projectPointerTransitions({ workflow, baton });
+
+  assert.deepEqual(projected.transitions.map((transition) => transition.to.cursor), ['review', 'implement']);
+  assert.equal(projected.transitions.some((transition) => transition.to.cursor === 'done'), false);
+});
+
 test('runner pointer API moves to a state-bearing predecessor while preserving replaceable state', async () => {
   const run = await createClaimedRun('api-retained');
   await next({ ...run, userPrompt: 'keep prompt marker', now: new Date('2026-06-01T10:00:01.000Z') });

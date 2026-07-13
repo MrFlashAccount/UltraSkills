@@ -50,17 +50,17 @@ function assertMatchCasesTargets(workflow, stepId, descriptor, fieldPath = 'next
   }
 }
 
-export function assertTransitionDescriptorTargets(workflowInput, stepId, descriptor = normalizeTransitionNext(workflowData(workflowInput).steps[stepId].next)) {
+export function assertTransitionDescriptorTargets(workflowInput, stepId, descriptor = normalizeTransitionNext(workflowData(workflowInput).steps[stepId].next), fieldPath = 'next') {
   const workflow = workflowData(workflowInput);
   if (descriptor.kind === NEXT_KIND.STATIC_TARGET) {
-    assertTransitionTarget(workflow, stepId, 'next', descriptor.target);
+    assertTransitionTarget(workflow, stepId, fieldPath, descriptor.target);
     return;
   }
 
   if (descriptor.kind === NEXT_KIND.DYNAMIC_TARGET) return;
 
   if (descriptor.kind === NEXT_KIND.MATCH_CASES) {
-    assertMatchCasesTargets(workflow, stepId, descriptor);
+    assertMatchCasesTargets(workflow, stepId, descriptor, fieldPath);
     return;
   }
 

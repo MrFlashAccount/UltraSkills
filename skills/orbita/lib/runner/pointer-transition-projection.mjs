@@ -10,6 +10,7 @@ import { WorkflowRuntimeError } from '../errors.mjs';
 import { Baton } from '../entities/Baton/index.mjs';
 import { Step } from '../entities/Step/index.mjs';
 import { normalizeCursor } from '../runtime/cursor.mjs';
+import { applyLoopPolicyTransition } from '../runtime/loop-policies.mjs';
 import { statusForStep } from '../runtime/step-status.mjs';
 
 const TERMINAL_STATUSES = new Set(['done']);
@@ -39,8 +40,17 @@ function resolvedStateTransitions({ workflow, baton }) {
   for (const stepId of Object.keys(baton?.state ?? {})) {
     const step = workflow.steps?.[stepId];
     if (!step || !Object.hasOwn(step, 'next')) continue;
-    const resolved = new Step({ id: stepId, step }).resolveConcreteTargets(baton, workflow, baton.state[stepId]);
-    transitions.push({ from: stepId, to: resolved.targetStepId });
+    const stepEntity = new Step({ id: stepId, step });
+    const output = baton.state[stepId];
+    const resolved = stepEntity.resolveConcreteTargets(baton, workflow, output);
+    const actual = applyLoopPolicyTransition({
+      workflow,
+      baton,
+      stepId,
+      transition: resolved,
+      resolveOnLimitTransition: (next) => stepEntity.resolveConcreteNext(next, baton, workflow, output),
+    });
+    transitions.push({ from: stepId, to: actual.transition.targetStepId });
   }
   return transitions;
 }

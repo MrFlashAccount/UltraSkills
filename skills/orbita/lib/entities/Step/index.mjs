@@ -140,7 +140,11 @@ export class Step {
   }
 
   resolveConcreteTargets(baton, workflow, output = baton?.state?.[this.id]) {
-    return resolveTransition({ workflow, baton, stepId: this.id, step: this.data, output });
+    return this.resolveConcreteNext(this.data.next, baton, workflow, output);
+  }
+
+  resolveConcreteNext(next, baton, workflow, output = baton?.state?.[this.id]) {
+    return resolveTransition({ workflow, baton, stepId: this.id, step: { ...this.data, next }, output });
   }
 
   validateForRun({ workflow } = {}) {
@@ -181,6 +185,7 @@ export class Step {
       baton,
       stepId: this.id,
       transition: resolvedTransition,
+      resolveOnLimitTransition: (next) => this.resolveConcreteNext(next, baton, wf, output),
     });
     const batonData = cloneBoundaryData(baton);
     const outputStepId = storeStepOutput ? this.id : undefined;

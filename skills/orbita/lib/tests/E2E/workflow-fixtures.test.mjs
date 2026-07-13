@@ -326,9 +326,13 @@ test('E2E fixture: loopPolicies exhaust approval and implementation revision loo
 
   const rejected = await continueWith(approvalRun, workflow, output('approval-rejected.json'), 'continue approval rejected');
   assert.equal(rejected.baton.cursor, 'plan');
-  assert.deepEqual(rejected.baton.state.$loopProgress, { approval_revision: 2 });
+  assert.deepEqual(rejected.baton.state.$loopProgress, { approval_revision: 1 });
 
-  const exhaustedApproval = await continueWith(approvalRun, workflow, output('plan-ready.json'), 'continue approval revision exhaustion');
+  const secondApproval = await continueWith(approvalRun, workflow, output('plan-ready.json'), 'continue approval revision plan v2');
+  assert.equal(secondApproval.baton.cursor, 'approval_gate');
+  assert.deepEqual(secondApproval.baton.state.$loopProgress, { approval_revision: 2 });
+
+  const exhaustedApproval = await continueWith(approvalRun, workflow, output('approval-rejected.json'), 'continue approval revision exhaustion');
   assert.equal(exhaustedApproval.status, 'done');
   assert.equal(exhaustedApproval.baton.cursor, 'limit_reached');
   assert.deepEqual(exhaustedApproval.baton.state.$loopProgress, { approval_revision: 2 });
@@ -343,9 +347,13 @@ test('E2E fixture: loopPolicies exhaust approval and implementation revision loo
 
   const revision = await continueWith(implementationRun, workflow, output('review-retry.json'), 'continue implementation revision retry');
   assert.equal(revision.baton.cursor, 'implement');
-  assert.deepEqual(revision.baton.state.$loopProgress, { approval_revision: 1, implementation_revision: 2 });
+  assert.deepEqual(revision.baton.state.$loopProgress, { approval_revision: 1, implementation_revision: 1 });
 
-  const exhaustedImplementation = await continueWith(implementationRun, workflow, output('implement-v2.json'), 'continue implementation revision exhaustion');
+  const secondReview = await continueWith(implementationRun, workflow, output('implement-v2.json'), 'continue implementation revision v2');
+  assert.equal(secondReview.baton.cursor, 'review');
+  assert.deepEqual(secondReview.baton.state.$loopProgress, { approval_revision: 1, implementation_revision: 2 });
+
+  const exhaustedImplementation = await continueWith(implementationRun, workflow, output('review-retry.json'), 'continue implementation revision exhaustion');
   assert.equal(exhaustedImplementation.status, 'done');
   assert.equal(exhaustedImplementation.baton.cursor, 'limit_reached');
   assert.deepEqual(exhaustedImplementation.baton.state.$loopProgress, { approval_revision: 1, implementation_revision: 2 });
@@ -361,11 +369,7 @@ test('E2E fixture: loopPolicies exhaust self-loop workflow', async () => {
   assert.deepEqual(firstRetry.baton.state.$loopProgress, { self_check: 1 });
 
   const secondRetry = await continueWith(run, workflow, output('self-retry.json'), 'continue self-loop retry 2');
-  assert.equal(secondRetry.baton.cursor, 'self_check');
+  assert.equal(secondRetry.baton.cursor, 'limit_reached');
+  assert.equal(secondRetry.status, 'done');
   assert.deepEqual(secondRetry.baton.state.$loopProgress, { self_check: 2 });
-
-  const exhausted = await continueWith(run, workflow, output('self-retry.json'), 'continue self-loop exhaustion');
-  assert.equal(exhausted.status, 'done');
-  assert.equal(exhausted.baton.cursor, 'limit_reached');
-  assert.deepEqual(exhausted.baton.state.$loopProgress, { self_check: 2 });
 });
