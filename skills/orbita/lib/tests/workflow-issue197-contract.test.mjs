@@ -81,6 +81,7 @@ test('issue 197: Orbita host watchdog instructions split bootstrap silence from 
   assert.match(skillText, /current work, inspected or changed surfaces, verification state, and the next bounded checkpoint/);
   assert.match(skillText, /continue that same worker and ask for the next bounded checkpoint/);
   assert.match(skillText, /Do not persist progress in baton, scrape transcripts, read private runner state, or add durable worker status storage/);
+  assert.match(skillText, /For `wait_agent`, set `timeout_ms` to at least `1800000` to cover the 30-minute watchdog/);
   assert.match(skillText, /Allow 30 minutes for load\/progress/);
   assert.match(skillText, /same 30\+2-minute bound/);
   assert.doesNotMatch(skillText, /Allow 10 minutes|same 10\+2-minute bound/);

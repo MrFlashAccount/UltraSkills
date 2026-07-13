@@ -104,7 +104,7 @@ If the instructions cannot be loaded, stop with an error and do not continue.
 
 Add no user context, role hints, output rules, watchdog prose, or metadata. The worker owns the task until accepted output or a concrete blocker. Workers use their loaded validating writer and never call `continue`. Do not duplicate their task in the orchestrator. Dispatch independent current requests before waiting when the harness supports parallel creation.
 
-Use the longest supported event wait, not short polling. Accepted output, actionable failure, or concrete blocker ends it; heartbeat does not.
+For `wait_agent`, set `timeout_ms` to at least `1800000` to cover the 30-minute watchdog; do not short-poll. Accepted output, actionable failure, or concrete blocker ends it; heartbeat does not.
 
 Treat bootstrap/instruction-load silence separately from active implementation progress. Concrete progress must name current work, inspected or changed surfaces, verification state, and the next bounded checkpoint. If the worker shows that evidence, continue that same worker and ask for the next bounded checkpoint. Do not persist progress in baton, scrape transcripts, read private runner state, or add durable worker status storage.
 
