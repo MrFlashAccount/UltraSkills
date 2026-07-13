@@ -48,6 +48,73 @@ function nonBlockingStopProtocol(command) {
   ].join('\n');
 }
 
+function compactApprovalProperty(name, propertySchema, required) {
+  const requirement = required ? 'required' : 'optional';
+  if (Array.isArray(propertySchema?.enum)) {
+    return `- \`${name}\` (${requirement}): one of ${propertySchema.enum.map((value) => `\`${JSON.stringify(value)}\``).join(', ')}.`;
+  }
+  if (Object.hasOwn(propertySchema ?? {}, 'const')) {
+    return `- \`${name}\` (${requirement}): \`${JSON.stringify(propertySchema.const)}\`.`;
+  }
+  const type = Array.isArray(propertySchema?.type) ? propertySchema.type.join(' or ') : propertySchema?.type;
+  return `- \`${name}\` (${requirement}): ${type || 'schema-validated value'}.`;
+}
+
+function compactApprovalStopProtocol(command) {
+  const trimmedCommand = typeof command === 'string' ? command.trim() : '';
+  if (!trimmedCommand) return '';
+  return [
+    'If the gate cannot be completed, report a non-blocking stop with this command:',
+    '',
+    '```bash',
+    trimmedCommand,
+    '```',
+    '',
+    'Use `{"non_blocking_stop":{"stop_id":"<new UUID v4>","summary":"...","needed":"...","source_step_id":"...","evidence":[],"risk":"..."}}`; reuse the stop id only for an exact retry.',
+  ].join('\n');
+}
+
+function compactApprovalOutputContract({ outputSchemaValue, schemaPath, options }) {
+  const required = new Set(outputSchemaValue?.required ?? []);
+  const properties = Object.entries(outputSchemaValue?.properties ?? {});
+  const lines = [
+    schemaPath ? `Response schema: \`${schemaPath}\`.` : 'Return one strict JSON object.',
+    ...properties.map(([name, propertySchema]) => compactApprovalProperty(name, propertySchema, required.has(name))),
+  ];
+  const command = typeof options.validatingWriterCommand === 'string' ? options.validatingWriterCommand.trim() : '';
+  if (!command) {
+    lines.push('The validating writer command is missing; stop and report the runner contract bug.');
+  } else {
+    lines.push(
+      '',
+      'Submit the normalized JSON with this validating writer command:',
+      '',
+      '```bash',
+      command,
+      '```',
+      '',
+      'On validation errors, correct the JSON and retry the same command.',
+    );
+  }
+  const stopProtocol = compactApprovalStopProtocol(options.reportStopCommand);
+  if (stopProtocol) lines.push('', stopProtocol);
+  return section('Approval response', lines.join('\n'));
+}
+
+export function supportsCompactApprovalSchema(schema) {
+  if (schema === undefined) return true;
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return false;
+  const approval = schema?.properties?.approval;
+  const hasSimpleDecision = Array.isArray(approval?.enum) || Object.hasOwn(approval ?? {}, 'const');
+  const hasConditionalShape = ['allOf', 'anyOf', 'oneOf', 'if', 'dependentRequired', 'patternProperties']
+    .some((keyword) => Object.hasOwn(schema, keyword));
+  return schema?.type === 'object'
+    && Array.isArray(schema.required)
+    && schema.required.includes('approval')
+    && hasSimpleDecision
+    && !hasConditionalShape;
+}
+
 function artifactOutputDirectoryInstruction(artifactOutputDir) {
   const trimmedDir = typeof artifactOutputDir === 'string' ? artifactOutputDir.trim() : '';
   if (!trimmedDir) return '';
@@ -106,6 +173,9 @@ function compactFollowUpOutputContract({ outputTemplate, templatePath, outputSch
 }
 
 export function outputContractSection(outputTemplate, templatePath, outputSchema, schemaPath, outputSchemaValue, options = {}) {
+  if (options.compactApproval === true && !outputTemplate) {
+    return compactApprovalOutputContract({ outputSchemaValue, schemaPath, options });
+  }
   if (!outputTemplate && !outputSchema) {
     const parts = [];
     if (options.validatingWriterCommand) parts.push(validatingWriterProtocol(options.validatingWriterCommand));

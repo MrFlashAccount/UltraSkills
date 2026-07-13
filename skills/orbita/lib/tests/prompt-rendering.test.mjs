@@ -10,6 +10,9 @@ import { renderWorkflowPrompt } from '../entities/Template/index.mjs';
 import { validateAgainstOutputSchema } from '../runtime/output/output-schema-validation.mjs';
 import { loadWorkflowResources } from '../persistence/workflow-resources/runtime-reader.mjs';
 import { loadOutputSchema } from '../persistence/workflow-resources/output-schema-loader.mjs';
+import { readWorkflowDocument } from '../persistence/workflow-resources/workflow-document-reader.mjs';
+import { toHostResponse } from '../runner/host-requests.mjs';
+import { reportStopCommandForStep, writeOutputCommandForStep } from '../runner/runner-command-builder.mjs';
 import { runWorkflowRuntimeApi } from './helpers/workflow-runtime-api-client.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -563,7 +566,135 @@ test('prompt renderer: approval keeps role reads but renders prompt input artifa
     `1. Prompt input artifact 'packet' from 'worker_step' (text/markdown): \`${path.join(runDir, 'worker_step', 'artifacts', 'packet.md')}\``,
     'Attachments are not required reads.',
   ]);
+  assert.match(compiled.prompt, /Artifacts:\nSee Approval attachments above\./);
+  assert.equal(compiled.prompt.split(path.join(runDir, 'worker_step', 'artifacts', 'packet.md')).length - 1, 1);
   assert.doesNotMatch(compiled.prompt, /3\. Prompt input artifact/);
+  assert.doesNotMatch(compiled.prompt, /## Final reminder/);
+});
+
+test('dev-harness research approval stays within the compact stdout budget', () => {
+  const workflowPath = path.join(root, 'workflows/dev-harness/workflow.toml');
+  const workflow = readWorkflowDocument(workflowPath);
+  const runId = 'dev-harness-approval-budget';
+  const runsRoot = path.join(tempDir, 'runs');
+  const runDir = path.join(runsRoot, runId);
+  const stepId = 'approve_research';
+  const leaseToken = 'approval-budget-token';
+  const artifactPath = path.join(runDir, 'research_draft', 'artifacts', 'reasons-canvas-research.md');
+  mkdirSync(path.dirname(artifactPath), { recursive: true });
+  writeFileSync(artifactPath, '# Research Canvas\n');
+  const batonDoc = baton({
+    cursor: stepId,
+    state: {
+      artifacts: [],
+      results: [],
+      research_draft: {
+        summary: 'The revised research contract is ready for approval with explicit traversal semantics and bounded snapshot reads.',
+        artifacts: [{ id: 'reasons-canvas-research', content_type: 'text/markdown', path: artifactPath, summary: 'Research contract.' }],
+      },
+      research_attack: {
+        verdict: {
+          summary: ['The proposal is evidence-backed.', 'No must-fix research gaps remain.'],
+          evidence_checked: ['Current workflow and dashboard contracts'],
+          findings: [],
+        },
+      },
+      approve_research: { approval: 'approved' },
+    },
+  });
+  const writer = writeOutputCommandForStep(runId, stepId, { runsRoot, leaseToken });
+  const reportStop = reportStopCommandForStep(runId, stepId, { runsRoot, leaseToken });
+  const resources = {
+    ...loadWorkflowResources({ workflow, workflowPath, repositoryRoot: root, runDir }),
+    validatingWriterCommand: writer,
+    reportStopCommand: reportStop,
+    artifactOutputDir: path.join(runDir, stepId, 'artifacts'),
+  };
+  const step = workflow.steps[stepId];
+  const compiledPrompt = renderWorkflowPrompt({
+    workflow,
+    workflowPath,
+    baton: batonDoc,
+    stepId,
+    step,
+    repositoryRoot: root,
+    resources,
+  });
+  const response = toHostResponse(
+    { baton: batonDoc, steps: [{ id: stepId, action: 'wait_for_approval', step, compiledPrompt }] },
+    { runId, workflow, workflowPath, repositoryRoot: root, runsRoot, leaseToken, includeInlineInstructions: true },
+  );
+
+  assert.ok(Buffer.byteLength(response.orchestratorInstruction) <= 6_000, 'real DevHarness approval stdout exceeded the 6 KB budget');
+  assert.match(response.orchestratorInstruction, /The revised research contract is ready for approval/);
+  assert.match(response.orchestratorInstruction, /Prompt input artifact 'reasons-canvas-research'/);
+  assert.equal(response.orchestratorInstruction.split(artifactPath).length - 1, 1);
+  assert.match(response.orchestratorInstruction, /`approval` \(required\): one of `"approved"`, `"rejected"`/);
+  assert.doesNotMatch(response.orchestratorInstruction, /Schema-derived artifact field notes|Artifact output directory for this step|"\$schema"/);
+});
+
+test('approval with an explicit output template preserves the full template contract', () => {
+  const step = {
+    name: 'Templated approval',
+    kind: 'approval',
+    input: { prompt: 'Approve with the explicit output template.' },
+    output: outputContract('approval'),
+    next: 'done',
+  };
+  const workflow = { ...schemaWorkflowDoc, steps: { ...schemaWorkflowDoc.steps, approval_step: step } };
+  const workflowPath = writeJson('templated-approval-workflow.json', workflow);
+  const compiled = renderPromptWithResources({
+    workflowPath,
+    workflow,
+    baton: baton({ cursor: 'approval_step' }),
+    stepId: 'approval_step',
+    step,
+    repositoryRoot: tempDir,
+  });
+
+  assert.match(compiled.prompt, /## Output contract/);
+  assert.match(compiled.prompt, /## Review verdict/);
+  assert.match(compiled.prompt, /"\$schema": "https:\/\/json-schema\.org/);
+  assert.match(compiled.prompt, /## Final reminder/);
+  assert.doesNotMatch(compiled.prompt, /## Approval response/);
+});
+
+test('approval with conditional schema requirements preserves the full schema contract', () => {
+  const schemaPath = writeJson('conditional-approval.schema.json', {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['approval'],
+    properties: {
+      approval: { enum: ['approved', 'rejected'] },
+      reason: { type: 'string' },
+    },
+    allOf: [{
+      if: { properties: { approval: { const: 'rejected' } } },
+      then: { required: ['reason'] },
+    }],
+  });
+  const step = {
+    name: 'Conditional approval',
+    kind: 'approval',
+    input: { prompt: 'Approve or reject with a reason.' },
+    output: { schema: path.basename(schemaPath) },
+    next: 'done',
+  };
+  const workflow = { ...schemaWorkflowDoc, steps: { ...schemaWorkflowDoc.steps, approval_step: step } };
+  const workflowPath = writeJson('conditional-approval-workflow.json', workflow);
+  const compiled = renderPromptWithResources({
+    workflowPath,
+    workflow,
+    baton: baton({ cursor: 'approval_step' }),
+    stepId: 'approval_step',
+    step,
+    repositoryRoot: tempDir,
+  });
+
+  assert.match(compiled.prompt, /## Output contract/);
+  assert.match(compiled.prompt, /"allOf"/);
+  assert.match(compiled.prompt, /## Final reminder/);
+  assert.doesNotMatch(compiled.prompt, /## Approval response/);
 });
 
 test('prompt renderer: worker prompt input artifacts remain required reads', () => {

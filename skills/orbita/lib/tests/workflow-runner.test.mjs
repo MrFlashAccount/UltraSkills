@@ -302,7 +302,15 @@ test('runner: approval host instruction lists prompt input artifacts as attachme
   assert.match(response.orchestratorInstruction, /Never substitute a summary, plain path, or inline body/);
   assert.match(response.orchestratorInstruction, /Prompt input artifact 'reasons-canvas-research' from 'prepare' \(text\/markdown\):/);
   assert.match(response.orchestratorInstruction, /prepare\/artifacts\/reasons-canvas-research\.md/);
-  assert.match(response.orchestratorInstruction, /## Output contract/);
+  assert.match(response.orchestratorInstruction, /## Approval response/);
+  assert.match(response.orchestratorInstruction, /Response schema: `approval-inline-instructions\.schema\.json`/);
+  assert.match(response.orchestratorInstruction, /`approval` \(required\): one of `"approved"`, `"rejected"`/);
+  assert.doesNotMatch(response.orchestratorInstruction, /Schema-derived artifact field notes/);
+  assert.doesNotMatch(response.orchestratorInstruction, /Artifact output directory for this step/);
+  assert.doesNotMatch(response.orchestratorInstruction, /"\$schema": "https:\/\/json-schema\.org/);
+  assert.doesNotMatch(response.orchestratorInstruction, /If this request cannot continue after you exhaust safe/);
+  assert.match(response.orchestratorInstruction, /If the gate cannot be completed, report a non-blocking stop/);
+  assert.ok(Buffer.byteLength(response.orchestratorInstruction) <= 6_000, 'approval stdout exceeded the 6 KB compact-envelope budget');
   assert.doesNotMatch(response.orchestratorInstruction, /## Prompt input context/);
   assert.doesNotMatch(response.orchestratorInstruction, /### Prompt input artifact content/);
   assert.doesNotMatch(response.orchestratorInstruction, /Full Canvas body for approval\./);

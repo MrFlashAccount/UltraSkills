@@ -1,4 +1,4 @@
-import { finalOutputReminder, outputContractSection, readOutputSchema, readOutputTemplate } from './sections/output-contract.mjs';
+import { finalOutputReminder, outputContractSection, readOutputSchema, readOutputTemplate, supportsCompactApprovalSchema } from './sections/output-contract.mjs';
 import { interpolatePromptExpressions } from './sections/prompt-interpolation.mjs';
 import { normalizePromptText } from '../../../runtime/prompt-text.mjs';
 import { section, trimStable } from './utils.mjs';
@@ -109,6 +109,9 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
   const inputTemplate = readInputTemplate({ input, resources });
   const outputTemplate = readOutputTemplate({ step, resources });
   const outputSchema = readOutputSchema({ workflow, step, resources });
+  const compactApproval = step.kind === 'approval'
+    && !outputTemplate.content
+    && supportsCompactApprovalSchema(outputSchema.schema);
   const outputContract = outputContractSection(outputTemplate.content, outputTemplate.metadataPath, outputSchema.content, outputSchema.metadataPath, outputSchema.schema, {
     schemaDefinitions: resources?.schemaDefinitions,
     validatingWriterCommand: resources?.validatingWriterCommand,
@@ -116,14 +119,16 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
     artifactOutputDir: resources?.artifactOutputDir,
     debugSummaryPath: resources?.debugSummaryPath,
     compactFollowUp: followUp === true,
+    compactApproval,
   });
   const workflowInstructionBlock = workflowInstruction({ workflow });
-  const finalReminder = finalOutputReminder(outputContract);
+  const finalReminder = compactApproval ? '' : finalOutputReminder(outputContract);
 
   const usesDefaultPrompt = inputTemplate.content === undefined;
   const promptLayer = usesDefaultPrompt ? defaultPrompt({ step, input }) : inputTemplate.content;
   const requiredReadsSection = requiredReadsBlock(requiredReadsForRender(requiredReads, { followUp }));
   const approvalAttachmentsSection = approvalAttachmentsBlock(approvalAttachments);
+  const attachedArtifactStepIds = new Set(approvalAttachments.map((item) => item.sourceStepId).filter(Boolean));
   const prompt = assembleFixedPrompt({
     promptLayer,
     templatePath: inputTemplate.metadataPath,
@@ -131,7 +136,11 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
     requiredReads: requiredReadsSection,
     approvalAttachments: approvalAttachmentsSection,
     nonBlockingStop: nonBlockingStopBlock({ baton, stepId }),
-    inlinePrompt: interpolatePromptExpressions(normalizePromptText(input.prompt), { input: promptInput.value, ...(shard ? { shard } : {}) }),
+    inlinePrompt: interpolatePromptExpressions(
+      normalizePromptText(input.prompt),
+      { input: promptInput.value, ...(shard ? { shard } : {}) },
+      { attachedArtifactStepIds },
+    ),
     outputContract,
     userPrompt: ['worker', 'fanout', 'shard'].includes(step.kind) && userPromptInjected !== true ? userPrompt : undefined,
     finalReminder,
