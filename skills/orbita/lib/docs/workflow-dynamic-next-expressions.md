@@ -34,10 +34,11 @@ The closed graph must prove the policy's declared `entry` and `boundary`, the
 single boundary-to-entry repeat, and `onLimit` as an external target already
 declared by the boundary step.
 
-`onLimit` is one scalar target: either a static step id or a path-only dynamic
-expression. The dynamic form resolves against the boundary step's normal
-output/input context. `onLimit` does not accept `match/cases`; it is a limit-exit
-selector, not a second routing tree. Every schema-enumerated result must be a
+`onLimit` is an independent transition descriptor with the same forms as
+`next`: a static target, a path-only dynamic expression, or `match/cases`. It
+resolves against the boundary step's normal output/input context only after
+`boundary.next` selected a repeat that reached the limit. Its selector and cases
+may differ from `boundary.next`; every schema-enumerated result must still be a
 declared external target of `boundary.next`.
 
 If validation cannot enumerate every possible target used by a policy-selected

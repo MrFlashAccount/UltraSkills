@@ -545,9 +545,8 @@
           "minimum": 1
         },
         "onLimit": {
-          "description": "One literal step id or path-only dynamic target expression resolved with the boundary step's output/input context. Every validation-proven target must already be a declared external target of the boundary step.",
-          "type": "string",
-          "minLength": 1
+          "description": "An independent transition descriptor evaluated only when a boundary repeat reaches the limit. It supports the same literal, dynamic-expression, and match/cases forms and output/input context as step.next. Every validation-proven target must already be a declared external target of the boundary step.",
+          "$ref": "#/$defs/next"
         }
       },
       "additionalProperties": false
