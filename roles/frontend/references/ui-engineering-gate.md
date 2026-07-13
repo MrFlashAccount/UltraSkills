@@ -26,10 +26,24 @@ Escalate a finding when a failure blocks task completion, hides state, breaks ke
 Prefer small, named seams over one large component that owns every concern.
 
 Strong defaults:
+- Start non-trivial user-facing UI work from a component map, not from a page blob. Name the intended page/screen containers, feature components, layout helpers, primitives/UI-kit usage, overlays, forms, lists/cards, UI states, hooks/selectors, and file zones before implementation settles.
 - Colocate component implementation, tests, stories/examples, component-local hooks, and types when repo convention supports it.
 - Separate data loading/mutation orchestration from pure presentation when mixing them hides state transitions or contracts.
 - Prefer composition over boolean-prop matrices and broad configuration objects.
 - Keep shared abstractions earned by repeated use; do not turn one screen's temporary shape into a generic helper.
+
+Default taxonomy for user-facing UI:
+- **primitives / UI kit**: controls and tokens already provided by the repo, or native semantic controls when no primitive exists
+- **layout**: shells, sections, stacks, grids, toolbars, rows, and reusable spacing structure
+- **composites**: dialog/modal, drawer/sheet, menu/dropdown, tabs, toast, table/list, card/list item, and form-field families
+- **feature components**: domain-specific panels, cards, forms, tables, editors, and detail sections
+- **state helpers**: hooks, selectors, reducers/state machines, normalizers, URL-state helpers, server-state adapters, and mutation helpers
+
+Review blockers / strong findings:
+- A page or route owns data orchestration, controls, list/card markup, overlay internals, loading/error/empty surfaces, and focus/keyboard policy in one component without an approved exception.
+- Existing UI-kit controls or layout primitives are bypassed by hand-rolled equivalents without evidence of a gap.
+- Repeated className/token clusters, repeated controls, repeated overlay/list/form scaffolds, or repeated status-state branches are copy-pasted instead of extracted or routed through primitives.
+- Component-local types, styles, tests/stories/examples, and helpers are smeared into broad files when repo convention supports colocation.
 
 ### 200 LOC pressure rule
 

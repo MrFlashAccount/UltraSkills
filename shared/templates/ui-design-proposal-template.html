@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>&lt;Project/Issue&gt; UI Design Proposal - &lt;Surface&gt;</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0c0d10;
+      --panel: #15171c;
+      --panel-2: #1d2026;
+      --text: #f3f5f7;
+      --muted: #9299a4;
+      --line: #2d3139;
+      --accent: #d6ff52;
+      --ok: #55d69a;
+      --warn: #ffad68;
+      --danger: #ff7470;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; }
+    button { color: inherit; font: inherit; }
+    .proposal { min-height: 100vh; display: grid; grid-template-rows: auto auto 1fr; }
+    .proposal-header { display: flex; align-items: center; gap: 20px; padding: 18px 24px; border-bottom: 1px solid var(--line); }
+    .proposal-header h1 { margin: 0; font-size: 17px; letter-spacing: -.025em; }
+    .proposal-header p { margin: 0; color: var(--muted); font-size: 11px; }
+    .proposal-status { margin-left: auto; white-space: nowrap; color: var(--warn); font: 700 10px/1 ui-monospace, monospace; }
+    .proposal-status::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: currentColor; }
+
+    .reasons-rail { position: sticky; top: 0; z-index: 10; display: grid; grid-template-columns: repeat(7, minmax(112px, 1fr)); gap: 6px; padding: 10px 18px; overflow-x: auto; border-bottom: 1px solid var(--line); background: rgba(12,13,16,.95); backdrop-filter: blur(16px); }
+    .reason-tab { min-width: 112px; padding: 10px; border: 1px solid transparent; border-radius: 10px; background: transparent; text-align: left; cursor: pointer; color: #747b86; }
+    .reason-tab:hover { color: var(--text); background: var(--panel); }
+    .reason-tab[aria-selected="true"] { color: var(--text); border-color: #3a3f49; background: var(--panel-2); }
+    .reason-letter { display: block; color: var(--accent); font: 850 17px/1 ui-monospace, monospace; }
+    .reason-name { display: block; margin-top: 6px; font-size: 10px; font-weight: 750; }
+    .reason-proof { display: block; margin-top: 3px; color: #666e79; font: 650 8px/1 ui-monospace, monospace; }
+
+    .reason-view { display: none; min-height: calc(100vh - 144px); padding: 22px 24px 30px; }
+    .reason-view.active { display: block; }
+    .view-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+    .view-head h2 { margin: 5px 0 0; font-size: clamp(26px, 4vw, 44px); line-height: 1; letter-spacing: -.045em; }
+    .view-kicker { color: var(--accent); font: 800 9px/1 ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; }
+    .view-purpose { max-width: 430px; margin: 0; color: var(--muted); font-size: 11px; text-align: right; }
+    .card, .frame, .spec, .annotation { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; }
+    .card, .spec, .annotation { padding: 17px; }
+    .label { color: #717987; font: 800 8px/1 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .grid { display: grid; gap: 12px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .proposal-image { display: block; width: 100%; height: auto; background: var(--panel-2); }
+    figcaption { padding: 9px 11px; color: var(--muted); border-top: 1px solid var(--line); font-size: 9px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 11px; }
+    th { color: #79818d; font: 750 8px/1 ui-monospace, monospace; text-transform: uppercase; }
+    .must { color: var(--ok); }
+    .risk { color: var(--warn); }
+    .forbidden { color: var(--danger); }
+
+    .requirement-layout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) 310px; gap: 10px; }
+    .requirement-group { display: flex; flex-direction: column; min-width: 0; }
+    .requirement-group header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+    .requirement-group h3 { margin: 0; font-size: 14px; letter-spacing: -.025em; }
+    .requirement-code { color: var(--accent); font: 800 8px/1 ui-monospace, monospace; }
+    .requirement-list, .context-list, .scope-list, .success-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+    .requirement-item { display: grid; grid-template-columns: 46px 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid #272b32; color: #cbd0d6; font-size: 10px; }
+    .requirement-item:last-child { border-bottom: 0; }
+    .priority { align-self: start; padding: 4px 5px; border: 1px solid #425424; border-radius: 5px; color: #d7ff72; background: #17200d; font: 800 7px/1 ui-monospace, monospace; text-align: center; }
+    .priority.should { border-color: #4a4f59; color: #a8afb8; background: #20242a; }
+    .requirement-review { grid-column: 3; grid-row: 1 / 3; display: flex; flex-direction: column; }
+    .requirement-review h3 { margin: 10px 0 5px; font-size: 18px; letter-spacing: -.035em; }
+    .requirement-review > p { margin: 0; color: var(--muted); font-size: 10px; }
+    .requirement-rule { margin-top: 14px; padding: 10px; border: 1px solid #435426; border-radius: 8px; background: #171e0e; color: #d9ff82; font-size: 9px; }
+    .requirement-section { margin-top: 18px; }
+    .requirement-section h4 { margin: 0 0 8px; color: #7e8793; font: 800 8px/1 ui-monospace, monospace; text-transform: uppercase; letter-spacing: .1em; }
+    .context-list, .scope-list, .success-list { gap: 7px; }
+    .context-list li, .scope-list li, .success-list li { position: relative; padding-left: 15px; color: #c2c7ce; font-size: 9px; }
+    .context-list li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+    .scope-list li::before { content: "−"; position: absolute; left: 0; color: var(--warn); font-weight: 900; }
+    .success-list li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 900; }
+    .requirement-gate { margin-top: auto; padding: 11px; border: 1px solid #4e6129; border-radius: 9px; background: #19220d; color: #dbff83; font-size: 9px; }
+
+    .entity-layout { display: grid; grid-template-columns: 1.4fr .8fr; gap: 12px; }
+    .entity-map { min-height: 430px; position: relative; background: radial-gradient(circle at center, #20242b, #13151a 66%); }
+    .entity-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .entity-map line { stroke: #4c535f; stroke-width: 1.2; }
+    .entity-map line.primary { stroke: var(--accent); stroke-width: 1.8; }
+    .entity-node { position: absolute; width: 150px; padding: 13px; border: 1px solid #404651; border-radius: 11px; background: #1a1d23; }
+    .entity-node strong { display: block; font-size: 11px; }
+    .entity-node span { display: block; margin-top: 5px; color: #78808c; font: 650 8px/1.35 ui-monospace, monospace; }
+    .entity-node.primary { border-color: var(--accent); }
+    .entity-node:nth-child(1) { left: 6%; top: 41%; }
+    .entity-node:nth-child(2) { left: 38%; top: 13%; }
+    .entity-node:nth-child(3) { left: 42%; top: 48%; }
+    .entity-node:nth-child(4) { right: 7%; top: 23%; }
+    .entity-node:nth-child(5) { right: 9%; bottom: 8%; }
+    .entity-node:nth-child(6) { left: 14%; bottom: 8%; }
+
+    .direction-note { margin: 0 0 12px; color: var(--muted); font-size: 11px; }
+    .direction-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .direction-option { position: relative; display: grid; grid-template-rows: minmax(260px, 1fr) auto; min-width: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; }
+    .direction-option.recommended { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    .direction-option.recommended::after { content: "RECOMMENDED"; position: absolute; right: 9px; top: 9px; padding: 5px 7px; border-radius: 999px; background: var(--accent); color: #121507; font: 900 7px/1 ui-monospace, monospace; }
+    .direction-frame { min-height: 260px; margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: #deddd8; }
+    .direction-copy { padding: 13px; }
+    .direction-copy h3 { margin: 0 0 7px; font-size: 12px; }
+    .direction-copy p { margin: 5px 0; color: var(--muted); font-size: 9px; }
+
+    .anatomy-layout { display: grid; grid-template-columns: 1.4fr .75fr; gap: 12px; }
+    .anatomy-frame { min-height: 460px; margin: 0; background: #deddd8; }
+    .anatomy-list { display: grid; gap: 9px; }
+    .anatomy-item { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+    .anatomy-item b { width: 21px; height: 21px; display: grid; place-items: center; border-radius: 50%; background: #292d34; color: var(--accent); font: 800 8px/1 ui-monospace, monospace; }
+    .anatomy-item strong { display: block; font-size: 10px; }
+    .anatomy-item span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+
+    .storyboard { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; }
+    .moment { position: relative; min-width: 0; }
+    .moment:not(:last-child)::after { content: "→"; position: absolute; right: -17px; top: 40%; z-index: 2; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: #111; font-weight: 900; }
+    .moment .frame { min-height: 300px; margin: 0; background: #deddd8; }
+    .moment h3 { margin: 10px 0 3px; font-size: 11px; }
+    .moment p { margin: 0; color: var(--muted); font-size: 9px; }
+
+    .norm-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .norm-card { min-height: 160px; }
+    .norm-card h3 { margin: 17px 0 6px; font-size: 16px; }
+    .norm-card p { margin: 0; color: var(--muted); font-size: 10px; }
+    .norm-code { color: var(--accent); font: 800 9px/1 ui-monospace, monospace; }
+
+    .safeguard-layout { display: grid; grid-template-columns: 1fr 280px; gap: 12px; }
+    .stress-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+    .stress-card { min-height: 170px; display: flex; flex-direction: column; }
+    .stress-card header { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; font-weight: 750; }
+    .stress-card figure { margin: 10px 0; border-radius: 8px; }
+    .stress-card footer { margin-top: auto; color: var(--muted); font-size: 8px; }
+    .result-pass { color: var(--ok); }
+    .result-risk { color: var(--warn); }
+
+    @media (max-width: 980px) {
+      .direction-grid, .storyboard { grid-template-columns: repeat(2, 1fr); }
+      .norm-grid, .stress-grid { grid-template-columns: repeat(2, 1fr); }
+      .requirement-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .requirement-review { grid-column: 1 / -1; grid-row: auto; }
+      .entity-layout, .anatomy-layout, .safeguard-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 620px) {
+      .proposal-header p, .view-purpose { display: none; }
+      .reason-view { padding: 16px; }
+      .requirement-layout, .direction-grid, .storyboard, .norm-grid, .stress-grid, .grid.two, .grid.three { grid-template-columns: 1fr; }
+      .requirement-review { grid-column: 1; }
+      .moment:not(:last-child)::after { display: none; }
+    }
+    @media print {
+      .reasons-rail { display: none; }
+      .reason-view { display: block; min-height: 0; break-before: page; }
+      .reason-view:first-of-type { break-before: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="proposal">
+    <header class="proposal-header">
+      <div><h1>&lt;Project/Issue&gt; UI Design Proposal — &lt;Surface&gt;</h1><p>Visual decision evidence derived from the approved REASONS research Canvas. This neutral viewer chrome is not product design law.</p></div>
+      <div class="proposal-status">&lt;ready / needs decision / blocked&gt;</div>
+    </header>
+
+    <nav class="reasons-rail" aria-label="REASONS proposal sections">
+      <button class="reason-tab" data-view="requirements" aria-selected="true"><span class="reason-letter">R</span><span class="reason-name">Requirements</span><span class="reason-proof">contract · priorities · checks</span></button>
+      <button class="reason-tab" data-view="entities" aria-selected="false"><span class="reason-letter">E</span><span class="reason-name">Entities</span><span class="reason-proof">objects · relations · state</span></button>
+      <button class="reason-tab" data-view="approach" aria-selected="false"><span class="reason-letter">A</span><span class="reason-name">Approach</span><span class="reason-proof">options · trade-offs · choice</span></button>
+      <button class="reason-tab" data-view="structure" aria-selected="false"><span class="reason-letter">S</span><span class="reason-name">Structure</span><span class="reason-proof">anatomy · hierarchy · containment</span></button>
+      <button class="reason-tab" data-view="operations" aria-selected="false"><span class="reason-letter">O</span><span class="reason-name">Operations</span><span class="reason-proof">storyboard · trigger · result</span></button>
+      <button class="reason-tab" data-view="norms" aria-selected="false"><span class="reason-letter">N</span><span class="reason-name">Norms</span><span class="reason-proof">visual and behavior laws</span></button>
+      <button class="reason-tab" data-view="safeguards" aria-selected="false"><span class="reason-letter">S</span><span class="reason-name">Safeguards</span><span class="reason-proof">stress proof · blocker · gate</span></button>
+    </nav>
+
+    <section class="reason-view active" id="requirements">
+      <div class="view-head"><div><div class="view-kicker">R · Solution-independent contract</div><h2>What must the interface make true?</h2></div><p class="view-purpose">Write short, prioritized requirements before showing a composition. This section defines what every later approach must satisfy, not how the selected design works.</p></div>
+      <!-- Requirements are intentionally text-first. Do not add a selected-direction mockup here: it biases comparison before Approach. Keep 3-5 observable, testable bullets per applicable group and remove irrelevant placeholders. -->
+      <div class="requirement-layout">
+        <section class="card requirement-group"><header><h3>Functional requirements</h3><span class="requirement-code">F · CAPABILITIES</span></header><ul class="requirement-list"><li class="requirement-item"><span class="priority">MUST</span><span>&lt;User capability or task the interface must enable.&gt;</span></li><li class="requirement-item"><span class="priority">MUST</span><span>&lt;State, action, or recovery path the user must reach.&gt;</span></li><li class="requirement-item"><span class="priority should">SHOULD</span><span>&lt;Valuable capability that may yield to a documented constraint.&gt;</span></li></ul></section>
+        <section class="card requirement-group"><header><h3>Interaction requirements</h3><span class="requirement-code">I · BEHAVIOR</span></header><ul class="requirement-list"><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Trigger, selection, focus, or return behavior.&gt;</span></li><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Mouse, keyboard, and touch behavior where applicable.&gt;</span></li><li class="requirement-item"><span class="priority should">SHOULD</span><span>&lt;Effort, continuity, or reversibility expectation.&gt;</span></li></ul></section>
+        <section class="card requirement-group"><header><h3>Information requirements</h3><span class="requirement-code">C · CONTENT</span></header><ul class="requirement-list"><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Facts, hierarchy, or state the first read must communicate.&gt;</span></li><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Explanation or next action required for failure/empty/waiting states.&gt;</span></li><li class="requirement-item"><span class="priority should">SHOULD</span><span>&lt;Detail to defer, truncate, or reveal progressively.&gt;</span></li></ul></section>
+        <section class="card requirement-group"><header><h3>Quality / non-functional</h3><span class="requirement-code">Q · CONSTRAINTS</span></header><ul class="requirement-list"><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Responsive, accessibility, containment, or compatibility constraint.&gt;</span></li><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Required behavior under dense, delayed, or degraded conditions.&gt;</span></li><li class="requirement-item"><span class="priority should">SHOULD</span><span>&lt;Perceived performance or progressive-loading expectation.&gt;</span></li></ul></section>
+        <aside class="card requirement-review"><span class="label">How to review Requirements</span><h3>Challenge the contract, not the composition</h3><p>Ask what is missing, ambiguous, solution-biased, unprioritized, or impossible to verify. Judge visual directions only after this contract is accepted.</p><div class="requirement-rule"><strong>Requirement rule</strong><br>Observable · solution-independent · testable · prioritized</div><section class="requirement-section"><h4>Source / basis</h4><ul class="context-list"><li>&lt;UI applicability and product/surface route.&gt;</li><li>&lt;Approved research, DESIGN.md, current UI, or reference evidence grounding these requirements.&gt;</li></ul></section><section class="requirement-section"><h4>Out of scope</h4><ul class="scope-list"><li>&lt;Adjacent workflow or surface this proposal must not redesign.&gt;</li><li>&lt;Capability intentionally deferred.&gt;</li><li>&lt;Existing behavior or compatibility boundary that stays untouched.&gt;</li></ul></section><section class="requirement-section"><h4>Success checks</h4><ul class="success-list"><li>&lt;User-visible outcome that proves the functional contract.&gt;</li><li>&lt;Interaction or continuity check.&gt;</li><li>&lt;Responsive/accessibility/pathological-state check.&gt;</li></ul></section><div class="requirement-gate"><strong>Approval gate</strong><br>&lt;Are these the right requirements to compare approaches against? Record answered, assumed, and still-open decisions beside the requirement they affect.&gt;</div></aside>
+      </div>
+    </section>
+
+    <section class="reason-view" id="entities">
+      <div class="view-head"><div><div class="view-kicker">E · Domain map</div><h2>What exists, and what owns what?</h2></div><p class="view-purpose">Show user-visible domain objects, their relationships, cardinality or state, and the questions they answer. Do not promote them into code components.</p></div>
+      <div class="entity-layout">
+        <div class="card entity-map"><svg viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true"><line x1="145" y1="300" x2="450" y2="325" class="primary"/><line x1="455" y1="120" x2="490" y2="300"/><line x1="500" y1="320" x2="820" y2="170" class="primary"/><line x1="500" y1="330" x2="820" y2="500"/><line x1="470" y1="340" x2="230" y2="500"/></svg><div class="entity-node"><strong>&lt;Actor&gt;</strong><span>&lt;verb / intent&gt;</span></div><div class="entity-node"><strong>&lt;Work surface&gt;</strong><span>&lt;owns context&gt;</span></div><div class="entity-node primary"><strong>&lt;Core entity&gt;</strong><span>&lt;state + relationships&gt;</span></div><div class="entity-node"><strong>&lt;Related entity&gt;</strong><span>&lt;facts exposed&gt;</span></div><div class="entity-node"><strong>&lt;Metadata&gt;</strong><span>&lt;belongs to…&gt;</span></div><div class="entity-node"><strong>&lt;Presentation surface&gt;</strong><span>&lt;presents, owns nothing&gt;</span></div></div>
+        <div class="spec"><span class="label">Entity contract</span><table><tr><th>Entity</th><th>User question</th><th>Primary facts</th><th>Deferred facts</th><th>States</th></tr><tr><td>&lt;Entity&gt;</td><td>&lt;What the user needs to know&gt;</td><td>&lt;Visible first&gt;</td><td>&lt;On demand or hidden&gt;</td><td>&lt;Loading/empty/error/selected/etc.&gt;</td></tr></table><p class="risk">If the domain cannot be represented without raw debug metadata, the proposal is not ready.</p></div>
+      </div>
+    </section>
+
+    <section class="reason-view" id="approach">
+      <div class="view-head"><div><div class="view-kicker">A · Option space</div><h2>Which strategy satisfies the requirement?</h2></div><p class="view-purpose">Compare product-relevant structural directions with controlled inputs. Direction labels and prose are secondary to rendered evidence.</p></div>
+      <p class="direction-note"><strong>Comparison contract:</strong> same content, scenario, state, selected object, and viewport; only the direction changes. Each direction needs its own rendered composition frame. A flat image gallery without a stated trade-off and evidence link is invalid.</p>
+      <div class="direction-grid">
+        <article class="direction-option" data-direction="A"><figure class="frame direction-frame"><img class="proposal-image" src="./ui-direction-a.png" alt="Direction A desktop UI mockup" width="1600" height="1000"><figcaption>Generated raster mockup using the shared scenario and content.</figcaption></figure><div class="direction-copy"><h3>A — &lt;working name&gt;</h3><p><strong>Product hypothesis:</strong> &lt;what this direction optimizes&gt;</p><p><strong>Trade-off:</strong> &lt;what it sacrifices&gt;</p><p><strong>Evidence:</strong> &lt;visible proof in frame&gt;</p></div></article>
+        <article class="direction-option" data-direction="B"><figure class="frame direction-frame"><img class="proposal-image" src="./ui-direction-b.png" alt="Direction B desktop UI mockup" width="1600" height="1000"><figcaption>Generated raster mockup; must be structurally distinct from A.</figcaption></figure><div class="direction-copy"><h3>B — &lt;working name&gt;</h3><p><strong>Product hypothesis:</strong> &lt;what this direction optimizes&gt;</p><p><strong>Trade-off:</strong> &lt;what it sacrifices&gt;</p><p><strong>Evidence:</strong> &lt;visible proof in frame&gt;</p></div></article>
+        <article class="direction-option" data-direction="C"><figure class="frame direction-frame"><img class="proposal-image" src="./ui-direction-c.png" alt="Direction C desktop UI mockup" width="1600" height="1000"><figcaption>Generated raster mockup; keep content and state controlled.</figcaption></figure><div class="direction-copy"><h3>C — &lt;working name&gt;</h3><p><strong>Product hypothesis:</strong> &lt;what this direction optimizes&gt;</p><p><strong>Trade-off:</strong> &lt;what it sacrifices&gt;</p><p><strong>Evidence:</strong> &lt;visible proof in frame&gt;</p></div></article>
+        <article class="direction-option recommended" data-direction="D"><figure class="frame direction-frame"><img class="proposal-image" src="./ui-direction-d.png" alt="Direction D desktop UI mockup" width="1600" height="1000"><figcaption>Generated raster mockup; remove when only three directions apply.</figcaption></figure><div class="direction-copy"><h3>D — &lt;working name&gt;</h3><p><strong>Product hypothesis:</strong> &lt;what this direction optimizes&gt;</p><p><strong>Trade-off:</strong> &lt;what it sacrifices&gt;</p><p><strong>Evidence:</strong> &lt;visible proof in frame&gt;</p></div></article>
+      </div>
+    </section>
+
+    <section class="reason-view" id="structure">
+      <div class="view-head"><div><div class="view-kicker">S · Composition anatomy</div><h2>Where does each responsibility live?</h2></div><p class="view-purpose">Turn the chosen approach into an annotated surface map: reading order, hierarchy, containment, responsive morph, and pattern-specific responsibilities.</p></div>
+      <div class="anatomy-layout">
+        <figure class="frame anatomy-frame"><img class="proposal-image" src="./ui-selected-desktop.png" alt="Annotated selected desktop UI proposal" width="1600" height="1000"><figcaption>Generated selected-direction raster. Tie numbered anatomy notes to visible zones in this image.</figcaption></figure>
+        <div class="card anatomy-list"><span class="label">Surface contract</span><div class="anatomy-item"><b>1</b><div><strong>&lt;First-read zone&gt;</strong><span>&lt;content, priority, and responsibility&gt;</span></div></div><div class="anatomy-item"><b>2</b><div><strong>&lt;Primary work surface&gt;</strong><span>&lt;what remains visible and stable&gt;</span></div></div><div class="anatomy-item"><b>3</b><div><strong>&lt;Detail / secondary surface if selected&gt;</strong><span>&lt;placement, selection, containment, focus return&gt;</span></div></div><div class="anatomy-item"><b>4</b><div><strong>&lt;Actions / feedback&gt;</strong><span>&lt;priority, danger, and visibility&gt;</span></div></div></div>
+      </div>
+      <div class="grid two" style="margin-top:12px"><div class="spec"><span class="label">Responsive containment</span><p>&lt;Show desktop and narrow morph only where behavior or hierarchy changes. Specify no-selection/open/closed states, inner scroll, safe-area, no page-level horizontal overflow, and compact-control containment.&gt;</p></div><div class="spec"><span class="label">Selected-pattern contract</span><p>&lt;Only for patterns actually chosen: card/list anatomy, drawer/sidebar/bottom-sheet placement, wrapping/truncation, focus, animation, and reduced-motion. Do not include generic pattern inventories.&gt;</p></div></div>
+    </section>
+
+    <section class="reason-view" id="operations">
+      <div class="view-head"><div><div class="view-kicker">O · Behavior sequence</div><h2>How does the experience unfold?</h2></div><p class="view-purpose">Use a visual storyboard for the primary scenario. Each moment must name its trigger, visible state change, focus result, and recovery path.</p></div>
+      <div class="storyboard"><article class="moment"><figure class="frame"><img class="proposal-image" src="./ui-flow-01.png" alt="Primary scenario starting state" width="1600" height="1000"></figure><h3>&lt;User sees / finds&gt;</h3><p>Trigger: &lt;input&gt; · Result: &lt;visible outcome&gt;</p></article><article class="moment"><figure class="frame"><img class="proposal-image" src="./ui-flow-02.png" alt="Primary scenario invocation state" width="1600" height="1000"></figure><h3>&lt;User invokes&gt;</h3><p>Trigger: &lt;input&gt; · Focus: &lt;target&gt;</p></article><article class="moment"><figure class="frame"><img class="proposal-image" src="./ui-flow-03.png" alt="Primary scenario inspection or edit state" width="1600" height="1000"></figure><h3>&lt;User understands / changes&gt;</h3><p>State: &lt;selected/loading/error/etc.&gt;</p></article><article class="moment"><figure class="frame"><img class="proposal-image" src="./ui-flow-04.png" alt="Primary scenario completion or recovery state" width="1600" height="1000"></figure><h3>&lt;User completes / recovers&gt;</h3><p>Result: &lt;success signal&gt; · Escape: &lt;path&gt;</p></article></div>
+      <div class="spec" style="margin-top:12px"><span class="label">Operation contract</span><table><tr><th>Moment</th><th>Trigger</th><th>Visible change</th><th>Focus / keyboard</th><th>Motion / reduced motion</th><th>Failure / recovery</th></tr><tr><td>&lt;01–04&gt;</td><td>&lt;click/tap/key/system&gt;</td><td>&lt;observable result&gt;</td><td>&lt;focus target and return&gt;</td><td>&lt;purposeful transition / equivalent&gt;</td><td>&lt;error and next action&gt;</td></tr></table></div>
+    </section>
+
+    <section class="reason-view" id="norms">
+      <div class="view-head"><div><div class="view-kicker">N · Interface constitution</div><h2>Which rules must remain consistent?</h2></div><p class="view-purpose">Express reusable, reviewable laws. Every norm must be observable in at least one frame or state, not merely asserted in prose.</p></div>
+      <div class="norm-grid"><div class="card norm-card"><span class="norm-code">N-01</span><h3>Typography scale / rhythm</h3><p>&lt;Roles, measure, weights, line height, long-content behavior, and rendered proof.&gt;</p></div><div class="card norm-card"><span class="norm-code">N-02</span><h3>Spacing / composition</h3><p>&lt;Grid, alignment, density, whitespace intent, and containment proof.&gt;</p></div><div class="card norm-card"><span class="norm-code">N-03</span><h3>Color / emphasis / contrast</h3><p>&lt;Surface roles, semantic states, non-color cues, and contrast proof.&gt;</p></div><div class="card norm-card"><span class="norm-code">N-04</span><h3>Focus-visible / target affordance</h3><p>&lt;Keyboard path, focus treatment, hover/press distinction, and target floor.&gt;</p></div><div class="card norm-card"><span class="norm-code">N-05</span><h3>Motion / reduced-motion</h3><p>&lt;Purpose, properties, timing, cause/effect, and reduced-motion equivalent.&gt;</p></div><div class="card norm-card"><span class="norm-code">N-06</span><h3>Content / copy hierarchy</h3><p>&lt;Labels, statuses, wrapping/truncation, deferred metadata, empty/error copy, icon semantics.&gt;</p></div></div>
+    </section>
+
+    <section class="reason-view" id="safeguards">
+      <div class="view-head"><div><div class="view-kicker">S · Failure boundary</div><h2>Where must the proposal survive?</h2></div><p class="view-purpose">Turn constraints into rendered stress cases and approval gates. A missing critical proof is visible as a blocker, not buried in open-tensions prose.</p></div>
+      <div class="safeguard-layout">
+        <div class="stress-grid"><article class="card stress-card"><header><span>Loading / pending</span><span class="result-pass">PASS | RISK</span></header><figure class="frame"><img class="proposal-image" src="./ui-state-loading.png" alt="Loading or pending UI state" width="1600" height="1000"></figure><footer>&lt;rhythm, action, and stability expectation&gt;</footer></article><article class="card stress-card"><header><span>Empty / first use</span><span class="result-pass">PASS | RISK</span></header><figure class="frame"><img class="proposal-image" src="./ui-state-empty.png" alt="Empty or first-use UI state" width="1600" height="1000"></figure><footer>&lt;one clear next action&gt;</footer></article><article class="card stress-card"><header><span>Error / degraded data</span><span class="result-pass">PASS | RISK</span></header><figure class="frame"><img class="proposal-image" src="./ui-state-error.png" alt="Error or degraded-data UI state" width="1600" height="1000"></figure><footer>&lt;identity, explanation, and recovery&gt;</footer></article><article class="card stress-card"><header><span>Pathological content</span><span class="result-pass">PASS | RISK</span></header><figure class="frame"><img class="proposal-image" src="./ui-state-pathological-data.png" alt="UI with long labels, identifiers, or dense data" width="1600" height="1000"></figure><footer>&lt;wrapping/truncation/containment proof&gt;</footer></article><article class="card stress-card"><header><span>Narrow / touch</span><span class="result-risk">PASS | RISK</span></header><figure class="frame"><img class="proposal-image" src="./ui-selected-mobile.png" alt="Selected 390px-class touch UI proposal" width="780" height="1688"></figure><footer>&lt;reflow, targets, and hover parity&gt;</footer></article><article class="card stress-card"><header><span>Keyboard / reduced motion</span><span class="result-pass">PASS | RISK</span></header><div class="annotation">Tie this gate to the applicable selected, focus-visible, and transition frames above; do not invent another screen when the visual state is already represented.</div><footer>&lt;reading order and equivalent behavior&gt;</footer></article></div>
+        <div class="card"><span class="label">Approval gates</span><table><tr><th>Constraint</th><th>Evidence</th><th>Verdict</th></tr><tr><td>&lt;Functional / visual invariant&gt;</td><td>&lt;frame or capture&gt;</td><td>Pass | Risk | Blocker</td></tr><tr><td>&lt;Accessibility floor&gt;</td><td>&lt;focus/reflow/contrast proof&gt;</td><td>Pass | Risk | Blocker</td></tr><tr><td>&lt;Compatibility / no-scope-drift&gt;</td><td>&lt;preserved surface&gt;</td><td>Pass | Risk | Blocker</td></tr></table><p class="risk"><strong>Open decision:</strong> &lt;Only unresolved choices that materially change layout, action, density, risk, or direction.&gt;</p><p><strong>Implementation proof expected:</strong> &lt;desktop, narrow, states, interaction sequence, pathological data, and fidelity comparison.&gt;</p></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    document.querySelectorAll('.reason-tab').forEach((tab) => tab.addEventListener('click', () => {
+      document.querySelectorAll('.reason-tab').forEach((candidate) => candidate.setAttribute('aria-selected', String(candidate === tab)));
+      document.querySelectorAll('.reason-view').forEach((view) => view.classList.toggle('active', view.id === tab.dataset.view));
+    }));
+  </script>
+</body>
+</html>

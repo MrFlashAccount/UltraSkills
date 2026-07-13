@@ -1,0 +1,107 @@
+{
+  "title": "DevHarness UI Design Proposal Draft Output",
+  "description": "Producer output contract for the DevHarness UI design proposal draft gate before architecture.",
+  "type": "object",
+  "required": [
+    "outcome"
+  ],
+  "properties": {
+    "outcome": {
+      "enum": [
+        "ready_for_attack",
+        "ready_for_approval"
+      ],
+      "description": "Producer must use ready_for_attack for an initial or critic-requested proposal and ready_for_approval for a correction requested at the user gate. Missing help is reported through the runner non-blocking stop control channel, never as an output outcome.",
+      "x-usage": "Treat this as the authoritative workflow state for completed output. Do not infer success from other populated fields when it requires revision."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Producer must summarize the UI design proposal state for human approval without embedding the ui-design-proposal artifact body.",
+      "x-usage": "Use this as the human-facing approval state for the UI design proposal gate. Show it with the artifact attachment; do not recreate the summary from artifact contents in the orchestrator."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
+      },
+      "description": "Producer must emit artifact metadata for the required immutable ui-design-proposal HTML artifact and every raster image it embeds when outcome is ready_for_attack or ready_for_approval.",
+      "x-usage": "For both ready_for_attack and ready_for_approval, emit the required immutable ui-design-proposal artifact with content_type text/html plus every linked raster image artifact. Non-trivial applicable proposals must not return HTML alone. Exact artifact field semantics come from the shared baton artifact schema.",
+      "minItems": 1,
+      "maxItems": 16,
+      "contains": {
+        "type": "object",
+        "required": [
+          "id",
+          "content_type"
+        ],
+        "properties": {
+          "id": {
+            "const": "ui-design-proposal"
+          },
+          "content_type": {
+            "const": "text/html"
+          }
+        }
+      },
+      "minContains": 1,
+      "maxContains": 1,
+      "allOf": [
+        {
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["id", "content_type"],
+                "properties": {
+                  "id": { "const": "ui-design-proposal" },
+                  "content_type": { "const": "text/html" }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["content_type"],
+                "properties": {
+                  "content_type": {
+                    "enum": ["image/png", "image/jpeg", "image/webp"]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
+      },
+      "description": "Producer may emit compact structured results, decisions, or evidence summaries created by this stage.",
+      "x-usage": "Use these as supporting evidence or compact summaries. Do not let them override outcome, selected steps, or approved contracts."
+    }
+  },
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/ui-intent-draft-output",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "enum": ["ready_for_attack", "ready_for_approval"]
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "summary",
+          "artifacts"
+        ]
+      }
+    }
+  ]
+}

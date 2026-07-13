@@ -12,7 +12,7 @@ Every draft step that feeds a human approval gate must emit a compact `summary` 
 
 Approval gates present the draft-produced `summary`, attach the referenced artifact without opening it, include the attack verdict, and wait for explicit approval. The orchestrator must not read the artifact body merely to prepare the gate or invent a fresh approval summary; it may open the attachment later only when the user explicitly asks a content question.
 
-Attack, review, implementation, and planning workers should continue to consume the artifact or structured contract fields they need. Do not replace their evidence context with the approval summary.
+Attack, review, implementation, and planning workers should continue to consume the artifact or structured contract fields they need. Do not replace their evidence context with the approval summary. Frontend implementation and frontend-taste review consume the approved `ui-design-proposal` HTML and its explicit approval evidence directly; the implementation-plan translation is not a visual substitute.
 
 The implementation plan body is artifact-only. `planning_draft` JSON must not inline the readable plan/proposal body; it should contain only compact routing and reviewer-selection fields needed by the runner plus `summary` and `artifacts`.
 
@@ -47,3 +47,11 @@ When code, docs, or existing contracts answer the question, inspect them instead
 - ask one question at a time.
 
 After the orchestrator resolves the non-blocking stop, continue the same architecture step from the resolved decision and only then finalize the architecture artifact and compact summary.
+
+## UI design proposal contract
+
+When the UI design proposal gate applies, frontend-taste owns both the draft and hostile attack. The HTML artifact must explicitly record UI applicability and product/surface route, design-basis preflight, user/task and primary/secondary actions, user questions/decisions, first-read hierarchy, screen/zones, product-level data hierarchy, selected pattern contracts, animation/reduced-motion behavior, responsive containment, visual evidence/rendered-proof expectations, and open tensions.
+
+Card/list anatomy and selection rules are mandatory only when the approved direction selects cards or list rows. Drawer/sidebar/bottom-sheet placement and state rules are mandatory only when the direction selects a detail overlay or panel. The workflow does not impose a generic card-and-drawer composition on forms, tables, documents, navigation, or other surfaces.
+
+The hostile attack checks hierarchy, typography/rhythm, spacing/composition, color/emphasis/contrast, focus-visible and target affordance, responsive containment, motion/reduced-motion, evidence fidelity, and generic UI slop without inventing `DESIGN.md`. Applicable non-trivial UI must define rendered proof, and implementation plus frontend-taste review must inspect and compare that proof against the approved HTML artifact.

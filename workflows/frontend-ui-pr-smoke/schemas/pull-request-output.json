@@ -1,0 +1,81 @@
+{
+  "title": "Frontend UI PR Smoke Pull Request Output",
+  "description": "Output contract for the final pull request step in the frontend UI PR smoke workflow.",
+  "type": "object",
+  "required": [
+    "outcome"
+  ],
+  "properties": {
+    "outcome": {
+      "const": "opened",
+      "description": "Completed pull request publication state. Report missing help through the runner non-blocking stop control channel, never as an output outcome."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable PR summary or preparation status."
+    },
+    "branch": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Branch used for the pull request."
+    },
+    "commit": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Commit SHA or short commit reference for the PR."
+    },
+    "pr_url": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pull request URL when outcome is opened."
+    },
+    "verification": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "command",
+          "result"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "result": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/frontend-ui-pr-smoke/pull-request-output",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "opened"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "summary",
+          "branch",
+          "commit",
+          "pr_url",
+          "verification"
+        ]
+      }
+    }
+  ]
+}

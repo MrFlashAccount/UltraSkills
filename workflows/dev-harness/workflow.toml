@@ -1,6 +1,6 @@
 name = "dev-harness"
 version = 1
-description = "End-to-end planning and execution workflow for non-trivial code work: research attack, architecture gate, implementation plan, approval, implementation fanout, and review fanout. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
+description = "End-to-end planning and execution workflow for non-trivial code work: research attack, optional UI design proposal gate, architecture gate, implementation plan, approval, implementation fanout, and review fanout. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
 start = "research_draft"
 done = "done"
 
@@ -87,7 +87,7 @@ Read research_draft.summary as the human-facing research proposal state and atta
 Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
 If the user asks for a packet/proposal file, retrieve/export the existing artifact referenced by baton/output artifacts; do not ask a worker to recreate it in a temp path.
 Continue only after explicit approval.
-Return approval approved to continue to architecture_draft or rejected to revise research_draft as completed output; otherwise report a non-blocking stop.
+Return approval approved to continue to ui_intent_draft or rejected to revise research_draft as completed output; otherwise report a non-blocking stop.
 
 Input context:
 - Research summary for approval: ${{ input.research_draft.summary }}
@@ -102,8 +102,109 @@ schema = "schemas/approval-output.json"
 match = "${{ output.approval }}"
 
 [steps.approve_research.next.cases]
-approved = "architecture_draft"
+approved = "ui_intent_draft"
 rejected = "research_draft"
+
+[steps.ui_intent_draft]
+name = "UI design proposal draft"
+kind = "worker"
+agent = "frontend-taste"
+
+[steps.ui_intent_draft.input]
+role = "frontend-taste"
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Use frontend-taste judgment. Read the approved/current `reasons-canvas-research` artifact from `research_draft` as the source of truth and produce one first-class human-facing HTML artifact named `ui-design-proposal` with content_type `text/html`, plus the raster image artifacts that the HTML embeds.
+Use the shared HTML template's REASONS interface as the mandatory content architecture. Translate the approved research Canvas into seven inspectable arguments instead of reproducing its Markdown or filling a long scrolling document: Requirements = a short prioritized solution-independent interface contract covering functional capabilities, interaction behavior, information/content, non-functional quality constraints, out-of-scope boundaries, and success checks; Entities = a domain-object relationship map; Approach = controlled direction comparison; Structure = annotated chosen-surface anatomy and containment; Operations = a primary-scenario storyboard; Norms = observable interface laws; Safeguards = rendered stress cases and approval gates. Requirements is intentionally text-first: use concise observable and testable `MUST`/`SHOULD` bullets, and do not place a selected-direction mockup or other solution-biased image there before Approach. Each later section must use the visual form that fits its reasoning job. Do not collapse the artifact into either prose-heavy documentation or a four-image direction gallery: directions are evidence inside Approach, not the whole proposal.
+The artifact must preserve a visible reasoning chain from requirement to entity model to chosen approach to surface anatomy to behavior to norms to failure proof. Use real product content or honest placeholders outside proposed-screen frames. Put claims next to the raster frame, map, storyboard moment, or stress case that proves them; do not rely on decorative scores, unsupported checklists, or rationale separated from visual evidence by long scrolling. Treat the template shell as neutral evidence navigation, not product visual direction; rendered product frames must follow the available design basis.
+This step is a lightweight UI/product-surface design proposal gate before architecture, not a separate design-law authoring workflow. It must not edit or invent `DESIGN.md`, choose durable visual law, or define file/component implementation architecture. The design-routing logic belongs inside `ui-design-proposal`: product/surface route, design-basis preflight, user decisions, visually comparable direction frames when needed, chosen desktop/mobile proof, annotations, component and copy inventory, typography/rhythm, spacing/composition, color/emphasis/contrast, focus-visible/target affordance, motion/reduced-motion, wrapping/truncation, product-level data hierarchy, evidence/proof expectations, open tensions, portable frontend-taste guidance allowed, what must not be inferred, and whether create-design/frontend-taste direction work is required before architecture. Include card/list anatomy and visual rules only when that pattern is selected; include drawer/sidebar/bottom-sheet placement and states only when that pattern is selected.
+If the approved research has no user-facing UI surface, or only trivial UI copy/bug work, still create `ui-design-proposal` with a clear "not applicable / no UI design proposal gate needed" decision and summary so downstream steps know the gate was considered.
+For non-trivial user-facing UI, the `ui-design-proposal` must capture the interface intent at product-surface depth: user/task, primary and secondary actions, user questions/decisions, first-read/work-surface reading order, screen/zones needed, product-level data hierarchy, content model/data hierarchy, text wrapping/truncation policy, required visible states, interaction expectations, density/tone, responsive containment, design-law or existing-UI basis, visual evidence/proof assets, rendered-proof expectations, and any UI open tensions that architecture must preserve. Describe semantic screen structure such as toolbar, filters, list/table, detail drawer/sidebar, form, dialog, empty/error/loading states; do not choose file paths, component filenames, hooks, state owners, or storage boundaries.
+For non-trivial UI, explicitly decide what each selected surface pattern should show, defer, truncate, or hide. Do not leave raw technical metadata, debug noise, or long token placement for implementation to guess. When card/list patterns are selected, specify their anatomy/content model and visual rules. When drawer/sidebar/bottom-sheet patterns are selected, specify breakpoint placement, containment, open/closed/no-selection behavior, focus return, animation, and reduced-motion behavior. Do not introduce cards or drawers merely because the template supports them. Define where wrapping is allowed and where it is forbidden: buttons, tabs, segmented controls, chips, badges, pills, and compact status labels must not wrap unless the design basis explicitly approves it; long labels/tokens must be shortened, truncated, moved to detail, or otherwise contained. One-letter wraps are never acceptable proof.
+Always include a `User Questions / Decisions` section for non-trivial UI. Put 3-7 concrete user-facing questions or decisions there when useful, with status Answered, Assumed, or Needs user approval. If an unanswered question materially changes layout, primary action, risk posture, density, or visual direction, report a non-blocking stop with non_blocking_stop.source_step_id = ui_intent_draft and the smallest concrete user-facing question instead of guessing.
+Use existing screenshots, approved reference images, proof pages, generated mockups, prior visual proposals, or current UI captures as visual evidence when they are already available in the task/repo/context. Record what each asset proves and what frontend should preserve or ignore. For every non-trivial UI proposal, use the host's built-in image generation tool to create ordinary raster UI mockups; do not draw the proposed screens as HTML/CSS/SVG/canvas snippets. Before generation, define one shared visual brief from the approved design basis, product concepts, critical copy, layout rules, and selected direction. Reuse it across calls so desktop, mobile, and state images are recognizably the same interface; vary only the intended viewport, composition direction, screen, or state. Make one image-generation call per requested view or variant, then copy each selected output from `$CODEX_HOME/generated_images/...` into this step's artifact output directory. Critical actions, headings, statuses, and data labels shown in the images must be legible and product-relevant; prefer honest short copy over generated gibberish. Emit each image in artifacts[] with a stable id and image/png, image/jpeg, or image/webp content_type. Keep the HTML and image files as siblings and embed them from `ui-design-proposal` through relative `<img src="./filename.png">` references with useful alt text. At minimum generate and embed the selected desktop and mobile/narrow views; also generate and embed each of the 3-4 direction variants when direction comparison is required, plus separate images for materially different screens or important loading, empty, error, degraded, selected/detail, dense-data, or pathological-data states needed to make the proposal inspectable. If the built-in image generation path is unavailable or an expected image cannot be persisted in the artifact output directory, report a non-blocking stop with non_blocking_stop.source_step_id = ui_intent_draft; never substitute an HTML mock surface or prose placeholder. Explicitly state the rendered proof/screenshots the implementation or review must capture; do not silently accept text-only evidence when the surface can be rendered locally.
+If design law, existing UI basis, product context, visual evidence, or user choice is missing and the task needs high-confidence new screen direction, report a non-blocking stop with non_blocking_stop.source_step_id = ui_intent_draft and the smallest concrete user-facing question, screenshot/proof request, or create-design/frontend-taste routing need. For small conservative UI work, record the fallback basis instead of stopping.
+Emit artifact metadata for `ui-design-proposal` and every image referenced by its `<img>` elements in artifacts[], plus a compact output.summary as the human-facing UI design proposal state. For a non-trivial applicable proposal, never return only the HTML artifact. Trivial/not-applicable proposals may omit images and must remove unused image sections from the HTML instead of leaving broken placeholders.
+Return ready_for_attack for the initial proposal or a ui_intent_attack-requested revision, or ready_for_approval after correcting an approve_ui_intent rejection as completed output; otherwise report a non-blocking stop with non_blocking_stop.source_step_id = ui_intent_draft.
+When revising after ui_intent_attack feedback or approve_ui_intent rejection, read feedback from input.ui_intent_attack and input.approve_ui_intent and address it explicitly while preserving approved research constraints. If the latest approve_ui_intent output is rejected, return ready_for_approval after the correction; do not send that user-requested revision through ui_intent_attack again.
+Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
+If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = ui_intent_draft and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
+
+Input context:
+- Research artifacts, including required `reasons-canvas-research`: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}
+- Research attack verdict: ${{ input.research_attack.verdict }}
+- Human research approval: ${{ input.approve_research }}
+- Previous UI design proposal artifacts: ${{ input.ui_intent_draft.artifacts | default: "No previous ui_intent_draft artifacts in input context." }}
+- UI design proposal attack feedback to address: ${{ input.ui_intent_attack.verdict | default: "No prior ui_intent_attack feedback." }}
+- Human UI design proposal gate feedback to address: ${{ input.approve_ui_intent | default: "No prior approve_ui_intent decision or feedback." }}'''
+
+[steps.ui_intent_draft.output]
+template = "../../shared/templates/ui-design-proposal-template.html"
+schema = "schemas/ui-intent-draft-output.json"
+
+[steps.ui_intent_draft.next]
+match = "${{ output.outcome }}"
+
+[steps.ui_intent_draft.next.cases]
+ready_for_attack = "ui_intent_attack"
+ready_for_approval = "approve_ui_intent"
+
+[steps.ui_intent_attack]
+name = "UI design proposal attack"
+kind = "worker"
+agent = "ui_intent_critic"
+agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
+
+[steps.ui_intent_attack.input]
+role = "frontend-taste"
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Start from a hostile prior: assume the UI design proposal draft is wrong, incomplete, overcomplicated, unsupported by research, or drifting into design-law/code architecture until the artifact proves otherwise. Do not give credit for intent, author confidence, or plausible-sounding structure.
+Read artifact `ui-design-proposal` and all linked raster image artifacts from `ui_intent_draft`; inspect every image visually instead of inferring its contents from filenames or HTML annotations. Attack them for missing user/task grounding, weak first-read/action hierarchy, hierarchy defects, weak typography or rhythm, inconsistent spacing or composition, arbitrary color/emphasis or insufficient contrast, missing focus-visible or target affordance, broken responsive containment, purposeless motion or missing reduced-motion behavior, generic UI slop, missing product-level data hierarchy, missing applicable-pattern anatomy/state rules, missing wrapping/truncation policy, missing required states, unsupported design basis, missing product/surface routing, missing or misused visual evidence/proof assets, hidden assumptions, over-specific code/component architecture, and failure to mark non-UI/trivial UI work as not applicable. For non-trivial applicable UI, fail a proposal that returns only HTML, renders proposed screens with HTML/CSS/SVG/canvas instead of ordinary raster image artifacts, has broken or non-relative `<img>` references, omits emitted image metadata, or lacks separate desktop/mobile and materially distinct required screen/state images. Also fail decorative concept art passed off as UI, illegible or generated-gibberish critical copy, and cross-view drift where desktop, mobile, or state images no longer represent the same selected interface. Card/list and drawer/sidebar concerns apply only when the proposal selects those patterns; do not require or invent them for forms, tables, documents, navigation, or other surfaces. Do not invent `DESIGN.md` or treat its absence as permission to create design law. Treat a missing `ui-design-proposal` artifact as a blocking UI design proposal failure.
+Require the artifact to preserve the full REASONS evidence chain: Requirements prioritized functional/interaction/information/quality contract with out-of-scope boundaries and success checks, Entities relationship map, Approach controlled options, Structure annotated anatomy, Operations storyboard, Norms observable laws, and Safeguards rendered stress cases and approval gates. Requirements is the deliberate text-first exception: fail it when bullets are verbose, unprioritized, solution-specific, untestable, or biased by a selected-direction mockup. Reject a Markdown-like document merely restyled as cards or tables everywhere else, long prose whose claims are detached from proof, duplicate navigation or decorative chrome that does not help the decision, and a proposal that consists mainly of 3-4 direction images. Reject any later section that uses the same generic content treatment when its reasoning job requires a map, annotated composition, sequence, or stress proof.
+For taste-sensitive or materially new UI, require 3-4 viable directions and require each direction to have its own inspectable rendered composition frame, a product-relevant structural/composition difference, and visible demonstration of typography/rhythm, spacing/composition, emphasis/contrast, focus-visible/target affordance, and motion/reduced-motion where applicable. Reject prose-only direction comparison, identical or near-identical frames merely relabeled or recolored, and filled contract tables or checklists unsupported by the rendered frames. A conservative/trivial existing-pattern exception is valid only when the artifact names the exact existing pattern and evidence being preserved and does not disguise materially new UI as conservative work.
+Return approved or needs_revision as completed output; otherwise report a non-blocking stop.
+When reporting it, set non_blocking_stop.source_step_id = ui_intent_attack.
+
+Input context:
+- UI design proposal artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}
+- Research artifacts: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}'''
+
+[steps.ui_intent_attack.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/gate-attack-verdict-output.json"
+
+[steps.ui_intent_attack.next]
+match = "${{ output.outcome }}"
+
+[steps.ui_intent_attack.next.cases]
+approved = "approve_ui_intent"
+needs_revision = "ui_intent_draft"
+
+[steps.approve_ui_intent]
+name = "Approve UI design proposal"
+kind = "approval"
+
+[steps.approve_ui_intent.input]
+prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Read ui_intent_draft.summary as the human-facing UI design proposal state and attach the `ui-design-proposal` artifact plus every raster image artifact it embeds from ui_intent_draft. On the first visit, include ui_intent_attack.verdict. After a user-rejected proposal is corrected, return directly to this gate and treat the old attack verdict only as evidence about the previous version; do not present it as critique of the revised artifact.
+Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
+If the user asks for UI design proposal files, retrieve/export the existing `ui-design-proposal` artifact and its linked raster image artifacts referenced by baton/output artifacts. Do not ask a worker to recreate them in a temp path.
+Continue only after explicit approval.
+Return approval approved to continue to architecture_draft or rejected to revise ui_intent_draft as completed output; otherwise report a non-blocking stop.
+
+Input context:
+- UI design proposal summary for approval: ${{ input.ui_intent_draft.summary }}
+- UI design proposal attack verdict: ${{ input.ui_intent_attack.verdict }}
+- UI design proposal artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}'''
+
+[steps.approve_ui_intent.output]
+schema = "schemas/approval-output.json"
+
+[steps.approve_ui_intent.next]
+match = "${{ output.approval }}"
+
+[steps.approve_ui_intent.next.cases]
+approved = "architecture_draft"
+rejected = "ui_intent_draft"
 
 [steps.architecture_draft]
 name = "Architecture draft"
@@ -115,6 +216,7 @@ agent_runtime.codex = { model = "gpt-5.6-luna", thinking_level = "xhigh" }
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read the approved/current `reasons-canvas-research` artifact from `research_draft` as the research source of truth and strictly follow it.
+Read the approved/current `ui-design-proposal` artifact from `ui_intent_draft` as the UI/product-surface source of truth when it is applicable. Preserve its user task, product/surface route, screen/zones, first-read/action hierarchy, required states, interaction expectations, design-law basis, visual evidence/proof asset constraints, and open UI tensions. Do not rewrite visual hierarchy or UI taste in architecture; translate only the code/system implications needed to preserve the approved UI design proposal.
 Produce the minimal architecture decision or structural contract required by the approved research in the `reasons-canvas-architecture` artifact and a compact output.summary as the human-facing architecture proposal state for approval gates. Do not embed the architecture artifact body in JSON.
 Before finalizing output.summary or `reasons-canvas-architecture`, explicitly identify the public contract and API surfaces affected by the task: exported APIs, CLI/user-facing commands, schemas, workflow interfaces, integration boundaries, compatibility promises, and observable behavior. If code, docs, or existing contracts answer a question, inspect them instead of asking the user.
 When user-owned choices remain about public contract shape, API compatibility, naming, migration behavior, or accepted breakage, report a non-blocking stop with non_blocking_stop.source_step_id = architecture_draft and the smallest focused non_blocking_stop.needed question for the orchestrator to resolve through the non-blocking stop flow; include your recommended answer in non_blocking_stop.summary or non_blocking_stop.needed.
@@ -132,6 +234,9 @@ Input context:
 - Research artifacts, including required `reasons-canvas-research`: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}
 - Research attack verdict: ${{ input.research_attack.verdict }}
 - Human research approval: ${{ input.approve_research }}
+- UI design proposal artifacts, including `ui-design-proposal` when present: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}
+- UI design proposal attack verdict: ${{ input.ui_intent_attack.verdict | default: "No UI design proposal attack verdict is available." }}
+- Human UI design proposal approval: ${{ input.approve_ui_intent | default: "No UI design proposal approval is available." }}
 - Previous architecture artifacts: ${{ input.architecture_draft.artifacts | default: "No previous architecture_draft artifacts in input context." }}
 - Architecture attack feedback to address: ${{ input.architecture_attack.verdict | default: "No prior architecture_attack feedback." }}
 - Human architecture gate feedback to address: ${{ input.approve_architecture | default: "No prior approve_architecture decision or feedback." }}'''
@@ -212,13 +317,16 @@ agent_runtime.codex = { model = "gpt-5.6-luna", thinking_level = "xhigh" }
 [steps.planning_draft.input]
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Produce the implementation plan contract for approval from the approved `reasons-canvas-architecture` artifact. Treat `reasons-canvas-architecture` as an immutable source contract: do not edit it, complete missing Canvas sections, or read earlier research artifacts separately. Convert the approved architecture artifact into workstreams, owners, verification, rollback, and reviewer selection in one file-backed artifact.
-Create exactly one first-class human-facing implementation plan artifact named `implementation-plan` and emit its artifact metadata in artifacts[]. Do not embed the readable plan/proposal body in JSON; keep JSON close to research/architecture draft outputs: outcome, compact summary, artifact metadata, routing fields, selected reviewer fields, and blockers only.
+Produce the implementation plan contract for approval from the approved `reasons-canvas-architecture` artifact and the approved `ui-design-proposal` artifact when applicable. Treat `reasons-canvas-architecture` and `ui-design-proposal` as immutable source contracts: do not edit them, complete missing sections, or read earlier research artifacts separately. Convert the approved architecture and UI design proposal artifacts into workstreams, owners, verification, rollback, and reviewer selection in one file-backed artifact.
+Create exactly one first-class human-facing implementation plan artifact named `implementation-plan` and emit its artifact metadata in artifacts[]. Do not embed the readable plan/proposal body in JSON; keep JSON close to research/architecture draft outputs: outcome, compact summary, artifact metadata, routing fields, and selected reviewer fields only.
+When a `ui-design-proposal` is applicable to the slice, the `implementation-plan` artifact must include a `UI Design Proposal` section that carries forward its user/task, product/surface route, primary actions, first-read hierarchy, screen/zones, product-level data hierarchy, selected pattern contracts, animation/reduced-motion behavior, responsive containment, required states, interaction expectations, density/tone, design-law or existing-UI basis, and visual evidence/proof asset expectations. Include card/list anatomy and selection rules only when a card/list pattern is selected. Include drawer/sidebar/bottom-sheet placement and state rules only when a detail-overlay pattern is selected. If the UI design proposal artifact says no UI design proposal gate is needed, record that reason instead of inventing UI design proposal.
+When selected_implementation_steps includes frontend_implementation for non-trivial user-facing UI, the `implementation-plan` artifact must include a `Frontend composition plan` section naming page/screen containers, feature components, layout components, primitives/UI-kit usage, overlays/composites, state surfaces, hooks/selectors/adapters, file zones, and responsibility boundaries. If the frontend slice is non-UI, trivial, or intentionally preserves an existing component shape, record that reason in the section. Treat a missing required frontend composition plan as a planning failure, not an implementation detail to improvise later.
 Emit a compact output.summary as the human-facing plan proposal state for approval gates. Summarize the artifact's current plan state, selected implementation route, selected reviewers, main risks, and verification/rollback shape without embedding the full plan body.
 The step id remains planning_draft for compatibility, but once approve_plan approves this output, downstream steps must treat it as the final approved plan contract. selected_implementation_steps must contain only unique canonical implementation branch ids needed for the plan: backend_implementation, frontend_implementation, architecture_artifact_update.
 Collapse overlapping same-role work into one canonical task; do not create duplicate backend/frontend/architecture workers.
 If duplicate same-role work cannot be safely collapsed, report a non-blocking stop with non_blocking_stop.source_step_id = planning_draft. selected_review_steps must explicitly contain the unique reviewers that must run after implementation; implementation must not invent or recompute reviewers.
 Keep review_plan.reviewers aligned with selected_review_steps.
+When frontend_implementation is selected for applicable non-trivial user-facing UI, selected_review_steps must include both frontend_review and frontend_taste_review as one mandatory pair. Do not prune either half of this engineering-plus-visible-quality gate or treat one as optional/skipped coverage.
 Reviewer fan-out budget: default to one independent reviewer, use two when two independent material risk classes are touched, use three for structural/runtime plus verification-heavy work, and select more than three only with review_escalation explaining the independent risk classes. selected_review_steps means "run these reviewers"; do not include optional, informational, or absence-confirmation reviewers. Record considered-but-skipped reviewers in skipped_review_steps with an evidence-backed reason instead.
 Return ready_for_attack for the initial plan or a planning_attack-requested revision as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = planning_draft.
 When revising after planning_attack feedback or approve_plan rejection, read feedback from input.planning_attack and input.approve_plan and address it explicitly while preserving the approved architecture constraints. If the latest approve_plan output is rejected, return ready_for_approval after the correction; do not send that user-requested revision through planning_attack again.
@@ -228,6 +336,8 @@ If concise clarification is needed, do not ask the user directly; report a non-b
 Input context:
 - Architecture artifacts, including `reasons-canvas-architecture` when present: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}
 - Architecture attack verdict: ${{ input.architecture_attack.verdict }}
+- UI design proposal artifacts, including `ui-design-proposal` when present: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}
+- UI design proposal approval: ${{ input.approve_ui_intent | default: "No UI design proposal approval is available." }}
 - Previous implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No previous planning_draft implementation artifacts in input context." }}
 - Planning attack feedback to address: ${{ input.planning_attack.verdict | default: "No prior planning_attack feedback." }}
 - Human plan gate feedback to address: ${{ input.approve_plan | default: "No prior approve_plan decision or feedback." }}'''
@@ -253,11 +363,15 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 role = "critic"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read artifact `implementation-plan` from `planning_draft` and challenge it plus selected_implementation_steps, selected_review_steps, review_plan, skipped_review_steps, and review_escalation for faithful conversion from approved architecture artifacts and immutable `reasons-canvas-architecture` when present into workstreams, unique canonical task selection, explicit final reviewer selection, no duplicate same-role workers, entity coverage, one-owner-per-file-zone, project baseline, architecture artifact manifest, verification/rollback surfaces, sensitive surfaces, request-path/contract touchpoints, and max-detail leaks. Treat a missing `implementation-plan` artifact as a blocking planning failure.
+When a `ui-design-proposal` is applicable, challenge the implementation-plan for faithful carry-forward of the UI design proposal: user/task, product/surface route, primary actions, first-read hierarchy, screen/zones, product-level data hierarchy, selected pattern contracts, animation/reduced-motion behavior, responsive containment, required states, interaction expectations, density/tone, design-law/existing-UI basis, and visual evidence/proof asset expectations. Require card/list or drawer/sidebar details only when those patterns are selected. If the plan ignores, rewrites, or invents UI design proposal instead of carrying it forward, return needs_revision or report a non-blocking stop as appropriate.
+When frontend_implementation is selected for non-trivial user-facing UI, challenge the implementation-plan for a concrete `Frontend composition plan`: page/screen containers, feature components, layout components, primitives/UI-kit usage, overlays/composites, state surfaces, hooks/selectors/adapters, file zones, responsibility boundaries, state ownership, and UI-kit/token evidence. If the plan omits this, treats it as cosmetic, leaves component architecture for implementation to invent, or lacks review criteria for component decomposition, return needs_revision or report a non-blocking stop as appropriate.
+When frontend_implementation is selected for applicable non-trivial user-facing UI, require both frontend_review and frontend_taste_review in selected_review_steps and review_plan. Missing either mandatory half is a planning failure.
 Return approved or needs_revision as completed output; otherwise report a non-blocking stop.
 If selected tasks contain duplicate/overlapping same-role work that cannot collapse to one canonical step, if selected_review_steps includes reviewers only to confirm absence of a surface, if optional reviewers are selected instead of recorded in skipped_review_steps, if selected_review_steps has more than three entries without strong review_escalation, or if reviewers are missing/recomputed outside planning, report a non-blocking stop with non_blocking_stop.source_step_id = planning_attack.
 
 Input context:
 - Implementation plan artifacts under review: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
+- UI design proposal artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}
 - Selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
 - Selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Review plan: ${{ input.planning_draft.review_plan }}
@@ -384,15 +498,19 @@ agent_runtime.codex = { model = "gpt-5.6-terra", thinking_level = "high" }
 role = "frontend"
 prompt = '''Implement only the frontend slice selected in the approved plan contract planning_draft.selected_implementation_steps.
 Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this implementation slice. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Read the approved `ui-design-proposal` HTML artifact and all linked raster image artifacts from `ui_intent_draft` directly when it is applicable, together with the explicit `approve_ui_intent` approval evidence. Treat the HTML plus proposal images, not only the implementation-plan translation, as the visual source of truth. Inspect every proposal image visually together with its annotations, states, selected pattern contracts, proof assets, and rendered-proof expectations before editing. Treat a missing applicable `ui-design-proposal`, missing linked image, wrong artifact id/content type, or missing explicit approval evidence as a non-blocking stop.
 This workflow supports at most one frontend_implementation worker; handle all frontend work for the approved plan here and do not spawn duplicate frontend workers.
 Read prior step outputs from input.<step_id> fields only; do not rely on artifacts/results globals.
 Preserve frozen research, architecture, execution plan, and user constraints.
 Treat the approved proposal, plan, and source-contract rows assigned to frontend_implementation as mandatory hard gates. Do not approximate, rename, or improvise around them without an approved mapping in the input context.
 Before implementing named frontend frameworks, routers, UI kits, accessibility primitive libraries, or build/runtime integrations, inspect relevant current docs or repo-local package examples and record the docs/examples used in the implementer handoff. If the needed documentation cannot be accessed and the behavior is contract-significant, report a non-blocking stop instead of guessing.
+For applicable non-trivial UI, capture rendered proof required by the approved HTML artifact and compare it against the approved frames/evidence for fidelity. Record proof locations and the comparison result in the implementer handoff. Text-only self-report is insufficient when the surface can be rendered locally; if rendering cannot proceed, report a non-blocking stop with non_blocking_stop.source_step_id = frontend_implementation and the concrete environment need.
 For user-facing UI, decompose the slice into named, reviewable components/hooks/selectors; do not leave page composition, lists/cards, overlays/drawers/dialogs, detail sections, loading/error surfaces, and focus/interaction policy in one large component unless the approved plan grants an explicit exception.
+For non-trivial user-facing UI, read the approved plan's `Frontend composition plan` before editing. If it is missing, too vague to name concrete components/file zones, or contradicts repo conventions, report a non-blocking stop with non_blocking_stop.source_step_id = frontend_implementation and the smallest concrete approval question instead of inventing the component architecture during implementation. Implement against that component map unless implementation reality exposes a contradiction that requires an approved plan revision.
 Follow component colocation by default: keep component implementation, component-local types, styles, tests/stories/fixtures when present, and component-specific helpers near that component. Use shared contracts/types only for genuinely shared DTOs or cross-component APIs.
 Identify the repo's UI kit/design-system primitives, tokens, and component conventions before creating controls or layout primitives. Use them by default; if none exists or none fits, record that evidence and use the approved primitive library or semantic native element.
 Name every reusable component introduced or materially changed in the implementer handoff with its purpose, boundary, expected inputs/outputs, and intended reuse scope.
+Do not finish with repeated className/token clusters, repeated control markup, repeated overlay/list/form scaffolds, or repeated status-state branches when an existing primitive/composite or named local component/helper would remove the duplication within scope.
 Treat red tests, lint failures, typecheck failures, or other verification failures caused by this worker's own in-scope frontend changes as implementation work to fix and rerun, not as blockers by themselves.
 Report a non-blocking stop only when fixing the failure requires missing external input, permission, an approved-contract change, a redesign/plan decision, or when repo/environment state makes continued work unsafe.
 If a required source row cannot be satisfied in the assigned frontend scope, or if implementation requires a deviation or exposes a contradiction in the approved contract, report a non-blocking stop with the smallest concrete approval question instead of redesigning silently.
@@ -406,6 +524,8 @@ If concise clarification is needed, do not ask the user directly; report a non-b
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
+- Approved UI design proposal artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}
+- Explicit UI design proposal approval evidence: ${{ input.approve_ui_intent | default: "No UI design proposal approval is available." }}
 - Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Previous frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "No previous frontend_implementation artifacts in input context." }}
@@ -552,6 +672,7 @@ Review frontend correctness, data flow, state handling, accessibility-relevant b
 Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
 For named frontend frameworks, routers, UI kits, accessibility primitive libraries, or build/runtime integrations, verify that relevant current docs or repo-local examples were inspected and that implementation follows the documented integration shape rather than a close-sounding substitution.
 For user-facing UI, review component decomposition, reusable-component handoff notes, colocation of component code/types/styles/tests where practical, and use of existing UI kit/design-system primitives before local hand-rolled primitives.
+For non-trivial user-facing UI, verify that the approved plan or implementation handoff includes a concrete frontend component map and that the implementation follows it. Treat a missing or cosmetic-only component map, page/route blobs that own controls/lists/overlays/state surfaces together, repeated className/token/control scaffolds, or hand-rolled equivalents of existing primitives as actionable current-scope component-architecture findings.
 Return passed only when there are no actionable current-scope `must_fix` or `should_fix` findings. Return needs_changes with required_implementation_steps for any actionable current-scope issue, including component architecture, documentation/best-practice evidence, colocation, UI-kit primitive usage, accessibility-relevant interaction behavior, or maintainability debt introduced or left in touched frontend zones. Use can-delay notes only for explicit future cleanup outside the approved slice.
 Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = frontend_review.
 
@@ -580,10 +701,14 @@ role = "frontend-taste"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review visual/product taste, copy fit, interaction polish, and user-facing coherence for frontend-relevant changes.
 Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Read the approved `ui-design-proposal` HTML artifact and all linked raster image artifacts from `ui_intent_draft` directly together with `approve_ui_intent` approval evidence. For applicable UI, inspect every proposal image visually, treat the HTML plus proposal images as the visual source of truth, and compare rendered implementation proof against their composition, annotations, states, design basis, selected pattern contracts, and evidence/proof expectations. Do not pass from implementation-plan prose alone. Missing applicable HTML, linked images, explicit approval evidence, or locally obtainable rendered proof is an actionable finding or non-blocking stop as appropriate.
+Attack hierarchy, typography/rhythm, spacing/composition, color/emphasis/contrast, focus-visible and target affordance, responsive containment, motion/reduced-motion, visual fidelity, and generic UI slop. Apply card/list and drawer/sidebar criteria only when those patterns were approved. Do not invent `DESIGN.md` or create design law from its absence.
 Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = frontend_taste_review.
 
 Input context:
 - Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
+- Approved UI design proposal artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}
+- Explicit UI design proposal approval evidence: ${{ input.approve_ui_intent | default: "No UI design proposal approval is available." }}
 - Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
 - Frontend taste reviewer handoff: ${{ input.implementation.reviewer_handoffs.frontend_taste_review | default: "No frontend-taste-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}

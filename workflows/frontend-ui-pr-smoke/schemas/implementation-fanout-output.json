@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/frontend-ui-pr-smoke/implementation-fanout-output",
+  "title": "Frontend UI Smoke Implementation Fanout Output",
+  "type": "object",
+  "required": ["outcome", "review_branches", "reviewer_handoffs"],
+  "properties": {
+    "outcome": {
+      "const": "ready_for_review",
+      "description": "Completed implementation aggregation state. Report missing help through the runner non-blocking stop control channel, never as an output outcome."
+    },
+    "review_branches": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": { "enum": ["frontend_review", "frontend_taste_review"] }
+    },
+    "reviewer_handoffs": {
+      "type": "object",
+      "properties": {
+        "frontend_review": { "type": "object", "minProperties": 1, "additionalProperties": true },
+        "frontend_taste_review": { "type": "object", "minProperties": 1, "additionalProperties": true }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "ready_for_review" } }, "required": ["outcome"] },
+      "then": {
+        "required": ["review_branches", "reviewer_handoffs"],
+        "properties": {
+          "reviewer_handoffs": { "type": "object", "required": ["frontend_review", "frontend_taste_review"] }
+        }
+      }
+    }
+  ]
+}

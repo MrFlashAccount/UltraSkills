@@ -7,11 +7,12 @@ import reviewerSelectionOutputSchema from '../../../../workflows/dev-harness/sch
 import researchDraftOutputSchema from '../../../../workflows/research-critic/schemas/research-draft-output.json' with { type: 'json' };
 import researchAttackOutputSchema from '../../../../workflows/research-critic/schemas/research-attack-output.json' with { type: 'json' };
 import saveResearchCanvasOutputSchema from '../../../../workflows/research-critic/schemas/save-research-canvas-output.json' with { type: 'json' };
+import smokeReviewFanoutOutputSchema from '../../../../workflows/frontend-ui-pr-smoke/schemas/review-fanout-output.json' with { type: 'json' };
 import { assertBatonSchema, batonSchema } from '../file-contracts/baton/baton-schema.mjs';
 import { assertWorkflowSchema, workflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import runnerHostResponseSchema from '../persistence/run-state/schema/runner-host-response.json' with { type: 'json' };
 
-const runtimeSchemas = [workflowSchema, batonSchema, reviewerSelectionOutputSchema, implementationFanoutOutputSchema, reviewFanoutOutputSchema, researchDraftOutputSchema, researchAttackOutputSchema, saveResearchCanvasOutputSchema, runnerHostResponseSchema];
+const runtimeSchemas = [workflowSchema, batonSchema, reviewerSelectionOutputSchema, implementationFanoutOutputSchema, reviewFanoutOutputSchema, smokeReviewFanoutOutputSchema, researchDraftOutputSchema, researchAttackOutputSchema, saveResearchCanvasOutputSchema, runnerHostResponseSchema];
 
 function minimalWorkflowDoc(overrides = {}) {
   return {
@@ -87,6 +88,29 @@ test('review fanout owner schema keeps scalar next separate from rework branch s
   assert.equal(validateJsonSchema(reviewFanoutOutputSchema, {
     ...valid,
     implementer_handoffs: {},
+  }, { schemas: runtimeSchemas }).ok, false);
+});
+
+test('frontend smoke review rework selects one implementer and preserves the mandatory reviewer pair', () => {
+  const valid = {
+    outcome: 'needs_changes',
+    next: 'implementation',
+    implementation_branches: ['frontend_implementation'],
+    review_branches: ['frontend_review', 'frontend_taste_review'],
+    implementer_handoffs: {
+      frontend_implementation: { summary: 'Fix the visible frontend defects.' },
+    },
+    verdict: { summary: ['Frontend and taste review require rework.'] },
+  };
+
+  assert.equal(validateJsonSchema(smokeReviewFanoutOutputSchema, valid, { schemas: runtimeSchemas }).ok, true);
+  assert.equal(validateJsonSchema(smokeReviewFanoutOutputSchema, {
+    ...valid,
+    review_branches: ['frontend_review'],
+  }, { schemas: runtimeSchemas }).ok, false);
+  assert.equal(validateJsonSchema(smokeReviewFanoutOutputSchema, {
+    ...valid,
+    implementation_branches: ['frontend_implementation', 'frontend_implementation'],
   }, { schemas: runtimeSchemas }).ok, false);
 });
 
