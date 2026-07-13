@@ -167,7 +167,7 @@ test('UI proposal contract rejects generic card-drawer routing and requires comp
   ]) {
     assert.match(uiProposalTemplate, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
-  assert.match(sharedTemplatesReadme, /REASONS visual-evidence chain/);
+  assert.match(sharedTemplatesReadme, /REASONS evidence chain/);
   assert.match(sharedTemplatesReadme, /sibling raster image artifacts/);
   assert.match(sharedTemplatesReadme, /selected-pattern contracts remain conditional/);
   assert.match(artifactDescription, /ready_for_attack or ready_for_approval/);
@@ -223,7 +223,20 @@ test('UI proposal template and design workers preserve the REASONS visual-eviden
 
   assert.deepEqual(templateViews, expectedSections);
   assert.deepEqual(templateTabs, expectedSections);
-  assert.match(uiProposalTemplate, /What must become true\?/);
+  assert.match(uiProposalTemplate, /What must the interface make true\?/);
+  assert.match(uiProposalTemplate, /Functional requirements/);
+  assert.match(uiProposalTemplate, /Interaction requirements/);
+  assert.match(uiProposalTemplate, /Information requirements/);
+  assert.match(uiProposalTemplate, /Quality \/ non-functional/);
+  assert.match(uiProposalTemplate, /Observable · solution-independent · testable · prioritized/);
+  const requirementsSection = uiProposalTemplate.match(
+    /<section class="reason-view active" id="requirements">[\s\S]*?(?=<section class="reason-view" id="entities">)/,
+  )?.[0] ?? '';
+  assert.notEqual(requirementsSection, '');
+  assert.doesNotMatch(
+    requirementsSection,
+    /<img\b/,
+  );
   assert.match(uiProposalTemplate, /Domain map/);
   assert.match(uiProposalTemplate, /Comparison contract:<\/strong> same content, scenario, state, selected object, and viewport/);
   assert.match(uiProposalTemplate, /Composition anatomy/);
@@ -234,7 +247,11 @@ test('UI proposal template and design workers preserve the REASONS visual-eviden
 
   for (const draftPrompt of [devDraftPrompt, smokeDraftPrompt]) {
     assert.match(draftPrompt, /REASONS interface as the mandatory content architecture/);
-    assert.match(draftPrompt, /Requirements = one .*outcome, boundaries, and acceptance signals/);
+    assert.match(draftPrompt, /Requirements = a short prioritized solution-independent interface contract/);
+    assert.match(draftPrompt, /functional capabilities, interaction behavior, information\/content, non-functional quality constraints/);
+    assert.match(draftPrompt, /Requirements is intentionally text-first/);
+    assert.match(draftPrompt, /MUST.*SHOULD/);
+    assert.match(draftPrompt, /do not place a selected-direction mockup/);
     assert.match(draftPrompt, /Entities = a domain-object relationship map/);
     assert.match(draftPrompt, /Approach = controlled direction comparison/);
     assert.match(draftPrompt, /Structure = annotated chosen-surface anatomy and containment/);
@@ -245,7 +262,10 @@ test('UI proposal template and design workers preserve the REASONS visual-eviden
   }
 
   for (const attackPrompt of [devAttackPrompt, smokeAttackPrompt]) {
-    assert.match(attackPrompt, /full REASONS visual-evidence chain/);
+    assert.match(attackPrompt, /full REASONS (?:visual-)?evidence chain/);
+    assert.match(attackPrompt, /Requirements.*prioritized.*functional\/interaction\/information\/quality contract/);
+    assert.match(attackPrompt, /text-first exception/);
+    assert.match(attackPrompt, /selected-direction mockup/);
     assert.match(attackPrompt, /restyled .*Markdown document|Markdown-like document merely restyled/);
     assert.match(attackPrompt, /proposal (?:made|that consists) primarily of .*direction images|proposal that consists mainly of 3-4 direction images/);
     assert.match(attackPrompt, /Structure annotated anatomy/);

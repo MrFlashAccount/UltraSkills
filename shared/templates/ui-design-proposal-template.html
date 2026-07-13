@@ -59,12 +59,28 @@
     .risk { color: var(--warn); }
     .forbidden { color: var(--danger); }
 
-    .requirement-layout { display: grid; grid-template-columns: 1.35fr .85fr; gap: 12px; }
-    .requirement-statement { min-height: 250px; display: flex; flex-direction: column; justify-content: space-between; padding: 24px; background: #f0eee8; color: #111317; }
-    .requirement-statement strong { max-width: 780px; font-size: clamp(27px, 4vw, 56px); line-height: .98; letter-spacing: -.055em; }
-    .signals { display: grid; gap: 12px; }
-    .signal-card b { display: block; margin: 13px 0 5px; font-size: 17px; }
-    .signal-card p { margin: 0; color: var(--muted); font-size: 10px; }
+    .requirement-layout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) 310px; gap: 10px; }
+    .requirement-group { display: flex; flex-direction: column; min-width: 0; }
+    .requirement-group header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+    .requirement-group h3 { margin: 0; font-size: 14px; letter-spacing: -.025em; }
+    .requirement-code { color: var(--accent); font: 800 8px/1 ui-monospace, monospace; }
+    .requirement-list, .context-list, .scope-list, .success-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+    .requirement-item { display: grid; grid-template-columns: 46px 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid #272b32; color: #cbd0d6; font-size: 10px; }
+    .requirement-item:last-child { border-bottom: 0; }
+    .priority { align-self: start; padding: 4px 5px; border: 1px solid #425424; border-radius: 5px; color: #d7ff72; background: #17200d; font: 800 7px/1 ui-monospace, monospace; text-align: center; }
+    .priority.should { border-color: #4a4f59; color: #a8afb8; background: #20242a; }
+    .requirement-review { grid-column: 3; grid-row: 1 / 3; display: flex; flex-direction: column; }
+    .requirement-review h3 { margin: 10px 0 5px; font-size: 18px; letter-spacing: -.035em; }
+    .requirement-review > p { margin: 0; color: var(--muted); font-size: 10px; }
+    .requirement-rule { margin-top: 14px; padding: 10px; border: 1px solid #435426; border-radius: 8px; background: #171e0e; color: #d9ff82; font-size: 9px; }
+    .requirement-section { margin-top: 18px; }
+    .requirement-section h4 { margin: 0 0 8px; color: #7e8793; font: 800 8px/1 ui-monospace, monospace; text-transform: uppercase; letter-spacing: .1em; }
+    .context-list, .scope-list, .success-list { gap: 7px; }
+    .context-list li, .scope-list li, .success-list li { position: relative; padding-left: 15px; color: #c2c7ce; font-size: 9px; }
+    .context-list li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+    .scope-list li::before { content: "−"; position: absolute; left: 0; color: var(--warn); font-weight: 900; }
+    .success-list li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 900; }
+    .requirement-gate { margin-top: auto; padding: 11px; border: 1px solid #4e6129; border-radius: 9px; background: #19220d; color: #dbff83; font-size: 9px; }
 
     .entity-layout { display: grid; grid-template-columns: 1.4fr .8fr; gap: 12px; }
     .entity-map { min-height: 430px; position: relative; background: radial-gradient(circle at center, #20242b, #13151a 66%); }
@@ -125,12 +141,15 @@
     @media (max-width: 980px) {
       .direction-grid, .storyboard { grid-template-columns: repeat(2, 1fr); }
       .norm-grid, .stress-grid { grid-template-columns: repeat(2, 1fr); }
-      .requirement-layout, .entity-layout, .anatomy-layout, .safeguard-layout { grid-template-columns: 1fr; }
+      .requirement-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .requirement-review { grid-column: 1 / -1; grid-row: auto; }
+      .entity-layout, .anatomy-layout, .safeguard-layout { grid-template-columns: 1fr; }
     }
     @media (max-width: 620px) {
       .proposal-header p, .view-purpose { display: none; }
       .reason-view { padding: 16px; }
-      .direction-grid, .storyboard, .norm-grid, .stress-grid, .grid.two, .grid.three { grid-template-columns: 1fr; }
+      .requirement-layout, .direction-grid, .storyboard, .norm-grid, .stress-grid, .grid.two, .grid.three { grid-template-columns: 1fr; }
+      .requirement-review { grid-column: 1; }
       .moment:not(:last-child)::after { display: none; }
     }
     @media print {
@@ -148,7 +167,7 @@
     </header>
 
     <nav class="reasons-rail" aria-label="REASONS proposal sections">
-      <button class="reason-tab" data-view="requirements" aria-selected="true"><span class="reason-letter">R</span><span class="reason-name">Requirements</span><span class="reason-proof">outcome · boundary · signal</span></button>
+      <button class="reason-tab" data-view="requirements" aria-selected="true"><span class="reason-letter">R</span><span class="reason-name">Requirements</span><span class="reason-proof">contract · priorities · checks</span></button>
       <button class="reason-tab" data-view="entities" aria-selected="false"><span class="reason-letter">E</span><span class="reason-name">Entities</span><span class="reason-proof">objects · relations · state</span></button>
       <button class="reason-tab" data-view="approach" aria-selected="false"><span class="reason-letter">A</span><span class="reason-name">Approach</span><span class="reason-proof">options · trade-offs · choice</span></button>
       <button class="reason-tab" data-view="structure" aria-selected="false"><span class="reason-letter">S</span><span class="reason-name">Structure</span><span class="reason-proof">anatomy · hierarchy · containment</span></button>
@@ -158,18 +177,14 @@
     </nav>
 
     <section class="reason-view active" id="requirements">
-      <div class="view-head"><div><div class="view-kicker">R · Desired outcome</div><h2>What must become true?</h2></div><p class="view-purpose">Normalize the approved research into one falsifiable user outcome. Show boundaries and acceptance signals; do not turn this into a feature list.</p></div>
+      <div class="view-head"><div><div class="view-kicker">R · Solution-independent contract</div><h2>What must the interface make true?</h2></div><p class="view-purpose">Write short, prioritized requirements before showing a composition. This section defines what every later approach must satisfy, not how the selected design works.</p></div>
+      <!-- Requirements are intentionally text-first. Do not add a selected-direction mockup here: it biases comparison before Approach. Keep 3-5 observable, testable bullets per applicable group and remove irrelevant placeholders. -->
       <div class="requirement-layout">
-        <div class="card requirement-statement"><span class="label">Core requirement</span><strong>&lt;One concise user-visible outcome in verb-phrase form.&gt;</strong><small>&lt;Why it matters and who benefits.&gt;</small></div>
-        <div class="signals">
-          <div class="card signal-card"><span class="label">Acceptance signal 01</span><b>&lt;Observable signal&gt;</b><p>&lt;What rendered evidence would prove it.&gt;</p></div>
-          <div class="card signal-card"><span class="label">Acceptance signal 02</span><b>&lt;Observable signal&gt;</b><p>&lt;Threshold or visible behavior.&gt;</p></div>
-          <div class="card signal-card"><span class="label">Boundary / non-goal</span><b>&lt;Must not widen into…&gt;</b><p>&lt;Compatibility, scope, and what stays untouched.&gt;</p></div>
-        </div>
-      </div>
-      <div class="grid two" style="margin-top:12px">
-        <div class="spec"><span class="label">Product / surface route and design basis</span><table><tr><th>Input</th><th>Evidence</th><th>Allowed inference</th><th>Must not invent</th></tr><tr><td>UI applicability</td><td>Applicable | Trivial / preserve existing UI | Not applicable + reason</td><td>&lt;required proposal depth&gt;</td><td>&lt;UI work outside the task&gt;</td></tr><tr><td>Product/surface type, DESIGN.md, current UI, screenshots/references</td><td>&lt;paths or captures&gt;</td><td>&lt;grounded design law&gt;</td><td>&lt;unsupported direction&gt;</td></tr></table></div>
-        <div class="spec"><span class="label">User questions / decisions</span><table><tr><th>Decision</th><th>Status</th><th>Impact if wrong</th></tr><tr><td>&lt;Concrete user-owned choice&gt;</td><td>Answered | Assumed | Needs approval</td><td>&lt;layout/action/risk impact&gt;</td></tr></table></div>
+        <section class="card requirement-group"><header><h3>Functional requirements</h3><span class="requirement-code">F · CAPABILITIES</span></header><ul class="requirement-list"><li class="requirement-item"><span class="priority">MUST</span><span>&lt;User capability or task the interface must enable.&gt;</span></li><li class="requirement-item"><span class="priority">MUST</span><span>&lt;State, action, or recovery path the user must reach.&gt;</span></li><li class="requirement-item"><span class="priority should">SHOULD</span><span>&lt;Valuable capability that may yield to a documented constraint.&gt;</span></li></ul></section>
+        <section class="card requirement-group"><header><h3>Interaction requirements</h3><span class="requirement-code">I · BEHAVIOR</span></header><ul class="requirement-list"><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Trigger, selection, focus, or return behavior.&gt;</span></li><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Mouse, keyboard, and touch behavior where applicable.&gt;</span></li><li class="requirement-item"><span class="priority should">SHOULD</span><span>&lt;Effort, continuity, or reversibility expectation.&gt;</span></li></ul></section>
+        <section class="card requirement-group"><header><h3>Information requirements</h3><span class="requirement-code">C · CONTENT</span></header><ul class="requirement-list"><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Facts, hierarchy, or state the first read must communicate.&gt;</span></li><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Explanation or next action required for failure/empty/waiting states.&gt;</span></li><li class="requirement-item"><span class="priority should">SHOULD</span><span>&lt;Detail to defer, truncate, or reveal progressively.&gt;</span></li></ul></section>
+        <section class="card requirement-group"><header><h3>Quality / non-functional</h3><span class="requirement-code">Q · CONSTRAINTS</span></header><ul class="requirement-list"><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Responsive, accessibility, containment, or compatibility constraint.&gt;</span></li><li class="requirement-item"><span class="priority">MUST</span><span>&lt;Required behavior under dense, delayed, or degraded conditions.&gt;</span></li><li class="requirement-item"><span class="priority should">SHOULD</span><span>&lt;Perceived performance or progressive-loading expectation.&gt;</span></li></ul></section>
+        <aside class="card requirement-review"><span class="label">How to review Requirements</span><h3>Challenge the contract, not the composition</h3><p>Ask what is missing, ambiguous, solution-biased, unprioritized, or impossible to verify. Judge visual directions only after this contract is accepted.</p><div class="requirement-rule"><strong>Requirement rule</strong><br>Observable · solution-independent · testable · prioritized</div><section class="requirement-section"><h4>Source / basis</h4><ul class="context-list"><li>&lt;UI applicability and product/surface route.&gt;</li><li>&lt;Approved research, DESIGN.md, current UI, or reference evidence grounding these requirements.&gt;</li></ul></section><section class="requirement-section"><h4>Out of scope</h4><ul class="scope-list"><li>&lt;Adjacent workflow or surface this proposal must not redesign.&gt;</li><li>&lt;Capability intentionally deferred.&gt;</li><li>&lt;Existing behavior or compatibility boundary that stays untouched.&gt;</li></ul></section><section class="requirement-section"><h4>Success checks</h4><ul class="success-list"><li>&lt;User-visible outcome that proves the functional contract.&gt;</li><li>&lt;Interaction or continuity check.&gt;</li><li>&lt;Responsive/accessibility/pathological-state check.&gt;</li></ul></section><div class="requirement-gate"><strong>Approval gate</strong><br>&lt;Are these the right requirements to compare approaches against? Record answered, assumed, and still-open decisions beside the requirement they affect.&gt;</div></aside>
       </div>
     </section>
 
