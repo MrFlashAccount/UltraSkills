@@ -2,7 +2,12 @@
 import {
   InvalidationEventSchema,
   PublicErrorSchema,
+  RUN_ACTIVITY_PAGE_MAX_UTF8_BYTES,
+  RUN_DETAIL_MAX_UTF8_BYTES,
+  RUN_OUTPUTS_MAX_UTF8_BYTES,
+  RunActivityPageSchema,
   RunDetailSchema,
+  RunOutputsSchema,
   SnapshotEnvelopeSchema,
 } from "../../../../dashboard/contracts/browser";
 import {
@@ -156,7 +161,7 @@ export async function handleDetailRequest(
     }
     const validated = RunDetailSchema.parse(detail);
     const body = JSON.stringify(validated);
-    if (new TextEncoder().encode(body).byteLength > 64 * 1024) {
+    if (new TextEncoder().encode(body).byteLength > RUN_DETAIL_MAX_UTF8_BYTES) {
       return publicError("observer_unavailable", "Run detail is temporarily unavailable", 503);
     }
     return new Response(body, { headers: { ...JSON_HEADERS, etag: tag }, status: 200 });
@@ -164,6 +169,162 @@ export async function handleDetailRequest(
     if (isDashboardConfigurationError(error)) {
       return publicError("invalid_request", "Dashboard runs root is not configured", 503);
     }
+    return publicError("observer_unavailable", "Run detail is temporarily unavailable", 503);
+  }
+}
+
+function requestStepId(
+  request: Request,
+): { ok: true; stepId?: string } | { ok: false; response: Response } {
+  const stepId = new URL(request.url).searchParams.get("step") ?? undefined;
+  if (stepId && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u.test(stepId)) {
+    return { ok: false, response: publicError("invalid_request", "Invalid step id", 400) };
+  }
+  return { ok: true, ...(stepId ? { stepId } : {}) };
+}
+
+export async function handleActivityRequest(
+  request: Request,
+  rawRunId: string,
+  providedComposition?: Composition,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return publicError("method_not_allowed", "Only GET is allowed", 405);
+  }
+  let runId: string;
+  try {
+    runId = decodeURIComponent(rawRunId);
+  } catch {
+    return publicError("invalid_request", "Invalid run id", 400);
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u.test(runId)) {
+    return publicError("invalid_request", "Invalid run id", 400);
+  }
+  const stepRequest = requestStepId(request);
+  if (!stepRequest.ok) {
+    return stepRequest.response;
+  }
+  const rawCursor = new URL(request.url).searchParams.get("cursor") ?? "0";
+  if (!/^\d{1,9}$/u.test(rawCursor)) {
+    return publicError("invalid_request", "Invalid activity cursor", 400);
+  }
+  try {
+    const composition = providedComposition ?? getDashboardComposition();
+    if (!hasAllowedAuthority(request, composition.config)) {
+      return authorityError();
+    }
+    const activity = await composition.readModel.getActivity(runId, {
+      cursor: Number(rawCursor),
+      limit: 20,
+      ...(stepRequest.stepId ? { stepId: stepRequest.stepId } : {}),
+    });
+    if (!activity) {
+      return publicError("not_found", "Run not found", 404);
+    }
+    const body = JSON.stringify(RunActivityPageSchema.parse(activity));
+    if (new TextEncoder().encode(body).byteLength > RUN_ACTIVITY_PAGE_MAX_UTF8_BYTES) {
+      return publicError("observer_unavailable", "Run detail is temporarily unavailable", 503);
+    }
+    return new Response(body, { headers: JSON_HEADERS });
+  } catch {
+    return publicError("observer_unavailable", "Run detail is temporarily unavailable", 503);
+  }
+}
+
+export async function handleOutputsRequest(
+  request: Request,
+  rawRunId: string,
+  providedComposition?: Composition,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return publicError("method_not_allowed", "Only GET is allowed", 405);
+  }
+  let runId: string;
+  try {
+    runId = decodeURIComponent(rawRunId);
+  } catch {
+    return publicError("invalid_request", "Invalid run id", 400);
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u.test(runId)) {
+    return publicError("invalid_request", "Invalid run id", 400);
+  }
+  const stepRequest = requestStepId(request);
+  if (!stepRequest.ok) {
+    return stepRequest.response;
+  }
+  try {
+    const composition = providedComposition ?? getDashboardComposition();
+    if (!hasAllowedAuthority(request, composition.config)) {
+      return authorityError();
+    }
+    const outputs = await composition.readModel.getOutputs(
+      runId,
+      stepRequest.stepId ? { stepId: stepRequest.stepId } : {},
+    );
+    if (!outputs) {
+      return publicError("not_found", "Run not found", 404);
+    }
+    const body = JSON.stringify(RunOutputsSchema.parse(outputs));
+    if (new TextEncoder().encode(body).byteLength > RUN_OUTPUTS_MAX_UTF8_BYTES) {
+      return publicError("observer_unavailable", "Run detail is temporarily unavailable", 503);
+    }
+    return new Response(body, { headers: JSON_HEADERS });
+  } catch {
+    return publicError("observer_unavailable", "Run detail is temporarily unavailable", 503);
+  }
+}
+
+export async function handleArtifactRequest(
+  request: Request,
+  rawRunId: string,
+  rawArtifactId: string,
+  providedComposition?: Composition,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return publicError("method_not_allowed", "Only GET is allowed", 405);
+  }
+  let runId: string;
+  let artifactId: string;
+  try {
+    runId = decodeURIComponent(rawRunId);
+    artifactId = decodeURIComponent(rawArtifactId);
+  } catch {
+    return publicError("invalid_request", "Invalid run id", 400);
+  }
+  if (
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u.test(runId) ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/u.test(artifactId)
+  ) {
+    return publicError("invalid_request", "Invalid run id", 400);
+  }
+  const stepRequest = requestStepId(request);
+  if (!stepRequest.ok) {
+    return stepRequest.response;
+  }
+  if (!stepRequest.stepId) {
+    return publicError("invalid_request", "Invalid step id", 400);
+  }
+  try {
+    const composition = providedComposition ?? getDashboardComposition();
+    if (!hasAllowedAuthority(request, composition.config)) {
+      return authorityError();
+    }
+    const artifact = await composition.readModel.getArtifact(runId, {
+      artifactId,
+      stepId: stepRequest.stepId,
+    });
+    if (!artifact) {
+      return publicError("not_found", "Run not found", 404);
+    }
+    return new Response(artifact.bytes as BodyInit, {
+      headers: {
+        "cache-control": "private, no-store",
+        "content-disposition": "inline",
+        "content-type": artifact.contentType,
+        "x-content-type-options": "nosniff",
+      },
+    });
+  } catch {
     return publicError("observer_unavailable", "Run detail is temporarily unavailable", 503);
   }
 }

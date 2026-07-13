@@ -82,7 +82,9 @@ describe("useDashboardEvents", () => {
     expect(invalidate).toHaveBeenCalledTimes(1);
     const predicate = invalidate.mock.calls[0]![0]?.predicate;
     expect(predicate?.({ queryKey: ["dashboard", "snapshot", "v1"] } as never)).toBe(true);
-    expect(predicate?.({ queryKey: ["dashboard", "run-detail", "run-1"] } as never)).toBe(true);
-    expect(predicate?.({ queryKey: ["dashboard", "run-detail", "run-2"] } as never)).toBe(false);
+    expect(
+      predicate?.({ queryKey: ["dashboard", "run", "run-1", "activity", "all"] } as never),
+    ).toBe(true);
+    expect(predicate?.({ queryKey: ["dashboard", "run", "run-2", "detail"] } as never)).toBe(false);
   });
 });

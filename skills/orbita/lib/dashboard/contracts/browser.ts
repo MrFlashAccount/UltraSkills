@@ -3,6 +3,9 @@ import { z } from "zod";
 
 export const DASHBOARD_SCHEMA_VERSION = "1" as const;
 export const EXPOSURE_POLICY_VERSION = "1" as const;
+export const RUN_ACTIVITY_PAGE_MAX_UTF8_BYTES = 128 * 1024;
+export const RUN_DETAIL_MAX_UTF8_BYTES = 128 * 1024;
+export const RUN_OUTPUTS_MAX_UTF8_BYTES = 128 * 1024;
 
 export const DASHBOARD_LANE_ORDER = [
   "waiting_for_user",
@@ -16,8 +19,8 @@ export const DashboardLaneIdSchema = z.enum(DASHBOARD_LANE_ORDER);
 export type DashboardLaneId = z.infer<typeof DashboardLaneIdSchema>;
 
 export const PUBLIC_TEXT_LIMITS = {
+  activity_markdown: { codePoints: 32_768, utf8Bytes: 65_536 },
   artifact_summary: { codePoints: 240, utf8Bytes: 1024 },
-  history_line: { codePoints: 240, utf8Bytes: 1024 },
   public_diagnostic: { codePoints: 80, utf8Bytes: 256 },
   result_summary: { codePoints: 240, utf8Bytes: 1024 },
   run_summary: { codePoints: 500, utf8Bytes: 2048 },
@@ -153,7 +156,7 @@ const DetailFactSchema = z
   })
   .strict();
 
-const DetailArtifactSchema = z
+export const DetailArtifactSchema = z
   .object({
     contentType: z
       .string()
@@ -162,17 +165,28 @@ const DetailArtifactSchema = z
       .regex(/^[\w.+-]+\/[\w.+-]+$/u)
       .optional(),
     id: ArtifactIdSchema,
+    previewKind: z.enum(["image", "markdown"]).optional(),
     producerStepId: StepIdSchema.optional(),
     summary: PublicDisplayTextSchema.optional(),
   })
   .strict();
 
-const DetailResultSchema = z
+export const DetailResultSchema = z
   .object({
     outcome: StepIdSchema.optional(),
+    producerStepId: StepIdSchema.optional(),
     ref: ResultRefSchema.optional(),
     summary: PublicDisplayTextSchema.optional(),
     type: StepIdSchema.optional(),
+  })
+  .strict();
+
+export const ActivityEntrySchema = z
+  .object({
+    id: z.string().regex(/^activity-[1-9]\d*$/u),
+    markdown: PublicDisplayTextSchema,
+    occurredAt: IsoDateSchema.optional(),
+    stepIds: z.array(StepIdSchema).max(24),
   })
   .strict();
 
@@ -202,7 +216,7 @@ const MiniMapSchema = z.discriminatedUnion("state", [
             })
             .strict(),
         )
-        .max(24),
+        .max(100),
       totalSteps: z.number().int().min(0),
       truncated: z.boolean(),
     })
@@ -210,29 +224,29 @@ const MiniMapSchema = z.discriminatedUnion("state", [
 ]);
 
 export const RunDetailSchema = RunSummarySchema.extend({
-  artifacts: z.array(DetailArtifactSchema).max(100),
   facts: z.array(DetailFactSchema).max(3),
-  history: z.array(PublicDisplayTextSchema).max(20),
-  historyTruncated: z.boolean(),
   miniMap: MiniMapSchema,
-  results: z.array(DetailResultSchema).max(100),
   schemaVersion: z.literal(DASHBOARD_SCHEMA_VERSION),
   summary: PublicDisplayTextSchema.optional(),
-})
-  .strict()
-  .superRefine((detail, context) => {
-    const totalHistoryBytes = detail.history.reduce(
-      (total, line) => total + utf8Length(line.value),
-      0,
-    );
-    if (totalHistoryBytes > 8192) {
-      context.addIssue({
-        code: "custom",
-        message: "history exceeds its total UTF-8 byte ceiling",
-        path: ["history"],
-      });
-    }
-  });
+}).strict();
+
+export const RunActivityPageSchema = z
+  .object({
+    activities: z.array(ActivityEntrySchema).max(20),
+    nextCursor: z.string().regex(/^\d+$/u).nullable(),
+    runId: RunIdSchema,
+    schemaVersion: z.literal(DASHBOARD_SCHEMA_VERSION),
+  })
+  .strict();
+
+export const RunOutputsSchema = z
+  .object({
+    artifacts: z.array(DetailArtifactSchema).max(100),
+    results: z.array(DetailResultSchema).max(100),
+    runId: RunIdSchema,
+    schemaVersion: z.literal(DASHBOARD_SCHEMA_VERSION),
+  })
+  .strict();
 
 export const InvalidationReasonSchema = z.enum([
   "snapshot_changed",
@@ -256,7 +270,9 @@ const PUBLIC_ERROR_MESSAGES = [
   "Dashboard data is temporarily unavailable",
   "Run detail is temporarily unavailable",
   "Dashboard runs root is not configured",
+  "Invalid activity cursor",
   "Invalid run id",
+  "Invalid step id",
   "Request authority is not allowed",
 ] as const;
 
@@ -281,4 +297,6 @@ export type ObserverFreshnessDTO = z.infer<typeof ObserverFreshnessSchema>;
 export type RunSummaryDTO = z.infer<typeof RunSummarySchema>;
 export type SnapshotEnvelope = z.infer<typeof SnapshotEnvelopeSchema>;
 export type RunDetailDTO = z.infer<typeof RunDetailSchema>;
+export type RunActivityPageDTO = z.infer<typeof RunActivityPageSchema>;
+export type RunOutputsDTO = z.infer<typeof RunOutputsSchema>;
 export type InvalidationEvent = z.infer<typeof InvalidationEventSchema>;

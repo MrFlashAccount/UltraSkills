@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
-import { buildSnapshot, detailFor } from "./fixtures";
+import { activityFor, buildSnapshot, detailFor, outputsFor } from "./fixtures";
 
 const proofDir = new URL("./proof/", import.meta.url).pathname;
 
@@ -142,6 +142,37 @@ async function emitInvalidations(
 }
 
 async function mockSnapshot(page: Page, snapshot: ReturnType<typeof buildSnapshot>) {
+  await page.route(
+    /\/api\/dashboard\/v1\/runs\/run-proof-\d+\/artifacts\/[^?]+(?:\?.*)?$/,
+    (route) => {
+      const artifactId = new URL(route.request().url()).pathname.split("/").at(-1)!;
+      if (artifactId === "research-note") {
+        return route.fulfill({
+          body: "# Research note\n\nRendered **Markdown** artifact.",
+          contentType: "text/markdown",
+        });
+      }
+      return route.fulfill({
+        body: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+          "base64",
+        ),
+        contentType: "image/png",
+      });
+    },
+  );
+  await page.route(/\/api\/dashboard\/v1\/runs\/run-proof-\d+\/activity(?:\?.*)?$/, (route) => {
+    const url = new URL(route.request().url());
+    const runId = url.pathname.split("/").at(-2)!;
+    const run = snapshot.runs.find((candidate) => candidate.runId === runId)!;
+    return route.fulfill({ json: activityFor(run, url.searchParams.get("step") ?? undefined) });
+  });
+  await page.route(/\/api\/dashboard\/v1\/runs\/run-proof-\d+\/outputs(?:\?.*)?$/, (route) => {
+    const url = new URL(route.request().url());
+    const runId = url.pathname.split("/").at(-2)!;
+    const run = snapshot.runs.find((candidate) => candidate.runId === runId)!;
+    return route.fulfill({ json: outputsFor(run, url.searchParams.get("step") ?? undefined) });
+  });
   await page.route(/\/api\/dashboard\/v1\/runs\/run-proof-\d+$/, (route) => {
     const runId = route.request().url().split("/").at(-1)!;
     const run = snapshot.runs.find((candidate) => candidate.runId === runId)!;
@@ -275,10 +306,13 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
   expect(sheetBounds.top).toBeCloseTo(0, 1);
   expect(sheetBounds.width).toBeCloseTo(680, 1);
   await expect(page.getByRole("tab", { name: "Graph" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("tab", { name: "Activity 2" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Artifacts 1" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Activity" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Artifacts" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Metadata" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Current run path" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Workflow graph" })).toBeVisible();
+  await expect(page.getByText("Step details")).toBeVisible();
+  await expect(page.getByLabel("review, Shard, Pending")).toBeVisible();
   await expect(page.locator('.workflow-node[data-kind="fanout"]')).toContainText(
     "3 branches · max 2 parallel",
   );
@@ -288,13 +322,19 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
     "animation-name",
     "workflow-spinner",
   );
-  await expect(page.locator('.workflow-node[data-kind="shard"]')).toContainText(
-    "8 shards · max 4 parallel",
+  await page.getByLabel("Filter by research, Worker, Completed").click();
+  await expect(page.getByLabel("Filter by research, Worker, Completed")).toHaveAttribute(
+    "aria-pressed",
+    "true",
   );
-  await page.getByLabel("research, Worker, Completed").click();
-  await expect(
-    page.locator(".workflow-step-detail").getByRole("heading", { name: "research" }),
-  ).toBeVisible();
+  await page.getByRole("tab", { name: "Artifacts" }).click();
+  await expect(page.locator(".artifact-carousel img")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next image" })).toBeVisible();
+  await page.getByRole("button", { name: /research-note/i }).click();
+  await expect(page.getByRole("dialog", { name: "research-note" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Research note" })).toBeVisible();
+  await page.getByRole("button", { name: "Close artifact" }).click();
+  await page.getByRole("tab", { name: "Graph" }).click();
   await page.screenshot({ path: `${proofDir}desktop-1440x900-open.png` });
   await page.getByRole("button", { name: "Close details" }).click();
   const closingSheet = page.locator('.sheet-content[data-state="closed"]');
@@ -433,22 +473,24 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
   await expect(page.getByRole("button", { name: "Close details" })).toBeFocused();
   await page.screenshot({ path: `${proofDir}narrow-1024x768-selected-sheet.png` });
   await page.getByRole("button", { name: "Close details" }).click();
-  await page.getByRole("button", { name: "Filter" }).click();
+  await page.getByRole("button", { exact: true, name: "Filter" }).click();
   await expect(page.getByLabel("Run filters")).toBeVisible();
   await page.screenshot({ path: `${proofDir}narrow-1024x768-filter.png` });
   await page.keyboard.press("Escape");
   await page.getByPlaceholder("Search run, workflow, step").focus();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Filter" })).toBeFocused();
+  await expect(page.getByRole("button", { exact: true, name: "Filter" })).toBeFocused();
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const focusedOutline = await page.getByRole("button", { name: "Filter" }).evaluate((element) => {
-    const style = getComputedStyle(element);
-    return {
-      color: style.outlineColor,
-      transition: style.transitionDuration,
-      width: style.outlineWidth,
-    };
-  });
+  const focusedOutline = await page
+    .getByRole("button", { exact: true, name: "Filter" })
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        color: style.outlineColor,
+        transition: style.transitionDuration,
+        width: style.outlineWidth,
+      };
+    });
   expect(focusedOutline).toEqual({
     color: "rgb(203, 166, 247)",
     transition: "1e-05s",

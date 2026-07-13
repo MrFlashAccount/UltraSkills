@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { PUBLIC_TEXT_LIMITS, type PublicTextSource } from "../contracts/browser";
 import { exposePublicText } from "./exposure-policy";
-import { projectRunDetail, projectRunSummary } from "./project-run";
+import {
+  projectRunActivity,
+  projectRunDetail,
+  projectRunOutputs,
+  projectRunSummary,
+} from "./project-run";
 
 const run = {
   createdAt: "2026-07-12T00:00:00.000Z",
@@ -80,14 +85,40 @@ describe("dashboard public projection", () => {
     );
     expect(detail.laneId).toBe("degraded");
     expect(detail.cursor).toEqual({ kind: "unsupported" });
-    expect(detail.history.map((line) => line.value)).toEqual(["safe line"]);
+    const activity = projectRunActivity({
+      persistedState: {
+        history: { mode: "embedded-text", text: "safe line\n/private/path\nhidden transcript" },
+      },
+      run,
+    });
+    const outputs = projectRunOutputs({
+      persistedState: {
+        baton: {
+          state: {
+            artifacts: [
+              {
+                producerStepId: "implementation",
+                artifact: {
+                  id: "handoff",
+                  path: "/private/artifact.md",
+                  summary: "Safe artifact",
+                },
+              },
+            ],
+            results: [{ summary: "--lease-token secret", rawError: "/private/error" }],
+          },
+        },
+      },
+      run,
+    });
+    expect(activity.activities.map((entry) => entry.markdown.value)).toEqual(["safe line"]);
     expect(detail.miniMap).toEqual({ state: "unavailable" });
-    expect(JSON.stringify(detail)).not.toMatch(
+    expect(JSON.stringify({ activity, detail, outputs })).not.toMatch(
       /tokenHash|user_prompt|private|rawError|artifact\.md/u,
     );
   });
 
-  test("bounds history by approved item and total byte ceilings and projects workflow mini-map", () => {
+  test("bounds structured activity and projects workflow mini-map", () => {
     const detail = projectRunDetail({
       persistedState: {
         baton: {
@@ -97,10 +128,14 @@ describe("dashboard public projection", () => {
         },
         history: {
           mode: "embedded-text",
-          text: Array.from(
-            { length: 30 },
-            (_, index) => `history ${index} ${"🙂".repeat(240)}`,
-          ).join("\n"),
+          text: Array.from({ length: 600 }, (_, index) =>
+            [
+              `## 2026-07-12T00:${String(index % 60).padStart(2, "0")}:00.000Z`,
+              "",
+              "- baton: cursor=research status=running",
+              `- output: history ${index} ${"🙂".repeat(240)}`,
+            ].join("\n"),
+          ).join("\n\n"),
         },
       },
       run,
@@ -117,14 +152,31 @@ describe("dashboard public projection", () => {
         },
       },
     });
-    expect(detail.history).toHaveLength(8);
+    const activity = projectRunActivity({
+      persistedState: {
+        history: {
+          mode: "embedded-text",
+          text: Array.from({ length: 600 }, (_, index) =>
+            [
+              `## 2026-07-12T00:${String(index % 60).padStart(2, "0")}:00.000Z`,
+              "",
+              "- baton: cursor=research status=running",
+              `- output: history ${index} ${"🙂".repeat(240)}`,
+            ].join("\n"),
+          ).join("\n\n"),
+        },
+      },
+      run,
+    });
+    expect(activity.activities).toHaveLength(20);
+    expect(activity.activities[0]?.stepIds).toEqual(["research"]);
     expect(
-      detail.history.reduce(
-        (bytes, line) => bytes + new TextEncoder().encode(line.value).byteLength,
+      activity.activities.reduce(
+        (bytes, entry) => bytes + new TextEncoder().encode(entry.markdown.value).byteLength,
         0,
       ),
-    ).toBeLessThanOrEqual(8192);
-    expect(detail.historyTruncated).toBe(true);
+    ).toBeLessThanOrEqual(128 * 1024);
+    expect(activity.nextCursor).toBe("20");
     expect(detail.miniMap).toEqual({
       state: "available",
       steps: [
@@ -136,16 +188,46 @@ describe("dashboard public projection", () => {
         },
         {
           kind: "fanout",
-          nextStepIds: ["done", "research"],
+          nextStepIds: ["frontend", "backend"],
           parallelism: { count: 2, maxParallel: 2, mode: "branches" },
           state: "current",
           stepId: "implementation",
         },
+        {
+          kind: "worker",
+          nextStepIds: ["done", "research"],
+          state: "pending",
+          stepId: "frontend",
+        },
+        {
+          kind: "worker",
+          nextStepIds: ["done", "research"],
+          state: "pending",
+          stepId: "backend",
+        },
         { kind: "done", nextStepIds: [], state: "pending", stepId: "done" },
       ],
-      totalSteps: 3,
+      totalSteps: 5,
       truncated: false,
     });
+  });
+
+  test("attributes fanout request history to the branch step", () => {
+    const activity = projectRunActivity({
+      persistedState: {
+        baton: { cursor: "implementation", state: {}, status: "running" },
+        history: {
+          mode: "embedded-text",
+          text: [
+            "## 2026-07-12T00:00:00.000Z",
+            "",
+            "- requests: id=implementation__fanout__2__frontend action=run_worker",
+          ].join("\n"),
+        },
+      },
+      run,
+    });
+    expect(activity.activities[0]?.stepIds).toEqual(["frontend"]);
   });
 
   test("classifies resolved and unresolved non-blocking stops truthfully", () => {

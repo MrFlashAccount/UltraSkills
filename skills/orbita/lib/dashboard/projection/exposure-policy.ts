@@ -69,6 +69,35 @@ export function exposePublicText(
   });
 }
 
+/** Preserve Markdown structure while applying the same line-level disclosure policy. */
+export function exposePublicMarkdown(value: unknown): PublicDisplayText | undefined {
+  const safeLines = String(value ?? "")
+    .normalize("NFKC")
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n")
+    .split("\n")
+    .map((line) => line.replaceAll(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/gu, ""))
+    .filter((line) => {
+      const policyValue = normalize(line);
+      return !policyValue || !FORBIDDEN.some((pattern) => pattern.test(policyValue));
+    })
+    .join("\n")
+    .trim();
+  if (!safeLines) {
+    return undefined;
+  }
+  const limits = PUBLIC_TEXT_LIMITS.activity_markdown;
+  const exposed = truncate(safeLines, limits.codePoints, limits.utf8Bytes);
+  if (!exposed) {
+    return undefined;
+  }
+  return PublicDisplayTextSchema.parse({
+    policyVersion: EXPOSURE_POLICY_VERSION,
+    sourceClass: "activity_markdown",
+    value: exposed,
+  });
+}
+
 export function fixedPublicText(
   source: "run_title" | "public_diagnostic",
   value: string,

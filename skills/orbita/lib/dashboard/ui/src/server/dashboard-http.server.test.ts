@@ -2,8 +2,11 @@ import { describe, expect, test } from "bun:test";
 import type { RunSummaryDTO } from "../../../../dashboard/contracts/browser";
 import { createDashboardComposition } from "./dashboard-composition.server";
 import {
+  handleActivityRequest,
+  handleArtifactRequest,
   handleDetailRequest,
   handleEventsRequest,
+  handleOutputsRequest,
   handleSnapshotRequest,
 } from "./dashboard-http.server";
 
@@ -54,13 +57,27 @@ function composition() {
               ...run,
               schemaVersion: "1",
               facts: [],
-              history: [],
-              historyTruncated: false,
-              artifacts: [],
-              results: [],
               miniMap: { state: "unavailable" },
             }
           : undefined,
+      getActivity: async (runId: string, options: { cursor?: number; stepId?: string }) =>
+        runId === "run-1"
+          ? {
+              activities: [],
+              nextCursor: options.cursor ? null : "20",
+              runId,
+              schemaVersion: "1",
+            }
+          : undefined,
+      getArtifact: async (runId: string, options: { artifactId: string; stepId: string }) =>
+        runId === "run-1" && options.artifactId === "research-note" && options.stepId === "research"
+          ? {
+              bytes: new TextEncoder().encode("# Research note"),
+              contentType: "text/markdown" as const,
+            }
+          : undefined,
+      getOutputs: async (runId: string) =>
+        runId === "run-1" ? { artifacts: [], results: [], runId, schemaVersion: "1" } : undefined,
       subscribe: (subscriber: (event: any) => void) => {
         subscribers.add(subscriber);
         return () => subscribers.delete(subscriber);
@@ -110,6 +127,53 @@ describe("dashboard v1 HTTP handlers", () => {
     expect(detail.headers.get("etag")).toBe('"dashboard-v1-detail-s7-o9-run-1"');
   });
 
+  test("serves activity and outputs independently with bounded query validation", async () => {
+    const fake = composition();
+    expect(
+      (await handleActivityRequest(request("/?cursor=bad"), "run-1", fake as any)).status,
+    ).toBe(400);
+    expect(
+      (await handleActivityRequest(request("/?step=../secret"), "run-1", fake as any)).status,
+    ).toBe(400);
+    const activity = await handleActivityRequest(
+      request("/?cursor=20&step=research"),
+      "run-1",
+      fake as any,
+    );
+    expect(activity.status).toBe(200);
+    expect(await activity.json()).toMatchObject({ nextCursor: null, runId: "run-1" });
+    const outputs = await handleOutputsRequest(request("/?step=research"), "run-1", fake as any);
+    expect(outputs.status).toBe(200);
+    expect(await outputs.json()).toMatchObject({ artifacts: [], results: [], runId: "run-1" });
+  });
+
+  test("serves allowlisted artifact content only for an exact step and artifact", async () => {
+    const fake = composition();
+    expect(
+      (await handleArtifactRequest(request("/"), "run-1", "research-note", fake as any)).status,
+    ).toBe(400);
+    const response = await handleArtifactRequest(
+      request("/?step=research"),
+      "run-1",
+      "research-note",
+      fake as any,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/markdown");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(await response.text()).toBe("# Research note");
+    expect(
+      (
+        await handleArtifactRequest(
+          request("/?step=implementation"),
+          "run-1",
+          "research-note",
+          fake as any,
+        )
+      ).status,
+    ).toBe(404);
+  });
+
   test("streams the versioned invalidation record and unsubscribes on cancel", async () => {
     const fake = composition();
     const response = handleEventsRequest(request("/api/dashboard/v1/events"), fake as any);
@@ -136,6 +200,9 @@ describe("dashboard v1 HTTP handlers", () => {
     let failure = false;
     const readerSource = {
       getRun: async () => undefined,
+      getRunActivity: async () => undefined,
+      getRunArtifact: async () => undefined,
+      getRunOutputs: async () => undefined,
       listRuns: async () => {
         if (failure) {
           throw new Error("/private/root secret");
@@ -216,6 +283,9 @@ describe("dashboard v1 HTTP handlers", () => {
     let failure = false;
     const source = {
       getRun: async () => undefined,
+      getRunActivity: async () => undefined,
+      getRunArtifact: async () => undefined,
+      getRunOutputs: async () => undefined,
       listRuns: async () => {
         if (failure) {
           throw new Error("refresh failed");

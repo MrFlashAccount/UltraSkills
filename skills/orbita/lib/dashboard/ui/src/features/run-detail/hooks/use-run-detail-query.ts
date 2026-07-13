@@ -19,7 +19,7 @@ export function useRunDetailQuery(runId?: string) {
     enabled: typeof window !== "undefined" && Boolean(runId),
     placeholderData: (previousDetail) => previousDetail,
     queryFn: () => fetchRunDetail(runId!),
-    queryKey: ["dashboard", "run-detail", runId],
+    queryKey: ["dashboard", "run", runId, "detail"],
     retry: 1,
   });
 }

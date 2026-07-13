@@ -16,7 +16,7 @@ async function fixture() {
   const entries = {
     created: {
       runId: "created",
-      workflow: { identity: "dev-harness", path: workflowPath },
+      workflow: { path: workflowPath },
       status: "running",
       createdAt: "2026-07-12T00:00:00.000Z",
       updatedAt: "2026-07-12T00:03:00.000Z",
@@ -54,9 +54,27 @@ async function fixture() {
     join(runsRoot, "healthy", "baton.json"),
     JSON.stringify({
       cursor: "approval_gate",
-      state: { artifacts: [], results: [] },
+      state: {
+        artifacts: [
+          {
+            artifact: {
+              content_type: "text/markdown",
+              id: "research-note",
+              path: join(runsRoot, "healthy", "research", "artifacts", "research-note.md"),
+            },
+            producerStepId: "research",
+          },
+        ],
+        results: [],
+      },
       status: "running",
     }),
+    { mode: 0o600 },
+  );
+  await mkdir(join(runsRoot, "healthy", "research", "artifacts"), { recursive: true });
+  await writeFile(
+    join(runsRoot, "healthy", "research", "artifacts", "research-note.md"),
+    "# Research note",
     { mode: 0o600 },
   );
   await writeFile(join(runsRoot, "healthy", "history.md"), "safe history", { mode: 0o600 });
@@ -72,6 +90,7 @@ describe("RunsRootObserverReader", () => {
     const second = await new RunsRootObserverReader(runsRoot).listRuns();
     expect(first).toEqual(second);
     expect(first.find((run) => run.runId === "created")?.laneId).toBe("worker_running");
+    expect(first.find((run) => run.runId === "created")?.workflow).toBe("dev-harness");
     expect(first.find((run) => run.runId === "healthy")?.laneId).toBe("waiting_for_user");
     expect(first.find((run) => run.runId === "corrupt")?.laneId).toBe("degraded");
   });
@@ -80,5 +99,22 @@ describe("RunsRootObserverReader", () => {
     const runsRoot = await fixture();
     await writeFile(join(runsRoot, "runs.json"), "{not json", { mode: 0o600 });
     await expect(new RunsRootObserverReader(runsRoot).listRuns()).rejects.toThrow();
+  });
+
+  test("reads only exact allowlisted artifacts inside the run directory", async () => {
+    const runsRoot = await fixture();
+    const reader = new RunsRootObserverReader(runsRoot);
+    const artifact = await reader.getRunArtifact("healthy", {
+      artifactId: "research-note",
+      stepId: "research",
+    });
+    expect(artifact?.contentType).toBe("text/markdown");
+    expect(new TextDecoder().decode(artifact?.bytes)).toBe("# Research note");
+    expect(
+      await reader.getRunArtifact("healthy", {
+        artifactId: "research-note",
+        stepId: "implementation",
+      }),
+    ).toBeUndefined();
   });
 });

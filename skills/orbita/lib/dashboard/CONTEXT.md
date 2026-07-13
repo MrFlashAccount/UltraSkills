@@ -77,7 +77,15 @@ The only dashboard HTTP surfaces are same-origin GET routes:
 - `/api/dashboard/v1/runs` — validated `SnapshotEnvelope`, including
   authoritative `ObserverFreshnessDTO`, with ETag/conditional GET.
 - `/api/dashboard/v1/runs/:runId` — lazy validated `RunDetailDTO` or a closed,
-  bounded public error.
+  bounded public error. This core response does not read history or include
+  activity, artifacts, or results.
+- `/api/dashboard/v1/runs/:runId/activity` — lazy `RunActivityPageDTO`, at most
+  20 entries per cursor page, optionally filtered by `step` before projection.
+- `/api/dashboard/v1/runs/:runId/outputs` — lazy `RunOutputsDTO`, optionally
+  filtered by `step` before projection.
+- `/api/dashboard/v1/runs/:runId/artifacts/:artifactId` — lazy raw content for
+  one projected image or Markdown artifact, requiring an exact producer `step`
+  and enforcing run-directory containment, an allowlisted type, and a byte cap.
 - `/api/dashboard/v1/events` — data-free `InvalidationEvent` with reason
   `snapshot_changed`, `observer_stale`, or `observer_recovered`, plus heartbeats.
 
@@ -115,8 +123,9 @@ Request authority has three owners: process configuration selects the runs
 root, the validated snapshot revision owns board/freshness data, and the
 router's exact `run` search value owns detail selection. Detail query keys use
 that id, transport URL-encodes it, and the route decodes/validates it before an
-exact index lookup. Filtering or a missing result preserves selection and must
-not choose a fallback run.
+exact index lookup. Activity and outputs have independent query keys containing
+the selected step; they are enabled only while their tab is active. Filtering
+or a missing result preserves selection and must not choose a fallback run.
 
 The projection exposes exactly five lanes in this order:
 `waiting_for_user`, `worker_running`, `needs_help`, `degraded`, `done`. Degraded is
@@ -127,14 +136,14 @@ more than one step becomes a bounded unsupported/degraded projection.
 
 Every browser-visible prose value passes exposure policy version `1` under one
 implemented source class. The policy performs NFKC normalization, replaces
-control characters, collapses whitespace, truncates to the source's
-120/160/240-code-point ceiling, and omits forbidden absolute paths, lease/token/
-hash shapes, commands, private instruction markers, prompts, and transcripts.
-`PublicDisplayText` then enforces non-empty text with a maximum length of 240.
-New prose fields default to omission until their source class, necessity,
-ceiling, fallback, fixtures, and policy version are approved. Snapshot and
-detail responses have aggregate UTF-8 caps of 1.5 MiB and 64 KiB; no per-field
-UTF-8 byte ceiling is currently implemented.
+control characters, applies source-specific code-point and UTF-8 ceilings, and
+omits forbidden absolute paths, lease/token/hash shapes, commands, private
+instruction markers, prompts, and transcripts. Activity Markdown preserves
+line structure while applying that disclosure policy per line and a 64 KiB
+per-entry ceiling. New prose fields default to omission until their source
+class, necessity, ceiling, fallback, fixtures, and policy version are approved.
+Aggregate activity-page, core-detail, and outputs caps are 128 KiB each; the
+snapshot cap is 1.5 MiB.
 
 Identifiers, content types, outcomes, timestamps, counts, and lane/event/error
 values use dedicated bounded schemas rather than the prose policy. Fixed public

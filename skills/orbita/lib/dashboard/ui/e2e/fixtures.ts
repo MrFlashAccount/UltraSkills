@@ -1,6 +1,8 @@
 import type {
   DashboardLaneId,
+  RunActivityPageDTO,
   RunDetailDTO,
+  RunOutputsDTO,
   RunSummaryDTO,
   SnapshotEnvelope,
 } from "../../contracts/browser";
@@ -88,19 +90,7 @@ export function buildSnapshot(
 export function detailFor(run: RunSummaryDTO): RunDetailDTO {
   return {
     ...run,
-    artifacts: [
-      {
-        id: "implementation-plan",
-        contentType: "text/markdown",
-        producerStepId: "implementation",
-      },
-    ],
     facts: [{ label: "Workflow", value: run.workflow }],
-    history: [
-      { sourceClass: "history_line", value: "Snapshot projected", policyVersion: "1" },
-      { sourceClass: "history_line", value: "Awaiting inspection", policyVersion: "1" },
-    ],
-    historyTruncated: false,
     miniMap: {
       state: "available",
       steps: [
@@ -128,12 +118,71 @@ export function detailFor(run: RunSummaryDTO): RunDetailDTO {
       truncated: false,
       totalSteps: 3,
     },
-    results: [],
     schemaVersion: "1",
     summary: {
       sourceClass: "run_summary",
       value: "Policy-approved summary for rendered proof.",
       policyVersion: "1",
     },
+  };
+}
+
+export function activityFor(run: RunSummaryDTO, stepId?: string): RunActivityPageDTO {
+  const activities: RunActivityPageDTO["activities"] = [
+    {
+      id: "activity-1",
+      markdown: {
+        sourceClass: "activity_markdown",
+        value: "## Snapshot projected\n\n- Observer snapshot is ready.",
+        policyVersion: "1",
+      },
+      stepIds: ["research"],
+    },
+    {
+      id: "activity-2",
+      markdown: {
+        sourceClass: "activity_markdown",
+        value: "## Awaiting inspection\n\n`implementation` is active.",
+        policyVersion: "1",
+      },
+      stepIds: ["implementation"],
+    },
+  ];
+  return {
+    activities: stepId
+      ? activities.filter((activity) => activity.stepIds.includes(stepId))
+      : activities,
+    nextCursor: null,
+    runId: run.runId,
+    schemaVersion: "1",
+  };
+}
+
+export function outputsFor(run: RunSummaryDTO, stepId?: string): RunOutputsDTO {
+  const artifacts: RunOutputsDTO["artifacts"] = [
+    {
+      id: "research-note",
+      contentType: "text/markdown",
+      previewKind: "markdown",
+      producerStepId: "research",
+    },
+    {
+      id: "research-preview-1",
+      contentType: "image/png",
+      previewKind: "image",
+      producerStepId: "research",
+    },
+    {
+      id: "research-preview-2",
+      contentType: "image/png",
+      previewKind: "image",
+      producerStepId: "research",
+    },
+  ];
+  return {
+    artifacts: artifacts.filter((artifact) => !stepId || artifact.producerStepId === stepId),
+    results: [],
+    runId: run.runId,
+    schemaVersion: "1",
   };
 }

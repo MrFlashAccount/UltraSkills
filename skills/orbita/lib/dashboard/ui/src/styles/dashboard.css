@@ -378,6 +378,127 @@
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
+.current-run-path {
+  min-height: 42px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  background: color-mix(in srgb, var(--surface-foundation) 46%, transparent);
+}
+.current-run-path-scroll {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  overflow-x: auto;
+}
+.current-run-path-scroll ol {
+  min-width: max-content;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin: 0;
+  padding: 0;
+}
+.current-run-path-scroll li {
+  position: relative;
+  list-style: none;
+}
+.current-run-path-scroll li:not(:last-child)::after {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 3px);
+  width: 9px;
+  height: 1px;
+  background: var(--border-strong);
+  content: "";
+}
+.current-run-path-scroll button {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.current-run-path-scroll button:hover,
+.current-run-path-scroll button[aria-pressed="true"] {
+  color: var(--text-primary);
+  background: var(--surface-selected);
+  border-color: color-mix(in srgb, var(--focus) 58%, transparent);
+}
+.current-run-path-scroll button > span {
+  max-width: 132px;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.current-run-path-scroll button > i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  background: var(--done);
+  border-radius: 50%;
+}
+.current-run-path-scroll button[data-state="current"] > i {
+  width: 9px;
+  height: 9px;
+  background: transparent;
+  border: 2px solid color-mix(in srgb, var(--running) 28%, transparent);
+  border-top-color: var(--running);
+  animation: workflow-spinner 760ms linear infinite;
+}
+.workflow-filter,
+.workflow-filter-skeleton {
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--surface-foundation) 82%, transparent);
+  border-block: 1px solid var(--border);
+}
+.workflow-filter-toolbar {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 18px;
+}
+.workflow-filter-toolbar > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.workflow-filter-toolbar span {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.workflow-filter-toolbar strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workflow-filter-canvas {
+  width: 100%;
+  min-height: 120px;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+  --xy-edge-stroke-default: var(--border-strong);
+  --xy-edge-stroke-width-default: 1.5;
+}
+.workflow-filter-skeleton {
+  height: 166px;
+}
 .detail-tabs {
   min-height: 0;
   flex: 1;
@@ -441,6 +562,26 @@
 .detail-tab-panel:focus-visible {
   outline-offset: -3px;
 }
+.detail-tab-state {
+  min-height: 132px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-muted);
+}
+.detail-load-more {
+  margin: 0 auto 18px;
+}
+.ui-spinner {
+  flex: none;
+  animation: ui-spin 0.8s linear infinite;
+}
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .detail-graph-panel .workflow-map {
   height: 100%;
   display: flex;
@@ -496,6 +637,418 @@
   color: var(--text-primary);
   font-size: 13px;
 }
+.step-groups {
+  min-height: 100%;
+}
+.step-group > h3 {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+.activity-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+.activity-entry {
+  min-width: 0;
+  padding: 12px 14px 14px;
+  overflow-wrap: anywhere;
+  background: color-mix(in srgb, var(--surface-card) 76%, transparent);
+  border: 0;
+  border-left: 2px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  list-style: none;
+}
+.activity-entry-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 16px;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.activity-markdown > :first-child,
+.activity-markdown > :first-child > :first-child {
+  margin-top: 0;
+}
+.activity-markdown > :last-child,
+.activity-markdown > :last-child > :last-child {
+  margin-bottom: 0;
+}
+.activity-entry > :first-child {
+  margin-top: 0;
+}
+.activity-entry > :last-child {
+  margin-bottom: 0;
+}
+.activity-entry h1,
+.activity-entry h2,
+.activity-entry h3,
+.activity-entry h4 {
+  margin: 14px 0 8px;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+.activity-entry h1 {
+  font-size: 16px;
+}
+.activity-entry h2 {
+  font-size: 14px;
+}
+.activity-entry h3,
+.activity-entry h4 {
+  font-size: 12px;
+}
+.activity-entry p,
+.activity-entry ul,
+.activity-entry ol,
+.activity-entry blockquote,
+.activity-entry pre,
+.activity-entry table {
+  margin: 9px 0;
+}
+.activity-entry ul,
+.activity-entry ol {
+  padding-left: 22px;
+}
+.activity-entry li + li {
+  margin-top: 4px;
+}
+.activity-entry .activity-property {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.28fr) minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 5px 8px;
+  background: color-mix(in srgb, var(--surface-selected) 48%, transparent);
+  border-radius: var(--radius-sm);
+  list-style: none;
+}
+.activity-entry .activity-property + .activity-property {
+  margin-top: 3px;
+}
+.activity-property strong {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.activity-property span {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.activity-entry code {
+  padding: 1px 4px;
+  color: var(--text-primary);
+  background: var(--surface-selected);
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+.activity-entry pre {
+  max-width: 100%;
+  padding: 11px 12px;
+  overflow: auto;
+  background: var(--surface-foundation);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.activity-entry pre code {
+  padding: 0;
+  background: transparent;
+}
+.activity-entry blockquote {
+  padding-left: 12px;
+  color: var(--text-muted);
+  border-left: 3px solid var(--border-strong);
+}
+.activity-entry table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.activity-entry th,
+.activity-entry td {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.activity-entry a {
+  color: var(--focus);
+}
+.detail-boundary-note {
+  margin: 0;
+  padding: 12px 18px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+.output-group + .output-group {
+  margin-top: 16px;
+}
+.output-group h4 {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.output-group .bounded-list > li {
+  align-items: flex-start;
+}
+.output-group .bounded-list > li > span {
+  max-width: 68%;
+  text-align: right;
+}
+.artifact-collection,
+.artifact-document-list {
+  display: grid;
+  gap: 8px;
+}
+.artifact-carousel {
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-foundation) 78%, transparent);
+  border-radius: var(--radius-md);
+}
+.artifact-carousel-stage {
+  position: relative;
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    linear-gradient(45deg, color-mix(in srgb, var(--border) 24%, transparent) 25%, transparent 25%)
+      0 0 / 16px 16px,
+    linear-gradient(45deg, transparent 75%, color-mix(in srgb, var(--border) 24%, transparent) 75%)
+      0 0 / 16px 16px,
+    var(--surface-foundation);
+}
+.artifact-carousel-stage img {
+  display: block;
+  width: 100%;
+  height: min(42dvh, 440px);
+  object-fit: contain;
+}
+.artifact-carousel-stage .ui-button {
+  position: absolute;
+  top: 50%;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface-top) 84%, transparent);
+  backdrop-filter: blur(8px);
+  transform: translateY(-50%);
+}
+.artifact-carousel-previous {
+  left: 10px;
+}
+.artifact-carousel-next {
+  right: 10px;
+}
+.artifact-carousel-caption {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.artifact-carousel-caption > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.artifact-carousel-caption strong {
+  color: var(--text-primary);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.artifact-document {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-card) 62%, transparent);
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+}
+.artifact-document:hover {
+  background: var(--surface-selected);
+}
+.artifact-document > span:first-of-type {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.artifact-document strong,
+.artifact-document small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artifact-document strong {
+  color: var(--text-primary);
+  font-size: 11px;
+}
+.artifact-document small,
+.artifact-document > span:last-child {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.artifact-metadata-list {
+  margin-top: 8px;
+}
+.artifact-dialog-overlay {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  background: rgb(5 4 9 / 0.72);
+  animation: artifact-overlay-in 180ms ease-in-out;
+}
+.artifact-dialog-content {
+  position: fixed;
+  z-index: 81;
+  top: 5dvh;
+  right: 5vw;
+  bottom: 5dvh;
+  left: 5vw;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  color: var(--text-secondary);
+  background: var(--surface-top);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 0.48);
+  animation: artifact-dialog-in 180ms ease-in-out;
+}
+.artifact-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.artifact-dialog-header > div {
+  min-width: 0;
+}
+.artifact-dialog-header span {
+  color: var(--text-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.artifact-dialog-header h2 {
+  margin: 2px 0 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.artifact-dialog-header p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.artifact-dialog-body {
+  min-height: 0;
+  overflow: auto;
+}
+.artifact-markdown {
+  width: min(100%, 860px);
+  margin: 0 auto;
+  padding: 28px 32px 60px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.artifact-markdown > :first-child {
+  margin-top: 0;
+}
+.artifact-markdown h1,
+.artifact-markdown h2,
+.artifact-markdown h3,
+.artifact-markdown h4 {
+  margin: 1.5em 0 0.55em;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+.artifact-markdown h1 {
+  font-size: 24px;
+}
+.artifact-markdown h2 {
+  font-size: 19px;
+}
+.artifact-markdown h3 {
+  font-size: 15px;
+}
+.artifact-markdown pre,
+.artifact-markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.artifact-markdown code {
+  padding: 2px 5px;
+  background: var(--surface-selected);
+  border-radius: 3px;
+}
+.artifact-markdown pre {
+  max-width: 100%;
+  padding: 14px;
+  overflow: auto;
+  background: var(--surface-foundation);
+  border-radius: var(--radius-md);
+}
+.artifact-markdown pre code {
+  padding: 0;
+  background: transparent;
+}
+.artifact-markdown blockquote {
+  margin-left: 0;
+  padding-left: 14px;
+  color: var(--text-muted);
+  border-left: 3px solid var(--border-strong);
+}
+.artifact-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.artifact-markdown th,
+.artifact-markdown td {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.artifact-markdown a {
+  color: var(--focus);
+}
+@keyframes artifact-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+}
+@keyframes artifact-overlay-in {
+  from {
+    opacity: 0;
+  }
+}
 .workflow-map {
   min-height: 100%;
 }
@@ -545,6 +1098,14 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   box-shadow: 0 8px 20px rgb(0 0 0 / 0.2);
+}
+.workflow-filter-node {
+  width: 196px;
+  min-height: 64px;
+  cursor: pointer;
+}
+.workflow-filter-canvas .react-flow__node {
+  width: 196px;
 }
 .workflow-node[data-parallel="true"]::before,
 .workflow-node[data-parallel="true"]::after {
@@ -608,6 +1169,10 @@
 .workflow-node[data-state="completed"] .workflow-node-state i {
   background: var(--done);
 }
+.workflow-node[data-state="terminal"] .workflow-node-state i {
+  background: transparent;
+  border: 1px solid var(--done);
+}
 .workflow-node[data-state="current"] .workflow-node-state i {
   width: 10px;
   height: 10px;
@@ -669,8 +1234,7 @@
 .workflow-step-detail {
   min-height: 150px;
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  display: block;
   background: var(--surface-top);
   border-bottom: 1px solid var(--border);
 }
@@ -748,6 +1312,9 @@
 }
 .workflow-state-current {
   color: var(--running);
+}
+.workflow-state-terminal {
+  color: var(--done);
 }
 .history-list {
   display: grid;

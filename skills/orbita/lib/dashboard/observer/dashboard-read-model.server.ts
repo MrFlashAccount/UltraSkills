@@ -5,9 +5,16 @@ import {
   SnapshotEnvelopeSchema,
   type InvalidationEvent,
   type ObserverFreshnessDTO,
+  type RunActivityPageDTO,
   type RunDetailDTO,
+  type RunOutputsDTO,
   type SnapshotEnvelope,
 } from "../contracts/browser";
+
+type RunArtifactContent = {
+  bytes: Uint8Array;
+  contentType: "image/gif" | "image/jpeg" | "image/png" | "image/webp" | "text/markdown";
+};
 
 export class ObserverUnavailableError extends Error {
   constructor() {
@@ -17,6 +24,21 @@ export class ObserverUnavailableError extends Error {
 
 type Reader = {
   getRun(runId: string, signal?: AbortSignal): Promise<RunDetailDTO | undefined>;
+  getRunActivity(
+    runId: string,
+    options?: { cursor?: number; limit?: number; stepId?: string },
+    signal?: AbortSignal,
+  ): Promise<RunActivityPageDTO | undefined>;
+  getRunArtifact(
+    runId: string,
+    options: { artifactId: string; stepId: string },
+    signal?: AbortSignal,
+  ): Promise<RunArtifactContent | undefined>;
+  getRunOutputs(
+    runId: string,
+    options?: { stepId?: string },
+    signal?: AbortSignal,
+  ): Promise<RunOutputsDTO | undefined>;
   listRuns(signal?: AbortSignal): Promise<SnapshotEnvelope["runs"]>;
 };
 type Subscriber = (event: InvalidationEvent) => void;
@@ -214,6 +236,30 @@ export class DashboardReadModel {
   async getDetail(runId: string): Promise<RunDetailDTO | undefined> {
     await this.ensureSnapshot();
     return this.reader.getRun(runId);
+  }
+
+  async getActivity(
+    runId: string,
+    options: { cursor?: number; limit?: number; stepId?: string } = {},
+  ): Promise<RunActivityPageDTO | undefined> {
+    await this.ensureSnapshot();
+    return this.reader.getRunActivity(runId, options);
+  }
+
+  async getOutputs(
+    runId: string,
+    options: { stepId?: string } = {},
+  ): Promise<RunOutputsDTO | undefined> {
+    await this.ensureSnapshot();
+    return this.reader.getRunOutputs(runId, options);
+  }
+
+  async getArtifact(
+    runId: string,
+    options: { artifactId: string; stepId: string },
+  ): Promise<RunArtifactContent | undefined> {
+    await this.ensureSnapshot();
+    return this.reader.getRunArtifact(runId, options);
   }
 
   refresh(): Promise<void> {

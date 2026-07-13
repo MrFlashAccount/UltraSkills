@@ -99,9 +99,10 @@ export function dashboardServerConfig(
 
 export function createDashboardComposition(
   config = dashboardServerConfig(),
-  reader: Pick<RunsRootObserverReader, "listRuns" | "getRun"> = new RunsRootObserverReader(
-    config.runsRoot,
-  ),
+  reader: Pick<
+    RunsRootObserverReader,
+    "listRuns" | "getRun" | "getRunActivity" | "getRunArtifact" | "getRunOutputs"
+  > = new RunsRootObserverReader(config.runsRoot),
 ) {
   const readModel = new DashboardReadModel(reader, {
     invalidationCoalesceMs: config.coalesceMs,

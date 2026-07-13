@@ -56,5 +56,5 @@ function detailContent({
   if (isError || detail === null) {
     return <DetailError />;
   }
-  return detail ? <RunDetailBody detail={detail} /> : <DetailLoading />;
+  return detail ? <RunDetailBody detail={detail} key={detail.runId} /> : <DetailLoading />;
 }

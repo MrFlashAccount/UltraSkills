@@ -54,14 +54,21 @@ controlled or ambiguous fallback.
 
 ## HTTP contract
 
-The supported same-origin surface contains exactly three GET routes:
+The supported same-origin surface contains exactly six GET routes:
 
 - `/api/dashboard/v1/runs` — complete validated summary snapshot with
   authoritative observer freshness and conditional ETag support.
-- `/api/dashboard/v1/runs/:runId` — lazy validated details for one bounded run
-  id or a fixed public error. Details include a bounded read-only workflow
-  mini-map when workflow step metadata is available, otherwise an explicit
-  unavailable state.
+- `/api/dashboard/v1/runs/:runId` — lazy validated core details for one bounded
+  run id or a fixed public error. Core details include metadata and a bounded
+  read-only workflow mini-map, but do not read or return activity and outputs.
+- `/api/dashboard/v1/runs/:runId/activity` — activity loaded only for the open
+  tab, in pages of at most 20 entries. `cursor` advances through durable history
+  and optional `step` filtering happens before public projection.
+- `/api/dashboard/v1/runs/:runId/outputs` — artifacts and results loaded only
+  for the open tab, with optional server-side `step` filtering.
+- `/api/dashboard/v1/runs/:runId/artifacts/:artifactId` — one lazily loaded,
+  allowlisted image or Markdown artifact. The exact producer `step` is required;
+  canonical path containment and type-specific byte caps are enforced server-side.
 - `/api/dashboard/v1/events` — data-free invalidation SSE and heartbeat
   comments.
 
@@ -98,11 +105,12 @@ unversioned `/api/dashboard/*`, `/dashboard/client.js`,
   route support remain the repair path.
 
 Exposure policy version `1` NFKC-normalizes prose, replaces control characters,
-collapses whitespace, applies source-specific 120/160/240-code-point ceilings,
-and omits values matching forbidden path, secret, command, private-instruction,
-prompt, or transcript shapes. `PublicDisplayText` has a non-empty/240 maximum
-schema. Aggregate serialized response caps are 1.5 MiB for snapshots and 64 KiB
-for details; there is no separate per-field UTF-8 byte ceiling.
+applies source-specific code-point and UTF-8 ceilings, and omits values matching
+forbidden path, secret, command, private-instruction, prompt, or transcript
+shapes. Activity Markdown preserves line structure under the same line-level
+disclosure policy and a 64 KiB per-entry ceiling. Aggregate activity-page,
+core-detail, and outputs response caps are 128 KiB each; the snapshot cap is
+1.5 MiB.
 
 `ORBITA_DASHBOARD_STALE_MS` caps the server refresh cadence through
 `min(POLL_MS, STALE_MS)`. Live UI state requires authoritative freshness,

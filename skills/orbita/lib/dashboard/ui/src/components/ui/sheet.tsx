@@ -48,7 +48,7 @@ export function Sheet({
               ) : null}
             </div>
             <Dialog.Close asChild>
-              <Button aria-label="Close details" size="icon" variant="quiet">
+              <Button aria-label="Close details" size="icon" variant="ghost">
                 <X aria-hidden="true" size={18} />
               </Button>
             </Dialog.Close>
