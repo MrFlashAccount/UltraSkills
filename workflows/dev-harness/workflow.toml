@@ -21,6 +21,7 @@ Before creating the research artifact or moving toward a proposal, run a user di
 - Phrase every user-answerable non_blocking_stop.needed as a direct user-facing question; the orchestrator must route it to the user as a question, not answer it from inference or convert it into a summary.
 Do not create `reasons-canvas-research` before the needed user dialogue is complete or evidence shows no user dialogue is needed.
 Read the task context, gather local/project evidence, identify constraints, risks, open questions, and architecture-sensitive pressure.
+Decide whether this task needs the optional UI design proposal gate. Return ui_gate required when the approved slice materially changes a user-facing interface, interaction model, information hierarchy, responsive behavior, or visual/product direction and therefore needs a product-surface proposal before architecture. Return ui_gate not_required for backend, infrastructure, tooling, documentation, non-visual behavior, or truly trivial UI copy/bug work where architecture can proceed safely from research alone. Missing UI evidence is not a reason to skip the gate: if UI work is material but its design basis is missing, choose required so the UI proposal step can request the missing evidence. Emit the decision in output.ui_gate, explain it in output.ui_gate_rationale, and include the decision in output.summary. Preserve the decision across revisions unless new evidence changes the task surface.
 Create exactly one first-class human-facing research artifact named `reasons-canvas-research`. Do not create any separate legacy research artifact or structured legacy output.
 Fill only the research-owned depth in `reasons-canvas-research`: evidence-backed Requirements, observed domain Entities, and research-level constraints, candidate options, risks, norms, safeguards, and open tensions. Do not finalize architecture, file-level operations, or implementation work; mark those as questions or constraints for later phases. Emit artifact metadata for `reasons-canvas-research` in artifacts[].
 Emit a compact output.summary as the human-facing research proposal state for approval gates. Summarize the artifact's current proposal state, major decisions, unresolved tensions, and why it is ready for attack/approval without embedding the artifact body.
@@ -59,12 +60,14 @@ agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 role = "researcher"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Start from a hostile prior: assume the change, proposal, draft, or Canvas is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed must-fix finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
-Read artifact `reasons-canvas-research` from `research_draft` and attack it for missing evidence, unsafe assumptions, scope drift, sensitive surfaces, unclear approval questions, and fake architecture/implementation certainty. Treat a missing `reasons-canvas-research` artifact as a blocking research failure.
+Read artifact `reasons-canvas-research` from `research_draft` and attack it for missing evidence, unsafe assumptions, scope drift, sensitive surfaces, unclear approval questions, and fake architecture/implementation certainty. Also attack research_draft.ui_gate and research_draft.ui_gate_rationale: fail a not_required decision when the slice materially changes a user-facing interface, interaction model, information hierarchy, responsive behavior, or visual/product direction, and fail a required decision that has no evidence-backed UI surface. Treat missing or unsupported UI-gate routing as a research failure, not a downstream UI-worker decision. Treat a missing `reasons-canvas-research` artifact as a blocking research failure.
 Return approved or needs_revision as completed output; otherwise report a non-blocking stop.
 When reporting it, set non_blocking_stop.source_step_id = research_attack.
 
 Input context:
-- Research artifacts: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}'''
+- Research artifacts: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}
+- Researcher UI gate decision: ${{ input.research_draft.ui_gate }}
+- Researcher UI gate rationale: ${{ input.research_draft.ui_gate_rationale }}'''
 
 [steps.research_attack.output]
 template = "../../shared/templates/review-verdict-template.md"
@@ -80,6 +83,7 @@ needs_revision = "research_draft"
 [steps.approve_research]
 name = "Approve research"
 kind = "approval"
+next = "${{ output.next_step }}"
 
 [steps.approve_research.input]
 prompt = '''This is a non-implementation approval phase. Do not inspect code, diffs, docs, or attached artifact bodies merely to prepare this gate; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
@@ -87,23 +91,18 @@ Read research_draft.summary as the human-facing research proposal state and atta
 Do not recreate a summary by reading/paraphrasing the artifact body in the orchestrator; use the draft-produced summary as the approval-state text.
 If the user asks for a packet/proposal file, retrieve/export the existing artifact referenced by baton/output artifacts; do not ask a worker to recreate it in a temp path.
 Continue only after explicit approval.
-Return approval approved to continue to ui_intent_draft or rejected to revise research_draft as completed output; otherwise report a non-blocking stop.
+The researcher owns the optional UI-gate decision. On approval, copy that decision mechanically into next_step: required routes to ui_intent_draft and not_required routes directly to architecture_draft. Do not override or reinterpret the researcher decision at this approval step. On rejection, return approval rejected with next_step research_draft. Otherwise report a non-blocking stop.
 
 Input context:
 - Research summary for approval: ${{ input.research_draft.summary }}
 - Research attack verdict: ${{ input.research_attack.verdict }}
+- Researcher UI gate decision: ${{ input.research_draft.ui_gate }}
+- Researcher UI gate rationale: ${{ input.research_draft.ui_gate_rationale }}
 - Previous research gate decision: ${{ input.approve_research | default: "No previous research gate decision." }}
 - Research artifacts: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}'''
 
 [steps.approve_research.output]
-schema = "schemas/approval-output.json"
-
-[steps.approve_research.next]
-match = "${{ output.approval }}"
-
-[steps.approve_research.next.cases]
-approved = "ui_intent_draft"
-rejected = "research_draft"
+schema = "schemas/research-approval-output.json"
 
 [steps.ui_intent_draft]
 name = "UI design proposal draft"
@@ -216,7 +215,7 @@ agent_runtime.codex = { model = "gpt-5.6-luna", thinking_level = "xhigh" }
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read the approved/current `reasons-canvas-research` artifact from `research_draft` as the research source of truth and strictly follow it.
-Read the approved/current `ui-design-proposal` artifact from `ui_intent_draft` as the UI/product-surface source of truth when it is applicable. Preserve its user task, product/surface route, screen/zones, first-read/action hierarchy, required states, interaction expectations, design-law basis, visual evidence/proof asset constraints, and open UI tensions. Do not rewrite visual hierarchy or UI taste in architecture; translate only the code/system implications needed to preserve the approved UI design proposal.
+Honor the researcher-owned UI gate decision. When ui_gate is required, read the approved/current `ui-design-proposal` artifact from `ui_intent_draft` as the UI/product-surface source of truth. Preserve its user task, product/surface route, screen/zones, first-read/action hierarchy, required states, interaction expectations, design-law basis, visual evidence/proof asset constraints, and open UI tensions. When ui_gate is not_required, proceed directly without a UI artifact or UI approval and record the researcher's skip rationale in the architecture artifact; do not invent a UI proposal or treat its absence as missing evidence. Do not rewrite visual hierarchy or UI taste in architecture; translate only the code/system implications needed to preserve an applicable approved UI design proposal.
 Produce the minimal architecture decision or structural contract required by the approved research in the `reasons-canvas-architecture` artifact and a compact output.summary as the human-facing architecture proposal state for approval gates. Do not embed the architecture artifact body in JSON.
 Before finalizing output.summary or `reasons-canvas-architecture`, explicitly identify the public contract and API surfaces affected by the task: exported APIs, CLI/user-facing commands, schemas, workflow interfaces, integration boundaries, compatibility promises, and observable behavior. If code, docs, or existing contracts answer a question, inspect them instead of asking the user.
 When user-owned choices remain about public contract shape, API compatibility, naming, migration behavior, or accepted breakage, report a non-blocking stop with non_blocking_stop.source_step_id = architecture_draft and the smallest focused non_blocking_stop.needed question for the orchestrator to resolve through the non-blocking stop flow; include your recommended answer in non_blocking_stop.summary or non_blocking_stop.needed.
@@ -234,6 +233,8 @@ Input context:
 - Research artifacts, including required `reasons-canvas-research`: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}
 - Research attack verdict: ${{ input.research_attack.verdict }}
 - Human research approval: ${{ input.approve_research }}
+- Researcher UI gate decision: ${{ input.research_draft.ui_gate }}
+- Researcher UI gate rationale: ${{ input.research_draft.ui_gate_rationale }}
 - UI design proposal artifacts, including `ui-design-proposal` when present: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}
 - UI design proposal attack verdict: ${{ input.ui_intent_attack.verdict | default: "No UI design proposal attack verdict is available." }}
 - Human UI design proposal approval: ${{ input.approve_ui_intent | default: "No UI design proposal approval is available." }}

@@ -15,6 +15,8 @@ const workflowAuthoring = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/w
 const uiProposalTemplate = readFileSync(path.join(REPO_ROOT, 'shared/templates/ui-design-proposal-template.html'), 'utf8');
 const implementationPlanTemplate = readFileSync(path.join(REPO_ROOT, 'shared/templates/implementation-plan-template.md'), 'utf8');
 const sharedTemplatesReadme = readFileSync(path.join(REPO_ROOT, 'shared/templates/README.md'), 'utf8');
+const devResearchDraftSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/dev-harness/schemas/research-draft-output.json'), 'utf8'));
+const devResearchApprovalSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/dev-harness/schemas/research-approval-output.json'), 'utf8'));
 const devUiDraftSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/dev-harness/schemas/ui-intent-draft-output.json'), 'utf8'));
 const smokeDesignDraftSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/frontend-ui-pr-smoke/schemas/design-draft-output.json'), 'utf8'));
 const smokeImplementationFanoutSchema = JSON.parse(readFileSync(path.join(REPO_ROOT, 'workflows/frontend-ui-pr-smoke/schemas/implementation-fanout-output.json'), 'utf8'));
@@ -40,6 +42,7 @@ const revisionGates = [
     attackId: 'research_attack',
     approvalId: 'approve_research',
     schemaPath: 'workflows/dev-harness/schemas/research-draft-output.json',
+    rejectionOutput: { approval: 'rejected', next_step: 'research_draft', feedback: 'Apply the requested correction.' },
   },
   {
     label: 'dev-harness architecture',
@@ -78,6 +81,43 @@ const revisionGates = [
 function applyStep(workflow, baton, stepId, output) {
   return new Step({ id: stepId, step: workflow.steps[stepId] }).applyOutput({ workflow, baton, output }).baton;
 }
+
+test('Dev Harness researcher owns the optional UI gate route', () => {
+  const researchPrompt = devHarness.steps.research_draft.input.prompt;
+  const attackPrompt = devHarness.steps.research_attack.input.prompt;
+  const approvalPrompt = devHarness.steps.approve_research.input.prompt;
+  const architecturePrompt = devHarness.steps.architecture_draft.input.prompt;
+  const approvalStep = devHarness.steps.approve_research;
+  const baton = {
+    cursor: 'approve_research',
+    status: 'running',
+    state: {
+      artifacts: [],
+      results: [],
+      research_draft: {
+        outcome: 'ready_for_attack',
+        ui_gate: 'not_required',
+        ui_gate_rationale: 'No user-facing interface changes.',
+      },
+    },
+  };
+
+  assert.deepEqual(devResearchDraftSchema.required, ['outcome', 'ui_gate', 'ui_gate_rationale']);
+  assert.deepEqual(devResearchDraftSchema.properties.ui_gate.enum, ['required', 'not_required']);
+  assert.deepEqual(devResearchApprovalSchema.required, ['approval', 'next_step']);
+  assert.equal(approvalStep.output.schema, 'schemas/research-approval-output.json');
+  assert.equal(approvalStep.next, '${{ output.next_step }}');
+  assert.match(researchPrompt, /Decide whether this task needs the optional UI design proposal gate/);
+  assert.match(researchPrompt, /Missing UI evidence is not a reason to skip the gate/);
+  assert.match(attackPrompt, /attack research_draft\.ui_gate/);
+  assert.match(approvalPrompt, /researcher owns the optional UI-gate decision/i);
+  assert.match(approvalPrompt, /required routes to ui_intent_draft and not_required routes directly to architecture_draft/);
+  assert.match(architecturePrompt, /When ui_gate is not_required, proceed directly without a UI artifact or UI approval/);
+
+  assert.equal(applyStep(devHarness, baton, 'approve_research', { approval: 'approved', next_step: 'ui_intent_draft' }).cursor, 'ui_intent_draft');
+  assert.equal(applyStep(devHarness, baton, 'approve_research', { approval: 'approved', next_step: 'architecture_draft' }).cursor, 'architecture_draft');
+  assert.equal(applyStep(devHarness, baton, 'approve_research', { approval: 'rejected', next_step: 'research_draft' }).cursor, 'research_draft');
+});
 
 test('frontend design gates preserve approved HTML and proof context through implementation and taste review', () => {
   const devDraft = devHarness.steps.ui_intent_draft;
@@ -292,7 +332,7 @@ for (const gate of revisionGates) {
     baton = applyStep(workflow, baton, attackId, { outcome: 'approved' });
     assert.equal(baton.cursor, approvalId);
 
-    baton = applyStep(workflow, baton, approvalId, { approval: 'rejected', feedback: 'Apply the requested correction.' });
+    baton = applyStep(workflow, baton, approvalId, gate.rejectionOutput ?? { approval: 'rejected', feedback: 'Apply the requested correction.' });
     assert.equal(baton.cursor, draftId);
 
     baton = applyStep(workflow, baton, draftId, { outcome: 'ready_for_approval' });
@@ -311,7 +351,12 @@ for (const gate of revisionGates) {
 
     assert.equal(draft.next.cases.ready_for_attack, attackId);
     assert.equal(draft.next.cases.ready_for_approval, approvalId);
-    assert.equal(approval.next.cases.rejected, draftId);
+    if (gate.rejectionOutput) {
+      assert.equal(approval.next, '${{ output.next_step }}');
+      assert.equal(gate.rejectionOutput.next_step, draftId);
+    } else {
+      assert.equal(approval.next.cases.rejected, draftId);
+    }
     assert.ok(schema.properties.outcome.enum.includes('ready_for_attack'));
     assert.ok(schema.properties.outcome.enum.includes('ready_for_approval'));
     assert.ok(successRequirement?.then?.required?.length > 0);

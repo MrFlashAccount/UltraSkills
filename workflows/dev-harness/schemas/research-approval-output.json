@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/research-approval-output",
+  "title": "DevHarness Research Approval Output",
+  "description": "Human research approval plus the deterministic next step derived from the researcher-owned UI gate decision.",
+  "type": "object",
+  "required": [
+    "approval",
+    "next_step"
+  ],
+  "properties": {
+    "approval": {
+      "enum": [
+        "approved",
+        "rejected"
+      ],
+      "description": "Human decision on the current research proposal.",
+      "x-usage": "Use approved only after explicit human approval. Use rejected when the proposal must return to research_draft for user-requested revision."
+    },
+    "next_step": {
+      "enum": [
+        "research_draft",
+        "ui_intent_draft",
+        "architecture_draft"
+      ],
+      "description": "Deterministic route: rejection returns to research_draft; approval copies the researcher UI-gate decision to ui_intent_draft or architecture_draft.",
+      "x-usage": "Do not make a new UI-gate judgment here. Copy research_draft.ui_gate exactly when approval is approved."
+    },
+    "feedback": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional user feedback when the research proposal is rejected for revision.",
+      "x-usage": "Pass this feedback to research_draft as the bounded revision request; do not reinterpret it as a new UI-gate decision."
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
+      },
+      "description": "Optional compact summary of the human approval decision or feedback.",
+      "x-usage": "Use as supporting approval context only. Route exclusively from next_step."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
+      },
+      "description": "Optional artifacts attached by the approval gate.",
+      "x-usage": "Use only for artifacts explicitly attached during research approval; do not replace the researcher-owned reasons-canvas-research artifact."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "approval": {
+            "const": "approved"
+          }
+        },
+        "required": [
+          "approval"
+        ]
+      },
+      "then": {
+        "properties": {
+          "next_step": {
+            "enum": [
+              "ui_intent_draft",
+              "architecture_draft"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "approval": {
+            "const": "rejected"
+          }
+        },
+        "required": [
+          "approval"
+        ]
+      },
+      "then": {
+        "properties": {
+          "next_step": {
+            "const": "research_draft"
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}
