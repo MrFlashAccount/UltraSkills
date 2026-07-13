@@ -593,11 +593,15 @@ The intended shape is static-graph first:
   approval/user routes, and schema-enumerable dynamic `next` expressions;
 - validation detects cyclic regions with SCC/self-loop analysis;
 - each policy must select exactly one unambiguous detected region;
-- runtime counts selected valid internal route events, not full human-described
-  cycle rounds;
-- `maxIterations` exhausts when the next selected internal event would exceed
-  the limit, and runtime routes to the configured `onLimit` target instead of
-  the original cycle target;
+- each policy declares one iteration `entry` and one `boundary`; validation
+  proves all entries, repeats, and exits respect those boundaries;
+- runtime increments progress once when a complete entry-to-boundary traversal
+  finishes, not for each internal edge;
+- after `maxIterations` complete traversals, a selected boundary-to-entry repeat
+  uses `onLimit`, which must already be a declared external target of the
+  boundary step; runtime never creates a synthetic workflow edge;
+- any declared external target selected before the boundary repeat remains a
+  normal early exit; an incomplete traversal does not advance progress;
 - baton stores only loop progress counters in a loop-specific namespace, never
   workflow policy definitions.
 

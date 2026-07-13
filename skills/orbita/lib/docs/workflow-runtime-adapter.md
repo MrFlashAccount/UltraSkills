@@ -24,12 +24,15 @@ Workflow loop limits are interpreter-owned. When a workflow declares validated
 succeeded and after the selected route target has been resolved, but before the
 cursor is advanced.
 
-`maxIterations` counts selected valid internal route events inside the validated
-SCC/self-loop region. It does not count malformed output.schema retry attempts
-and does not count full human-described cycle rounds. When the next selected
-internal route event would exceed the limit, the runner persists loop progress
-and routes to the configured `onLimit` target instead of the original cycle
-target.
+Each policy declares one `entry` and one `boundary` inside its validated
+SCC/self-loop region. `maxIterations` counts completed traversals from that
+entry to that boundary, not individual internal edges. It does not count
+malformed output.schema retry attempts. When the boundary selects the repeat
+target after the configured number of traversals has completed, the runner uses
+the boundary's already-declared external `onLimit` target. It never manufactures
+an edge outside the workflow's `next` graph. Any step in the loop may still
+select one of its declared external targets for a normal early exit; an
+incomplete traversal does not advance the counter.
 
 Baton stores loop progress counters only. It must not store workflow policy
 definitions such as selected steps, limits, or targets. Loop progress uses a

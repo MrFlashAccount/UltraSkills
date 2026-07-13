@@ -44,15 +44,20 @@ MVP policy identity and fields:
 
 - the object key under `loopPolicies`: unique policy id inside the workflow;
 - `steps`: member steps used to select one detected cyclic region;
-- `maxIterations`: positive count of selected valid internal route events;
-- `onLimit`: existing target step used when the next selected internal event
-  would exceed the limit.
+- `entry`: the single step through which each iteration enters the region;
+- `boundary`: the single step that completes an iteration and owns repeat/exit
+  routing (`entry` and `boundary` are the same step for a self-loop);
+- `maxIterations`: positive count of complete entry-to-boundary traversals;
+- `onLimit`: an existing external target already declared by the boundary step,
+  used when another boundary-to-entry repeat would exceed the limit.
 
 Validation must reject ambiguous fanout participation, branch-local dynamic
-routing before a join, cross-branch cycles, non-convergent fanout, `onLimit`
-targets that route back into the same exhausted region, and policy definitions
-that try to use `cycleId`, manual scopes, runtime history, or prompt behavior as
-the primary loop mechanism.
+routing before a join, cross-branch cycles, non-convergent fanout, entries that
+bypass the declared entry, ambiguous boundary repeats, `onLimit` targets absent
+from the boundary's declared external routes, targets that route back into the
+exhausted region, and policy definitions that try to use
+`cycleId`, manual scopes, runtime history, or prompt behavior as the primary
+loop mechanism.
 
 Consecutive pass/success early exit is deferred. Do not accept success-streak or
 `onSuccess` policy fields in the MVP unless a newer approved architecture

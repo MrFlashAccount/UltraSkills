@@ -9,6 +9,8 @@
       "steps": [
         "self_check"
       ],
+      "entry": "self_check",
+      "boundary": "self_check",
       "maxIterations": 2,
       "onLimit": "limit_reached"
     }
@@ -22,13 +24,14 @@
       },
       "output": {
         "template": "output.md",
-        "schema": "schemas/routing-review.schema.json"
+        "schema": "schemas/loop-review.schema.json"
       },
       "next": {
         "match": "${{ output.outcome }}",
         "cases": {
           "ready": "done",
-          "retry": "self_check"
+          "retry": "self_check",
+          "limit_reached": "limit_reached"
         }
       }
     },

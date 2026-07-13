@@ -98,10 +98,10 @@ function syntheticWorkflow(overrides) {
 
 test('workflow loopPolicies validate against exactly one SCC or self-loop region', () => {
   const valid = syntheticWorkflow((doc) => {
-    doc.steps.producer.next = 'consumer';
-    doc.steps.consumer.next = 'producer';
+    doc.steps.producer.next = { match: '${{ output.outcome }}', cases: { ready: 'consumer', limit_reached: 'done' } };
+    doc.steps.consumer.next = { match: '${{ output.outcome }}', cases: { ready: 'producer', limit_reached: 'limit_reached' } };
     doc.loopPolicies = {
-      producer_consumer: { steps: ['producer', 'consumer'], maxIterations: 2, onLimit: 'limit_reached' },
+      producer_consumer: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: 'limit_reached' },
     };
     return doc;
   });
@@ -109,7 +109,7 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
 
   const schemaLessApprovalRoute = syntheticWorkflow((doc) => {
     doc.steps.producer.next = 'consumer';
-    doc.steps.consumer.next = 'producer';
+    doc.steps.consumer.next = { match: '${{ output.outcome }}', cases: { ready: 'producer', limit_reached: 'limit_reached' } };
     doc.steps.untyped_approval = {
       name: 'Untyped Approval',
       kind: 'approval',
@@ -117,7 +117,7 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
       next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'limit_reached' } },
     };
     doc.loopPolicies = {
-      producer_consumer: { steps: ['producer', 'consumer'], maxIterations: 2, onLimit: 'limit_reached' },
+      producer_consumer: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: 'limit_reached' },
     };
     return doc;
   });
@@ -127,7 +127,7 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
     doc.steps.producer.next = 'consumer';
     doc.steps.consumer.next = 'producer';
     doc.loopPolicies = {
-      partial: { steps: ['producer'], maxIterations: 2, onLimit: 'limit_reached' },
+      partial: { steps: ['producer'], entry: 'producer', boundary: 'producer', maxIterations: 2, onLimit: 'limit_reached' },
     };
     return doc;
   }), /loopPolicy 'partial' steps must exactly match one unambiguous SCC or self-loop region/);
@@ -136,7 +136,7 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
     doc.steps.producer.next = 'consumer';
     doc.steps.consumer.next = 'producer';
     doc.loopPolicies = {
-      bad_limit: { steps: ['producer', 'consumer'], maxIterations: 2, onLimit: 'producer' },
+      bad_limit: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: 'producer' },
     };
     return doc;
   }), /onLimit target 'producer' stays inside the exhausted loop region/);
@@ -152,17 +152,17 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
       next: 'producer',
     };
     doc.loopPolicies = {
-      bad_on_limit_path: { steps: ['producer', 'consumer'], maxIterations: 2, onLimit: 'fallback' },
+      bad_on_limit_path: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: 'fallback' },
     };
     return doc;
-  }), /onLimit target 'fallback' routes back into the exhausted loop region/);
+  }), /onLimit target 'fallback' must be a declared external target of boundary 'consumer'/);
 
   assertSemanticFailure(syntheticWorkflow((doc) => {
     doc.steps.producer.next = 'consumer';
-    doc.steps.consumer.next = 'producer';
+    doc.steps.consumer.next = { match: '${{ output.outcome }}', cases: { ready: 'producer', limit_reached: 'limit_reached' } };
     doc.loopPolicies = {
-      first: { steps: ['producer', 'consumer'], maxIterations: 2, onLimit: 'limit_reached' },
-      second: { steps: ['consumer'], maxIterations: 2, onLimit: 'limit_reached' },
+      first: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: 'limit_reached' },
+      second: { steps: ['consumer'], entry: 'consumer', boundary: 'consumer', maxIterations: 2, onLimit: 'limit_reached' },
     };
     return doc;
   }), /overlaps with loopPolicy 'first' at step 'consumer'/);
@@ -171,10 +171,28 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
     doc.steps.producer.next = 'consumer';
     doc.steps.consumer.next = 'producer';
     doc.loopPolicies = {
-      ['__proto__']: { steps: ['producer', 'consumer'], maxIterations: 2, onLimit: 'limit_reached' },
+      ['__proto__']: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: 'limit_reached' },
     };
     return doc;
   }), /loopPolicy id '__proto__' is unsafe as a JavaScript object key/);
+
+  assertSemanticFailure(syntheticWorkflow((doc) => {
+    doc.steps.producer.next = { match: '${{ output.outcome }}', cases: { ready: 'consumer', limit_reached: 'limit_reached' } };
+    doc.steps.consumer.next = { match: '${{ output.outcome }}', cases: { ready: 'producer', limit_reached: 'done' } };
+    doc.loopPolicies = {
+      wrong_boundary: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: 'limit_reached' },
+    };
+    return doc;
+  }), /onLimit target 'limit_reached' must be a declared external target of boundary 'consumer'/);
+
+  assertSemanticFailure(syntheticWorkflow((doc) => {
+    doc.steps.producer.next = 'consumer';
+    doc.steps.consumer.next = { match: '${{ output.outcome }}', cases: { ready: 'producer', limit_reached: 'limit_reached' } };
+    doc.loopPolicies = {
+      wrong_entry: { steps: ['producer', 'consumer'], entry: 'consumer', boundary: 'producer', maxIterations: 2, onLimit: 'limit_reached' },
+    };
+    return doc;
+  }), /workflow start 'producer' must equal entry 'consumer'/);
 });
 
 test('workflow loopPolicies reject fanout and non-enumerable dynamic routes', () => {
@@ -183,7 +201,7 @@ test('workflow loopPolicies reject fanout and non-enumerable dynamic routes', ()
     doc.steps.branch_a.next = 'producer';
     doc.steps.branch_b.next = 'producer';
     doc.loopPolicies = {
-      fanout: { steps: ['producer', 'branch_a', 'branch_b'], maxIterations: 2, onLimit: 'limit_reached' },
+      fanout: { steps: ['producer', 'branch_a', 'branch_b'], entry: 'producer', boundary: 'producer', maxIterations: 2, onLimit: 'limit_reached' },
     };
     return doc;
   }), /workflow failed schema validation: .*next must be string/);
@@ -193,7 +211,7 @@ test('workflow loopPolicies reject fanout and non-enumerable dynamic routes', ()
     doc.steps.producer.next = '${{ output.route }}';
     doc.steps.consumer.next = 'producer';
     doc.loopPolicies = {
-      dynamic: { steps: ['producer', 'consumer'], maxIterations: 2, onLimit: 'limit_reached' },
+      dynamic: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: 'limit_reached' },
     };
     return doc;
   }), /next expression .* open string schema must be constrained with enum or const values/);

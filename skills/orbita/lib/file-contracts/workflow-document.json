@@ -517,6 +517,8 @@
       "type": "object",
       "required": [
         "steps",
+        "entry",
+        "boundary",
         "maxIterations",
         "onLimit"
       ],
@@ -529,6 +531,14 @@
             "type": "string",
             "minLength": 1
           }
+        },
+        "entry": {
+          "type": "string",
+          "minLength": 1
+        },
+        "boundary": {
+          "type": "string",
+          "minLength": 1
         },
         "maxIterations": {
           "type": "integer",
@@ -583,7 +593,7 @@
           }
         },
         "loopPolicies": {
-          "description": "Optional loop policies keyed by policy id. Each policy must cover exactly one semantic validation-proven SCC or self-loop region. Runtime counts selected internal route events and routes to onLimit when maxIterations would be exceeded.",
+          "description": "Optional loop policies keyed by policy id. Each policy must cover exactly one semantic validation-proven SCC or self-loop region with a single declared entry and boundary. Runtime counts completed entry-to-boundary traversals and uses the boundary's declared onLimit exit when another repeat would exceed maxIterations.",
           "type": "object",
           "minProperties": 1,
           "additionalProperties": {

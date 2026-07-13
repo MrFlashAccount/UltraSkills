@@ -10,6 +10,8 @@
         "plan",
         "approval_gate"
       ],
+      "entry": "plan",
+      "boundary": "approval_gate",
       "maxIterations": 2,
       "onLimit": "limit_reached"
     },
@@ -18,6 +20,8 @@
         "implement",
         "review"
       ],
+      "entry": "implement",
+      "boundary": "review",
       "maxIterations": 2,
       "onLimit": "limit_reached"
     }
@@ -50,11 +54,12 @@
         "match": "${{ output.approval }}",
         "cases": {
           "approved": "implement",
-          "rejected": "plan"
+          "rejected": "plan",
+          "limit_reached": "limit_reached"
         }
       },
       "output": {
-        "schema": "schemas/approval.schema.json"
+        "schema": "schemas/loop-approval.schema.json"
       }
     },
     "implement": {
@@ -87,13 +92,14 @@
       },
       "output": {
         "template": "output.md",
-        "schema": "schemas/routing-review.schema.json"
+        "schema": "schemas/loop-review.schema.json"
       },
       "next": {
         "match": "${{ output.outcome }}",
         "cases": {
           "ready": "done",
-          "retry": "implement"
+          "retry": "implement",
+          "limit_reached": "limit_reached"
         }
       }
     },

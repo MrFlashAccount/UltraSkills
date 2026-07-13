@@ -30,6 +30,10 @@ a closed target set from the referenced output contract/schema. Closed targets
 include direct string `const`, string `enum`, or equivalent discriminated schema
 branches where every branch maps to a known step id.
 
+The closed graph must prove the policy's declared `entry` and `boundary`, the
+single boundary-to-entry repeat, and `onLimit` as an external target already
+declared by the boundary step.
+
 If validation cannot enumerate every possible target used by a policy-selected
 cyclic region, that `loopPolicy` is invalid. The dynamic route itself may still
 be valid for ordinary runtime routing when it passes the existing dynamic `next`
