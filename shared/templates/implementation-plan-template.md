@@ -50,7 +50,7 @@
 
 ## UI Design Proposal
 
-Complete this section when an approved `ui-design-proposal` is applicable. If the UI design proposal gate marked the slice not applicable, record that reason instead of inventing UI design proposal.
+Complete this section when an approved `ui-design-proposal` exists. When research routed directly to architecture, record the approved architecture artifact's no-design rationale instead of inventing UI design proposal.
 
 | Topic | Approved UI design proposal | Implementation planning consequence |
 | --- | --- | --- |

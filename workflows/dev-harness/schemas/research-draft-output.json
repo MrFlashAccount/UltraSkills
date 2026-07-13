@@ -4,8 +4,7 @@
   "type": "object",
   "required": [
     "outcome",
-    "ui_gate",
-    "ui_gate_rationale"
+    "next_step"
   ],
   "properties": {
     "outcome": {
@@ -16,19 +15,13 @@
       "description": "Producer must use ready_for_attack for an initial or critic-requested draft and ready_for_approval for a correction requested at the user gate. Missing help is reported through the runner non-blocking stop control channel, never as an output outcome.",
       "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when it requires revision."
     },
-    "ui_gate": {
+    "next_step": {
       "enum": [
-        "required",
-        "not_required"
+        "ui_intent_draft",
+        "architecture_draft"
       ],
-      "description": "Researcher-owned decision whether the approved task slice needs the optional UI design proposal gate before architecture.",
-      "x-usage": "Use required for material user-facing interface, interaction, information-hierarchy, responsive, or visual/product-direction work. Use not_required only when architecture can proceed safely without a UI proposal."
-    },
-    "ui_gate_rationale": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Evidence-backed reason for requiring or skipping the optional UI design proposal gate.",
-      "x-usage": "Explain the concrete task surface behind ui_gate. Missing UI evidence is not a reason to choose not_required for material UI work."
+      "description": "Researcher-selected step after human research approval: UI design proposal for material user-facing UI work, otherwise architecture.",
+      "x-usage": "Use ui_intent_draft when the research artifact says UI design is needed. Use architecture_draft when it says UI design is not needed. The approval step reads this field directly."
     },
     "summary": {
       "type": "string",

@@ -11,6 +11,7 @@ Output:
 - Key capabilities needed to satisfy the requirement.
 - Scope boundaries, explicit non-goals, compatibility expectations, and acceptance signals.
 - Requirement tensions or unresolved ambiguity, if any.
+- For research artifacts, an explicit `UI design needed: yes | no` decision with an evidence-backed reason. This is required research evidence, not workflow routing metadata.
 
 Construction guidance:
 - Abstract the fundamental problem before listing features.
