@@ -19,6 +19,11 @@
 .ui-button-quiet {
   background: transparent;
 }
+.ui-button-ghost {
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
+}
 .ui-button-danger {
   background: color-mix(in srgb, var(--needs-help) 12%, var(--surface-card));
   border-color: var(--needs-help);
@@ -30,6 +35,10 @@
 .ui-button:hover {
   background: var(--surface-card);
   border-color: var(--border-strong);
+}
+.ui-button-ghost:hover {
+  color: var(--text-primary);
+  border-color: transparent;
 }
 .ui-input,
 .ui-select {

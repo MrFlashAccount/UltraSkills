@@ -14,6 +14,15 @@ async function fixture() {
   await mkdir(runsRoot, { recursive: true });
   const workflowPath = resolve("workflows/dev-harness/workflow.toml");
   const entries = {
+    created: {
+      runId: "created",
+      workflow: { identity: "dev-harness", path: workflowPath },
+      status: "running",
+      createdAt: "2026-07-12T00:00:00.000Z",
+      updatedAt: "2026-07-12T00:03:00.000Z",
+      workerLease: null,
+      title: "Created",
+    },
     corrupt: {
       runId: "corrupt",
       workflow: { identity: "dev-harness", path: workflowPath },
@@ -62,6 +71,7 @@ describe("RunsRootObserverReader", () => {
     const first = await new RunsRootObserverReader(runsRoot).listRuns();
     const second = await new RunsRootObserverReader(runsRoot).listRuns();
     expect(first).toEqual(second);
+    expect(first.find((run) => run.runId === "created")?.laneId).toBe("worker_running");
     expect(first.find((run) => run.runId === "healthy")?.laneId).toBe("waiting_for_user");
     expect(first.find((run) => run.runId === "corrupt")?.laneId).toBe("degraded");
   });

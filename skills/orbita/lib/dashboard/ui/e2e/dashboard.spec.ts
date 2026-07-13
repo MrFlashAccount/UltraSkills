@@ -164,6 +164,21 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Orbita runs" })).toBeVisible();
   await expect(page.locator(".lane")).toHaveCount(5);
+  expect(
+    await page.locator(".brand").evaluate((element) => getComputedStyle(element).alignItems),
+  ).toBe("baseline");
+  expect(
+    await page
+      .locator(".lane-scroll")
+      .first()
+      .evaluate((element) => getComputedStyle(element).scrollbarGutter),
+  ).toBe("auto");
+  expect(
+    await page
+      .locator(".lane-scroll")
+      .first()
+      .evaluate((element) => getComputedStyle(element).scrollbarWidth),
+  ).toBe("thin");
   expect(await page.locator(".run-card").count()).toBeLessThanOrEqual(150);
   const waitingRegion = page.getByRole("region", { name: "Waiting for user" });
   await expect(waitingRegion.getByRole("list", { name: "Waiting for user runs" })).toBeVisible();
@@ -172,6 +187,12 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
     String(waitingCount),
   );
   expect(await waitingRegion.getByRole("listitem").count()).toBeGreaterThan(0);
+  const firstCardTopInset = await waitingRegion.evaluate((region) => {
+    const scroll = region.querySelector<HTMLElement>(".lane-scroll")!;
+    const card = region.querySelector<HTMLElement>(".run-card")!;
+    return card.getBoundingClientRect().top - scroll.getBoundingClientRect().top;
+  });
+  expect(firstCardTopInset).toBeCloseTo(8, 1);
   expect(
     await page
       .locator(".status-reason")
@@ -186,6 +207,10 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
   ).toBe("rgb(154, 146, 168)");
 
   if (testInfo.project.name === "mobile") {
+    const mobileLaneTops = await page
+      .locator(".lane")
+      .evaluateAll((lanes) => lanes.map((lane) => lane.getBoundingClientRect().top));
+    expect(new Set(mobileLaneTops).size).toBe(mobileLaneTops.length);
     await expect(page.getByRole("region", { name: "Attention summary" })).toBeVisible();
     await expect(page.locator('.lane[data-lane="waiting_for_user"] .lane-body')).toBeVisible();
     await expect(page.locator('.lane[data-lane="needs_help"] .lane-body')).toBeVisible();
@@ -195,7 +220,18 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
     const origin = page.locator(".run-card").first();
     await origin.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("dialog")).toBeVisible();
+    const mobileSheet = page.getByRole("dialog");
+    await expect(mobileSheet).toBeVisible();
+    await mobileSheet.evaluate(async (element) => {
+      await Promise.all(element.getAnimations().map((animation) => animation.finished));
+    });
+    await expect(mobileSheet).toHaveCSS("animation-timing-function", "ease-in-out");
+    expect(
+      await mobileSheet.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return { height: bounds.height, left: bounds.left, top: bounds.top, width: bounds.width };
+      }),
+    ).toEqual({ height: 844, left: 0, top: 0, width: 390 });
     const closeDetails = page.getByRole("button", { name: "Close details" });
     await expect(closeDetails).toBeFocused();
     await origin.focus();
@@ -205,6 +241,9 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
     await page.screenshot({ path: `${proofDir}mobile-390x844-bottom-sheet.png` });
     await closeDetails.focus();
     await page.keyboard.press("Escape");
+    const closingMobileSheet = page.locator('.sheet-content[data-state="closed"]');
+    await expect(closingMobileSheet).toHaveCSS("animation-name", "sheet-out-bottom");
+    await expect(closingMobileSheet).toHaveCSS("animation-timing-function", "ease-in-out");
     await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.locator(".run-card:focus")).toBeVisible();
     return;
@@ -213,10 +252,54 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
   await page.screenshot({ path: `${proofDir}desktop-1440x900-closed.png` });
   const detailStart = Date.now();
   await page.locator(".run-card").first().click();
-  await expect(page.getByRole("complementary", { name: "Run details" })).toBeVisible();
+  const desktopSheet = page.getByRole("dialog");
+  await expect(desktopSheet).toBeVisible();
+  await desktopSheet.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished));
+  });
+  await expect(desktopSheet).toHaveCSS("animation-timing-function", "ease-in-out");
   expect(Date.now() - detailStart).toBeLessThan(2000);
+  const sheetBounds = await desktopSheet.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return {
+      bottom: window.innerHeight - bounds.bottom,
+      height: bounds.height,
+      right: window.innerWidth - bounds.right,
+      top: bounds.top,
+      width: bounds.width,
+    };
+  });
+  expect(sheetBounds.bottom).toBeCloseTo(0, 1);
+  expect(sheetBounds.height).toBeCloseTo(900, 1);
+  expect(sheetBounds.right).toBeCloseTo(0, 1);
+  expect(sheetBounds.top).toBeCloseTo(0, 1);
+  expect(sheetBounds.width).toBeCloseTo(680, 1);
+  await expect(page.getByRole("tab", { name: "Graph" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Activity 2" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Artifacts 1" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Metadata" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Workflow graph" })).toBeVisible();
+  await expect(page.locator('.workflow-node[data-kind="fanout"]')).toContainText(
+    "3 branches · max 2 parallel",
+  );
+  const currentWorkflowNode = page.locator('.workflow-node[data-state="current"]');
+  await expect(currentWorkflowNode).toHaveCSS("border-color", "rgb(203, 166, 247)");
+  await expect(currentWorkflowNode.locator(".workflow-node-state i")).toHaveCSS(
+    "animation-name",
+    "workflow-spinner",
+  );
+  await expect(page.locator('.workflow-node[data-kind="shard"]')).toContainText(
+    "8 shards · max 4 parallel",
+  );
+  await page.getByLabel("research, Worker, Completed").click();
+  await expect(
+    page.locator(".workflow-step-detail").getByRole("heading", { name: "research" }),
+  ).toBeVisible();
   await page.screenshot({ path: `${proofDir}desktop-1440x900-open.png` });
   await page.getByRole("button", { name: "Close details" }).click();
+  const closingSheet = page.locator('.sheet-content[data-state="closed"]');
+  await expect(closingSheet).toHaveCSS("animation-name", "sheet-out-right");
+  await expect(closingSheet).toHaveCSS("animation-timing-function", "ease-in-out");
   await expect(page.locator(".run-card:focus")).toBeVisible();
 
   const interactiveSamples: Array<number> = [];
@@ -234,13 +317,9 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
   const reclassified = snapshot.runs[0];
   await interactiveTarget.focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("complementary", { name: "Run details" })).toBeVisible();
+  await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Shift+Tab");
-  await expect(interactiveTarget).toBeFocused();
-  await expect(interactiveTarget).toHaveAttribute(
-    "aria-label",
-    new RegExp(reclassified.title.value),
-  );
+  await expect(page.getByRole("dialog").locator(":focus")).toHaveCount(1);
   const reconciliationSamples: Array<number> = [];
   for (let change = 0; change < 5; change += 1) {
     const laneId = change % 2 === 0 ? "needs_help" : "waiting_for_user";
@@ -269,14 +348,16 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
       { laneId, title: reclassified.title.value },
     );
     await emitInvalidations(page, Number(snapshot.freshness.observerRevision), 1);
-    await expect(page.locator(`.lane[data-lane="${laneId}"] .run-card:focus`)).toHaveAttribute(
+    await expect(page.locator(`.run-card[data-run-id="${reclassified.runId}"]`)).toHaveAttribute(
       "aria-label",
       new RegExp(reclassified.title.value),
     );
     await expect(
       page
-        .getByRole("complementary", { name: "Run details" })
-        .getByText(laneId === "needs_help" ? "Needs help" : "Waiting for user", { exact: true }),
+        .getByRole("dialog")
+        .getByText(laneId === "needs_help" ? "Decision missing" : "Approval needed", {
+          exact: true,
+        }),
     ).toBeVisible();
     reconciliationSamples.push(
       await page.evaluate(
@@ -318,8 +399,7 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
   await expect(page.locator(`.run-card[data-run-id="${reclassified.runId}"]:focus`)).toBeVisible();
 
   await page.goto(`/?run=${reclassified.runId}`);
-  await expect(page.getByRole("complementary", { name: "Run details" })).toBeVisible();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "Close details" }).click();
   await expect(page.locator(`.run-card[data-run-id="${reclassified.runId}"]`)).toBeFocused();
 
@@ -330,6 +410,20 @@ test("responsive attention board, detail semantics, virtualization, and keyboard
     /Observe workflow run 999/,
   );
 
+  await page.setViewportSize({ height: 768, width: 1024 });
+  const tabletBoardMetrics = await page.locator(".board-region").evaluate((region) => ({
+    clientWidth: region.clientWidth,
+    laneTops: [...region.querySelectorAll(".lane")].map((lane) => lane.getBoundingClientRect().top),
+    scrollWidth: region.scrollWidth,
+  }));
+  expect(new Set(tabletBoardMetrics.laneTops).size).toBe(1);
+  expect(tabletBoardMetrics.scrollWidth).toBeGreaterThan(tabletBoardMetrics.clientWidth);
+  await page.setViewportSize({ height: 768, width: 700 });
+  const compactDesktopLaneTops = await page
+    .locator(".lane")
+    .evaluateAll((lanes) => lanes.map((lane) => lane.getBoundingClientRect().top));
+  expect(new Set(compactDesktopLaneTops).size).toBe(1);
+  await expect(page.locator(".lane-toggle").first()).toBeHidden();
   await page.setViewportSize({ height: 768, width: 1024 });
   await page.locator(".run-card").first().focus();
   await page.keyboard.press("Enter");
@@ -443,7 +537,7 @@ test("empty, stale, detail-error, and missing-selection states render explicitly
 
   await page.goto("/?run=run-proof-0000&q=not-present");
   await expect(page.getByText("This run is no longer in the current results")).toBeVisible();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toBeVisible();
   await page.screenshot({ path: `${proofDir}failure-missing-selection.png` });
   await page.getByRole("button", { name: "Back to board" }).click();
   await expect(page.getByRole("heading", { name: "Waiting for user" })).toBeFocused();

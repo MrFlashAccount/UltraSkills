@@ -176,6 +176,15 @@ const DetailResultSchema = z
   })
   .strict();
 
+const WorkflowStepKindSchema = z.enum(["worker", "approval", "fanout", "shard", "done"]);
+const ParallelismSchema = z
+  .object({
+    count: z.number().int().min(1).max(100).optional(),
+    maxParallel: z.number().int().min(1).max(16).optional(),
+    mode: z.enum(["branches", "shards"]),
+  })
+  .strict();
+
 const MiniMapSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("unavailable") }).strict(),
   z
@@ -185,6 +194,9 @@ const MiniMapSchema = z.discriminatedUnion("state", [
         .array(
           z
             .object({
+              kind: WorkflowStepKindSchema,
+              nextStepIds: z.array(StepIdSchema).max(24),
+              parallelism: ParallelismSchema.optional(),
               state: z.enum(["completed", "current", "pending"]),
               stepId: StepIdSchema,
             })

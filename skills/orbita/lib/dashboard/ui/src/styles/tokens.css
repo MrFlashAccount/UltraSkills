@@ -10,6 +10,9 @@
   --text-muted: #afa6ba;
   --border: #4a4357;
   --border-strong: #5c536a;
+  --scrollbar-thumb: var(--border);
+  --scrollbar-thumb-hover: var(--border-strong);
+  --scrollbar-track: transparent;
   --focus: #cba6f7;
   --waiting: #fab387;
   --running: #cba6f7;

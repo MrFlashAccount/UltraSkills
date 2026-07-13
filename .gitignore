@@ -17,6 +17,7 @@ node_modules/
 coverage/
 .nyc_output/
 .cache/
+skills/orbita/lib/dashboard/ui/.output/
 tmp/
 temp/
 .worktrees/

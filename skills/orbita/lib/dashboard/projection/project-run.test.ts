@@ -104,7 +104,18 @@ describe("dashboard public projection", () => {
         },
       },
       run,
-      workflowDocument: { steps: { research: {}, implementation: {}, done: {} } },
+      workflowDocument: {
+        steps: {
+          research: { kind: "worker", next: "implementation" },
+          implementation: {
+            branches: { frontend: {}, backend: {} },
+            kind: "fanout",
+            max_parallel: 2,
+            next: { cases: { approved: "done", retry: "research" } },
+          },
+          done: { kind: "done" },
+        },
+      },
     });
     expect(detail.history).toHaveLength(8);
     expect(
@@ -117,9 +128,20 @@ describe("dashboard public projection", () => {
     expect(detail.miniMap).toEqual({
       state: "available",
       steps: [
-        { state: "completed", stepId: "research" },
-        { state: "current", stepId: "implementation" },
-        { state: "pending", stepId: "done" },
+        {
+          kind: "worker",
+          nextStepIds: ["implementation"],
+          state: "completed",
+          stepId: "research",
+        },
+        {
+          kind: "fanout",
+          nextStepIds: ["done", "research"],
+          parallelism: { count: 2, maxParallel: 2, mode: "branches" },
+          state: "current",
+          stepId: "implementation",
+        },
+        { kind: "done", nextStepIds: [], state: "pending", stepId: "done" },
       ],
       totalSteps: 3,
       truncated: false,

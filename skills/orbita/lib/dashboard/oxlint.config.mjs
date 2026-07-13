@@ -107,6 +107,13 @@ export default {
         "react-doctor/no-noninteractive-element-interactions": "off",
       },
     },
+    {
+      files: ["ui/src/components/ui/sheet.tsx"],
+      rules: {
+        // Exit presence outlives route state, so focus restoration must retain the open-state callback.
+        "react-doctor/no-event-handler": "off",
+      },
+    },
   ],
   rules: {
     ...base.rules,

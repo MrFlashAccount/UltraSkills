@@ -6,7 +6,12 @@ import { cn } from "@/lib/cn";
 const buttonVariants = cva("ui-button", {
   defaultVariants: { variant: "default", size: "default" },
   variants: {
-    variant: { default: "ui-button-default", quiet: "ui-button-quiet", danger: "ui-button-danger" },
+    variant: {
+      default: "ui-button-default",
+      danger: "ui-button-danger",
+      ghost: "ui-button-ghost",
+      quiet: "ui-button-quiet",
+    },
     size: { default: "ui-button-md", icon: "ui-button-icon" },
   },
 });

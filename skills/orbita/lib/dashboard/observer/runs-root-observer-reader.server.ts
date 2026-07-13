@@ -1,4 +1,5 @@
 /** Bounded, read-only adapter over durable run state. Whole-index failures propagate. */
+import { existsSync } from "node:fs";
 // @ts-expect-error Durable persistence is legacy MJS; runtime schemas remain authoritative.
 import { readRunsIndex, runsIndexPathsForRoot } from "../../persistence/run-state/run-index.mjs";
 // @ts-expect-error Durable persistence is legacy MJS; runtime schemas remain authoritative.
@@ -84,6 +85,9 @@ export class RunsRootObserverReader {
         runsRoot: this.runsRoot,
         workflowPath: run.workflow?.path,
       });
+      if (!existsSync(paths.batonPath)) {
+        return { run, workflowDocument: this.workflowDocument(run.workflow?.path) };
+      }
       const persistedState = await readPersistedRunState(paths);
       signal?.throwIfAborted();
       return { persistedState, run, workflowDocument: this.workflowDocument(run.workflow?.path) };

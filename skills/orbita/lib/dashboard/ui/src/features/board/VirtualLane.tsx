@@ -20,6 +20,8 @@ export function VirtualLane({ laneLabel, onSelect, roving, runs, selectedId }: V
     getItemKey: (index) => runs[index]!.runId,
     getScrollElement: () => scrollRef.current,
     overscan: 8,
+    paddingEnd: 4,
+    paddingStart: 4,
     useFlushSync: false,
   });
   runs.forEach((run, index) =>

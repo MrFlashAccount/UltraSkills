@@ -48,15 +48,26 @@ export function makeSnapshot(runs: Array<RunSummaryDTO>): SnapshotEnvelope {
 export function makeDetail(run = makeRun()): RunDetailDTO {
   return {
     ...run,
-    artifacts: [{ id: "ui-design-proposal", contentType: "text/html" }],
+    artifacts: [{ id: "ui-design-proposal", contentType: "text/html", producerStepId: "research" }],
     facts: [{ label: "Workflow", value: "dev-harness" }],
     history: [{ sourceClass: "history_line", value: "Awaiting approval", policyVersion: "1" }],
     historyTruncated: false,
     miniMap: {
       state: "available",
       steps: [
-        { stepId: "research", state: "completed" },
-        { stepId: "implementation", state: "current" },
+        {
+          kind: "worker",
+          nextStepIds: ["implementation"],
+          stepId: "research",
+          state: "completed",
+        },
+        {
+          kind: "fanout",
+          nextStepIds: [],
+          parallelism: { count: 3, maxParallel: 2, mode: "branches" },
+          stepId: "implementation",
+          state: "current",
+        },
       ],
       truncated: false,
       totalSteps: 2,

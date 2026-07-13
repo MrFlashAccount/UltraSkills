@@ -88,7 +88,13 @@ export function buildSnapshot(
 export function detailFor(run: RunSummaryDTO): RunDetailDTO {
   return {
     ...run,
-    artifacts: [{ id: "implementation-plan", contentType: "text/markdown" }],
+    artifacts: [
+      {
+        id: "implementation-plan",
+        contentType: "text/markdown",
+        producerStepId: "implementation",
+      },
+    ],
     facts: [{ label: "Workflow", value: run.workflow }],
     history: [
       { sourceClass: "history_line", value: "Snapshot projected", policyVersion: "1" },
@@ -98,9 +104,26 @@ export function detailFor(run: RunSummaryDTO): RunDetailDTO {
     miniMap: {
       state: "available",
       steps: [
-        { stepId: "research", state: "completed" },
-        { stepId: "implementation", state: "current" },
-        { stepId: "review", state: "pending" },
+        {
+          kind: "worker",
+          nextStepIds: ["implementation"],
+          stepId: "research",
+          state: "completed",
+        },
+        {
+          kind: "fanout",
+          nextStepIds: ["review"],
+          parallelism: { count: 3, maxParallel: 2, mode: "branches" },
+          stepId: "implementation",
+          state: "current",
+        },
+        {
+          kind: "shard",
+          nextStepIds: [],
+          parallelism: { count: 8, maxParallel: 4, mode: "shards" },
+          stepId: "review",
+          state: "pending",
+        },
       ],
       truncated: false,
       totalSteps: 3,

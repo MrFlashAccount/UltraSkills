@@ -17,6 +17,7 @@ async function fetchRunDetail(runId: string) {
 export function useRunDetailQuery(runId?: string) {
   return useQuery({
     enabled: typeof window !== "undefined" && Boolean(runId),
+    placeholderData: (previousDetail) => previousDetail,
     queryFn: () => fetchRunDetail(runId!),
     queryKey: ["dashboard", "run-detail", runId],
     retry: 1,

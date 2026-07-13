@@ -24,7 +24,7 @@ export function Lane({ lane, onSelect, roving, runs, selectedId }: LaneProps) {
   const attention = lane === "waiting_for_user" || lane === "needs_help" || lane === "degraded";
   const headingId = useId();
   const listId = useId();
-  const desktop = useMediaQuery("(min-width: 760px)");
+  const desktop = useMediaQuery("(min-width: 640px)");
   const disclosure = useLaneDisclosure(attention, runs.length, desktop);
   return (
     <CollapsibleRoot

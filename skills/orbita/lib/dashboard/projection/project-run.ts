@@ -163,6 +163,53 @@ function projectHistory(historyInput: any): Pick<RunDetailDTO, "history" | "hist
   };
 }
 
+const WORKFLOW_STEP_KINDS = new Set(["worker", "approval", "fanout", "shard", "done"]);
+
+function transitionTargets(next: any): Array<string> {
+  const candidates =
+    typeof next === "string"
+      ? next.includes("${{")
+        ? []
+        : [next]
+      : next?.cases && typeof next.cases === "object" && !Array.isArray(next.cases)
+        ? Object.values(next.cases)
+        : [];
+  return [
+    ...new Set(
+      candidates.flatMap((target) => {
+        const safe = exposeIdentifier("step_id", target);
+        return safe ? [safe] : [];
+      }),
+    ),
+  ].slice(0, 24);
+}
+
+function parallelism(stepId: string, step: any, baton: any) {
+  if (step.kind === "fanout") {
+    const count = Object.keys(step.branches ?? {}).length;
+    return {
+      ...(count ? { count } : {}),
+      ...(Number.isInteger(step.max_parallel) ? { maxParallel: step.max_parallel } : {}),
+      mode: "branches" as const,
+    };
+  }
+  if (step.kind !== "shard") {
+    return undefined;
+  }
+  const activationValues = baton?.state?.shards?.[stepId]?.values;
+  const configuredValues = step.input?.shards;
+  const count = Array.isArray(activationValues)
+    ? activationValues.length
+    : Array.isArray(configuredValues)
+      ? configuredValues.length
+      : undefined;
+  return {
+    ...(count ? { count } : {}),
+    ...(Number.isInteger(step.max_parallel) ? { maxParallel: step.max_parallel } : {}),
+    mode: "shards" as const,
+  };
+}
+
 function projectMiniMap(workflowDocument: any, baton: any): RunDetailDTO["miniMap"] {
   if (
     !workflowDocument?.steps ||
@@ -176,11 +223,19 @@ function projectMiniMap(workflowDocument: any, baton: any): RunDetailDTO["miniMa
     baton?.state && typeof baton.state === "object" && !Array.isArray(baton.state)
       ? baton.state
       : {};
-  const stepIds = Object.keys(workflowDocument.steps).flatMap((stepId) => {
-    const safe = exposeIdentifier("step_id", stepId);
-    return safe ? [safe] : [];
-  });
-  const steps = stepIds.slice(0, 24).map((stepId) => ({
+  const projectedSteps = Object.entries(workflowDocument.steps).flatMap(
+    ([stepId, step]: [string, any]) => {
+      const safe = exposeIdentifier("step_id", stepId);
+      if (!safe || !WORKFLOW_STEP_KINDS.has(step?.kind)) {
+        return [];
+      }
+      return [{ raw: step, stepId: safe }];
+    },
+  );
+  const steps = projectedSteps.slice(0, 24).map(({ raw, stepId }) => ({
+    kind: raw.kind,
+    nextStepIds: transitionTargets(raw.next),
+    ...(parallelism(stepId, raw, baton) ? { parallelism: parallelism(stepId, raw, baton) } : {}),
     state: Object.hasOwn(state, stepId)
       ? ("completed" as const)
       : cursor.kind === "single" && cursor.step === stepId
@@ -191,8 +246,8 @@ function projectMiniMap(workflowDocument: any, baton: any): RunDetailDTO["miniMa
   return {
     state: "available",
     steps,
-    totalSteps: stepIds.length,
-    truncated: stepIds.length > steps.length,
+    totalSteps: projectedSteps.length,
+    truncated: projectedSteps.length > steps.length,
   };
 }
 
