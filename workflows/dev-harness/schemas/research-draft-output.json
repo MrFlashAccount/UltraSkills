@@ -3,7 +3,8 @@
   "description": "Producer output contract for the DevHarness research draft before critic attack or repeat user approval.",
   "type": "object",
   "required": [
-    "outcome"
+    "outcome",
+    "next_step"
   ],
   "properties": {
     "outcome": {
@@ -13,6 +14,14 @@
       ],
       "description": "Producer must use ready_for_attack for an initial or critic-requested draft and ready_for_approval for a correction requested at the user gate. Missing help is reported through the runner non-blocking stop control channel, never as an output outcome.",
       "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when it requires revision."
+    },
+    "next_step": {
+      "enum": [
+        "ui_intent_draft",
+        "architecture_draft"
+      ],
+      "description": "Researcher-selected step after human research approval: UI design proposal for material user-facing UI work, otherwise architecture.",
+      "x-usage": "Use ui_intent_draft when the research artifact says UI design is needed. Use architecture_draft when it says UI design is not needed. The approval step reads this field directly."
     },
     "summary": {
       "type": "string",
