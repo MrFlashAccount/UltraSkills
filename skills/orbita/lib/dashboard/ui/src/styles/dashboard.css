@@ -668,7 +668,7 @@
 }
 .workflow-step-detail {
   min-height: 150px;
-  flex: 1;
+  flex: 1 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   background: var(--surface-top);

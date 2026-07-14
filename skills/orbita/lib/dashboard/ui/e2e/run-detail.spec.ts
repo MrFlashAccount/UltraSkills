@@ -246,18 +246,16 @@ test("workflow renders durable artifact descriptors with content authority", asy
     await route.fulfill({
       json: {
         complete: true,
-        items: [
-          {
-            artifactRef: "artifact_ref_evidence_01",
-            declaredContentType: "text/plain",
-            effectiveContentType: "text/plain",
-            id: "evidence.txt",
-            mimeMismatch: false,
-            previewState: "previewable",
-            producerStepId: stepId,
-          },
-        ],
-        runAggregateCount: 4,
+        items: Array.from({ length: 8 }, (_, index) => ({
+          artifactRef: `artifact_ref_evidence_${index}`,
+          declaredContentType: "text/plain",
+          effectiveContentType: "text/plain",
+          id: index === 0 ? "evidence.txt" : `evidence-${index}.txt`,
+          mimeMismatch: false,
+          previewState: "previewable",
+          producerStepId: stepId,
+        })),
+        runAggregateCount: 8,
         runId,
         schemaVersion: "2",
         scope: { kind: "workflow_step", stepId },
@@ -268,6 +266,20 @@ test("workflow renders durable artifact descriptors with content authority", asy
   await page.locator(".run-card").first().click();
   await expect(page.getByText("evidence.txt")).toBeVisible();
   await expect(page.getByText(/content unavailable/u)).toBeHidden();
+  const detail = page.locator(".workflow-step-detail");
+  const artifacts = detail.locator(".workflow-step-artifacts");
+  const layout = await detail.evaluate((node) => {
+    const detailBounds = node.getBoundingClientRect();
+    const artifactBounds = node.querySelector(".workflow-step-artifacts")!.getBoundingClientRect();
+    return {
+      artifactBottom: artifactBounds.bottom,
+      detailBottom: detailBounds.bottom,
+      flexShrink: getComputedStyle(node).flexShrink,
+    };
+  });
+  await expect(artifacts).toBeVisible();
+  expect(layout.flexShrink).toBe("0");
+  expect(layout.artifactBottom).toBeLessThanOrEqual(layout.detailBottom + 1);
   await page.screenshot({ path: `${proofDir}/v2-artifact-${testInfo.project.name}.png` });
 });
 
