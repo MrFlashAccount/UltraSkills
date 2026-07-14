@@ -22,5 +22,9 @@ export default defineConfig({
     },
   },
   root: uiRoot,
-  server: { watch: { ignored: ["**/e2e/results/**", "**/e2e/proof/**"] } },
+  preview: { allowedHosts: true },
+  server: {
+    allowedHosts: true,
+    watch: { ignored: ["**/e2e/results/**", "**/e2e/proof/**"] },
+  },
 });

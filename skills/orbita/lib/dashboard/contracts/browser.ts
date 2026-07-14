@@ -355,7 +355,6 @@ export const PublicErrorSchema = z
           "Dashboard data is temporarily unavailable",
           "Dashboard runs root is not configured",
           "Invalid request",
-          "Request authority is not allowed",
           "Resource locator is stale",
           "Requested range is not satisfiable",
           "Artifact content is unavailable",

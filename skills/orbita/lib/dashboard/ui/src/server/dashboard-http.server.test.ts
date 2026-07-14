@@ -94,22 +94,24 @@ describe("dashboard v2 HTTP", () => {
     expect(JSON.stringify(body)).not.toMatch(/history|artifacts|workflowPath/u);
   });
 
-  test("rejects opaque-origin and cross-site access to private JSON", async () => {
+  test("accepts requests through proxies without authority or Fetch Metadata checks", async () => {
     const model = { ensureSnapshot: async () => snapshot };
-    const opaque = request("/api/dashboard/v2/runs", { headers: { origin: "null" } });
-    const crossSite = request("/api/dashboard/v2/runs", {
-      headers: { "sec-fetch-site": "cross-site" },
+    const proxied = new Request("https://dashboard.example/api/dashboard/v2/runs", {
+      headers: {
+        host: "proxy.internal",
+        origin: "null",
+        "sec-fetch-site": "cross-site",
+      },
     });
-    expect((await handleSnapshotRequest(opaque, composition(model))).status).toBe(403);
-    expect((await handleSnapshotRequest(crossSite, composition(model))).status).toBe(403);
+    expect((await handleSnapshotRequest(proxied, composition(model))).status).toBe(200);
   });
 
-  test("requires trusted Fetch Metadata and rejects extra query fields", async () => {
+  test("accepts missing Fetch Metadata and rejects extra query fields", async () => {
     const model = { ensureSnapshot: async () => snapshot };
     const missingMetadata = new Request("http://127.0.0.1:3000/api/dashboard/v2/runs", {
       headers: { host: "127.0.0.1:3000" },
     });
-    expect((await handleSnapshotRequest(missingMetadata, composition(model))).status).toBe(403);
+    expect((await handleSnapshotRequest(missingMetadata, composition(model))).status).toBe(200);
     expect(
       (await handleSnapshotRequest(request("/api/dashboard/v2/runs?private=1"), composition(model)))
         .status,
@@ -245,6 +247,7 @@ describe("dashboard v2 HTTP", () => {
       "aaaaaaaaaaaaaaaa",
       composition({ getArtifactHandle: async () => handle }),
     );
-    expect(navigatedDownload.status).toBe(403);
+    expect(navigatedDownload.status).toBe(200);
+    expect(navigatedDownload.headers.get("content-disposition")).toContain("attachment");
   });
 });

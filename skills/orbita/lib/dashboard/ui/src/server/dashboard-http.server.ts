@@ -42,82 +42,6 @@ function publicError(code: ErrorCode, message: string, status: number): Response
   return json(PublicErrorSchema.parse({ error: { code, message } }), status);
 }
 
-function configuredHost(config: Composition["config"]): string {
-  return config.host.includes(":") && !config.host.startsWith("[")
-    ? `[${config.host}]`
-    : config.host.toLowerCase();
-}
-
-function hasAllowedAuthority(request: Request, config: Composition["config"]): boolean {
-  let url: URL;
-  try {
-    url = new URL(request.url);
-  } catch {
-    return false;
-  }
-  const host = configuredHost(config);
-  const expected =
-    config.port === 0 ? undefined : `${host}${config.port === 80 ? "" : `:${config.port}`}`;
-  const authority = (request.headers.get("host") ?? url.host).toLowerCase();
-  if (authority !== url.host.toLowerCase()) {
-    return false;
-  }
-  if (
-    expected
-      ? authority !== expected
-      : url.hostname.replaceAll(/^\[|\]$/gu, "").toLowerCase() !==
-        host.replaceAll(/^\[|\]$/gu, "").toLowerCase()
-  ) {
-    return false;
-  }
-  const origin = request.headers.get("origin");
-  if (!origin || origin === "null") {
-    return origin !== "null";
-  }
-  try {
-    const parsed = new URL(origin);
-    return (
-      ["http:", "https:"].includes(parsed.protocol) &&
-      parsed.origin.toLowerCase() === url.origin.toLowerCase()
-    );
-  } catch {
-    return false;
-  }
-}
-
-function hasPrivateFetchMetadata(request: Request): boolean {
-  const site = request.headers.get("sec-fetch-site");
-  const destination = request.headers.get("sec-fetch-dest");
-  const mode = request.headers.get("sec-fetch-mode");
-  if (site !== "same-origin") {
-    return false;
-  }
-  if (destination !== "empty") {
-    return false;
-  }
-  if (!mode || !["cors", "same-origin"].includes(mode)) {
-    return false;
-  }
-  return true;
-}
-
-function hasPreviewFetchMetadata(request: Request): boolean {
-  const site = request.headers.get("sec-fetch-site");
-  const destination = request.headers.get("sec-fetch-dest");
-  const mode = request.headers.get("sec-fetch-mode");
-  if (site !== "same-origin") {
-    return false;
-  }
-  return (
-    (destination === "iframe" && mode === "navigate") ||
-    (destination === "empty" && !!mode && ["cors", "same-origin"].includes(mode))
-  );
-}
-
-function authorityError(): Response {
-  return publicError("invalid_request", "Request authority is not allowed", 403);
-}
-
 function runId(raw: string): string | undefined {
   try {
     const decoded = decodeURIComponent(raw);
@@ -142,11 +66,7 @@ function hasOnlyQueryKeys(request: Request, allowed: ReadonlySet<string>): boole
   );
 }
 
-function requestContext(
-  request: Request,
-  provided?: Composition,
-  preview = false,
-): Composition | Response {
+function requestContext(request: Request, provided?: Composition): Composition | Response {
   if (request.method !== "GET") {
     return publicError("method_not_allowed", "Only GET is allowed", 405);
   }
@@ -157,12 +77,6 @@ function requestContext(
     return isDashboardConfigurationError(error)
       ? publicError("invalid_request", "Dashboard runs root is not configured", 503)
       : publicError("observer_unavailable", "Dashboard data is temporarily unavailable", 503);
-  }
-  if (
-    !hasAllowedAuthority(request, composition.config) ||
-    !(preview ? hasPreviewFetchMetadata(request) : hasPrivateFetchMetadata(request))
-  ) {
-    return authorityError();
   }
   return composition;
 }
@@ -386,7 +300,7 @@ export async function handleArtifactContentRequest(
   ) {
     return publicError("invalid_request", "Invalid request", 400);
   }
-  const context = requestContext(request, provided, mode === "preview");
+  const context = requestContext(request, provided);
   if (isResponse(context)) {
     return context;
   }
