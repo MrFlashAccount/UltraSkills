@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { makeRun } from "@/test/fixtures";
 import { filterRuns, groupRuns, workflowsFor } from "./board-selectors";
 
@@ -7,7 +7,7 @@ describe("board selectors", () => {
 
   it("filters bounded card fields without copying server state", () => {
     expect(filterRuns(runs, { q: "step-2" }).map((run) => run.runId)).toEqual(["run-2"]);
-    expect(filterRuns(runs, { lane: "done", q: "" })).toEqual([runs[2]]);
+    expect(filterRuns(runs, { lane: "done", q: "" })).toEqual([runs[2]!]);
   });
 
   it("keeps all five lanes including empty lanes", () => {

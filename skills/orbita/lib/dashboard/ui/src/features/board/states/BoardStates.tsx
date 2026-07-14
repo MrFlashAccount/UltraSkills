@@ -4,14 +4,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function BoardLoading() {
   return (
-    <section aria-busy="true" aria-label="Loading runs" className="state-board">
-      {Array.from({ length: 5 }, (_, lane) => (
-        <div className="state-lane" key={lane}>
-          <Skeleton />
-          <Skeleton />
+    <>
+      <header aria-busy="true" aria-label="Loading dashboard controls" className="toolbar">
+        <div className="brand">
+          <span aria-hidden="true" className="orb" />
+          <h1>Orbita runs</h1>
+          <span className="read-only">Read only</span>
         </div>
-      ))}
-    </section>
+        <div className="state-toolbar-controls">
+          <Skeleton className="state-toolbar-search" />
+          <Skeleton className="state-toolbar-action" />
+          <Skeleton className="state-toolbar-status" />
+        </div>
+      </header>
+      <section aria-busy="true" aria-label="Loading runs" className="state-board">
+        {Array.from({ length: 5 }, (_, lane) => (
+          <div className="state-lane" key={lane}>
+            <Skeleton />
+            <Skeleton />
+          </div>
+        ))}
+      </section>
+    </>
   );
 }
 

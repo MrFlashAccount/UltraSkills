@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { PUBLIC_TEXT_LIMITS, type PublicTextSource } from "../contracts/browser";
 import { exposePublicText } from "./exposure-policy";
-import { projectRunDetail, projectRunSummary } from "./project-run";
+import { projectRunLightDetail, projectRunSummary } from "./project-run";
+import { projectWorkflowPage } from "./project-workflow";
 
 const run = {
   createdAt: "2026-07-12T00:00:00.000Z",
@@ -51,7 +52,7 @@ describe("dashboard public projection", () => {
   });
 
   test("degrades cursor cardinality above one and never projects private fields", () => {
-    const detail = projectRunDetail(
+    const detail = projectRunLightDetail(
       {
         persistedState: {
           baton: {
@@ -72,39 +73,24 @@ describe("dashboard public projection", () => {
               results: [{ summary: "--lease-token secret", rawError: "/private/error" }],
             },
           },
-          history: { mode: "embedded-text", text: "safe line\n/private/path\nhidden transcript" },
         },
         run,
       },
       { now: new Date("2026-07-12T00:01:00.000Z") },
     );
-    expect(detail.laneId).toBe("degraded");
-    expect(detail.cursor).toEqual({ kind: "unsupported" });
-    expect(detail.history.map((line) => line.value)).toEqual(["safe line"]);
-    expect(detail.miniMap).toEqual({ state: "unavailable" });
+    expect(detail.run.laneId).toBe("degraded");
+    expect(detail.run.cursor).toEqual({ kind: "unsupported" });
     expect(JSON.stringify(detail)).not.toMatch(
       /tokenHash|user_prompt|private|rawError|artifact\.md/u,
     );
   });
 
-  test("bounds history by approved item and total byte ceilings and projects workflow mini-map", () => {
-    const detail = projectRunDetail({
-      persistedState: {
-        baton: {
-          cursor: "implementation",
-          status: "running",
-          state: { research: { outcome: "ok" } },
-        },
-        history: {
-          mode: "embedded-text",
-          text: Array.from(
-            { length: 30 },
-            (_, index) => `history ${index} ${"🙂".repeat(240)}`,
-          ).join("\n"),
-        },
-      },
-      run,
-      workflowDocument: {
+  test("projects complete workflow pages in declaration order", () => {
+    const page = projectWorkflowPage({
+      fingerprint: "f".repeat(43),
+      offset: 0,
+      runId: run.runId,
+      workflow: {
         steps: {
           research: { kind: "worker", next: "implementation" },
           implementation: {
@@ -117,35 +103,26 @@ describe("dashboard public projection", () => {
         },
       },
     });
-    expect(detail.history).toHaveLength(8);
-    expect(
-      detail.history.reduce(
-        (bytes, line) => bytes + new TextEncoder().encode(line.value).byteLength,
-        0,
-      ),
-    ).toBeLessThanOrEqual(8192);
-    expect(detail.historyTruncated).toBe(true);
-    expect(detail.miniMap).toEqual({
-      state: "available",
-      steps: [
+    expect(page).toMatchObject({
+      complete: true,
+      nodes: [
         {
           kind: "worker",
-          nextStepIds: ["implementation"],
-          state: "completed",
           stepId: "research",
         },
         {
           kind: "fanout",
-          nextStepIds: ["done", "research"],
           parallelism: { count: 2, maxParallel: 2, mode: "branches" },
-          state: "current",
           stepId: "implementation",
         },
-        { kind: "done", nextStepIds: [], state: "pending", stepId: "done" },
+        { kind: "done", stepId: "done" },
       ],
-      totalSteps: 3,
-      truncated: false,
     });
+    expect(page.edges).toEqual([
+      { from: "research", to: "implementation" },
+      { from: "implementation", to: "done" },
+      { from: "implementation", to: "research" },
+    ]);
   });
 
   test("classifies resolved and unresolved non-blocking stops truthfully", () => {

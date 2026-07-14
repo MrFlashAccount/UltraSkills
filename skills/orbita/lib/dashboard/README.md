@@ -1,9 +1,10 @@
 # Orbita dashboard
 
 The Orbita dashboard is a local, read-only TanStack Start application for
-scanning durable workflow runs as an attention-first five-lane board. Durable
-run files remain authoritative; the dashboard never claims a lease or mutates a
-run.
+scanning durable workflow runs as an attention-first five-lane board and
+inspecting one run in a contextual sidebar. Durable run files remain
+authoritative; the dashboard never claims a lease, mutates a run, or introduces
+dashboard-only execution identity.
 
 Architecture and placement rules live in `../../ARCHITECTURE.md` and
 `CONTEXT.md`. Visual and interaction rules live in `../../DESIGN.md`.
@@ -24,6 +25,7 @@ Run these from the repository root:
   `skills/orbita/lib/dashboard/ui/.output/server/index.mjs`.
 - `bun run dashboard:typecheck` — check the dashboard TypeScript project.
 - `bun run dashboard:test` — run dashboard contract/component tests.
+- `bun run dashboard:test:runtime` — run dashboard observer/projection/HTTP tests.
 - `bun run dashboard:test:browser` — run Playwright browser scenarios.
 
 The TypeScript project extends `@sergeigarin/hygene/tsconfig.json` on stable
@@ -54,32 +56,39 @@ controlled or ambiguous fallback.
 
 ## HTTP contract
 
-The supported same-origin surface contains exactly three GET routes:
+The supported same-origin v2 surface contains these GET routes:
 
-- `/api/dashboard/v1/runs` — complete validated summary snapshot with
+- `/api/dashboard/v2/runs` — complete validated summary snapshot with
   authoritative observer freshness and conditional ETag support.
-- `/api/dashboard/v1/runs/:runId` — lazy validated details for one bounded run
-  id or a fixed public error. Details include a bounded read-only workflow
-  mini-map when workflow step metadata is available, otherwise an explicit
-  unavailable state.
-- `/api/dashboard/v1/events` — data-free invalidation SSE and heartbeat
-  comments.
+- `/api/dashboard/v2/runs/:runId` — lazy validated light detail for one run.
+- `/api/dashboard/v2/runs/:runId/workflow` — the authored workflow graph.
+- `/api/dashboard/v2/runs/:runId/traversal` — the ordered current step path
+  reconstructed from existing managed history and Baton cursor state.
+- `/api/dashboard/v2/runs/:runId/activity?stepId=...` — activity for the selected
+  workflow step.
+- `/api/dashboard/v2/runs/:runId/logs?stepId=...` — managed debug-summary
+  Markdown for the selected workflow step.
+- `/api/dashboard/v2/runs/:runId/artifacts?stepId=...` — artifact descriptors for
+  the selected workflow step, including existing fanout branch artifacts owned
+  by that step.
+- `/api/dashboard/v2/runs/:runId/artifacts/:artifactRef?mode=preview|download` —
+  content for one validated opaque artifact reference.
+- `/api/dashboard/v2/events` — invalidation SSE and heartbeat comments.
 
 SSE never carries run state. It only announces `snapshot_changed`,
 `observer_stale`, or `observer_recovered`; the browser reconciles through the
 snapshot route. A connected event stream alone does not mean the snapshot is
 fresh.
 
-Frames carry the reason as the SSE event name and the observer revision as the
-event id; they contain no JSON data payload. Snapshot-change publication and
-browser refetch signals are coalesced, while stale/recovered events update the
-local health hint immediately. The browser ignores invalid/non-increasing ids,
-refetches after reconnect, and performs a normal snapshot GET every 15 seconds.
-The snapshot route supports `If-None-Match`, although the current browser fetch
-adapter does not send that header.
+Frames carry a bounded invalidation envelope and observer revision; they never
+carry run state. Snapshot-change publication and browser refetch signals are
+coalesced, while stale/recovered events update the local health hint
+immediately. The browser ignores invalid/non-increasing ids, refetches after
+reconnect, and performs a normal snapshot GET every 15 seconds. The snapshot
+route supports `If-None-Match`.
 
-There are no compatibility aliases or redirects for `/api/runs`, `/api/events`,
-unversioned `/api/dashboard/*`, `/dashboard/client.js`,
+There are no compatibility aliases or redirects for v1, `/api/runs`,
+`/api/events`, unversioned `/api/dashboard/*`, `/dashboard/client.js`,
 `/dashboard/render.mjs`, or `/dashboard/style.css`. There is no supported
 `orbita-dashboard serve` CLI or public `startDashboardServer` API.
 
@@ -89,6 +98,15 @@ unversioned `/api/dashboard/*`, `/dashboard/client.js`,
   Raw Baton/history, local paths, prompts, transcripts, tokens/hashes, commands,
   bindings, and exception messages are not public DTO fields.
 - One corrupt run becomes one Degraded card; healthy runs remain usable.
+- Step selection is keyed only by the existing workflow `stepId`. Activity and
+  logs are parsed from existing managed history; artifacts are read from the
+  existing durable artifact records and files. Repeated visits do not create a
+  new dashboard or runner entity.
+- Workflow remains run-wide. Selecting a step changes only Activity, Logs, and
+  Artifacts.
+- Markdown is rendered through the bounded safe renderer. Images use the
+  artifact gallery, and artifact content is reopened through a validated opaque
+  reference for preview or download.
 - A failed initial snapshot is an explicit error, never an empty board.
 - A detail failure stays inside the detail surface.
 - A refresh failure after a good snapshot keeps the cards but marks the board

@@ -592,10 +592,9 @@ the versioned DTO boundary are the only justified seams.
   contract fixtures. It imports no dashboard implementation or Node-only code.
 - `lib/dashboard/projection/**` owns lane classification, source-specific
   exposure policy, fixed public diagnostics, cursor cardinality enforcement,
-  safe summary/detail projection, bounded history, artifact/result facts, and
-  the bounded workflow mini-map projection. It is server-only even when helpers
-  are pure. `RunDetailDTO.miniMap` is an explicit available/unavailable
-  projection; its renderer remains browser-owned.
+  safe summary/detail projection, authored workflow pages, bounded managed
+  history, step-path reconstruction, step-scoped Activity/Logs, and artifact
+  facts. It is server-only even when helpers are pure.
 - `lib/dashboard/observer/**` owns read-only durable adapters, bounded-concurrency
   reads, per-run failure isolation, the process-local `DashboardReadModel`,
   watcher/poll reconciliation, immutable snapshot replacement, freshness
@@ -625,11 +624,20 @@ instruction storage paths, preferred worker agent ids, worker binding flags, or
 unnecessary host control-plane metadata.
 
 Durable run files remain the only authority. `SnapshotEnvelope`,
-`ObserverFreshnessDTO`, `RunSummaryDTO`, `RunDetailDTO`, `InvalidationEvent`,
-`PublicDisplayText`, and the browser board store are records/read models, not
-domain entities. `DashboardReadModel` has process identity and lifecycle but is
-ephemeral, immutable per published revision, fully rebuildable, and forbidden
-from writing cache data into run directories.
+`ObserverFreshnessDTO`, `RunSummaryDTO`, `RunLightDetailDTO`, workflow/history/
+artifact pages, `InvalidationEvent`, `PublicDisplayText`, and the browser board
+store are records/read models, not domain entities. `DashboardReadModel` has
+process identity and lifecycle but is ephemeral, immutable per published
+revision, fully rebuildable, and forbidden from writing cache data into run
+directories.
+
+Run inspection introduces no durable execution identity. The selected workflow
+`stepId` is only a browser/read-model key. The ordered path, Activity, managed
+debug-summary logs, and artifact ownership are derived from the existing Baton,
+managed history, workflow document, and artifact records. Fanout/shard request
+ids remain request addresses and may be mapped to their owning workflow step for
+display; they never become workflow steps or new persisted entities. Workflow is
+run-wide; selecting a step scopes only Activity, Logs, and Artifacts.
 
 The projection exposes exactly five observer lanes in stable order:
 
@@ -644,7 +652,7 @@ Current cursor cardinality is `0..1`. The DTO may retain an array shape, but a
 projection with more than one current step is an explicit bounded unsupported/
 degraded result, never fabricated fanout.
 
-All browser-visible prose must be produced by exposure policy version `1` for
+All browser-visible prose must be produced by exposure policy version `2` for
 one of the implemented source classes: run title/summary, workflow identity,
 step id, artifact id/summary, result summary/ref, or history line. The policy
 normalizes with NFKC, replaces control characters with spaces, collapses
@@ -660,20 +668,23 @@ per-field byte-limit contract.
 
 ### Versioned HTTP and Reconciliation Contract
 
-The Start application exposes exactly three same-origin GET surfaces:
+The Start application exposes the same-origin v2 GET surface:
 
-- `/api/dashboard/v1/runs` returns one validated `SnapshotEnvelope` and supports
-  `ETag` / `If-None-Match` over both run data and observer freshness.
-- `/api/dashboard/v1/runs/:runId` returns one lazy validated `RunDetailDTO` or a
-  bounded closed-code error envelope.
-- `/api/dashboard/v1/events` streams data-free invalidation events with the
-  closed reasons `snapshot_changed`, `observer_stale`, and
-  `observer_recovered`, plus heartbeat comments.
+- `/api/dashboard/v2/runs` and `/api/dashboard/v2/runs/:runId` return the
+  validated summary snapshot and light run detail.
+- `/api/dashboard/v2/runs/:runId/workflow` and `traversal` return the authored
+  graph and current ordered step path.
+- `/api/dashboard/v2/runs/:runId/activity`, `logs`, and `artifacts` require one
+  validated existing workflow `stepId`.
+- `/api/dashboard/v2/runs/:runId/artifacts/:artifactRef` streams one validated
+  preview/download artifact.
+- `/api/dashboard/v2/events` streams bounded invalidation envelopes and
+  heartbeat comments.
 
 The server and browser contracts ship atomically under one schema version. SSE
 is a lossy hint, never a state transition or authority: events may be dropped,
-duplicated, delayed, reordered, or reset. The SSE frame carries the reason as
-its event name and the observer revision as `id`; it carries no run-state data.
+duplicated, delayed, reordered, or reset. The SSE frame carries a bounded
+invalidation envelope and revision id; it carries no run-state data.
 `snapshot_changed` publication is coalesced to the configured interval, while
 stale/recovered events publish immediately. The browser ignores invalid or
 non-increasing ids, coalesces query invalidation to one signal per 100ms, resets

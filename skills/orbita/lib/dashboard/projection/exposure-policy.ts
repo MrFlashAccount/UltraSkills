@@ -31,6 +31,19 @@ function normalize(value: unknown): string {
     .trim();
 }
 
+function normalizeManagedMarkdown(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n")
+    .replaceAll(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/gu, "")
+    .split("\n")
+    .map((line) => line.replace(/\s+$/u, ""))
+    .filter((line) => !FORBIDDEN.some((pattern) => pattern.test(line)))
+    .join("\n")
+    .trim();
+}
+
 function truncate(value: string, codePointLimit: number, utf8ByteLimit: number): string {
   const encoder = new TextEncoder();
   const accepted: Array<string> = [];
@@ -53,8 +66,12 @@ export function exposePublicText(
   source: PublicTextSource,
   value: unknown,
 ): PublicDisplayText | undefined {
-  const normalized = normalize(value);
-  if (!normalized || FORBIDDEN.some((pattern) => pattern.test(normalized))) {
+  const normalized =
+    source === "managed_markdown" ? normalizeManagedMarkdown(value) : normalize(value);
+  if (
+    !normalized ||
+    (source !== "managed_markdown" && FORBIDDEN.some((pattern) => pattern.test(normalized)))
+  ) {
     return undefined;
   }
   const limits = PUBLIC_TEXT_LIMITS[source];

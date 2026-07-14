@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
+import { stubGlobal } from "@/test/globals";
 import { useDashboardEvents } from "./use-dashboard-events";
 
 class EventSourceStub extends EventTarget {
@@ -21,7 +22,7 @@ class EventSourceStub extends EventTarget {
       changeId: String(changeId),
       emittedAt: "2026-07-12T12:00:00.000Z",
       reason,
-      schemaVersion: "1",
+      schemaVersion: "2",
       type: "invalidation",
     };
     this.dispatchEvent(
@@ -42,12 +43,11 @@ function withClient(client: QueryClient) {
 afterEach(() => {
   EventSourceStub.instances = [];
   vi.useRealTimers();
-  vi.unstubAllGlobals();
 });
 
 describe("useDashboardEvents", () => {
   it("seeds ordering from authoritative freshness and ignores delayed or duplicate events", () => {
-    vi.stubGlobal("EventSource", EventSourceStub);
+    stubGlobal("EventSource", EventSourceStub);
     const client = new QueryClient();
     const { rerender, result } = renderHook(
       ({ changeId, state }) => useDashboardEvents({ changeId, state }),
@@ -66,7 +66,7 @@ describe("useDashboardEvents", () => {
 
   it("coalesces a burst into one snapshot-and-active-detail invalidation per 100ms", () => {
     vi.useFakeTimers();
-    vi.stubGlobal("EventSource", EventSourceStub);
+    stubGlobal("EventSource", EventSourceStub);
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
     renderHook(() => useDashboardEvents({ changeId: "1", state: "fresh" }, "run-1"), {
@@ -81,8 +81,12 @@ describe("useDashboardEvents", () => {
     });
     expect(invalidate).toHaveBeenCalledTimes(1);
     const predicate = invalidate.mock.calls[0]![0]?.predicate;
-    expect(predicate?.({ queryKey: ["dashboard", "snapshot", "v1"] } as never)).toBe(true);
-    expect(predicate?.({ queryKey: ["dashboard", "run-detail", "run-1"] } as never)).toBe(true);
-    expect(predicate?.({ queryKey: ["dashboard", "run-detail", "run-2"] } as never)).toBe(false);
+    expect(predicate?.({ queryKey: ["dashboard", "snapshot", "v2"] } as never)).toBe(true);
+    expect(predicate?.({ queryKey: ["dashboard", "2", "run-1", "workflow", null] } as never)).toBe(
+      true,
+    );
+    expect(predicate?.({ queryKey: ["dashboard", "2", "run-2", "workflow", null] } as never)).toBe(
+      false,
+    );
   });
 });

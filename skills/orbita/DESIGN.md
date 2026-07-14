@@ -92,7 +92,8 @@ Screen zones:
 - board: five attention-weighted rails with sticky headers and independent
   vertical scrolling/virtualization;
 - wide contextual right detail: complementary, non-modal inspection;
-- tablet/mobile detail: modal right or bottom sheet;
+- tablet/mobile detail: non-modal right sidebar that may cover the board only on
+  the narrowest viewport;
 - narrow attention summary and stacked lane disclosures;
 - global feedback/live region for load, connectivity, and reclassification.
 
@@ -109,13 +110,12 @@ only when needed for disambiguation. Full id, artifacts/results/history,
 diagnostics, raw paths, commands, prompts, tokens, bindings, and host metadata
 do not belong on the card.
 
-Run detail primary facts are safe identity, lane/status, workflow, zero or one
-current step, and freshness. Secondary facts may include a policy-approved
-summary, bounded fact rows, artifact/result facts, bounded history, and fixed
-diagnostic codes. A read-only workflow mini-map provides bounded orientation:
-up to 24 safe step ids marked completed, current, or pending, with explicit
-truncation or an unavailable state. It never implies parallel execution or
-offers workflow control. Raw
+Run detail primary facts are safe identity, lane/status, workflow, current step,
+and freshness. A compact ordered step path sits above the tabs. Workflow remains
+the full authored graph and does not react to step selection. Activity, Logs,
+and Artifacts are scoped by the selected existing workflow step. Managed
+Markdown is formatted through the safe renderer; image artifacts use a gallery,
+and all supported artifacts have a contained preview/download viewer. Raw
 Baton/history/transcript, filesystem paths, token/hash or command text, and
 private host/worker metadata never render.
 
@@ -157,24 +157,23 @@ virtual item identity.
 No selection means no drawer/sheet and no reserved blank rail. The board uses
 the available width; a subtle toolbar hint may invite inspection.
 
-- At 1100px and wider, detail is a non-modal complementary right region,
-  340–400px and at most 34vw, with internal scrolling. The board remains
+- At 1100px and wider, detail is a non-modal complementary right region with
+  internal scrolling. The board remains
   visible, operable, and not inert. Focus enters the heading/close target but is
   not trapped; normal navigation and Shift+Tab may return to the board.
-- From 760–1099px, detail is a modal right sheet sized `min(420px, 92vw)` with
-  backdrop, inert background, and inner scroll.
-- Below 760px, detail is a modal bottom sheet, full width, at most 88dvh, with
-  safe-area padding, sticky header, and inner scroll. Explicit close, Escape,
-  and backdrop dismissal are supported; swipe is never the only exit.
+- From 760–1099px, detail remains a non-modal complementary right region. There
+  is no backdrop and the board is not inert.
+- Below 760px, detail uses the full available width with safe-area padding,
+  sticky header, and inner scroll. It is still an `aside`, not a dialog; explicit
+  close and Escape are supported.
 
 Escape while focus is within detail or explicit close returns focus to the
 originating card. If that card vanished, focus returns to its lane header. A
 filtered or missing selection keeps its id and displays `This run is no longer
 in the current results`; it never selects a neighbor.
 
-Motion is 160ms ease-out translateX plus opacity for right detail and 180ms
-translateY for mobile detail. Missing-selection content may crossfade at most
-100ms. Reduced-motion mode changes visibility instantly without transforms.
+The sidebar opens without modal-sheet motion. Missing-selection content may
+crossfade at most 100ms. Reduced-motion mode changes visibility instantly.
 
 ## Responsive and Containment Law
 
@@ -183,11 +182,11 @@ translateY for mobile detail. Missing-selection content may crossfade at most
 - From 1100–1439px, the first three or four lanes remain visible and the board,
   not the page, may scroll horizontally.
 - From 760–1099px, lanes use stacked or two-column sections and selected detail
-  uses the modal right sheet.
+  remains a non-modal right sidebar.
 - Below 760px, lanes are one-column disclosures in the same order. Every
   non-empty Waiting, Needs help, and Degraded lane starts expanded and is repeated
   in an always-visible attention summary. Running and Done alone may start
-  collapsed. Selected detail uses the modal bottom sheet.
+  collapsed. Selected detail takes the available viewport width.
 
 Page-level horizontal overflow is forbidden. Counts remain visible for
 collapsed lanes. Secondary filters move into one Filter popover on narrow
@@ -320,7 +319,7 @@ Required rendered evidence:
 - 1440x900, balanced distribution, detail closed and open;
 - 1024x768, selected run and filter open;
 - 390x844, attention summary, attention lanes expanded, Running/Done collapsed,
-  and bottom sheet;
+  and full-width non-modal detail;
 - pathological density;
 - initial error, empty root/result, stale/reconnect, corrupt run, detail failure,
   and missing selection;

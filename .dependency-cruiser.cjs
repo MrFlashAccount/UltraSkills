@@ -183,8 +183,15 @@ module.exports = {
       comment: 'Observer may read durable state but must not depend on UI, entrypoints, runner mutation/control, writers, locks, or lease ownership.',
       from: { path: '^skills/orbita/lib/dashboard/observer/' },
       to: {
-        path: '^(?:skills/orbita/lib/dashboard/ui/|skills/orbita/lib/entrypoints/|skills/orbita/lib/use-cases/(?:runtime/)?(?:Continue|Next|WriteOutput|Claim|Heartbeat|Move|Repair|Retry)|skills/orbita/lib/persistence/run-state/(?:PersistedRunStateWriter|lease-authority|lock-metadata|lock)[.]mjs$)',
+        path: '^(?:skills/orbita/lib/dashboard/ui/|skills/orbita/lib/(?:entrypoints|runner|runtime|use-cases)/|skills/orbita/lib/persistence/run-state/(?:PersistedRunStateWriter|lease-authority|lock-metadata|lock)[.]mjs$)',
       },
+    },
+    {
+      name: 'orbita-dashboard-server-does-not-project',
+      severity: 'error',
+      comment: 'Server transport dispatches through the read model and browser contracts; projection remains behind the observer seam.',
+      from: { path: '^skills/orbita/lib/dashboard/ui/src/server/' },
+      to: { path: '^skills/orbita/lib/dashboard/projection/' },
     },
     {
       name: 'orbita-dashboard-server-composition-is-the-observer-seam',
@@ -200,9 +207,9 @@ module.exports = {
       name: 'orbita-dashboard-api-routes-use-server-composition-only',
       severity: 'error',
       comment: 'Versioned Start API routes frame transport and may not reach observer, projection, or persistence directly.',
-      from: { path: '^skills/orbita/lib/dashboard/ui/src/routes/api[.]dashboard[.]v1[.]' },
+      from: { path: '^skills/orbita/lib/dashboard/ui/src/routes/api[.]dashboard[.]v2[.]' },
       to: {
-        path: '^(?:skills/orbita/lib/dashboard/(?:observer|projection)/|skills/orbita/lib/persistence/)',
+        path: '^(?:skills/orbita/lib/dashboard/(?:observer|projection)/|skills/orbita/lib/persistence/|skills/orbita/lib/(?:entrypoints|runner|runtime|use-cases)/)',
       },
     },
     {
@@ -211,7 +218,7 @@ module.exports = {
       comment: 'Client-reachable dashboard modules may import browser-safe contracts, never server, projection, observer, persistence, runner internals, or entrypoints.',
       from: {
         path: '^skills/orbita/lib/dashboard/ui/src/',
-        pathNot: '^skills/orbita/lib/dashboard/ui/src/(?:server/|routes/api[.]dashboard[.]v1[.])',
+        pathNot: '^skills/orbita/lib/dashboard/ui/src/(?:server/|routes/api[.]dashboard[.]v2[.])',
       },
       to: {
         path: '^(?:skills/orbita/lib/dashboard/(?:observer|projection)/|skills/orbita/lib/dashboard/ui/src/server/|skills/orbita/lib/(?:persistence|entrypoints|use-cases|entities)/|.*[.]server[.](?:ts|tsx)$|(?:node:)?(?:fs|path|http|https|os|util|url|stream|events)(?:/|$))',

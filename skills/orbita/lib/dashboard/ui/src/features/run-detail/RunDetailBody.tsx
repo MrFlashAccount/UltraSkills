@@ -1,168 +1,64 @@
-import type { RunDetailDTO } from "@dashboard-contracts";
-import { Clock3, Copy } from "lucide-react";
+import type { RunLightDetailDTO } from "@dashboard-contracts";
 import { lazy, Suspense } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@/components/ui/tabs";
-import { TooltipLabel } from "@/components/ui/tooltip";
-import { formatAge } from "@/lib/time";
+import { ActivityPanel } from "./ActivityPanel";
+import { ArtifactsPanel } from "./ArtifactsPanel";
+import { useRunDetailModel } from "./hooks/use-run-detail-model";
+import { LogsPanel } from "./LogsPanel";
+import { RunDetailOverview } from "./RunDetailOverview";
+import { StepPathSelector } from "./StepPathSelector";
+import { PanelEmpty, PanelError, PanelLoading } from "./states/PanelStates";
 
 const WorkflowGraph = lazy(() => import("./WorkflowGraph"));
-const workflowFallback = (
-  <section className="workflow-map workflow-map-loading">
-    <p>Loading workflow visualization…</p>
-  </section>
-);
 
-export function RunDetailBody({ detail }: Readonly<{ detail: RunDetailDTO }>) {
+/** Run-detail orchestration shell. Step-path selection never enters Workflow query state. */
+export function RunDetailBody({ detail }: Readonly<{ detail: RunLightDetailDTO }>) {
+  const model = useRunDetailModel(detail);
+
   return (
     <div className="detail-body">
-      <div className="detail-overview">
-        <div className="detail-overview-meta">
-          <Badge className={`tone-${detail.laneId}`}>
-            {detail.reason?.value ?? detail.status ?? detail.laneId}
-          </Badge>
-          <span>
-            <Clock3 aria-hidden="true" size={14} />
-            Updated {formatAge(detail.updatedAt ?? detail.createdAt)} ago
-          </span>
-        </div>
-        <p>{detail.summary?.value ?? "No additional summary is available."}</p>
-      </div>
-      <TabsRoot className="detail-tabs" defaultValue="graph">
+      <RunDetailOverview detail={detail} />
+      {model.selector.isPending && !model.selector.steps.length ? (
+        <PanelLoading label="Loading workflow path…" />
+      ) : model.selector.isError ? (
+        <PanelError message="Workflow path is unavailable." onRetry={model.selector.onRetry} />
+      ) : model.selector.steps.length ? (
+        <StepPathSelector
+          onRetryPaging={model.selector.onRetryPaging}
+          onSelect={model.selector.onSelect}
+          onShowEarlier={model.selector.onShowEarlier}
+          pagination={model.selector.pagination}
+          selectedStepId={model.selector.selectedStepId}
+          steps={model.selector.steps}
+        />
+      ) : (
+        <PanelEmpty
+          detail="No current or previous workflow step is available."
+          title="Workflow path unavailable"
+        />
+      )}
+      <TabsRoot className="detail-tabs" defaultValue="workflow">
         <TabsList aria-label="Run detail sections" className="detail-tabs-list">
-          <TabsTrigger value="graph">Graph</TabsTrigger>
-          <TabsTrigger value="activity">
-            Activity <span>{detail.history.length}</span>
-          </TabsTrigger>
-          <TabsTrigger value="artifacts">
-            Artifacts <span>{detail.artifacts.length + detail.results.length}</span>
-          </TabsTrigger>
-          <TabsTrigger value="metadata">Metadata</TabsTrigger>
+          <TabsTrigger value="workflow">Workflow</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="logs">Logs</TabsTrigger>
+          <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
         </TabsList>
-        <TabsContent className="detail-tab-panel detail-graph-panel" value="graph">
-          <Suspense fallback={workflowFallback}>
-            <WorkflowGraph artifacts={detail.artifacts} miniMap={detail.miniMap} />
+        <TabsContent className="detail-tab-panel detail-graph-panel" value="workflow">
+          <Suspense fallback={<PanelLoading label="Loading workflow visualization…" />}>
+            <WorkflowGraph {...model.workflow} />
           </Suspense>
         </TabsContent>
         <TabsContent className="detail-tab-panel" value="activity">
-          <DetailSection
-            title={detail.historyTruncated ? "Bounded activity · truncated" : "Bounded activity"}
-          >
-            {detail.history.length ? (
-              <ol className="history-list">
-                {detail.history.map((entry, index) => (
-                  <li key={`${index}:${entry.value}`}>{entry.value}</li>
-                ))}
-              </ol>
-            ) : (
-              <EmptyDetailState>No public activity is available for this run.</EmptyDetailState>
-            )}
-          </DetailSection>
+          <ActivityPanel stepLabel={model.stepLabel} {...model.activity} />
+        </TabsContent>
+        <TabsContent className="detail-tab-panel" value="logs">
+          <LogsPanel stepLabel={model.stepLabel} {...model.logs} />
         </TabsContent>
         <TabsContent className="detail-tab-panel" value="artifacts">
-          <DetailSection title={`Artifacts · ${detail.artifacts.length}`}>
-            {detail.artifacts.length ? (
-              <ul className="bounded-list">
-                {detail.artifacts.map((artifact) => (
-                  <li key={`${artifact.producerStepId ?? ""}:${artifact.id}`}>
-                    <code>{artifact.id}</code>
-                    <span>{artifact.contentType ?? "Artifact"}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyDetailState>No public artifacts are available for this run.</EmptyDetailState>
-            )}
-          </DetailSection>
-          <DetailSection title={`Results · ${detail.results.length}`}>
-            {detail.results.length ? (
-              <ul className="bounded-list">
-                {detail.results.map((result, index) => (
-                  <li key={`${result.ref ?? result.type ?? "result"}:${index}`}>
-                    <span>{result.outcome ?? result.type ?? "Result"}</span>
-                    <span>{result.summary?.value ?? result.ref}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyDetailState>No public results are available for this run.</EmptyDetailState>
-            )}
-          </DetailSection>
-        </TabsContent>
-        <TabsContent className="detail-tab-panel" value="metadata">
-          <DetailSection title="Run metadata">
-            <dl className="detail-facts">
-              <div>
-                <dt>Run id</dt>
-                <dd>
-                  <code>{detail.runId}</code>
-                  <TooltipLabel label="Copy run id">
-                    <Button
-                      aria-label="Copy run id"
-                      onClick={() => void navigator.clipboard?.writeText(detail.runId)}
-                      size="icon"
-                      variant="ghost"
-                    >
-                      <Copy aria-hidden="true" size={15} />
-                    </Button>
-                  </TooltipLabel>
-                </dd>
-              </div>
-              <div>
-                <dt>Workflow</dt>
-                <dd>{detail.workflow}</dd>
-              </div>
-              <div>
-                <dt>Current step</dt>
-                <dd>
-                  <code>{cursorLabel(detail)}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>Updated</dt>
-                <dd>{formatAge(detail.updatedAt ?? detail.createdAt)} ago</dd>
-              </div>
-            </dl>
-          </DetailSection>
-          {detail.facts.length ? (
-            <DetailSection title="Facts">
-              <dl className="bounded-list">
-                {detail.facts.map((fact) => (
-                  <div key={`${fact.label}:${fact.value}`}>
-                    <dt>{fact.label}</dt>
-                    <dd>{fact.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </DetailSection>
-          ) : null}
+          <ArtifactsPanel stepLabel={model.stepLabel} {...model.artifacts} />
         </TabsContent>
       </TabsRoot>
     </div>
-  );
-}
-
-function cursorLabel(detail: RunDetailDTO): string {
-  return detail.cursor.kind === "single"
-    ? detail.cursor.step
-    : detail.cursor.kind === "unsupported"
-      ? "Unsupported cursor"
-      : "None";
-}
-
-function EmptyDetailState({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <p className="detail-empty">{children}</p>;
-}
-
-function DetailSection({
-  children,
-  title,
-}: Readonly<{ children: React.ReactNode; title: string }>) {
-  return (
-    <section className="detail-section">
-      <h3>{title}</h3>
-      {children}
-    </section>
   );
 }

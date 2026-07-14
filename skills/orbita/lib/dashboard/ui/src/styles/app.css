@@ -3,6 +3,13 @@
 @import "./tokens.css";
 @import "./controls.css";
 @import "./dashboard.css";
+@import "../features/run-detail/run-detail.css";
+@import "../features/run-detail/panel-states.css";
+@import "../features/run-detail/activity-logs.css";
+@import "../features/run-detail/artifacts-panel.css";
+@import "../features/run-detail/workflow-status.css";
+@import "../features/run-detail/detail-surface.css";
+@import "../features/run-detail/artifact-preview.css";
 
 * {
   box-sizing: border-box;

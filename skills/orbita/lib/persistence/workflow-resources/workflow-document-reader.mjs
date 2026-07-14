@@ -21,6 +21,13 @@ function parseWorkflowToml(content, kind) {
   }
 }
 
+export function parseWorkflowDocument(content, pathname, kind = 'workflow') {
+  const extension = extname(pathname);
+  if (extension === '.json') return parseWorkflowJson(content, kind);
+  if (extension === '.toml') return parseWorkflowToml(content, kind);
+  throw new WorkflowRuntimeError(`failed to read ${kind}: unsupported workflow file extension '${extension || '<none>'}'`);
+}
+
 export function readWorkflowDocument(pathname, kind = 'workflow') {
   const extension = extname(pathname);
   let content;
@@ -31,7 +38,5 @@ export function readWorkflowDocument(pathname, kind = 'workflow') {
     const format = extension === '.toml' ? 'TOML' : 'JSON';
     throw new WorkflowRuntimeError(`failed to read ${kind} ${format}${code}`);
   }
-  if (extension === '.json') return parseWorkflowJson(content, kind);
-  if (extension === '.toml') return parseWorkflowToml(content, kind);
-  throw new WorkflowRuntimeError(`failed to read ${kind}: unsupported workflow file extension '${extension || '<none>'}'`);
+  return parseWorkflowDocument(content, pathname, kind);
 }

@@ -1,10 +1,11 @@
-import type { RunDetailDTO } from "@dashboard-contracts";
+import type { RunLightDetailDTO } from "@dashboard-contracts";
+import { useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { RunDetailBody } from "./RunDetailBody";
 import { DetailError, DetailLoading, MissingSelection } from "./states/DetailStates";
 
 type DetailSurfaceProps = {
-  detail?: RunDetailDTO | null | undefined;
+  detail?: RunLightDetailDTO | null | undefined;
   isError: boolean;
   isLoading: boolean;
   onClose: () => void;
@@ -14,23 +15,27 @@ type DetailSurfaceProps = {
 };
 
 export function RunDetailSurface(props: DetailSurfaceProps) {
+  const [closingSnapshot, setClosingSnapshot] = useState<DetailSurfaceProps | null>(null);
+  const visible = props.selectedId ? props : (closingSnapshot ?? props);
+
   return (
     <Sheet
-      description={props.detail?.workflow ?? "Read-only run details"}
-      eyebrow={props.detail ? compactRunId(props.detail.runId) : "Run details"}
+      description={visible.detail?.run.workflow ?? "Read-only run details"}
+      eyebrow={visible.detail ? compactRunId(visible.detail.run.runId) : "Run details"}
       onCloseAutoFocus={(event) => {
         event.preventDefault();
         props.onReturnFocus();
       }}
       onOpenChange={(open) => {
         if (!open) {
+          setClosingSnapshot(props);
           props.onClose();
         }
       }}
       open={Boolean(props.selectedId)}
-      title={props.detail?.title.value ?? "Run details"}
+      title={visible.detail?.run.title.value ?? "Run details"}
     >
-      {detailContent(props)}
+      {detailContent(visible)}
     </Sheet>
   );
 }

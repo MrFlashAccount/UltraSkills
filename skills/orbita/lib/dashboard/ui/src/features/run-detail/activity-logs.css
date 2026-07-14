@@ -1,0 +1,281 @@
+.activity-groups,
+.managed-logs {
+  display: grid;
+  gap: var(--space-3);
+}
+.activity-group {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.activity-group > header {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.activity-group h4 {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.activity-state-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  background: var(--running);
+  border-radius: 50%;
+}
+.activity-table-wrap {
+  overflow-x: auto;
+}
+.activity-group table {
+  width: 100%;
+  min-width: 540px;
+  border-collapse: collapse;
+}
+.activity-group th,
+.activity-group td {
+  height: 40px;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.activity-group th {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.activity-group td {
+  color: var(--text-secondary);
+}
+.activity-group td:nth-child(2) {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-group-empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--text-muted);
+}
+.activity-group-load-more {
+  width: calc(100% - 24px);
+  margin: 10px 12px;
+}
+.managed-logs > ol {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.managed-logs > ol > li {
+  padding: 12px;
+  background: var(--surface-card);
+  border-left: 2px solid var(--border-strong);
+}
+.managed-logs > ol > li > header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.markdown-content {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+.markdown-content a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--focus);
+}
+.markdown-content :where(h1, h2, h3, h4, h5, h6) {
+  margin: var(--space-5) 0 var(--space-2);
+  color: var(--text-primary);
+  font-weight: 650;
+  line-height: 1.25;
+}
+.markdown-content h1 {
+  font-size: 22px;
+}
+.markdown-content h2 {
+  padding-bottom: 6px;
+  font-size: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.markdown-content h3 {
+  font-size: 15px;
+}
+.markdown-content :where(h4, h5, h6) {
+  font-size: 13px;
+}
+.markdown-content :where(p, ul, ol, blockquote, pre, .markdown-table-scroll) {
+  margin: 0 0 var(--space-3);
+}
+.markdown-content :where(ul, ol) {
+  padding-left: 22px;
+}
+.markdown-content ul {
+  list-style: disc;
+}
+.markdown-content ol {
+  list-style: decimal;
+}
+.markdown-content ul ul {
+  list-style: circle;
+}
+.markdown-content li {
+  padding-left: 2px;
+}
+.markdown-content li + li {
+  margin-top: var(--space-1);
+}
+.markdown-content li > :where(ul, ol) {
+  margin-top: var(--space-1);
+}
+.markdown-content li::marker {
+  color: var(--text-muted);
+}
+.markdown-content strong {
+  color: var(--text-primary);
+  font-weight: 650;
+}
+.markdown-content blockquote {
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--surface-card) 62%, transparent);
+  border-left: 3px solid var(--border-strong);
+}
+.markdown-content blockquote > :last-child {
+  margin-bottom: 0;
+}
+.markdown-content hr {
+  margin: var(--space-5) 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.markdown-content code:not(pre code) {
+  padding: 1px 4px;
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.markdown-content pre {
+  overflow-x: auto;
+  padding: var(--space-3);
+  background: var(--surface-foundation);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.markdown-content pre code {
+  overflow-wrap: normal;
+  white-space: pre;
+}
+.markdown-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.markdown-table-scroll table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+.markdown-table-scroll th,
+.markdown-table-scroll td {
+  min-width: 180px;
+  max-width: 360px;
+  padding: 9px 12px;
+  overflow-wrap: anywhere;
+  text-align: left;
+  vertical-align: top;
+}
+.markdown-table-scroll th:first-child,
+.markdown-table-scroll td:first-child {
+  min-width: 110px;
+}
+.markdown-table-scroll th {
+  color: var(--text-primary);
+  background: var(--surface-card);
+  font-size: 11px;
+  font-weight: 650;
+}
+.markdown-table-scroll th + th,
+.markdown-table-scroll td + td {
+  border-left: 1px solid var(--border);
+}
+.markdown-table-scroll tbody tr + tr td {
+  border-top: 1px solid var(--border);
+}
+.markdown-table-scroll tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--surface-card) 32%, transparent);
+}
+@media (max-width: 639px) {
+  .activity-table-wrap {
+    overflow-x: visible;
+  }
+  .activity-group table,
+  .activity-group tbody,
+  .activity-group tr,
+  .activity-group td {
+    width: 100%;
+    min-width: 0;
+    display: block;
+  }
+  .activity-group thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .activity-group tbody {
+    display: grid;
+  }
+  .activity-group tr {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    border-bottom: 1px solid var(--border);
+  }
+  .activity-group td,
+  .activity-group td:nth-child(2) {
+    max-width: none;
+    height: auto;
+    min-height: 48px;
+    display: grid;
+    align-content: center;
+    gap: 3px;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    border-bottom: 0;
+  }
+  .activity-group td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 9px;
+    text-transform: uppercase;
+  }
+  .activity-group td:last-child {
+    grid-column: 1 / -1;
+  }
+}

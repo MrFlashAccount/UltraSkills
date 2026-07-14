@@ -1,5 +1,5 @@
 import type { SnapshotEnvelope } from "@dashboard-contracts";
-import type { RunDetailDTO } from "@dashboard-contracts";
+import type { RunLightDetailDTO } from "@dashboard-contracts";
 import type { FreshnessView } from "@/features/freshness/freshness-selector";
 import { RunDetailSurface } from "@/features/run-detail/RunDetailSurface";
 import { Board } from "./Board";
@@ -10,7 +10,7 @@ import { EmptyBoard, NoMatches } from "./states/BoardStates";
 import type { BoardFilters } from "./selectors/board-selectors";
 
 type BoardScreenProps = {
-  detail?: RunDetailDTO | null | undefined;
+  detail?: RunLightDetailDTO | null | undefined;
   detailError: boolean;
   detailLoading: boolean;
   filters: BoardFilters;

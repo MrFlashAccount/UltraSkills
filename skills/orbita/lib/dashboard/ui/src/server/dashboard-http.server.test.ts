@@ -1,277 +1,289 @@
+import { Readable } from "node:stream";
 import { describe, expect, test } from "bun:test";
-import type { RunSummaryDTO } from "../../../../dashboard/contracts/browser";
-import { createDashboardComposition } from "./dashboard-composition.server";
 import {
-  handleDetailRequest,
-  handleEventsRequest,
+  handleActivityRequest,
+  handleArtifactContentRequest,
+  handleArtifactsRequest,
+  handleLightDetailRequest,
   handleSnapshotRequest,
 } from "./dashboard-http.server";
 
-const timestamp = "2026-07-12T00:00:00.000Z";
-const run: RunSummaryDTO = {
-  cursor: { kind: "none" },
-  laneId: "worker_running",
-  occupancy: { state: "unclaimed" },
+const run = {
+  cursor: { kind: "single" as const, step: "implementation" },
+  laneId: "worker_running" as const,
+  occupancy: { state: "unclaimed" as const },
   runId: "run-1",
-  title: { sourceClass: "run_title", value: "Run", policyVersion: "1" },
+  title: { policyVersion: "2" as const, sourceClass: "run_title" as const, value: "Run one" },
   workflow: "dev-harness",
 };
+
 const snapshot = {
   freshness: {
-    state: "fresh",
-    observerRevision: "9",
-    lastRefreshAttemptAt: timestamp,
-    lastSuccessfulRefreshAt: timestamp,
-    staleSince: null,
-    staleAfterMs: 10_000,
+    lastRefreshAttemptAt: "2026-07-14T00:00:00.000Z",
+    lastSuccessfulRefreshAt: "2026-07-14T00:00:00.000Z",
+    observerRevision: "1",
     retryAt: null,
+    staleAfterMs: 10_000,
+    staleSince: null,
+    state: "fresh" as const,
   },
-  generatedAt: timestamp,
+  generatedAt: "2026-07-14T00:00:00.000Z",
   runs: [run],
-  schemaVersion: "1",
-  snapshotVersion: "7",
-} as const;
+  schemaVersion: "2" as const,
+  snapshotVersion: "1",
+};
 
-const config = { heartbeatMs: 60_000, host: "127.0.0.1", port: 3000 };
+function composition(readModel: Record<string, any>) {
+  return {
+    config: {
+      coalesceMs: 100,
+      heartbeatMs: 15_000,
+      host: "127.0.0.1",
+      pollMs: 2000,
+      port: 3000,
+      runsRoot: "/runs",
+      staleMs: 10_000,
+    },
+    readModel,
+  } as any;
+}
 
-function request(path = "/api/dashboard/v1/runs", init: RequestInit = {}): Request {
+function request(path: string, init: RequestInit = {}): Request {
   return new Request(`http://127.0.0.1:3000${path}`, {
     ...init,
-    headers: { host: "127.0.0.1:3000", origin: "http://127.0.0.1:3000", ...init.headers },
-  });
-}
-
-function composition() {
-  const subscribers = new Set<(event: any) => void>();
-  return {
-    async close() {},
-    config,
-    readModel: {
-      ensureSnapshot: async () => snapshot,
-      getDetail: async (runId: string) =>
-        runId === "run-1"
-          ? {
-              ...run,
-              schemaVersion: "1",
-              facts: [],
-              history: [],
-              historyTruncated: false,
-              artifacts: [],
-              results: [],
-              miniMap: { state: "unavailable" },
-            }
-          : undefined,
-      subscribe: (subscriber: (event: any) => void) => {
-        subscribers.add(subscriber);
-        return () => subscribers.delete(subscriber);
-      },
+    headers: {
+      host: "127.0.0.1:3000",
+      "sec-fetch-dest": "empty",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-site": "same-origin",
+      ...init.headers,
     },
-    subscribers,
-  };
+  });
 }
 
-describe("dashboard v1 HTTP handlers", () => {
-  test("serves conditional strict snapshot and bounded method errors", async () => {
-    const fake = composition();
-    const response = await handleSnapshotRequest(request(), fake as any);
+describe("dashboard v2 HTTP", () => {
+  test("serves a bounded v2 snapshot and honors ETag", async () => {
+    const model = { ensureSnapshot: async () => snapshot };
+    const first = await handleSnapshotRequest(
+      request("/api/dashboard/v2/runs"),
+      composition(model),
+    );
+    expect(first.status).toBe(200);
+    expect((await first.json()).schemaVersion).toBe("2");
+    const second = await handleSnapshotRequest(
+      request("/api/dashboard/v2/runs", {
+        headers: { "if-none-match": first.headers.get("etag")! },
+      }),
+      composition(model),
+    );
+    expect(second.status).toBe(304);
+  });
+
+  test("serves light detail without embedded history/workflow/artifacts", async () => {
+    const detail = {
+      run,
+      schemaVersion: "2",
+    };
+    const response = await handleLightDetailRequest(
+      request("/api/dashboard/v2/runs/run-1"),
+      "run-1",
+      composition({ getLightDetail: async () => detail }),
+    );
     expect(response.status).toBe(200);
-    expect(response.headers.get("etag")).toBe('"dashboard-v1-s7-o9"');
-    const conditional = await handleSnapshotRequest(
-      request(undefined, { headers: { "if-none-match": '"dashboard-v1-s7-o9"' } }),
-      fake as any,
-    );
-    expect(conditional.status).toBe(304);
-    const rejected = await handleSnapshotRequest(
-      request(undefined, { method: "POST" }),
-      fake as any,
-    );
-    expect(rejected.status).toBe(405);
+    const body = await response.json();
+    expect(body).toEqual(detail);
+    expect(JSON.stringify(body)).not.toMatch(/history|artifacts|workflowPath/u);
   });
 
-  test("enforces configured Host and same-origin authority", async () => {
-    const fake = composition();
-    const foreignHost = request(undefined, {
-      headers: { host: "evil.example", origin: "http://evil.example" },
-    });
-    expect((await handleSnapshotRequest(foreignHost, fake as any)).status).toBe(403);
-    const foreignOrigin = request(undefined, {
-      headers: { host: "127.0.0.1:3000", origin: "https://evil.example" },
-    });
-    expect((await handleSnapshotRequest(foreignOrigin, fake as any)).status).toBe(403);
-    expect(handleEventsRequest(foreignOrigin, fake as any).status).toBe(403);
-  });
-
-  test("validates ids and returns closed detail errors", async () => {
-    const fake = composition();
-    expect((await handleDetailRequest(request("/"), "../secret", fake as any)).status).toBe(400);
-    expect((await handleDetailRequest(request("/"), "missing", fake as any)).status).toBe(404);
-    const detail = await handleDetailRequest(request("/"), "run-1", fake as any);
-    expect(detail.status).toBe(200);
-    expect(detail.headers.get("etag")).toBe('"dashboard-v1-detail-s7-o9-run-1"');
-  });
-
-  test("streams the versioned invalidation record and unsubscribes on cancel", async () => {
-    const fake = composition();
-    const response = handleEventsRequest(request("/api/dashboard/v1/events"), fake as any);
-    const reader = response.body!.getReader();
-    await reader.read();
-    const event = {
-      changeId: "10",
-      emittedAt: timestamp,
-      reason: "observer_stale",
-      schemaVersion: "1",
-      type: "invalidation",
-    };
-    for (const subscriber of fake.subscribers) {
-      subscriber(event);
-    }
-    const frame = new TextDecoder().decode((await reader.read()).value);
-    expect(frame).toBe(`id: 10\nevent: invalidation\ndata: ${JSON.stringify(event)}\n\n`);
-    expect(frame).not.toContain('"runs"');
-    await reader.cancel();
-    expect(fake.subscribers.size).toBe(0);
-  });
-
-  test("keeps connected SSE truthful through stale, repeated stale, conditional GET, and recovery", async () => {
-    let failure = false;
-    const readerSource = {
-      getRun: async () => undefined,
-      listRuns: async () => {
-        if (failure) {
-          throw new Error("/private/root secret");
-        }
-        return [run];
+  test("accepts requests through proxies without authority or Fetch Metadata checks", async () => {
+    const model = { ensureSnapshot: async () => snapshot };
+    const proxied = new Request("https://dashboard.example/api/dashboard/v2/runs", {
+      headers: {
+        host: "proxy.internal",
+        origin: "null",
+        "sec-fetch-site": "cross-site",
       },
-    };
-    const real = createDashboardComposition(
-      {
-        coalesceMs: 10,
-        heartbeatMs: 60_000,
-        host: "127.0.0.1",
-        pollMs: 60_000,
-        port: 3000,
-        runsRoot: process.cwd(),
-        staleMs: 10_000,
-      },
-      readerSource,
-    );
-    const model = real.readModel;
-    await model.refresh();
-    let activeSubscriptions = 0;
-    const subscribe = model.subscribe.bind(model);
-    (model as any).subscribe = (subscriber: any) => {
-      activeSubscriptions++;
-      const unsubscribe = subscribe(subscriber);
-      return () => {
-        activeSubscriptions--;
-        unsubscribe();
-      };
-    };
-    const stream = handleEventsRequest(request("/api/dashboard/v1/events"), real as any);
-    const streamReader = stream.body!.getReader();
-    await streamReader.read();
-    const first = await handleSnapshotRequest(request(), real as any);
-    const firstEtag = first.headers.get("etag")!;
-    const firstBody = await first.json();
+    });
+    expect((await handleSnapshotRequest(proxied, composition(model))).status).toBe(200);
+  });
 
-    failure = true;
-    await model.refresh();
-    const staleEvent = new TextDecoder().decode((await streamReader.read()).value);
-    expect(staleEvent).toContain('"reason":"observer_stale"');
-    const staleResponse = await handleSnapshotRequest(
-      request(undefined, { headers: { "if-none-match": firstEtag } }),
-      real as any,
-    );
-    expect(staleResponse.status).toBe(200);
-    const staleEtag = staleResponse.headers.get("etag")!;
-    const staleBody = await staleResponse.json();
-    expect(staleBody.runs).toEqual(firstBody.runs);
-    expect(staleBody.snapshotVersion).toBe(firstBody.snapshotVersion);
-    expect(staleBody.freshness.state).toBe("stale");
-    expect(staleEtag).not.toBe(firstEtag);
-
-    await model.refresh();
-    const repeatedEvent = new TextDecoder().decode((await streamReader.read()).value);
-    expect(repeatedEvent).toContain('"reason":"observer_stale"');
-    const repeated = await handleSnapshotRequest(
-      request(undefined, { headers: { "if-none-match": staleEtag } }),
-      real as any,
-    );
-    expect(repeated.status).toBe(200);
-    expect(repeated.headers.get("etag")).not.toBe(staleEtag);
-
-    failure = false;
-    await model.refresh();
-    const recoveredEvent = new TextDecoder().decode((await streamReader.read()).value);
-    expect(recoveredEvent).toContain('"reason":"observer_recovered"');
+  test("accepts missing Fetch Metadata and rejects extra query fields", async () => {
+    const model = { ensureSnapshot: async () => snapshot };
+    const missingMetadata = new Request("http://127.0.0.1:3000/api/dashboard/v2/runs", {
+      headers: { host: "127.0.0.1:3000" },
+    });
+    expect((await handleSnapshotRequest(missingMetadata, composition(model))).status).toBe(200);
     expect(
-      (await (await handleSnapshotRequest(request(), real as any)).json()).freshness.state,
-    ).toBe("fresh");
-    await streamReader.cancel();
-    expect(activeSubscriptions).toBe(0);
-    await real.close();
+      (await handleSnapshotRequest(request("/api/dashboard/v2/runs?private=1"), composition(model)))
+        .status,
+    ).toBe(400);
   });
 
-  test("streams the real read model through Bun HTTP and releases the client on disconnect", async () => {
-    let failure = false;
-    const source = {
-      getRun: async () => undefined,
-      listRuns: async () => {
-        if (failure) {
-          throw new Error("refresh failed");
-        }
-        return [run];
+  test("requires a bounded workflow-step artifact scope", async () => {
+    const calls: Array<Array<unknown>> = [];
+    const model = {
+      getArtifactPage: async (...args: Array<unknown>) => {
+        calls.push(args);
+        const stepId = args[1] as string | undefined;
+        return {
+          complete: true,
+          items: [],
+          runAggregateCount: 7,
+          runId: "run-1",
+          schemaVersion: "2",
+          scope: { kind: "workflow_step", stepId },
+        };
       },
     };
-    const real = createDashboardComposition(
-      {
-        coalesceMs: 10,
-        heartbeatMs: 60_000,
-        host: "127.0.0.1",
-        pollMs: 60_000,
-        port: 0,
-        runsRoot: process.cwd(),
-        staleMs: 10_000,
-      },
-      source,
+    const workflowStep = await handleArtifactsRequest(
+      request("/api/dashboard/v2/runs/run-1/artifacts?stepId=implementation"),
+      "run-1",
+      composition(model),
     );
-    await real.readModel.refresh();
-    let activeSubscriptions = 0;
-    const subscribe = real.readModel.subscribe.bind(real.readModel);
-    (real.readModel as any).subscribe = (subscriber: any) => {
-      activeSubscriptions++;
-      const unsubscribe = subscribe(subscriber);
-      return () => {
-        activeSubscriptions--;
-        unsubscribe();
-      };
-    };
-    const server = Bun.serve({
-      fetch: (incoming) =>
-        new URL(incoming.url).pathname.endsWith("/events")
-          ? handleEventsRequest(incoming, real as any)
-          : handleSnapshotRequest(incoming, real as any),
-      hostname: "127.0.0.1",
-      port: 0,
+    expect(workflowStep.status).toBe(200);
+    expect((await workflowStep.json()).scope).toEqual({
+      kind: "workflow_step",
+      stepId: "implementation",
     });
-    const controller = new AbortController();
-    try {
-      const base = `http://127.0.0.1:${server.port}/api/dashboard/v1`;
-      expect((await fetch(`${base}/runs`)).status).toBe(200);
-      const response = await fetch(`${base}/events`, { signal: controller.signal });
-      const body = response.body!.getReader();
-      expect(new TextDecoder().decode((await body.read()).value)).toContain(": connected");
-      failure = true;
-      await real.readModel.refresh();
-      expect(new TextDecoder().decode((await body.read()).value)).toContain(
-        '"reason":"observer_stale"',
-      );
-      controller.abort();
-      await body.cancel().catch(() => {});
-    } finally {
-      await server.stop(true);
-      await real.close();
-    }
-    expect(activeSubscriptions).toBe(0);
+    expect(calls[0]?.[1]).toBe("implementation");
+
+    expect(
+      (
+        await handleArtifactsRequest(
+          request("/api/dashboard/v2/runs/run-1/artifacts"),
+          "run-1",
+          composition(model),
+        )
+      ).status,
+    ).toBe(400);
+  });
+
+  test("requires and dispatches one bounded activity group scope", async () => {
+    const calls: Array<Array<unknown>> = [];
+    const model = {
+      getActivityPage: async (...args: Array<unknown>) => {
+        calls.push(args);
+        return {
+          complete: true,
+          groupId: args[2],
+          items: [],
+          runId: "run-1",
+          schemaVersion: "2",
+          stepId: args[1],
+        };
+      },
+    };
+    const response = await handleActivityRequest(
+      request(
+        "/api/dashboard/v2/runs/run-1/activity?stepId=implementation&groupId=activation%3A3%3Afanout_branch",
+      ),
+      "run-1",
+      composition(model),
+    );
+    expect(response.status).toBe(200);
+    expect(calls[0]?.slice(1, 3)).toEqual(["implementation", "activation:3:fanout_branch"]);
+    expect(
+      (
+        await handleActivityRequest(
+          request("/api/dashboard/v2/runs/run-1/activity?stepId=implementation"),
+          "run-1",
+          composition(model),
+        )
+      ).status,
+    ).toBe(400);
+  });
+
+  test("streams one verified range and applies active preview sandbox headers", async () => {
+    const bytes = Buffer.from("<!doctype html><script>document.body.textContent='safe'</script>");
+    const handle = {
+      close: async () => {},
+      contentLimit: 2_097_152,
+      createReadStream: (range?: { end: number; start: number }) =>
+        Readable.from(bytes.subarray(range?.start ?? 0, (range?.end ?? bytes.length - 1) + 1)),
+      declaredContentType: "text/html",
+      effectiveContentType: "text/html",
+      filename: "preview.html",
+      mimeMismatch: false,
+      previewEligible: true,
+      size: bytes.length,
+      stampTag: '"stamp"',
+    };
+    const previewRequest = request(
+      "/api/dashboard/v2/runs/run-1/artifacts/aaaaaaaaaaaaaaaa?mode=preview",
+      { headers: { "sec-fetch-dest": "iframe", "sec-fetch-mode": "navigate" } },
+    );
+    const preview = await handleArtifactContentRequest(
+      previewRequest,
+      "run-1",
+      "aaaaaaaaaaaaaaaa",
+      composition({ getArtifactHandle: async () => handle }),
+    );
+    expect(preview.status).toBe(200);
+    expect(preview.headers.get("content-security-policy")).toContain("sandbox allow-scripts");
+    expect(preview.headers.get("content-security-policy")).not.toContain("allow-same-origin");
+
+    const rangeRequest = request(
+      "/api/dashboard/v2/runs/run-1/artifacts/aaaaaaaaaaaaaaaa?mode=download",
+      { headers: { range: "bytes=0-3" } },
+    );
+    const range = await handleArtifactContentRequest(
+      rangeRequest,
+      "run-1",
+      "aaaaaaaaaaaaaaaa",
+      composition({ getArtifactHandle: async () => handle }),
+    );
+    expect(range.status).toBe(206);
+    expect(range.headers.get("content-range")).toBe(`bytes 0-3/${bytes.length}`);
+  });
+
+  test("enforces canonical preview eligibility and fixed range failures", async () => {
+    const bytes = Buffer.from("plain text");
+    let closed = 0;
+    const handle = {
+      close: async () => {
+        closed += 1;
+      },
+      contentLimit: 1_048_576,
+      createReadStream: () => Readable.from(bytes),
+      declaredContentType: "text/html",
+      effectiveContentType: "text/plain",
+      filename: "mismatch.html",
+      mimeMismatch: true,
+      previewEligible: false,
+      size: bytes.length,
+      stampTag: '"stamp"',
+    };
+    const preview = await handleArtifactContentRequest(
+      request("/api/dashboard/v2/runs/run-1/artifacts/aaaaaaaaaaaaaaaa?mode=preview", {
+        headers: { "sec-fetch-dest": "iframe", "sec-fetch-mode": "navigate" },
+      }),
+      "run-1",
+      "aaaaaaaaaaaaaaaa",
+      composition({ getArtifactHandle: async () => handle }),
+    );
+    expect(preview.status).toBe(409);
+    expect(closed).toBe(1);
+
+    const invalidRange = await handleArtifactContentRequest(
+      request("/api/dashboard/v2/runs/run-1/artifacts/aaaaaaaaaaaaaaaa?mode=download", {
+        headers: { range: "bytes=0-1,4-5" },
+      }),
+      "run-1",
+      "aaaaaaaaaaaaaaaa",
+      composition({ getArtifactHandle: async () => ({ ...handle, previewEligible: true }) }),
+    );
+    expect(invalidRange.status).toBe(416);
+    expect(invalidRange.headers.get("content-range")).toBe(`bytes */${bytes.length}`);
+
+    const navigatedDownload = await handleArtifactContentRequest(
+      request("/api/dashboard/v2/runs/run-1/artifacts/aaaaaaaaaaaaaaaa?mode=download", {
+        headers: { "sec-fetch-dest": "iframe", "sec-fetch-mode": "navigate" },
+      }),
+      "run-1",
+      "aaaaaaaaaaaaaaaa",
+      composition({ getArtifactHandle: async () => handle }),
+    );
+    expect(navigatedDownload.status).toBe(200);
+    expect(navigatedDownload.headers.get("content-disposition")).toContain("attachment");
   });
 });

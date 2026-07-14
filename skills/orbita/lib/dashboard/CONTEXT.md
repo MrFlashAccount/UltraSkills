@@ -16,17 +16,16 @@ supported developer/runtime surface in `README.md`.
   `PublicDisplayText`, and adversarial contract fixtures. It is the only shared
   server/browser dashboard zone.
 - `projection/**` owns lane classification, source-specific exposure policy,
-  fixed public diagnostics, cursor cardinality, safe summary/detail projection,
-  bounded history, artifact/result facts, and the bounded workflow mini-map
-  projection. It is server-only. The detail DTO exposes an explicit
-  available/unavailable mini-map; browser code owns its read-only renderer.
+  fixed public diagnostics, safe summary/detail projection, authored workflow
+  pages, step-path reconstruction from existing managed history, step-scoped
+  Activity/Logs, and artifact descriptor projection. It is server-only.
 - `observer/**` owns read-only durable adapters, bounded-concurrency reads,
   per-run failure isolation, the process-local `DashboardReadModel`, watcher and
   periodic reconciliation, immutable snapshot replacement, freshness lifecycle,
   invalidation subscriptions, and close behavior. It is server-only.
 - `ui/src/server/**` owns validated process configuration and the one server-only
   composition root for the observer lifecycle.
-- `ui/src/routes/api.dashboard.v1.*` owns only HTTP/SSE framing, ETag and
+- `ui/src/routes/api.dashboard.v2.*` owns only HTTP/SSE framing, ETag and
   conditional responses, same-origin headers, method/status handling, and fixed
   public error envelopes. Route code does not own domain/projection policy.
 - `ui/src/routes/{__root.tsx,index.tsx}`, `ui/src/app/**`, `ui/src/features/**`,
@@ -52,8 +51,8 @@ folders for the one concrete observer/deployment.
   metadata as a browser action surface.
 - `contracts/**` is the shared source for the browser-visible DTO surface. The
   server, projection, UI fixtures, and renderer must agree on the same list,
-  detail, event, degraded diagnostic, artifact, history excerpt, cursor, and
-  mini-map shapes.
+  detail, event, workflow, traversal, Activity, Logs, artifact, cursor, and
+  preview shapes.
 - `projection/**` may read validated records and plain values supplied by
   adapters, then return allowlisted DTOs. It must not parse CLI arguments,
   inspect process state, perform filesystem IO, or call runner mutation/control
@@ -72,14 +71,17 @@ folders for the one concrete observer/deployment.
 - SSE updates are observational and lossy. Connected clients must not create
   backpressure into workflow execution or make runner writes depend on UI state.
 
-The only dashboard HTTP surfaces are same-origin GET routes:
+The only dashboard HTTP surfaces are same-origin v2 GET routes:
 
-- `/api/dashboard/v1/runs` — validated `SnapshotEnvelope`, including
-  authoritative `ObserverFreshnessDTO`, with ETag/conditional GET.
-- `/api/dashboard/v1/runs/:runId` — lazy validated `RunDetailDTO` or a closed,
-  bounded public error.
-- `/api/dashboard/v1/events` — data-free `InvalidationEvent` with reason
-  `snapshot_changed`, `observer_stale`, or `observer_recovered`, plus heartbeats.
+- `/api/dashboard/v2/runs` and `/api/dashboard/v2/runs/:runId` — validated run
+  summary and light-detail records.
+- `/api/dashboard/v2/runs/:runId/workflow` and `traversal` — authored workflow
+  and the current ordered path reconstructed from existing runner state.
+- `/api/dashboard/v2/runs/:runId/activity`, `logs`, and `artifacts` — resources
+  requiring one validated existing workflow `stepId`.
+- `/api/dashboard/v2/runs/:runId/artifacts/:artifactRef` — one validated artifact
+  preview/download stream.
+- `/api/dashboard/v2/events` — `InvalidationEvent` plus heartbeats.
 
 SSE is lossy invalidation, not state. Its frame contains only an event name and
 revision id. `snapshot_changed` is server-coalesced; `observer_stale` and
@@ -123,9 +125,17 @@ The projection exposes exactly five lanes in this order:
 observer/read health, not durable workflow state. Cursor cardinality is `0..1`;
 more than one step becomes a bounded unsupported/degraded projection.
 
+Run inspection adds no durable identity or storage. The selected `stepId` is a
+browser read-model key only. Traversal, Activity, managed debug-summary logs,
+and artifact ownership are derived from the existing Baton, managed history,
+workflow document, and artifact records. Fanout/shard request ids remain old
+request addresses and may be mapped to their owning workflow step for display;
+they never become workflow steps or new persisted entities. Workflow stays
+run-wide while step selection scopes only Activity, Logs, and Artifacts.
+
 ## Disclosure boundary
 
-Every browser-visible prose value passes exposure policy version `1` under one
+Every browser-visible prose value passes exposure policy version `2` under one
 implemented source class. The policy performs NFKC normalization, replaces
 control characters, collapses whitespace, truncates to the source's
 120/160/240-code-point ceiling, and omits forbidden absolute paths, lease/token/
@@ -180,7 +190,7 @@ compatibility layer is approved. The final source must not contain:
 - `orbita-dashboard serve` or dashboard API entrypoint re-exports;
 - the custom Node HTTP/static server or whole-snapshot event publisher;
 - string `renderDashboard*`, `client.js`, or direct dashboard CSS/assets;
-- `/api/runs`, `/api/events`, unversioned `/api/dashboard/*`, or redirects;
+- v1 routes, `/api/runs`, `/api/events`, unversioned `/api/dashboard/*`, or redirects;
 - automatic first selection, multiple active cursor chips, drag/drop, or runner
   control affordances.
 
@@ -197,7 +207,7 @@ Dashboard changes must provide focused evidence for:
   invalidation-only SSE, disconnect and idempotent shutdown;
 - connected-SSE refresh failure visibly becoming stale while last-good cards
   remain, staying stale across failures, and becoming fresh only on recovery;
-- only the three v1 GET routes and no legacy exports/CLI/aliases/assets;
+- only the documented v2 GET routes and no v1/legacy exports/CLI/aliases/assets;
 - TypeScript source direction via dependency-cruiser and forbidden server/
   private material absence in the production client bundle;
 - the approved board/focus/responsive state contract and 1,000-run performance

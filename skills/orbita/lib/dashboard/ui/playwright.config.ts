@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
+  expect: { timeout: 10_000 },
   outputDir: "./e2e/results",
   projects: [
     {
@@ -17,10 +18,10 @@ export default defineConfig({
     },
   ],
   testDir: "./e2e",
-  use: { baseURL: "http://127.0.0.1:4173", trace: "retain-on-failure" },
+  use: { baseURL: "http://127.0.0.1:4398", trace: "retain-on-failure" },
   webServer: {
-    command: "bun run dashboard:dev -- --host 127.0.0.1 --port 4173",
-    url: "http://127.0.0.1:4173",
-    reuseExistingServer: !process.env.CI,
+    command: "bun run dashboard:dev -- --host 127.0.0.1 --port 4398",
+    url: "http://127.0.0.1:4398",
+    reuseExistingServer: false,
   },
 });

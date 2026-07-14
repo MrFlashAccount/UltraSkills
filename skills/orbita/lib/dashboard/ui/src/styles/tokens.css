@@ -14,11 +14,14 @@
   --scrollbar-thumb-hover: var(--border-strong);
   --scrollbar-track: transparent;
   --focus: #cba6f7;
-  --waiting: #fab387;
-  --running: #cba6f7;
-  --needs-help: #f38ba8;
+  --success: #a6e3a1;
+  --error: #f38ba8;
+  --warning: #fab387;
+  --waiting: var(--warning);
+  --running: var(--focus);
+  --needs-help: var(--error);
   --degraded: #9a92a8;
-  --done: #a6e3a1;
+  --done: var(--success);
   --radius-sm: 6px;
   --radius-md: 8px;
   --space-1: 4px;
@@ -29,6 +32,7 @@
   --layer-sticky: 10;
   --layer-overlay: 40;
   --layer-popover: 50;
+  --layer-nested-overlay: 60;
 }
 
 @theme inline {
@@ -36,6 +40,9 @@
   --color-foreground: var(--text-primary);
   --color-border: var(--border);
   --color-ring: var(--focus);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-warning: var(--warning);
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
 }
