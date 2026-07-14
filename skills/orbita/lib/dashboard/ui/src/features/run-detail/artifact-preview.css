@@ -84,6 +84,11 @@
   padding: var(--space-4);
   align-self: start;
 }
+.artifact-preview-markdown > .markdown-content {
+  width: 100%;
+  max-width: 80ch;
+  margin-inline: auto;
+}
 .artifact-preview-fallback {
   display: grid;
   justify-items: center;

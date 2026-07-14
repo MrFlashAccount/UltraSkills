@@ -1,3 +1,4 @@
+// oxlint-disable react-doctor/no-noninteractive-tabindex -- Overflow regions need a keyboard focus target for horizontal scrolling.
 import { ExternalLink } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -26,6 +27,15 @@ export function MarkdownContent({ children }: Readonly<{ children: string }>) {
               </a>
             );
           },
+          table: ({ children: tableChildren }) => (
+            <section
+              aria-label="Scrollable Markdown table"
+              className="markdown-table-scroll"
+              tabIndex={0}
+            >
+              <table>{tableChildren}</table>
+            </section>
+          ),
         }}
         remarkPlugins={[remarkGfm]}
         skipHtml

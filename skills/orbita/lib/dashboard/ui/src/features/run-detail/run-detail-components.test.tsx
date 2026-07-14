@@ -129,7 +129,12 @@ describe("run detail Direction A components", () => {
   it("renders Markdown artifacts through the shared safe renderer", async () => {
     stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("**Safe** <script>unsafe()</script>")),
+      vi.fn(
+        async () =>
+          new Response(
+            "# Report\n\n## Summary\n\n- Safe\n- Structured\n\n| Severity | Finding |\n| --- | --- |\n| High | Evidence |\n\n<script>unsafe()</script>",
+          ),
+      ),
     );
     const { container } = renderFeature(
       <ArtifactPreviewBody
@@ -147,6 +152,13 @@ describe("run detail Direction A components", () => {
       />,
     );
     expect(await screen.findByText("Safe")).toBeVisible();
+    expect(screen.getByRole("heading", { level: 2, name: "Summary" })).toBeVisible();
+    expect(screen.getByRole("list")).toHaveTextContent("Structured");
+    expect(screen.getByRole("region", { name: "Scrollable Markdown table" })).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    expect(screen.getByRole("table")).toHaveTextContent("Evidence");
     expect(container.querySelector("script")).not.toBeInTheDocument();
   });
 
