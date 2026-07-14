@@ -1,9 +1,11 @@
 .step-path-selector {
+  --step-path-edge-padding: 18px;
+
   min-width: 0;
   flex: 0 0 auto;
   display: grid;
   gap: var(--space-2);
-  padding: 12px 18px;
+  padding-block: 12px;
   border-bottom: 1px solid var(--border);
 }
 .step-path-scroll {
@@ -23,6 +25,18 @@
 }
 .step-path-selector li {
   display: flex;
+}
+.step-path-selector li:first-child {
+  padding-left: var(--step-path-edge-padding);
+}
+.step-path-selector li:last-child {
+  padding-right: var(--step-path-edge-padding);
+}
+.step-path-scroll > .step-path-earlier {
+  margin-left: var(--step-path-edge-padding);
+}
+.step-path-earlier + ul li:first-child {
+  padding-left: 0;
 }
 .step-path-item,
 .step-path-earlier {
@@ -51,7 +65,6 @@
 .step-path-item[data-selected="true"] {
   color: var(--text-primary);
   border-color: var(--focus);
-  box-shadow: inset 3px 0 0 var(--focus);
 }
 .step-path-item[data-state="completed"] > svg:first-child {
   color: var(--done);
@@ -139,7 +152,7 @@
     padding-left: var(--space-2);
   }
   .step-path-selector {
-    padding-inline: 14px;
+    --step-path-edge-padding: 14px;
   }
   .step-panel-heading {
     align-items: flex-start;

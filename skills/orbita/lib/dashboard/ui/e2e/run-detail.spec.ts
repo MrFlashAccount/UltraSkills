@@ -22,9 +22,11 @@ test("Direction A preserves Workflow and scopes selected-step evidence", async (
   expect(await tabs.allTextContents()).toEqual(["Workflow", "Activity", "Logs", "Artifacts"]);
   const selector = dialog.getByRole("region", { name: "Current workflow path" });
   await expect(selector.locator("button[data-step]")).toHaveCount(3);
+  await expectEdgePaddingOnItems(selector);
   const selectedStep = selector.getByRole("button", { name: /architecture.*current/i });
   await expect(selectedStep).toHaveAttribute("aria-pressed", "true");
   await expectContained(selectedStep, selector);
+  await expectUniformBorder(selectedStep);
   const tabList = dialog.getByRole("tablist");
   expect((await selector.boundingBox())!.y).toBeLessThan((await tabList.boundingBox())!.y);
   const workflowGraph = dialog.getByRole("region", { name: "Workflow graph" });
@@ -316,6 +318,38 @@ async function expectUnshifted(
   expect(after).not.toBeNull();
   expect(after!.x).toBeCloseTo(before!.x, 0);
   expect(after!.width).toBeCloseTo(before!.width, 0);
+}
+
+async function expectUniformBorder(element: Locator) {
+  const style = await element.evaluate((node) => {
+    const computed = getComputedStyle(node);
+    return {
+      bottom: computed.borderBottomWidth,
+      boxShadow: computed.boxShadow,
+      left: computed.borderLeftWidth,
+      right: computed.borderRightWidth,
+      top: computed.borderTopWidth,
+    };
+  });
+  expect(new Set([style.top, style.right, style.bottom, style.left]).size).toBe(1);
+  expect(style.boxShadow).toBe("none");
+}
+
+async function expectEdgePaddingOnItems(selector: Locator) {
+  const spacing = await selector.evaluate((node) => {
+    const items = node.querySelectorAll("li");
+    const outer = getComputedStyle(node);
+    return {
+      first: getComputedStyle(items.item(0)).paddingLeft,
+      last: getComputedStyle(items.item(items.length - 1)).paddingRight,
+      outerLeft: outer.paddingLeft,
+      outerRight: outer.paddingRight,
+    };
+  });
+  expect(spacing.outerLeft).toBe("0px");
+  expect(spacing.outerRight).toBe("0px");
+  expect(Number.parseFloat(spacing.first)).toBeGreaterThan(0);
+  expect(Number.parseFloat(spacing.last)).toBeGreaterThan(0);
 }
 
 async function expectOverlayPlacement(dialog: Locator, project: string) {
