@@ -29,6 +29,7 @@
   --layer-sticky: 10;
   --layer-overlay: 40;
   --layer-popover: 50;
+  --layer-nested-overlay: 60;
 }
 
 @theme inline {

@@ -145,7 +145,16 @@ function devHarnessImplementationWorkflow() {
 }
 
 function implementationArtifactPathFor(runDir, stepId, summary) {
-  const filePath = path.join(runDir, stepId, 'artifacts', `implementation-handoff-${summary.replaceAll(/\W+/g, '-')}.md`);
+  const filePath = path.join(
+    runDir,
+    stepId,
+    'occurrences',
+    '1',
+    'requests',
+    stepId,
+    'artifacts',
+    `implementation-handoff-${summary.replaceAll(/\W+/g, '-')}.md`,
+  );
   mkdirSync(path.dirname(filePath), { recursive: true });
   writeFileSync(filePath, `${summary} handoff\n`, { flag: 'w' });
   return filePath;

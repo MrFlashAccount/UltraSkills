@@ -8,7 +8,8 @@ export function createWorkflowRunnerInputSupport({
   workflowStepIdForRequest,
   assertSafeStepId,
   validateRunnerAcceptedOutput,
-  artifactPathBoundaryErrors,
+  artifactPathBoundaryInspection,
+  batonWithAcceptedOutputProvenance,
   publicStopResolutionDetails,
   workerBindingKeyForStep,
   writePersistedRunStateUpdate,
@@ -54,14 +55,16 @@ export function createWorkflowRunnerInputSupport({
         ? { kind: 'worker', output: workflowStep?.branches?.[request.fanout.branch_id]?.output }
         : workflowStep;
     const artifactOutputDir = typeof resources?.artifactOutputDirForStep === 'function' ? resources.artifactOutputDirForStep(requestStepId) : undefined;
-    return validateRunnerAcceptedOutput({
+    const boundary = artifactPathBoundaryInspection(output, artifactOutputDir);
+    const accepted = validateRunnerAcceptedOutput({
       requestStepId,
       step,
       resources,
       requestAction: request.action,
       output,
-      artifactPathErrors: artifactPathBoundaryErrors(output, artifactOutputDir),
+      artifactPathErrors: boundary.errors,
     });
+    return { accepted, acceptedFiles: boundary.acceptedFiles };
   }
 
   function validateStopResolutionOutput(output, { runsRoot } = {}) {
@@ -87,18 +90,7 @@ export function createWorkflowRunnerInputSupport({
     return { stopId, resolution: publicStopResolutionDetails(output, { runsRoot }) };
   }
 
-  function batonWithAcceptedOutput(baton, stepId, output) {
-    const nextBaton = structuredClone(baton);
-    nextBaton.state = {
-      ...nextBaton.state,
-      [stepId]: structuredClone(output),
-    };
-    if (nextBaton.nonBlockingStops?.[stepId]) {
-      delete nextBaton.nonBlockingStops[stepId];
-      if (Object.keys(nextBaton.nonBlockingStops).length === 0) delete nextBaton.nonBlockingStops;
-    }
-    return nextBaton;
-  }
+  const batonWithAcceptedOutput = batonWithAcceptedOutputProvenance;
 
   function assertAgentId(agentId) {
     if (

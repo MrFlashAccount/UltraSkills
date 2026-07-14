@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { snapshotQueryKey } from "@/features/board/hooks/use-snapshot-query";
 
 export type TransportState = "connecting" | "connected" | "disconnected";
-const detailQueryPrefix = ["dashboard", "run-detail"] as const;
+const detailQueryPrefix = ["dashboard", "2"] as const;
 
 /** One EventSource owns invalidation; events are data-free and refetches coalesce to 100ms. */
 export function useDashboardEvents(
@@ -37,7 +37,7 @@ export function useDashboardEvents(
   }, [authoritativeChangeId]);
 
   useEffect(() => {
-    const source = new EventSource("/api/dashboard/v1/events");
+    const source = new EventSource("/api/dashboard/v2/events");
     const invalidate = () => {
       if (timer.current) {
         return;
@@ -48,7 +48,12 @@ export function useDashboardEvents(
         void queryClient.invalidateQueries({
           predicate: ({ queryKey }) =>
             sameQueryKey(queryKey, snapshotQueryKey) ||
-            Boolean(selectedRunId && sameQueryKey(queryKey, [...detailQueryPrefix, selectedRunId])),
+            Boolean(
+              selectedRunId &&
+              queryKey[0] === detailQueryPrefix[0] &&
+              queryKey[1] === detailQueryPrefix[1] &&
+              queryKey[2] === selectedRunId,
+            ),
         });
       }, 100);
     };

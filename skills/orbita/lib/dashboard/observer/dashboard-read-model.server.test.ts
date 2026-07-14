@@ -7,7 +7,7 @@ const run: RunSummaryDTO = {
   laneId: "worker_running",
   occupancy: { state: "unclaimed" },
   runId: "run-1",
-  title: { sourceClass: "run_title", value: "Run one", policyVersion: "1" },
+  title: { sourceClass: "run_title", value: "Run one", policyVersion: "2" },
   workflow: "dev-harness",
 };
 
@@ -16,7 +16,7 @@ describe("DashboardReadModel", () => {
     let timestamp = 0;
     let failure: Error | undefined;
     const reader = {
-      getRun: async () => undefined,
+      getRunLight: async () => undefined,
       listRuns: async () => {
         if (failure) {
           throw failure;
@@ -69,7 +69,7 @@ describe("DashboardReadModel", () => {
       release = resolve;
     });
     const reader = {
-      getRun: async () => undefined,
+      getRunLight: async () => undefined,
       listRuns: async () => {
         calls++;
         active++;
@@ -96,7 +96,7 @@ describe("DashboardReadModel", () => {
   test("fails first build with a bounded observer error", async () => {
     const model = new DashboardReadModel(
       {
-        getRun: async () => undefined,
+        getRunLight: async () => undefined,
         listRuns: async () => {
           throw new Error("/secret/path");
         },
@@ -110,14 +110,14 @@ describe("DashboardReadModel", () => {
   test("coalesces a 100-change burst to at most one invalidation per 100ms window", async () => {
     let version = 0;
     const reader = {
-      getRun: async () => undefined,
+      getRunLight: async () => undefined,
       listRuns: async () => [
         {
           ...run,
           title: {
             sourceClass: "run_title" as const,
             value: `Run ${version++}`,
-            policyVersion: "1" as const,
+            policyVersion: "2" as const,
           },
         },
       ],
@@ -143,7 +143,7 @@ describe("DashboardReadModel", () => {
       release = resolve;
     });
     const reader = {
-      getRun: async () => undefined,
+      getRunLight: async () => undefined,
       listRuns: async () => {
         if (block) {
           await gate;
@@ -170,7 +170,7 @@ describe("DashboardReadModel", () => {
     let calls = 0;
     let aborted = false;
     const reader = {
-      getRun: async () => undefined,
+      getRunLight: async () => undefined,
       listRuns: async (signal?: AbortSignal) => {
         calls++;
         await new Promise<void>((resolve, reject) =>

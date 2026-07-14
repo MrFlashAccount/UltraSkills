@@ -425,7 +425,7 @@ test('runner: rendered artifact instructions include the absolute step artifact 
   assert.equal(loaded.status, 0, loaded.stderr);
   const instructions = loaded.stdout;
 
-  assert.match(instructions, new RegExp(`Artifact output directory for this step: ${path.join(runDir, 'prepare', 'artifacts').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  assert.match(instructions, new RegExp(`Artifact output directory for this step: ${path.join(runDir, 'prepare', 'occurrences', '1', 'requests', 'prepare', 'artifacts').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   assert.match(instructions, /Use the artifact id as the artifact file name\/stem/);
   assert.match(instructions, /artifacts\[\]\.path to the full absolute filesystem path/);
   assert.match(instructions, /Do not create a separate JSON output file and do not pass an output path to the orchestrator/);
@@ -457,7 +457,7 @@ async function startArtifactOutputRun(label) {
   const workflowPath = artifactOutputWorkflow(label);
   const leaseToken = `${label}-token-${process.pid}`;
   await runnerNext({ runId, workflowPath, leaseToken });
-  return { runId, runDir, workflowPath, leaseToken, artifactDir: path.join(runDir, 'prepare', 'artifacts') };
+  return { runId, runDir, workflowPath, leaseToken, artifactDir: path.join(runDir, 'prepare', 'occurrences', '1', 'requests', 'prepare', 'artifacts') };
 }
 
 test('runner write-output rejects relative artifact paths', async () => {
@@ -531,7 +531,9 @@ test('runner write-output rejects another step artifact directory and traversal 
 });
 
 test('runner write-output accepts artifact paths inside the current step artifact directory', async () => {
-  const { runId, workflowPath, leaseToken, artifactDir } = await startArtifactOutputRun('valid-artifact-path-accept');
+  const { runId, runDir, workflowPath, leaseToken, artifactDir } = await startArtifactOutputRun('valid-artifact-path-accept');
+  mkdirSync(artifactDir, { recursive: true });
+  writeFileSync(path.join(artifactDir, 'packet.md'), '# packet\n');
   const accepted = await runnerWriteOutput({
     runId,
     workflowPath,
@@ -542,6 +544,12 @@ test('runner write-output accepts artifact paths inside the current step artifac
   });
 
   assert.equal(accepted.ok, true);
+  await runnerContinueRun({ runId, workflowPath, leaseToken });
+  const [aggregate] = JSON.parse(readFileSync(path.join(runDir, 'baton.json'), 'utf8')).state.artifacts;
+  assert.equal(aggregate.producerStepId, 'prepare');
+  assert.equal(aggregate.producerOccurrence, 1);
+  assert.equal(aggregate.producerRequestId, 'prepare');
+  assert.equal(aggregate.acceptedFileStamp.size, Buffer.byteLength('# packet\n'));
 });
 
 

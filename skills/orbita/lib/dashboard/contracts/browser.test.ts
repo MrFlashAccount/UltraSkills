@@ -11,7 +11,7 @@ const summary = {
   laneId: "worker_running",
   occupancy: { state: "unclaimed" },
   runId: "run-1",
-  title: { sourceClass: "run_title", value: "Safe run", policyVersion: "1" },
+  title: { sourceClass: "run_title", value: "Safe run", policyVersion: "2" },
   workflow: "dev-harness",
 } as const;
 
@@ -41,7 +41,7 @@ describe("dashboard browser contracts", () => {
       },
       generatedAt: "2026-07-12T00:00:00.000Z",
       runs: [summary],
-      schemaVersion: "1",
+      schemaVersion: "2",
       snapshotVersion: "1",
     };
     expect(SnapshotEnvelopeSchema.parse(snapshot)).toEqual(snapshot);
@@ -56,7 +56,7 @@ describe("dashboard browser contracts", () => {
         changeId: "1",
         emittedAt: "2026-07-12T00:00:00.000Z",
         reason: "snapshot",
-        schemaVersion: "1",
+        schemaVersion: "2",
         type: "invalidation",
       }),
     ).toThrow();
@@ -70,7 +70,7 @@ describe("dashboard browser contracts", () => {
       title: {
         sourceClass: "run_title" as const,
         value: `Run ${index} ${"x".repeat(100)}`,
-        policyVersion: "1" as const,
+        policyVersion: "2" as const,
       },
     }));
     const envelope = SnapshotEnvelopeSchema.parse({
@@ -85,7 +85,7 @@ describe("dashboard browser contracts", () => {
       },
       generatedAt: "2026-07-12T00:00:00.000Z",
       runs,
-      schemaVersion: "1",
+      schemaVersion: "2",
       snapshotVersion: "1",
     });
     expect(new TextEncoder().encode(JSON.stringify(envelope)).byteLength).toBeLessThanOrEqual(

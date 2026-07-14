@@ -11,7 +11,7 @@ describe("dashboard production lifecycle binding", () => {
     let calls = 0;
     let aborted = false;
     const reader = {
-      getRun: async () => undefined,
+      getRunLight: async () => undefined,
       listRuns: async (signal?: AbortSignal) => {
         calls++;
         await new Promise<void>((_resolve, reject) =>

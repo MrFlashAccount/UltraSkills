@@ -11,6 +11,7 @@ export function createWorkflowRunnerCurrentState({
   runnerResponseForRendered,
   recoverDurableCommit,
   readPersistedRunState,
+  ensurePersistedOccurrenceProvenance,
 }) {
   function contentSignature(value) {
     return createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -194,21 +195,24 @@ export function createWorkflowRunnerCurrentState({
     const rendered = runNext({
       workflowDoc: runtime.workflow,
       batonDoc: runtime.baton,
-      resources: resourcesWithValidatingWriter(runtime.resources, paths, { leaseToken }),
+      resources: resourcesWithValidatingWriter(runtime.resources, paths, { leaseToken, baton: runtime.baton }),
     });
     const response = await runnerResponseForRendered(paths, rendered, {
       initialized: false,
       resumed: true,
       includeInlineInstructions: false,
       workflowDoc: runtime.workflow,
-      resources: resourcesWithValidatingWriter(runtime.resources, paths),
+      resources: resourcesWithValidatingWriter(runtime.resources, paths, { baton: runtime.baton }),
     });
     return { runtime, response };
   }
 
   async function outputForCurrentState(paths, { includeHistoryText = false } = {}) {
     await recoverDurableCommit(paths);
-    const current = await readPersistedRunState(paths, { includeHistoryText });
+    const current = await ensurePersistedOccurrenceProvenance(
+      paths,
+      await readPersistedRunState(paths, { includeHistoryText }),
+    );
     const { runtime, response } = await currentRuntimeAndResponse(paths, current);
     if (response.status !== 'needs_host_actions') throw new Error(`current runner response is '${response.status}', not needs_host_actions`);
 

@@ -24,7 +24,7 @@ export default defineConfig({
   server: { watch: { ignored: ["**/e2e/results/**", "**/e2e/proof/**"] } },
   test: {
     environment: "jsdom",
-    exclude: ["./src/server/**", "./src/routes/api.dashboard.v1.*.test.ts"],
+    exclude: ["./src/server/**"],
     include: ["./src/**/*.test.ts", "./src/**/*.test.tsx"],
     setupFiles: ["./src/test/setup.ts"],
   },

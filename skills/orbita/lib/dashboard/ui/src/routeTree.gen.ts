@@ -10,75 +10,153 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiDashboardV1RunsRouteImport } from './routes/api.dashboard.v1.runs'
-import { Route as ApiDashboardV1EventsRouteImport } from './routes/api.dashboard.v1.events'
-import { Route as ApiDashboardV1RunsRunIdRouteImport } from './routes/api.dashboard.v1.runs.$runId'
+import { Route as ApiDashboardV2RunsRouteImport } from './routes/api.dashboard.v2.runs'
+import { Route as ApiDashboardV2EventsRouteImport } from './routes/api.dashboard.v2.events'
+import { Route as ApiDashboardV2RunsRunIdRouteImport } from './routes/api.dashboard.v2.runs.$runId'
+import { Route as ApiDashboardV2RunsRunIdWorkflowRouteImport } from './routes/api.dashboard.v2.runs.$runId.workflow'
+import { Route as ApiDashboardV2RunsRunIdTraversalRouteImport } from './routes/api.dashboard.v2.runs.$runId.traversal'
+import { Route as ApiDashboardV2RunsRunIdLogsRouteImport } from './routes/api.dashboard.v2.runs.$runId.logs'
+import { Route as ApiDashboardV2RunsRunIdArtifactsRouteImport } from './routes/api.dashboard.v2.runs.$runId.artifacts'
+import { Route as ApiDashboardV2RunsRunIdActivityRouteImport } from './routes/api.dashboard.v2.runs.$runId.activity'
+import { Route as ApiDashboardV2RunsRunIdArtifactsArtifactRefRouteImport } from './routes/api.dashboard.v2.runs.$runId.artifacts.$artifactRef'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDashboardV1RunsRoute = ApiDashboardV1RunsRouteImport.update({
-  id: '/api/dashboard/v1/runs',
-  path: '/api/dashboard/v1/runs',
+const ApiDashboardV2RunsRoute = ApiDashboardV2RunsRouteImport.update({
+  id: '/api/dashboard/v2/runs',
+  path: '/api/dashboard/v2/runs',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDashboardV1EventsRoute = ApiDashboardV1EventsRouteImport.update({
-  id: '/api/dashboard/v1/events',
-  path: '/api/dashboard/v1/events',
+const ApiDashboardV2EventsRoute = ApiDashboardV2EventsRouteImport.update({
+  id: '/api/dashboard/v2/events',
+  path: '/api/dashboard/v2/events',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDashboardV1RunsRunIdRoute = ApiDashboardV1RunsRunIdRouteImport.update({
+const ApiDashboardV2RunsRunIdRoute = ApiDashboardV2RunsRunIdRouteImport.update({
   id: '/$runId',
   path: '/$runId',
-  getParentRoute: () => ApiDashboardV1RunsRoute,
+  getParentRoute: () => ApiDashboardV2RunsRoute,
 } as any)
+const ApiDashboardV2RunsRunIdWorkflowRoute =
+  ApiDashboardV2RunsRunIdWorkflowRouteImport.update({
+    id: '/workflow',
+    path: '/workflow',
+    getParentRoute: () => ApiDashboardV2RunsRunIdRoute,
+  } as any)
+const ApiDashboardV2RunsRunIdTraversalRoute =
+  ApiDashboardV2RunsRunIdTraversalRouteImport.update({
+    id: '/traversal',
+    path: '/traversal',
+    getParentRoute: () => ApiDashboardV2RunsRunIdRoute,
+  } as any)
+const ApiDashboardV2RunsRunIdLogsRoute =
+  ApiDashboardV2RunsRunIdLogsRouteImport.update({
+    id: '/logs',
+    path: '/logs',
+    getParentRoute: () => ApiDashboardV2RunsRunIdRoute,
+  } as any)
+const ApiDashboardV2RunsRunIdArtifactsRoute =
+  ApiDashboardV2RunsRunIdArtifactsRouteImport.update({
+    id: '/artifacts',
+    path: '/artifacts',
+    getParentRoute: () => ApiDashboardV2RunsRunIdRoute,
+  } as any)
+const ApiDashboardV2RunsRunIdActivityRoute =
+  ApiDashboardV2RunsRunIdActivityRouteImport.update({
+    id: '/activity',
+    path: '/activity',
+    getParentRoute: () => ApiDashboardV2RunsRunIdRoute,
+  } as any)
+const ApiDashboardV2RunsRunIdArtifactsArtifactRefRoute =
+  ApiDashboardV2RunsRunIdArtifactsArtifactRefRouteImport.update({
+    id: '/$artifactRef',
+    path: '/$artifactRef',
+    getParentRoute: () => ApiDashboardV2RunsRunIdArtifactsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/api/dashboard/v1/events': typeof ApiDashboardV1EventsRoute
-  '/api/dashboard/v1/runs': typeof ApiDashboardV1RunsRouteWithChildren
-  '/api/dashboard/v1/runs/$runId': typeof ApiDashboardV1RunsRunIdRoute
+  '/api/dashboard/v2/events': typeof ApiDashboardV2EventsRoute
+  '/api/dashboard/v2/runs': typeof ApiDashboardV2RunsRouteWithChildren
+  '/api/dashboard/v2/runs/$runId': typeof ApiDashboardV2RunsRunIdRouteWithChildren
+  '/api/dashboard/v2/runs/$runId/activity': typeof ApiDashboardV2RunsRunIdActivityRoute
+  '/api/dashboard/v2/runs/$runId/artifacts': typeof ApiDashboardV2RunsRunIdArtifactsRouteWithChildren
+  '/api/dashboard/v2/runs/$runId/logs': typeof ApiDashboardV2RunsRunIdLogsRoute
+  '/api/dashboard/v2/runs/$runId/traversal': typeof ApiDashboardV2RunsRunIdTraversalRoute
+  '/api/dashboard/v2/runs/$runId/workflow': typeof ApiDashboardV2RunsRunIdWorkflowRoute
+  '/api/dashboard/v2/runs/$runId/artifacts/$artifactRef': typeof ApiDashboardV2RunsRunIdArtifactsArtifactRefRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/api/dashboard/v1/events': typeof ApiDashboardV1EventsRoute
-  '/api/dashboard/v1/runs': typeof ApiDashboardV1RunsRouteWithChildren
-  '/api/dashboard/v1/runs/$runId': typeof ApiDashboardV1RunsRunIdRoute
+  '/api/dashboard/v2/events': typeof ApiDashboardV2EventsRoute
+  '/api/dashboard/v2/runs': typeof ApiDashboardV2RunsRouteWithChildren
+  '/api/dashboard/v2/runs/$runId': typeof ApiDashboardV2RunsRunIdRouteWithChildren
+  '/api/dashboard/v2/runs/$runId/activity': typeof ApiDashboardV2RunsRunIdActivityRoute
+  '/api/dashboard/v2/runs/$runId/artifacts': typeof ApiDashboardV2RunsRunIdArtifactsRouteWithChildren
+  '/api/dashboard/v2/runs/$runId/logs': typeof ApiDashboardV2RunsRunIdLogsRoute
+  '/api/dashboard/v2/runs/$runId/traversal': typeof ApiDashboardV2RunsRunIdTraversalRoute
+  '/api/dashboard/v2/runs/$runId/workflow': typeof ApiDashboardV2RunsRunIdWorkflowRoute
+  '/api/dashboard/v2/runs/$runId/artifacts/$artifactRef': typeof ApiDashboardV2RunsRunIdArtifactsArtifactRefRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/api/dashboard/v1/events': typeof ApiDashboardV1EventsRoute
-  '/api/dashboard/v1/runs': typeof ApiDashboardV1RunsRouteWithChildren
-  '/api/dashboard/v1/runs/$runId': typeof ApiDashboardV1RunsRunIdRoute
+  '/api/dashboard/v2/events': typeof ApiDashboardV2EventsRoute
+  '/api/dashboard/v2/runs': typeof ApiDashboardV2RunsRouteWithChildren
+  '/api/dashboard/v2/runs/$runId': typeof ApiDashboardV2RunsRunIdRouteWithChildren
+  '/api/dashboard/v2/runs/$runId/activity': typeof ApiDashboardV2RunsRunIdActivityRoute
+  '/api/dashboard/v2/runs/$runId/artifacts': typeof ApiDashboardV2RunsRunIdArtifactsRouteWithChildren
+  '/api/dashboard/v2/runs/$runId/logs': typeof ApiDashboardV2RunsRunIdLogsRoute
+  '/api/dashboard/v2/runs/$runId/traversal': typeof ApiDashboardV2RunsRunIdTraversalRoute
+  '/api/dashboard/v2/runs/$runId/workflow': typeof ApiDashboardV2RunsRunIdWorkflowRoute
+  '/api/dashboard/v2/runs/$runId/artifacts/$artifactRef': typeof ApiDashboardV2RunsRunIdArtifactsArtifactRefRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/api/dashboard/v1/events'
-    | '/api/dashboard/v1/runs'
-    | '/api/dashboard/v1/runs/$runId'
+    | '/api/dashboard/v2/events'
+    | '/api/dashboard/v2/runs'
+    | '/api/dashboard/v2/runs/$runId'
+    | '/api/dashboard/v2/runs/$runId/activity'
+    | '/api/dashboard/v2/runs/$runId/artifacts'
+    | '/api/dashboard/v2/runs/$runId/logs'
+    | '/api/dashboard/v2/runs/$runId/traversal'
+    | '/api/dashboard/v2/runs/$runId/workflow'
+    | '/api/dashboard/v2/runs/$runId/artifacts/$artifactRef'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/api/dashboard/v1/events'
-    | '/api/dashboard/v1/runs'
-    | '/api/dashboard/v1/runs/$runId'
+    | '/api/dashboard/v2/events'
+    | '/api/dashboard/v2/runs'
+    | '/api/dashboard/v2/runs/$runId'
+    | '/api/dashboard/v2/runs/$runId/activity'
+    | '/api/dashboard/v2/runs/$runId/artifacts'
+    | '/api/dashboard/v2/runs/$runId/logs'
+    | '/api/dashboard/v2/runs/$runId/traversal'
+    | '/api/dashboard/v2/runs/$runId/workflow'
+    | '/api/dashboard/v2/runs/$runId/artifacts/$artifactRef'
   id:
     | '__root__'
     | '/'
-    | '/api/dashboard/v1/events'
-    | '/api/dashboard/v1/runs'
-    | '/api/dashboard/v1/runs/$runId'
+    | '/api/dashboard/v2/events'
+    | '/api/dashboard/v2/runs'
+    | '/api/dashboard/v2/runs/$runId'
+    | '/api/dashboard/v2/runs/$runId/activity'
+    | '/api/dashboard/v2/runs/$runId/artifacts'
+    | '/api/dashboard/v2/runs/$runId/logs'
+    | '/api/dashboard/v2/runs/$runId/traversal'
+    | '/api/dashboard/v2/runs/$runId/workflow'
+    | '/api/dashboard/v2/runs/$runId/artifacts/$artifactRef'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ApiDashboardV1EventsRoute: typeof ApiDashboardV1EventsRoute
-  ApiDashboardV1RunsRoute: typeof ApiDashboardV1RunsRouteWithChildren
+  ApiDashboardV2EventsRoute: typeof ApiDashboardV2EventsRoute
+  ApiDashboardV2RunsRoute: typeof ApiDashboardV2RunsRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -90,45 +168,126 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/dashboard/v1/runs': {
-      id: '/api/dashboard/v1/runs'
-      path: '/api/dashboard/v1/runs'
-      fullPath: '/api/dashboard/v1/runs'
-      preLoaderRoute: typeof ApiDashboardV1RunsRouteImport
+    '/api/dashboard/v2/runs': {
+      id: '/api/dashboard/v2/runs'
+      path: '/api/dashboard/v2/runs'
+      fullPath: '/api/dashboard/v2/runs'
+      preLoaderRoute: typeof ApiDashboardV2RunsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/dashboard/v1/events': {
-      id: '/api/dashboard/v1/events'
-      path: '/api/dashboard/v1/events'
-      fullPath: '/api/dashboard/v1/events'
-      preLoaderRoute: typeof ApiDashboardV1EventsRouteImport
+    '/api/dashboard/v2/events': {
+      id: '/api/dashboard/v2/events'
+      path: '/api/dashboard/v2/events'
+      fullPath: '/api/dashboard/v2/events'
+      preLoaderRoute: typeof ApiDashboardV2EventsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/dashboard/v1/runs/$runId': {
-      id: '/api/dashboard/v1/runs/$runId'
+    '/api/dashboard/v2/runs/$runId': {
+      id: '/api/dashboard/v2/runs/$runId'
       path: '/$runId'
-      fullPath: '/api/dashboard/v1/runs/$runId'
-      preLoaderRoute: typeof ApiDashboardV1RunsRunIdRouteImport
-      parentRoute: typeof ApiDashboardV1RunsRoute
+      fullPath: '/api/dashboard/v2/runs/$runId'
+      preLoaderRoute: typeof ApiDashboardV2RunsRunIdRouteImport
+      parentRoute: typeof ApiDashboardV2RunsRoute
+    }
+    '/api/dashboard/v2/runs/$runId/workflow': {
+      id: '/api/dashboard/v2/runs/$runId/workflow'
+      path: '/workflow'
+      fullPath: '/api/dashboard/v2/runs/$runId/workflow'
+      preLoaderRoute: typeof ApiDashboardV2RunsRunIdWorkflowRouteImport
+      parentRoute: typeof ApiDashboardV2RunsRunIdRoute
+    }
+    '/api/dashboard/v2/runs/$runId/traversal': {
+      id: '/api/dashboard/v2/runs/$runId/traversal'
+      path: '/traversal'
+      fullPath: '/api/dashboard/v2/runs/$runId/traversal'
+      preLoaderRoute: typeof ApiDashboardV2RunsRunIdTraversalRouteImport
+      parentRoute: typeof ApiDashboardV2RunsRunIdRoute
+    }
+    '/api/dashboard/v2/runs/$runId/logs': {
+      id: '/api/dashboard/v2/runs/$runId/logs'
+      path: '/logs'
+      fullPath: '/api/dashboard/v2/runs/$runId/logs'
+      preLoaderRoute: typeof ApiDashboardV2RunsRunIdLogsRouteImport
+      parentRoute: typeof ApiDashboardV2RunsRunIdRoute
+    }
+    '/api/dashboard/v2/runs/$runId/artifacts': {
+      id: '/api/dashboard/v2/runs/$runId/artifacts'
+      path: '/artifacts'
+      fullPath: '/api/dashboard/v2/runs/$runId/artifacts'
+      preLoaderRoute: typeof ApiDashboardV2RunsRunIdArtifactsRouteImport
+      parentRoute: typeof ApiDashboardV2RunsRunIdRoute
+    }
+    '/api/dashboard/v2/runs/$runId/activity': {
+      id: '/api/dashboard/v2/runs/$runId/activity'
+      path: '/activity'
+      fullPath: '/api/dashboard/v2/runs/$runId/activity'
+      preLoaderRoute: typeof ApiDashboardV2RunsRunIdActivityRouteImport
+      parentRoute: typeof ApiDashboardV2RunsRunIdRoute
+    }
+    '/api/dashboard/v2/runs/$runId/artifacts/$artifactRef': {
+      id: '/api/dashboard/v2/runs/$runId/artifacts/$artifactRef'
+      path: '/$artifactRef'
+      fullPath: '/api/dashboard/v2/runs/$runId/artifacts/$artifactRef'
+      preLoaderRoute: typeof ApiDashboardV2RunsRunIdArtifactsArtifactRefRouteImport
+      parentRoute: typeof ApiDashboardV2RunsRunIdArtifactsRoute
     }
   }
 }
 
-interface ApiDashboardV1RunsRouteChildren {
-  ApiDashboardV1RunsRunIdRoute: typeof ApiDashboardV1RunsRunIdRoute
+interface ApiDashboardV2RunsRunIdArtifactsRouteChildren {
+  ApiDashboardV2RunsRunIdArtifactsArtifactRefRoute: typeof ApiDashboardV2RunsRunIdArtifactsArtifactRefRoute
 }
 
-const ApiDashboardV1RunsRouteChildren: ApiDashboardV1RunsRouteChildren = {
-  ApiDashboardV1RunsRunIdRoute: ApiDashboardV1RunsRunIdRoute,
+const ApiDashboardV2RunsRunIdArtifactsRouteChildren: ApiDashboardV2RunsRunIdArtifactsRouteChildren =
+  {
+    ApiDashboardV2RunsRunIdArtifactsArtifactRefRoute:
+      ApiDashboardV2RunsRunIdArtifactsArtifactRefRoute,
+  }
+
+const ApiDashboardV2RunsRunIdArtifactsRouteWithChildren =
+  ApiDashboardV2RunsRunIdArtifactsRoute._addFileChildren(
+    ApiDashboardV2RunsRunIdArtifactsRouteChildren,
+  )
+
+interface ApiDashboardV2RunsRunIdRouteChildren {
+  ApiDashboardV2RunsRunIdActivityRoute: typeof ApiDashboardV2RunsRunIdActivityRoute
+  ApiDashboardV2RunsRunIdArtifactsRoute: typeof ApiDashboardV2RunsRunIdArtifactsRouteWithChildren
+  ApiDashboardV2RunsRunIdLogsRoute: typeof ApiDashboardV2RunsRunIdLogsRoute
+  ApiDashboardV2RunsRunIdTraversalRoute: typeof ApiDashboardV2RunsRunIdTraversalRoute
+  ApiDashboardV2RunsRunIdWorkflowRoute: typeof ApiDashboardV2RunsRunIdWorkflowRoute
 }
 
-const ApiDashboardV1RunsRouteWithChildren =
-  ApiDashboardV1RunsRoute._addFileChildren(ApiDashboardV1RunsRouteChildren)
+const ApiDashboardV2RunsRunIdRouteChildren: ApiDashboardV2RunsRunIdRouteChildren =
+  {
+    ApiDashboardV2RunsRunIdActivityRoute: ApiDashboardV2RunsRunIdActivityRoute,
+    ApiDashboardV2RunsRunIdArtifactsRoute:
+      ApiDashboardV2RunsRunIdArtifactsRouteWithChildren,
+    ApiDashboardV2RunsRunIdLogsRoute: ApiDashboardV2RunsRunIdLogsRoute,
+    ApiDashboardV2RunsRunIdTraversalRoute:
+      ApiDashboardV2RunsRunIdTraversalRoute,
+    ApiDashboardV2RunsRunIdWorkflowRoute: ApiDashboardV2RunsRunIdWorkflowRoute,
+  }
+
+const ApiDashboardV2RunsRunIdRouteWithChildren =
+  ApiDashboardV2RunsRunIdRoute._addFileChildren(
+    ApiDashboardV2RunsRunIdRouteChildren,
+  )
+
+interface ApiDashboardV2RunsRouteChildren {
+  ApiDashboardV2RunsRunIdRoute: typeof ApiDashboardV2RunsRunIdRouteWithChildren
+}
+
+const ApiDashboardV2RunsRouteChildren: ApiDashboardV2RunsRouteChildren = {
+  ApiDashboardV2RunsRunIdRoute: ApiDashboardV2RunsRunIdRouteWithChildren,
+}
+
+const ApiDashboardV2RunsRouteWithChildren =
+  ApiDashboardV2RunsRoute._addFileChildren(ApiDashboardV2RunsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ApiDashboardV1EventsRoute: ApiDashboardV1EventsRoute,
-  ApiDashboardV1RunsRoute: ApiDashboardV1RunsRouteWithChildren,
+  ApiDashboardV2EventsRoute: ApiDashboardV2EventsRoute,
+  ApiDashboardV2RunsRoute: ApiDashboardV2RunsRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

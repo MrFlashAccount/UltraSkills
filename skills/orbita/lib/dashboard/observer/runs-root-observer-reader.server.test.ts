@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { RunsRootObserverReader } from "./runs-root-observer-reader.server";
@@ -80,5 +80,92 @@ describe("RunsRootObserverReader", () => {
     const runsRoot = await fixture();
     await writeFile(join(runsRoot, "runs.json"), "{not json", { mode: 0o600 });
     await expect(new RunsRootObserverReader(runsRoot).listRuns()).rejects.toThrow();
+  });
+
+  test("pages workflow-step artifacts independently from occurrence scope", async () => {
+    const runsRoot = await fixture();
+    const runDir = join(runsRoot, "healthy");
+    const artifacts = [];
+    for (let index = 0; index < 101; index += 1) {
+      const producerRequestId = `implementation_request_${index}`;
+      const directory = join(
+        runDir,
+        "implementation",
+        "occurrences",
+        "1",
+        "requests",
+        producerRequestId,
+        "artifacts",
+      );
+      await mkdir(directory, { recursive: true });
+      const pathname = join(directory, `artifact-${index}.txt`);
+      await writeFile(pathname, `artifact ${index}`);
+      const accepted = await stat(pathname);
+      artifacts.push({
+        acceptedFileStamp: {
+          device: accepted.dev,
+          inode: accepted.ino,
+          size: accepted.size,
+          mtimeMs: accepted.mtimeMs,
+          ctimeMs: accepted.ctimeMs,
+        },
+        artifact: {
+          id: `artifact-${index}`,
+          content_type: "text/plain",
+          path: pathname,
+        },
+        producerOccurrence: 1,
+        producerRequestId,
+        producerStepId: "implementation",
+      });
+    }
+    await writeFile(
+      join(runDir, "baton.json"),
+      JSON.stringify({
+        cursor: "implementation",
+        state: {
+          $occurrenceProvenance: {
+            version: 2,
+            counters: { implementation: 1 },
+            current: { ownerStepId: "implementation", occurrence: 1 },
+            coverage: {
+              mode: "complete",
+              historyBytes: 0,
+              currentAvailable: true,
+              firstAvailableByStep: { implementation: 1 },
+            },
+            pendingArtifactAcceptances: {},
+          },
+          artifacts,
+          results: [],
+        },
+        status: "running",
+      }),
+      { mode: 0o600 },
+    );
+
+    const reader = new RunsRootObserverReader(runsRoot);
+    const first = await reader.getArtifactPage(
+      "healthy",
+      undefined,
+      undefined,
+      undefined,
+      "implementation",
+    );
+    expect(first?.scope).toEqual({ kind: "workflow_step", stepId: "implementation" });
+    expect(first?.items).toHaveLength(100);
+    expect(first?.complete).toBe(false);
+    expect(first?.nextCursor).toBeString();
+
+    const second = await reader.getArtifactPage(
+      "healthy",
+      undefined,
+      first?.nextCursor,
+      undefined,
+      "implementation",
+    );
+    expect(second?.items).toHaveLength(1);
+    expect(second?.complete).toBe(true);
+    expect(second?.runAggregateCount).toBe(101);
   });
 });

@@ -265,3 +265,41 @@ test('Baton refuses to fabricate aggregate producer identity for artifacts witho
     (error) => error instanceof WorkflowRuntimeError && /cannot determine producerStepId/.test(error.message) && !error.message.includes('<unknown>'),
   );
 });
+
+test('Baton keeps repeated artifact ids distinct by owner occurrence and producer request', () => {
+  const stamp = { device: 1, inode: 2, size: 3, mtimeMs: 4, ctimeMs: 5 };
+  const state = applyOutputToBatonState({
+    ...baton(),
+    state: {
+      artifacts: [{
+        producerStepId: 'worker',
+        producerOccurrence: 1,
+        producerRequestId: 'worker_request_1',
+        acceptedFileStamp: stamp,
+        artifact: { id: 'packet', content_type: 'text/plain', path: '/runs/worker/occurrences/1/packet.txt' },
+      }],
+      results: [],
+      $occurrenceProvenance: {
+        version: 2,
+        counters: { worker: 2 },
+        current: { ownerStepId: 'worker', occurrence: 2 },
+        coverage: { mode: 'complete', historyBytes: 0 },
+        pendingArtifactAcceptances: {
+          worker_request_2: {
+            ownerStepId: 'worker',
+            ownerOccurrence: 2,
+            producerRequestId: 'worker_request_2',
+            artifacts: [{ id: 'packet', acceptedFileStamp: { ...stamp, inode: 6 } }],
+          },
+        },
+      },
+    },
+  }, {
+    outcome: 'ok',
+    artifacts: [{ id: 'packet', content_type: 'text/plain', path: '/runs/worker/occurrences/2/packet.txt' }],
+  }, undefined, 'worker', { producerRequestId: 'worker_request_2' });
+
+  assert.equal(state.artifacts.length, 2);
+  assert.deepEqual(state.artifacts.map((entry) => [entry.producerOccurrence, entry.producerRequestId]), [[1, 'worker_request_1'], [2, 'worker_request_2']]);
+  assert.equal(state.$occurrenceProvenance.pendingArtifactAcceptances.worker_request_2, undefined);
+});

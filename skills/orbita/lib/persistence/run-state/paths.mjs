@@ -7,6 +7,7 @@ import { defaultRepositoryRootForWorkflow } from '../workflow-resources/resource
 import { readWorkflowDocument } from '../workflow-resources/workflow-document-reader.mjs';
 import { assertManagedRunStateFile, createManagedDirectory } from './atomic-file.mjs';
 import { runsIndexPathsForRoot } from './run-index.mjs';
+import { initialOccurrenceProvenance } from '../../runtime/occurrence-provenance.mjs';
 
 const runnerDir = dirname(fileURLToPath(import.meta.url));
 export const repositoryRoot = resolve(runnerDir, '../../../../..');
@@ -156,6 +157,16 @@ export function resolveRunPaths({ runId, workflowPath, runsRoot = workflowRunsRo
   };
 }
 
+export function artifactOutputDirForOccurrence(paths, { ownerStepId, occurrence, producerRequestId }) {
+  for (const value of [ownerStepId, producerRequestId]) {
+    if (typeof value !== 'string' || !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(value)) {
+      throw new Error(`invalid occurrence artifact identity: ${value}`);
+    }
+  }
+  if (!Number.isInteger(occurrence) || occurrence < 1) throw new Error(`invalid occurrence artifact ordinal: ${occurrence}`);
+  return join(paths.runDir, ownerStepId, 'occurrences', String(occurrence), 'requests', producerRequestId, 'artifacts');
+}
+
 async function exists(path) {
   try { await access(path, constants.F_OK); return true; } catch { return false; }
 }
@@ -240,7 +251,15 @@ export async function ensureRunDirectories(paths) {
 export function initialRunBaton(paths, { userPrompt, userPromptTarget } = {}) {
   const workflowDoc = readWorkflowDocument(paths.workflowPath, 'workflow');
   const start = workflowStart(workflowDoc, paths.workflowPath);
-  const baton = { cursor: start, status: 'running', state: { artifacts: [], results: [] } };
+  const baton = {
+    cursor: start,
+    status: 'running',
+    state: {
+      artifacts: [],
+      results: [],
+      $occurrenceProvenance: initialOccurrenceProvenance(start),
+    },
+  };
   if (typeof userPrompt === 'string') {
     baton.user_prompt = userPrompt;
     if (typeof userPromptTarget === 'string') baton.user_prompt_target = userPromptTarget;

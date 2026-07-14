@@ -21,7 +21,7 @@ class EventSourceStub extends EventTarget {
       changeId: String(changeId),
       emittedAt: "2026-07-12T12:00:00.000Z",
       reason,
-      schemaVersion: "1",
+      schemaVersion: "2",
       type: "invalidation",
     };
     this.dispatchEvent(
@@ -81,8 +81,12 @@ describe("useDashboardEvents", () => {
     });
     expect(invalidate).toHaveBeenCalledTimes(1);
     const predicate = invalidate.mock.calls[0]![0]?.predicate;
-    expect(predicate?.({ queryKey: ["dashboard", "snapshot", "v1"] } as never)).toBe(true);
-    expect(predicate?.({ queryKey: ["dashboard", "run-detail", "run-1"] } as never)).toBe(true);
-    expect(predicate?.({ queryKey: ["dashboard", "run-detail", "run-2"] } as never)).toBe(false);
+    expect(predicate?.({ queryKey: ["dashboard", "snapshot", "v2"] } as never)).toBe(true);
+    expect(predicate?.({ queryKey: ["dashboard", "2", "run-1", "workflow", null] } as never)).toBe(
+      true,
+    );
+    expect(predicate?.({ queryKey: ["dashboard", "2", "run-2", "workflow", null] } as never)).toBe(
+      false,
+    );
   });
 });

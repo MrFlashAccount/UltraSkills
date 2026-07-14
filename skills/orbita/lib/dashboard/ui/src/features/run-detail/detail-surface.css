@@ -1,0 +1,87 @@
+.sheet-overlay[data-state],
+.sheet-content[data-state] {
+  animation-duration: 180ms;
+}
+.detail-header .ui-button {
+  width: 44px;
+  min-height: 44px;
+}
+.detail-title {
+  max-width: 36ch;
+  font-size: 20px;
+}
+.detail-overview {
+  padding-top: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-overview-facts {
+  display: flex;
+  align-items: end;
+  gap: var(--space-4);
+  margin: 0;
+}
+.detail-overview-facts > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.detail-overview-facts > div + div {
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--border);
+}
+.detail-overview-facts dt {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.detail-overview-facts dd {
+  min-width: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+@media (min-width: 640px) and (max-width: 1100px) {
+  .sheet-content {
+    top: 32px;
+    right: auto;
+    left: 50%;
+    width: min(900px, calc(100vw - 48px));
+    height: calc(100dvh - 64px);
+    transform: translateX(-50%);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+  }
+  .sheet-content[data-state="open"] {
+    animation-name: detail-sheet-in-tablet;
+  }
+  .sheet-content[data-state="closed"] {
+    animation-name: detail-sheet-out-tablet;
+  }
+}
+@media (max-width: 639px) {
+  .sheet-content {
+    right: 8px;
+    bottom: 0;
+    left: 8px;
+    width: auto;
+    height: min(92dvh, 820px);
+    max-height: calc(100dvh - 8px);
+    border: 1px solid var(--border-strong);
+    border-bottom: 0;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+}
+@keyframes detail-sheet-in-tablet {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+@keyframes detail-sheet-out-tablet {
+  to {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}

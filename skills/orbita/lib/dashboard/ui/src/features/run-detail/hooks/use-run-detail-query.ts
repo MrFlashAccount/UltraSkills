@@ -1,25 +1,25 @@
+import { RunLightDetailSchema, type RunLightDetailDTO } from "@dashboard-contracts";
 import { useQuery } from "@tanstack/react-query";
-import { RunDetailSchema } from "@dashboard-contracts";
-
-async function fetchRunDetail(runId: string) {
-  const response = await fetch(`/api/dashboard/v1/runs/${encodeURIComponent(runId)}`, {
-    headers: { Accept: "application/json" },
-  });
-  if (response.status === 404) {
-    return null;
-  }
-  if (!response.ok) {
-    throw new Error("detail_unavailable");
-  }
-  return RunDetailSchema.parse(await response.json());
-}
+import { DashboardResourceError, fetchDashboardResource, resourceQueryKey } from "./query-client";
 
 export function useRunDetailQuery(runId?: string) {
-  return useQuery({
+  return useQuery<RunLightDetailDTO | null>({
     enabled: typeof window !== "undefined" && Boolean(runId),
-    placeholderData: (previousDetail) => previousDetail,
-    queryFn: () => fetchRunDetail(runId!),
-    queryKey: ["dashboard", "run-detail", runId],
+    queryFn: async ({ signal }) => {
+      try {
+        return await fetchDashboardResource<RunLightDetailDTO>(
+          `/api/dashboard/v2/runs/${encodeURIComponent(runId!)}`,
+          RunLightDetailSchema,
+          signal,
+        );
+      } catch (error) {
+        if (error instanceof DashboardResourceError && error.status === 404) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    queryKey: resourceQueryKey(runId, "light-detail"),
     retry: 1,
   });
 }

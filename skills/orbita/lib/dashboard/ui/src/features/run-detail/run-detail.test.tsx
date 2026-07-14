@@ -1,14 +1,121 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { makeDetail } from "@/test/fixtures";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppProviders } from "@/app/AppProviders";
+import { makeDetail } from "@/test/fixtures";
 import { RunDetailSurface } from "./RunDetailSurface";
 
-const renderDetail = (component: React.ReactNode) =>
-  render(<AppProviders>{component}</AppProviders>);
+const occurrenceRef = "occurrence_ref_01";
+const artifactRef = "artifact_ref_0001";
+
+const renderDetail = (component: React.ReactNode) => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AppProviders>{component}</AppProviders>
+    </QueryClientProvider>,
+  );
+};
+
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: string | URL | Request) => {
+      const url = String(typeof request === "object" && "url" in request ? request.url : request);
+      if (url.includes("/workflow")) {
+        return json({
+          complete: true,
+          edges: [{ from: "research", to: "step-1" }],
+          nodes: [
+            { kind: "worker", stepId: "research" },
+            {
+              kind: "fanout",
+              parallelism: { count: 3, maxParallel: 2, mode: "branches" },
+              stepId: "step-1",
+            },
+          ],
+          runId: "run-1",
+          schemaVersion: "2",
+          workflowFingerprint: "workflow_fingerprint_01",
+        });
+      }
+      if (url.includes("/traversal")) {
+        return json({
+          availability: "available",
+          complete: true,
+          items: [
+            {
+              occurrenceRef: "occurrence_ref_00",
+              ordinal: 1,
+              peers: [],
+              state: "completed",
+              stepId: "research",
+            },
+            { occurrenceRef, ordinal: 1, peers: [], state: "current", stepId: "step-1" },
+          ],
+          runId: "run-1",
+          schemaVersion: "2",
+        });
+      }
+      if (url.includes("/activity")) {
+        return json({
+          complete: true,
+          items: [
+            {
+              event: publicText("Fanout activation started", "activity_label"),
+              source: "route",
+              state: "completed",
+            },
+          ],
+          occurrenceRef,
+          runId: "run-1",
+          schemaVersion: "2",
+        });
+      }
+      if (url.includes("/logs")) {
+        return json({
+          complete: true,
+          entries: [
+            {
+              markdown: publicText("**Managed evidence**", "managed_markdown"),
+              source: "workflow-runner",
+            },
+          ],
+          occurrenceRef,
+          runId: "run-1",
+          schemaVersion: "2",
+        });
+      }
+      if (url.includes("/artifacts")) {
+        const scoped = url.includes("occurrenceRef=");
+        return json({
+          complete: true,
+          items: [
+            {
+              artifactRef,
+              declaredContentType: "image/png",
+              effectiveContentType: "image/png",
+              id: "workflow-trail.png",
+              mimeMismatch: false,
+              previewState: "previewable",
+              producerOccurrence: 1,
+              producerRequestId: "request-01",
+              producerStepId: scoped ? "step-1" : "research",
+            },
+          ],
+          runAggregateCount: 1,
+          runId: "run-1",
+          schemaVersion: "2",
+          scope: scoped ? { kind: "occurrence", occurrenceRef } : { kind: "run" },
+        });
+      }
+      return json({}, 404);
+    }),
+  );
+});
 
 describe("RunDetailSurface", () => {
-  it("renders bounded detail facts and restores through explicit close", async () => {
+  it("renders Direction A and scopes occurrence detail without recomposing Workflow", async () => {
     const close = vi.fn();
     renderDetail(
       <RunDetailSurface
@@ -24,41 +131,35 @@ describe("RunDetailSurface", () => {
     expect(screen.getByRole("dialog", { name: "Run 1 needs attention" })).toHaveTextContent(
       "A bounded public summary",
     );
-    expect(screen.getByRole("tab", { name: "Graph" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Activity 1" })).toBeVisible();
-    expect(screen.getByRole("tab", { name: "Artifacts 1" })).toBeVisible();
-    expect(screen.getByRole("tab", { name: "Metadata" })).toBeVisible();
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Workflow",
+      "Activity",
+      "Logs",
+      "Artifacts",
+    ]);
     expect(await screen.findByRole("region", { name: "Workflow graph" })).toBeVisible();
-    expect(screen.getByLabelText("implementation, Fanout, Current")).toBeInTheDocument();
-    expect(screen.getByText("3 branches · max 2 parallel")).toBeInTheDocument();
-    const stepDetails = screen.getByText("Step details").closest("section");
-    expect(stepDetails).not.toBeNull();
-    expect(within(stepDetails!).getByRole("heading", { name: "implementation" })).toBeVisible();
-    fireEvent.click(screen.getByLabelText("research, Worker, Completed"));
-    expect(within(stepDetails!).getByRole("heading", { name: "research" })).toBeVisible();
-    expect(
-      within(stepDetails!).getByRole("list", { name: "Artifacts produced by research" }),
-    ).toHaveTextContent("ui-design-proposal");
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Activity 1" }), { button: 0 });
-    expect(screen.getByText("Awaiting approval")).toBeVisible();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Artifacts 1" }), { button: 0 });
-    expect(screen.getByText("ui-design-proposal")).toBeVisible();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Metadata" }), { button: 0 });
-    expect(
-      within(screen.getByRole("tabpanel", { name: "Metadata" })).getByText("run-1"),
-    ).toBeVisible();
-    expect(screen.getByRole("button", { name: "Copy run id" })).toHaveClass(
-      "ui-button-ghost",
-      "ui-button-icon",
-    );
+    expect(screen.getByLabelText("step-1, Fanout, Current")).toBeInTheDocument();
+    const graphBefore = screen.getByRole("region", { name: "Workflow graph" }).innerHTML;
+    fireEvent.click(screen.getByRole("button", { name: /research · 1/i }));
+    expect(screen.getByRole("region", { name: "Workflow graph" }).innerHTML).toBe(graphBefore);
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Activity" }), { button: 0 });
+    expect(await screen.findByText("Fanout activation started")).toBeVisible();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Logs" }), { button: 0 });
+    expect(await screen.findByText("Managed evidence")).toBeVisible();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Artifacts" }), { button: 0 });
+    expect(await screen.findByText("workflow-trail.png")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Close details" }));
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it("renders unavailable workflow state without an empty graph", async () => {
+  it("keeps Workflow available when legacy occurrence evidence is unavailable", async () => {
     renderDetail(
       <RunDetailSurface
-        detail={{ ...makeDetail(), miniMap: { state: "unavailable" } }}
+        detail={{
+          ...makeDetail(),
+          currentOccurrence: null,
+          occurrenceAvailability: "legacy_unavailable",
+        }}
         isError={false}
         isLoading={false}
         onClose={() => {}}
@@ -67,8 +168,10 @@ describe("RunDetailSurface", () => {
         visibleInResults
       />,
     );
-    expect(await screen.findByText("Workflow visualization is unavailable.")).toBeVisible();
-    expect(screen.queryByRole("region", { name: "Workflow graph" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Workflow graph" })).toBeVisible();
+    expect(screen.getByText("Legacy occurrence unavailable")).toBeVisible();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Activity" }), { button: 0 });
+    expect(screen.getByText(/legacy run predates occurrence provenance/i)).toBeVisible();
   });
 
   it("preserves a missing selection instead of selecting a neighbor", () => {
@@ -85,3 +188,14 @@ describe("RunDetailSurface", () => {
     expect(screen.getByText("This run is no longer in the current results")).toBeVisible();
   });
 });
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+    status,
+  });
+}
+
+function publicText(value: string, sourceClass: "activity_label" | "managed_markdown") {
+  return { policyVersion: "2", sourceClass, value };
+}

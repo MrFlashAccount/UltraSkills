@@ -3,11 +3,17 @@ import { watch, type FSWatcher } from "node:fs";
 import {
   InvalidationEventSchema,
   SnapshotEnvelopeSchema,
+  type ActivityPageDTO,
+  type ArtifactPageDTO,
   type InvalidationEvent,
+  type LogsPageDTO,
   type ObserverFreshnessDTO,
-  type RunDetailDTO,
+  type RunLightDetailDTO,
   type SnapshotEnvelope,
+  type TraversalPageDTO,
+  type WorkflowPageDTO,
 } from "../contracts/browser";
+import type { VerifiedArtifactHandle } from "./artifact-content-reader.server";
 
 export class ObserverUnavailableError extends Error {
   constructor() {
@@ -16,7 +22,41 @@ export class ObserverUnavailableError extends Error {
 }
 
 type Reader = {
-  getRun(runId: string, signal?: AbortSignal): Promise<RunDetailDTO | undefined>;
+  getActivityPage?(
+    runId: string,
+    occurrenceRef: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<ActivityPageDTO | undefined>;
+  getArtifactHandle?(
+    runId: string,
+    artifactRef: string,
+    signal?: AbortSignal,
+  ): Promise<VerifiedArtifactHandle | undefined>;
+  getArtifactPage?(
+    runId: string,
+    occurrenceRef?: string,
+    cursor?: string,
+    signal?: AbortSignal,
+    workflowStepId?: string,
+  ): Promise<ArtifactPageDTO | undefined>;
+  getLogsPage?(
+    runId: string,
+    occurrenceRef: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<LogsPageDTO | undefined>;
+  getRunLight?(runId: string, signal?: AbortSignal): Promise<RunLightDetailDTO | undefined>;
+  getTraversalPage?(
+    runId: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<TraversalPageDTO | undefined>;
+  getWorkflowPage?(
+    runId: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<WorkflowPageDTO | undefined>;
   listRuns(signal?: AbortSignal): Promise<SnapshotEnvelope["runs"]>;
 };
 type Subscriber = (event: InvalidationEvent) => void;
@@ -121,7 +161,7 @@ export class DashboardReadModel {
       changeId: String(this.observerRevision),
       emittedAt: this.now().toISOString(),
       reason,
-      schemaVersion: "1",
+      schemaVersion: "2",
       type: "invalidation",
     });
     for (const subscriber of this.subscribers) {
@@ -211,9 +251,70 @@ export class DashboardReadModel {
     return this.snapshot;
   }
 
-  async getDetail(runId: string): Promise<RunDetailDTO | undefined> {
+  async getLightDetail(
+    runId: string,
+    signal?: AbortSignal,
+  ): Promise<RunLightDetailDTO | undefined> {
     await this.ensureSnapshot();
-    return this.reader.getRun(runId);
+    return this.reader.getRunLight?.(runId, signal);
+  }
+
+  async getWorkflowPage(
+    runId: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<WorkflowPageDTO | undefined> {
+    await this.ensureSnapshot();
+    return this.reader.getWorkflowPage?.(runId, cursor, signal);
+  }
+
+  async getTraversalPage(
+    runId: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<TraversalPageDTO | undefined> {
+    await this.ensureSnapshot();
+    return this.reader.getTraversalPage?.(runId, cursor, signal);
+  }
+
+  async getActivityPage(
+    runId: string,
+    occurrenceRef: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<ActivityPageDTO | undefined> {
+    await this.ensureSnapshot();
+    return this.reader.getActivityPage?.(runId, occurrenceRef, cursor, signal);
+  }
+
+  async getLogsPage(
+    runId: string,
+    occurrenceRef: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<LogsPageDTO | undefined> {
+    await this.ensureSnapshot();
+    return this.reader.getLogsPage?.(runId, occurrenceRef, cursor, signal);
+  }
+
+  async getArtifactPage(
+    runId: string,
+    occurrenceRef?: string,
+    cursor?: string,
+    signal?: AbortSignal,
+    workflowStepId?: string,
+  ): Promise<ArtifactPageDTO | undefined> {
+    await this.ensureSnapshot();
+    return this.reader.getArtifactPage?.(runId, occurrenceRef, cursor, signal, workflowStepId);
+  }
+
+  async getArtifactHandle(
+    runId: string,
+    artifactRef: string,
+    signal?: AbortSignal,
+  ): Promise<VerifiedArtifactHandle | undefined> {
+    await this.ensureSnapshot();
+    return this.reader.getArtifactHandle?.(runId, artifactRef, signal);
   }
 
   refresh(): Promise<void> {
@@ -266,7 +367,7 @@ export class DashboardReadModel {
           freshness,
           generatedAt: attemptedAt,
           runs,
-          schemaVersion: "1",
+          schemaVersion: "2",
           snapshotVersion: String(this.snapshotVersion || 1),
         }),
       );

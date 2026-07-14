@@ -1,9 +1,10 @@
 # Orbita dashboard
 
 The Orbita dashboard is a local, read-only TanStack Start application for
-scanning durable workflow runs as an attention-first five-lane board. Durable
-run files remain authoritative; the dashboard never claims a lease or mutates a
-run.
+scanning durable workflow runs as an attention-first board and progressively
+inspecting one run through the version-2 occurrence-aware surface. Durable run
+files remain authoritative; the dashboard never claims a lease, mutates a run,
+or persists a dashboard cache.
 
 Architecture and placement rules live in `../../ARCHITECTURE.md` and
 `CONTEXT.md`. Visual and interaction rules live in `../../DESIGN.md`.
@@ -25,19 +26,17 @@ Run these from the repository root:
 - `bun run dashboard:typecheck` — check the dashboard TypeScript project.
 - `bun run dashboard:test` — run dashboard contract/component tests.
 - `bun run dashboard:test:browser` — run Playwright browser scenarios.
+- `bun run depcruise:check` — enforce contracts/projection/observer/server/
+  browser dependency direction.
 
-The TypeScript project extends `@sergeigarin/hygene/tsconfig.json` on stable
-TypeScript 7. The Vite 8 build runs React Compiler through the official
-`reactCompilerPreset`; `routeTree.gen.ts` remains owned by TanStack Router and
-is excluded from handwritten-source format/lint gates.
-
-`bun run depcruise:check` is the repository boundary gate for dashboard
-contracts, projection, observer, server composition, and browser imports.
+The TypeScript project extends `@sergeigarin/hygene/tsconfig.json`. TanStack
+Router owns generated `routeTree.gen.ts`; handwritten-source format/lint gates
+do not treat it as a manually edited file.
 
 ## Process configuration
 
-Configuration is read from the server process. Browser requests and URL search
-cannot choose the runs root or any filesystem path.
+Configuration is read from the server process. Browser requests, refs, cursors,
+and URL search cannot choose the runs root or any filesystem path.
 
 | Variable                        | Default                              | Accepted value                                                            |
 | ------------------------------- | ------------------------------------ | ------------------------------------------------------------------------- |
@@ -46,80 +45,133 @@ cannot choose the runs root or any filesystem path.
 | `ORBITA_DASHBOARD_PORT`         | `3000`                               | Integer `0..65535`                                                        |
 | `ORBITA_DASHBOARD_POLL_MS`      | `2000`                               | Integer `250..300000`                                                     |
 | `ORBITA_DASHBOARD_HEARTBEAT_MS` | `15000`                              | Integer `1000..120000`                                                    |
-| `ORBITA_DASHBOARD_STALE_MS`     | `10000`                              | Integer `1000..600000`; caps the full reconciliation interval             |
+| `ORBITA_DASHBOARD_STALE_MS`     | `10000`                              | Integer `1000..600000`; caps full reconciliation interval                 |
 | `ORBITA_DASHBOARD_COALESCE_MS`  | `100`                                | Integer `10..1000`; coalesces filesystem-watch bursts                     |
 
-Invalid configuration fails server composition instead of accepting a browser-
-controlled or ambiguous fallback.
+Invalid configuration fails server composition instead of accepting a
+browser-controlled or ambiguous fallback.
 
 ## HTTP contract
 
-The supported same-origin surface contains exactly three GET routes:
+The supported application exposes the root plus exactly nine version-2 GET
+resources:
 
-- `/api/dashboard/v1/runs` — complete validated summary snapshot with
-  authoritative observer freshness and conditional ETag support.
-- `/api/dashboard/v1/runs/:runId` — lazy validated details for one bounded run
-  id or a fixed public error. Details include a bounded read-only workflow
-  mini-map when workflow step metadata is available, otherwise an explicit
-  unavailable state.
-- `/api/dashboard/v1/events` — data-free invalidation SSE and heartbeat
-  comments.
+- `/api/dashboard/v2/runs` — summary snapshot and authoritative freshness.
+- `/api/dashboard/v2/events` — data-free invalidation SSE and heartbeats.
+- `/api/dashboard/v2/runs/:runId` — bounded light detail.
+- `/api/dashboard/v2/runs/:runId/workflow` — paged complete workflow definition.
+- `/api/dashboard/v2/runs/:runId/traversal` — ordered owner occurrences and
+  activation peers.
+- `/api/dashboard/v2/runs/:runId/activity` — occurrence-scoped Activity.
+- `/api/dashboard/v2/runs/:runId/logs` — occurrence-scoped managed Markdown.
+- `/api/dashboard/v2/runs/:runId/artifacts` — occurrence-scoped descriptors.
+- `/api/dashboard/v2/runs/:runId/artifacts/:artifactRef?mode=preview|download`
+  — verified content from a canonical open handle.
 
-SSE never carries run state. It only announces `snapshot_changed`,
-`observer_stale`, or `observer_recovered`; the browser reconciles through the
-snapshot route. A connected event stream alone does not mean the snapshot is
-fresh.
+There are no version-1 routes, aliases, redirects, unversioned dashboard APIs,
+custom static server/assets, supported `orbita-dashboard serve` CLI, or public
+`startDashboardServer` API.
 
-Frames carry the reason as the SSE event name and the observer revision as the
-event id; they contain no JSON data payload. Snapshot-change publication and
-browser refetch signals are coalesced, while stale/recovered events update the
-local health hint immediately. The browser ignores invalid/non-increasing ids,
-refetches after reconnect, and performs a normal snapshot GET every 15 seconds.
-The snapshot route supports `If-None-Match`, although the current browser fetch
-adapter does not send that header.
+Board snapshot reads consume zero `history.md` body bytes, workflow bodies, and
+artifact bytes. Workflow, traversal, Activity, Logs, artifacts, and content are
+separate bounded and cancellable reads. Refs and cursors are process-scoped
+opaque HMAC tokens whose canonical state stays in one bounded server registry;
+restart or eviction makes them stale. They never contain or grant path
+authority.
 
-There are no compatibility aliases or redirects for `/api/runs`, `/api/events`,
-unversioned `/api/dashboard/*`, `/dashboard/client.js`,
-`/dashboard/render.mjs`, or `/dashboard/style.css`. There is no supported
-`orbita-dashboard serve` CLI or public `startDashboardServer` API.
+Approved bounds:
 
-## Trust and recovery model
+| Resource                                                | Bound                                          |
+| ------------------------------------------------------- | ---------------------------------------------- |
+| Snapshot                                                | 1.5 MiB                                        |
+| Light detail, traversal, Activity, Logs, artifact pages | 64 KiB                                         |
+| Workflow page                                           | 256 KiB / 200 steps                            |
+| Traversal / Activity / artifacts                        | 100 occurrences / 200 events / 100 descriptors |
+| Text / active HTML or SVG                               | 1 MiB / 2 MiB                                  |
+| Raster or PDF / audio or video                          | 32 MiB / 64 MiB                                |
+| MIME probe                                              | 8 KiB                                          |
 
+History pages contain whole managed entries under byte and entry-count limits,
+remain stable across append, and report `complete`, `truncated`, and
+`nextCursor` separately. Workflow cursors resolve to a content fingerprint;
+history cursors resolve to resource/occurrence scope and one immutable file
+snapshot; artifact refs resolve to canonical aggregate identity. Stale,
+cross-run, cross-route, cross-occurrence, evicted/restarted, replaced, shrunk,
+malformed, or forged locators return fixed public failures without disclosing
+their server-side state.
+
+Traversal reads at most 100 source entries, Activity at most 11 source entries
+before its 200-event DTO ceiling, and Logs at most 200 source entries. Workflow
+loading rejects a source above 8 MiB and fingerprints/parses one verified
+no-follow file snapshot.
+
+## Occurrence and artifact truth
+
+An occurrence is one durable workflow cursor-owner visit identified by
+`(stepId, ordinal)`. Self/backward loops produce distinct ordinals. Fanout and
+shard work remains nested under the owning activation and is not promoted to a
+workflow occurrence. When a legacy run is seeded, its inherited current cursor
+remains unavailable until the next successful forward route opens a new visit.
+Ambiguous panels show `legacy_unavailable`; the dashboard does not infer an
+ordinal from old history or label the seed as occurrence `1`.
+
+Workflow is run-scoped and independent of occurrence selection. Selecting an
+occurrence changes only Activity, Logs, and Artifacts. Aggregate artifact
+identity includes owner step, owner occurrence, producer request, and artifact
+id, so repeated owners cannot overwrite or merge one another. Worker-authored
+artifact metadata remains `{id, content_type, path, summary?}`. Legacy aggregate
+wrappers remain descriptor-visible with `legacy_unavailable`, but receive no
+artifact ref or content capability when provenance/stamp truth is absent.
+
+Paged panels expose continuation/end explicitly. A stale cursor preserves
+already loaded evidence and restarts only that resource at page 1. Query
+placeholder data is exact-key scoped and never carries detail, selection, or
+preview state from one run/occurrence into another.
+
+## Trust, content, and recovery
+
+- Private JSON/data routes require the configured Host authority, permit only
+  the request URL's same origin when Origin is present, and require exact
+  same-origin Fetch Metadata. They reject `Origin: null`, cross-site,
+  navigation/image/script requests, duplicate parameters, and unknown query
+  fields.
+- Only an eligible canonical preview request accepts same-origin iframe
+  navigation. Active HTML/SVG renders in an opaque-origin nested frame with CSP
+  sandbox and without same-origin, top-navigation, popup, or download
+  capability. It may still execute scripts and contact HTTP(S) network
+  resources, which the trusted parent must disclose.
+- Artifact files are reopened and verified as contained regular files against
+  the accepted device/inode/size/mtime/ctime stamp. Descriptor and transport use
+  one MIME/size policy. Mismatch is download-only; mismatch, unsupported,
+  oversized, and legacy content cannot enter preview even through a direct URL.
+- Content uses exact MIME, `nosniff`, safe disposition, `no-store`,
+  no-referrer, ETag/file stamp, and fixed errors. PDF/audio/video/download allow
+  one valid Range; malformed, multiple, or unsatisfiable ranges return 416.
 - Browser-visible prose is source-classified, bounded, and disclosure-filtered.
-  Raw Baton/history, local paths, prompts, transcripts, tokens/hashes, commands,
-  bindings, and exception messages are not public DTO fields.
-- One corrupt run becomes one Degraded card; healthy runs remain usable.
-- A failed initial snapshot is an explicit error, never an empty board.
-- A detail failure stays inside the detail surface.
-- A refresh failure after a good snapshot keeps the cards but marks the board
-  stale. Repeated failures stay stale; only a successful refresh restores
-  fresh/live.
-- Watch notifications and SSE are lossy. Periodic reconciliation and conditional
-  route support remain the repair path.
+  Logs are newly constructed from allowlisted structured v2 facts, never raw
+  managed-history or `debug-summary.md` bodies. Raw Baton/history, paths,
+  prompts, transcripts, credentials/tokens/hashes, commands, bindings, private
+  host/worker metadata, and raw errors are not DTOs.
+- One corrupt run becomes one Degraded card. Initial failure is explicit; a
+  later refresh failure retains the last-good board until successful recovery.
+- Watch notifications and SSE are lossy. Periodic validated GET reconciliation
+  remains the repair path; a connected event stream alone does not mean Live.
 
-Exposure policy version `1` NFKC-normalizes prose, replaces control characters,
-collapses whitespace, applies source-specific 120/160/240-code-point ceilings,
-and omits values matching forbidden path, secret, command, private-instruction,
-prompt, or transcript shapes. `PublicDisplayText` has a non-empty/240 maximum
-schema. Aggregate serialized response caps are 1.5 MiB for snapshots and 64 KiB
-for details; there is no separate per-field UTF-8 byte ceiling.
+The trusted React parent owns preview controls and never injects active artifact
+bytes into its DOM. Markdown rendering is local to run detail, uses pinned
+`react-markdown` plus `remark-gfm`, disables raw HTML, escapes code, and marks
+external links with disclosure and `rel="noreferrer"`.
 
-`ORBITA_DASHBOARD_STALE_MS` caps the server refresh cadence through
-`min(POLL_MS, STALE_MS)`. Live UI state requires authoritative freshness,
-connected transport, and no newer stale event hint; the browser does not apply
-an elapsed-age stale calculation.
+The dashboard remains inspection-only: no retry, continue, repair, move, bind,
+write-output, drag/drop, lease, or other control action belongs in UI or routes.
 
-The server composition is created lazily once per process. It starts one
-periodic refresh and an optional watcher, closes them idempotently on
-`beforeExit`, and clears per-client SSE heartbeat/subscription resources on
-abort or cancellation. This is the implemented lifecycle boundary; no broader
-signal-hook behavior is implied.
+## Rollback boundary
 
-The runs root comes only from process configuration. Snapshot revision is the
-authority for board/freshness data. URL search `run` is the authority for detail
-selection: it is used as the React Query key, encoded into the request, decoded
-and validated by the route, and looked up exactly. Missing or filtered
-selection is preserved instead of selecting a neighboring run.
-
-The dashboard is inspection-only: no retry, continue, repair, move, bind,
-write-output, drag/drop, or lease/control action belongs in its UI or routes.
+Dashboard rollback is atomic at the React/Start v2 surface: do not leave mixed
+v1/v2 routes, aliases, flags, or partial panels. Durable run files are never
+rewritten or deleted. If any v2 provenance/history/artifact write may have
+occurred, keep additive Baton parsing, provenance validation, and stamped
+aggregate compatibility while rolling back the observer/UI. A strict pre-v2
+runtime/schema rollback is allowed only with positive evidence that no v2 write
+occurred. Browser refs/cursors are process-local and correctly become stale on
+restart or rollback.

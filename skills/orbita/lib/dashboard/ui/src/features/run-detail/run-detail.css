@@ -1,0 +1,156 @@
+.occurrence-selector {
+  min-width: 0;
+  flex: 0 0 auto;
+  display: grid;
+  gap: var(--space-2);
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.occurrence-scroll {
+  min-width: 0;
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+.occurrence-selector ul {
+  min-width: max-content;
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.occurrence-selector li {
+  display: flex;
+}
+.occurrence-item,
+.occurrence-earlier {
+  min-height: 44px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.occurrence-item {
+  min-width: 150px;
+  max-width: 210px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.occurrence-item:hover {
+  background: var(--surface-selected);
+  border-color: var(--border-strong);
+}
+.occurrence-item[data-selected="true"] {
+  color: var(--text-primary);
+  border-color: var(--focus);
+  box-shadow: inset 3px 0 0 var(--focus);
+}
+.occurrence-item[data-state="completed"] > svg:first-child {
+  color: var(--done);
+}
+.occurrence-item[data-state="failed"] > svg:first-child {
+  color: var(--needs-help);
+}
+.occurrence-item[data-state="current"] > svg:first-child {
+  color: var(--running);
+}
+.occurrence-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+.occurrence-copy strong,
+.occurrence-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.occurrence-copy strong {
+  color: inherit;
+  font-size: 12px;
+}
+.occurrence-copy span {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+.occurrence-edge {
+  color: var(--text-muted);
+}
+.detail-tabs-list,
+.ui-tabs-trigger {
+  min-height: 44px;
+}
+.detail-tabs-list {
+  gap: 26px;
+}
+.ui-tabs-trigger {
+  white-space: nowrap;
+}
+.occurrence-panel {
+  min-height: 100%;
+  padding: 18px;
+}
+.occurrence-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.occurrence-panel-heading h3,
+.occurrence-panel-heading p {
+  margin: 0;
+}
+.occurrence-panel-heading h3 {
+  color: var(--text-primary);
+  font-size: 15px;
+}
+.occurrence-panel-heading p {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.panel-truncated {
+  color: var(--waiting);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+@media (max-width: 639px) {
+  .detail-title {
+    font-size: 18px;
+  }
+  .detail-overview,
+  .occurrence-panel {
+    padding-inline: 14px;
+  }
+  .detail-overview-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+  .detail-overview-facts > div + div {
+    padding-left: var(--space-2);
+  }
+  .occurrence-selector {
+    padding-inline: 14px;
+  }
+  .occurrence-panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-overlay[data-state],
+  .sheet-content[data-state],
+  .artifact-preview-dialog[data-state] {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
