@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
-import { resolveRunPaths } from '../../persistence/run-state/paths.mjs';
+import {
+  artifactOutputDirForOccurrence,
+  resolveRunPaths,
+} from '../../persistence/run-state/paths.mjs';
 import { registerWorkflowRun } from '../helpers/orbita-production-api.mjs';
 import { runWorkflowRunnerApi } from '../helpers/workflow-runner-api-client.mjs';
 
@@ -89,7 +92,19 @@ function parseOutputRef(ref) {
 }
 
 async function writeOutput(run, workflow, stepId, filePath, { action, label = 'write output' } = {}) {
-  const outputJson = readFileSync(filePath, 'utf8').replaceAll('__RUN_DIR__', runPath(run));
+  const output = JSON.parse(readFileSync(filePath, 'utf8').replaceAll('__RUN_DIR__', runPath(run)));
+  const persistedRequests = JSON.parse(readFileSync(path.join(runPath(run), '.workflow-runner', 'current-requests.json'), 'utf8'));
+  const currentRequest = (persistedRequests.requests ?? persistedRequests).find((request) => (request.stepId ?? request.id) === stepId);
+  if (Array.isArray(output.artifacts) && output.artifacts.length > 0) {
+    const artifactDir = artifactDirForCurrentRequest(run, currentRequest);
+    mkdirSync(artifactDir, { recursive: true });
+    output.artifacts = output.artifacts.map((artifact) => {
+      const artifactPath = path.join(artifactDir, path.basename(artifact.path));
+      if (!existsSync(artifactPath)) writeFileSync(artifactPath, `fixture artifact ${artifact.id}\n`);
+      return { ...artifact, path: artifactPath };
+    });
+  }
+  const outputJson = JSON.stringify(output);
   const args = ['write-output', '--run-id', runId(run), '--workflow', workflow, '--step-id', stepId];
   if (action === 'run_worker') {
     const debugSummaryPath = path.join(runPath(run), stepId, 'debug-summary.md');
@@ -136,8 +151,18 @@ function readHistory(run) {
   return readFileSync(path.join(runPath(run), 'history.md'), 'utf8');
 }
 
+function artifactDirForCurrentRequest(run, request) {
+  const current = readBaton(run).state.$occurrenceProvenance.current;
+  return artifactOutputDirForOccurrence(resolveRunPaths({ runId: runId(run), runsRoot }), {
+    ownerStepId: current.ownerStepId,
+    occurrence: current.occurrence,
+    producerRequestId: request.id,
+  });
+}
+
 function writeRunArtifact(run, artifactPath, content) {
-  const fullPath = path.join(runPath(run), artifactPath);
+  const producerRequestId = artifactPath.split('/')[0];
+  const fullPath = path.join(artifactDirForCurrentRequest(run, { id: producerRequestId }), path.basename(artifactPath));
   mkdirSync(path.dirname(fullPath), { recursive: true });
   writeFileSync(fullPath, content);
 }
@@ -161,8 +186,8 @@ test('E2E fixture: long happy path loops through review revision and preserves l
   const approvalInstructions = await instructions(run, 'approval_gate');
   assert.doesNotMatch(approvalInstructions, /## Required reads/);
   assert.match(approvalInstructions, /## Approval attachments/);
-  assert.match(approvalInstructions, /\[plan\]\(<.*plan\/artifacts\/plan\.md>\) — text\/markdown/);
-  assert.match(approvalInstructions, /plan\/artifacts\/plan\.md/);
+  assert.match(approvalInstructions, /\[plan\]\(<.*plan\/occurrences\/1\/requests\/plan\/artifacts\/plan\.md>\) — text\/markdown/);
+  assert.match(approvalInstructions, /plan\/occurrences\/1\/requests\/plan\/artifacts\/plan\.md/);
   assert.doesNotMatch(approvalInstructions, /Plan artifact content for approval\./);
 
   const approved = await continueWith(run, workflow, output('approval-approved.json'), 'continue approval');
@@ -208,7 +233,7 @@ test('E2E fixture: DevHarness-style artifact path is required-read context for d
   const reviewInstructions = await instructions(run, 'review');
   assert.match(reviewInstructions, /## Required reads/);
   assert.match(reviewInstructions, /Prompt input artifact 'packet' from 'implement' \(text\/markdown\):/);
-  assert.match(reviewInstructions, /implement\/artifacts\/packet\.md/);
+  assert.match(reviewInstructions, /implement\/occurrences\/1\/requests\/implement\/artifacts\/packet\.md/);
   assert.doesNotMatch(reviewInstructions, /Concrete implementation artifact content for reviewer\./);
 });
 
