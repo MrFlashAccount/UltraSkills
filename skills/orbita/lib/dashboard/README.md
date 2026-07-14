@@ -25,11 +25,16 @@ Run these from the repository root:
   `skills/orbita/lib/dashboard/ui/.output/server/index.mjs`.
 - `bun run dashboard:typecheck` — check the dashboard TypeScript project.
 - `bun run dashboard:test` — run dashboard contract/component tests.
+- `bun run dashboard:test:runtime` — run dashboard server/runtime tests natively
+  under Bun.
 - `bun run dashboard:test:browser` — run Playwright browser scenarios.
 - `bun run depcruise:check` — enforce contracts/projection/observer/server/
   browser dependency direction.
 
-The dashboard application runtime is Bun-only. Development, build, and production start commands must execute under Bun; workflow TOML parsing intentionally relies on `Bun.TOML`.
+The dashboard application runtime is Bun-only. Development, build, production
+start, and runtime tests execute under Bun; workflow TOML parsing intentionally
+relies on `Bun.TOML`. Vitest remains the Node-based UI component-test tool and
+does not stand in for Bun runtime coverage.
 
 The TypeScript project extends `@sergeigarin/hygene/tsconfig.json`. TanStack
 Router owns generated `routeTree.gen.ts`; handwritten-source format/lint gates

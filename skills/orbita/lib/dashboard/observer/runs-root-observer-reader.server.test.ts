@@ -66,6 +66,17 @@ async function fixture() {
 }
 
 describe("RunsRootObserverReader", () => {
+  test("reads workflow TOML under the Bun runtime", async () => {
+    expect(Bun.TOML.parse).toBeFunction();
+    const runsRoot = await fixture();
+
+    const page = await new RunsRootObserverReader(runsRoot).getWorkflowPage("healthy");
+
+    expect(page?.complete).toBe(true);
+    expect(page?.nodes).toHaveLength(15);
+    expect(page?.nodes.some((node) => node.stepId === "done" && node.kind === "done")).toBe(true);
+  });
+
   test("isolates corrupt runs and rebuilds exclusively from durable state", async () => {
     const runsRoot = await fixture();
     const first = await new RunsRootObserverReader(runsRoot).listRuns();

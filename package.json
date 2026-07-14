@@ -7,7 +7,7 @@
     "test": "AGENT=1 make -C skills/orbita test",
     "test:workflow-e2e": "AGENT=1 make -C skills/orbita test-workflow-e2e",
     "workflow:validate": "bun skills/orbita/lib/entrypoints/cli/validate-workflow.mjs workflows",
-    "validate": "bun run dashboard:format:check && bun run dashboard:lint && bun run dashboard:typecheck && bun run depcruise:check && bun run role-evidence:check && bun run test && bun run workflow:validate && bun run agents:check && bun run schema-validation:check-vendor-ajv",
+    "validate": "bun run dashboard:format:check && bun run dashboard:lint && bun run dashboard:typecheck && bun run dashboard:test && bun run dashboard:test:runtime && bun run depcruise:check && bun run role-evidence:check && bun run test && bun run workflow:validate && bun run agents:check && bun run schema-validation:check-vendor-ajv",
     "prepare": "git config core.hooksPath .githooks || true",
     "schema-validation:bundle-vendor-ajv": "bun scripts/bundle-schema-validation-vendor-ajv.mjs",
     "schema-validation:check-vendor-ajv": "bun run schema-validation:bundle-vendor-ajv && git diff --exit-code -- shared/scripts/schema-validation/vendor/ajv.mjs && test -z \"$(git status --porcelain -- shared/scripts/schema-validation/vendor/ajv.mjs)\"",
@@ -24,6 +24,7 @@
     "dashboard:start": "HOST=${ORBITA_DASHBOARD_HOST:-127.0.0.1} PORT=${ORBITA_DASHBOARD_PORT:-3000} bun skills/orbita/lib/dashboard/ui/.output/server/index.mjs",
     "dashboard:typecheck": "tsc --noEmit -p skills/orbita/lib/dashboard/ui/tsconfig.json",
     "dashboard:test": "vitest run --config skills/orbita/lib/dashboard/ui/vite.config.ts",
+    "dashboard:test:runtime": "bun test --timeout=30000 --parallel skills/orbita/lib/dashboard/contracts skills/orbita/lib/dashboard/observer skills/orbita/lib/dashboard/projection skills/orbita/lib/dashboard/ui/src/server skills/orbita/lib/dashboard/dashboard-v2-inventory.test.ts",
     "dashboard:test:browser": "playwright test --config skills/orbita/lib/dashboard/ui/playwright.config.ts"
   },
   "dependencies": {
