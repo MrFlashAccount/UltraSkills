@@ -9,11 +9,14 @@ test("Direction A preserves Workflow and scopes selected-step evidence", async (
 }, testInfo) => {
   await mockDashboard(page);
   await page.goto("/");
+  const boardRegion = page.locator(".board-region");
+  const boardBefore = await boardRegion.boundingBox();
   const origin = page.locator(".run-card").first();
   await origin.click();
   const dialog = page.getByRole("complementary", { name: "Run detail inspection" });
   await expect(dialog).toBeVisible();
   await expectOverlayPlacement(dialog, testInfo.project.name);
+  await expectUnshifted(boardRegion, boardBefore);
   const tabs = dialog.getByRole("tab");
   await expect(tabs).toHaveCount(4);
   expect(await tabs.allTextContents()).toEqual(["Workflow", "Activity", "Logs", "Artifacts"]);
@@ -111,8 +114,10 @@ test("tablet containment and reduced motion match the approved contract", async 
   const dialog = page.getByRole("complementary", { name: "Run detail inspection" });
   const bounds = await dialog.boundingBox();
   expect(bounds!.width).toBeLessThanOrEqual(575);
-  expect(bounds!.height).toBeLessThanOrEqual(708);
-  await expect(dialog).toHaveCSS("animation-name", "none");
+  expect(bounds!.y).toBe(0);
+  expect(bounds!.height).toBe(768);
+  await expect(dialog).toHaveCSS("position", "fixed");
+  await expect(dialog).toHaveCSS("animation-duration", "0s");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -302,7 +307,19 @@ async function expectContained(inner: Locator, outer: Locator) {
   );
 }
 
+async function expectUnshifted(
+  region: Locator,
+  before: Awaited<ReturnType<Locator["boundingBox"]>>,
+) {
+  const after = await region.boundingBox();
+  expect(before).not.toBeNull();
+  expect(after).not.toBeNull();
+  expect(after!.x).toBeCloseTo(before!.x, 0);
+  expect(after!.width).toBeCloseTo(before!.width, 0);
+}
+
 async function expectOverlayPlacement(dialog: Locator, project: string) {
+  await expect(dialog).toHaveCSS("position", "fixed");
   const bounds = await dialog.boundingBox();
   const viewport = dialog.page().viewportSize();
   expect(bounds).not.toBeNull();
