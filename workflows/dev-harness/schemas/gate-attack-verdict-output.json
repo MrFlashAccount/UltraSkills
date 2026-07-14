@@ -3,7 +3,8 @@
   "description": "Producer output contract for DevHarness attack gates that approve, request revision, or block an upstream draft.",
   "type": "object",
   "required": [
-    "outcome"
+    "outcome",
+    "verdict"
   ],
   "properties": {
     "outcome": {
@@ -73,41 +74,5 @@
   },
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/gate-attack-verdict-output",
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "approved"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "verdict"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "needs_revision"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "verdict"
-        ]
-      }
-    }
-  ]
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/gate-attack-verdict-output"
 }

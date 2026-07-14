@@ -57,7 +57,7 @@ function templateRefs(workflow) {
 function schemaRefs(workflow) {
   const refs = new Set();
   for (const step of Object.values(workflow?.steps ?? {})) {
-    if (step?.output?.schema) refs.add(step.output.schema);
+    if (step?.kind !== 'approval' && step?.output?.schema) refs.add(step.output.schema);
     if (step?.worker?.output?.schema) refs.add(step.worker.output.schema);
     for (const branch of Object.values(step?.branches ?? {})) {
       if (branch?.output?.schema) refs.add(branch.output.schema);
@@ -91,8 +91,7 @@ function resolveSafeRunArtifactPath({ runDir, artifactPath }) {
   return candidate;
 }
 
-export function readRunArtifactContent({ runDir, artifactPath }) {
-  if (!runDir) throw new WorkflowRuntimeError('workflow prompt render failed: run directory is required to read artifact content');
+function resolveExistingRunArtifactPath({ runDir, artifactPath }) {
   const root = path.resolve(runDir);
   const candidate = resolveSafeRunArtifactPath({ runDir, artifactPath });
   if (!existsSync(candidate)) {
@@ -103,6 +102,12 @@ export function readRunArtifactContent({ runDir, artifactPath }) {
   if (!isInside(realCandidate, realRoot)) {
     throw new WorkflowRuntimeError(`workflow prompt render failed: artifact path cannot escape run directory via symlink: ${artifactPath}`);
   }
+  return realCandidate;
+}
+
+export function readRunArtifactContent({ runDir, artifactPath }) {
+  if (!runDir) throw new WorkflowRuntimeError('workflow prompt render failed: run directory is required to read artifact content');
+  const realCandidate = resolveExistingRunArtifactPath({ runDir, artifactPath });
   return readFileSync(realCandidate, 'utf8');
 }
 
@@ -114,6 +119,11 @@ function artifactReaderForRunDir(runDir) {
 function artifactPathResolverForRunDir(runDir) {
   if (!runDir) return undefined;
   return (artifactPath) => resolveSafeRunArtifactPath({ runDir, artifactPath });
+}
+
+function existingArtifactPathResolverForRunDir(runDir) {
+  if (!runDir) return undefined;
+  return (artifactPath) => resolveExistingRunArtifactPath({ runDir, artifactPath });
 }
 
 function isDeferredMissingResource(error) {
@@ -183,6 +193,7 @@ export function loadWorkflowResources({ workflow, workflowPath, repositoryRoot =
     runDir: runDir ? path.resolve(runDir) : undefined,
     readRunArtifact: artifactReaderForRunDir(runDir),
     resolveRunArtifactPath: artifactPathResolverForRunDir(runDir),
+    resolveExistingRunArtifactPath: existingArtifactPathResolverForRunDir(runDir),
   };
 }
 
@@ -191,6 +202,7 @@ function runScopedResources(runDir) {
     runDir: runDir ? path.resolve(runDir) : undefined,
     readRunArtifact: artifactReaderForRunDir(runDir),
     resolveRunArtifactPath: artifactPathResolverForRunDir(runDir),
+    resolveExistingRunArtifactPath: existingArtifactPathResolverForRunDir(runDir),
   };
 }
 

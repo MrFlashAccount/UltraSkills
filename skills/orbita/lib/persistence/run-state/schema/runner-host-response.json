@@ -106,27 +106,6 @@
             "type": "string",
             "minLength": 1
           },
-          "outputSchema": {
-            "type": "string",
-            "minLength": 1
-          },
-          "resolvedOutputSchema": {
-            "type": "object",
-            "properties": {
-              "ref": {
-                "type": "string",
-                "minLength": 1
-              },
-              "schema": {
-                "type": "object"
-              }
-            },
-            "required": [
-              "ref",
-              "schema"
-            ],
-            "additionalProperties": false
-          },
           "parentStepId": {
             "type": "string",
             "minLength": 1
@@ -165,6 +144,9 @@
               ]
             },
             "then": {
+              "required": [
+                "loadInstructionsCommand"
+              ],
               "not": {
                 "anyOf": [
                   {
@@ -248,6 +230,50 @@
     }
   },
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "needs_host_actions"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "requests"
+        ],
+        "properties": {
+          "requests": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "done"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "requests"
+          ]
+        }
+      }
+    }
+  ],
   "$defs": {
     "fanoutWorkRequest": {
       "type": "object",

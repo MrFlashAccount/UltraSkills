@@ -243,147 +243,95 @@ test('runner: continue reuses saved custom workflow when --workflow is omitted',
   assert.equal(response.baton.state.prepare.results[0].summary, 'prepared with saved workflow');
 });
 
-test('runner: wait_for_approval request accepts request-specific host output JSON', async () => {
-  const { runId, runDir } = await runCase('approval-generic-output');
-  const workflowPath = path.join(tempDir, 'approval-generic-output-workflow.json');
+function typedApprovalWorkflow() {
   const approvalWorkflow = structuredClone(workflowDoc);
-  approvalWorkflow.start = 'choose_path';
-  approvalWorkflow.steps = {
-    choose_path: {
-      name: 'Choose path',
-      kind: 'approval',
-      input: { prompt: 'Ask the user to choose option_a, option_b, or a free-form reason.' },
-      next: { match: '${{ output.choice }}', cases: { option_a: 'done', option_b: 'join' } },
-    },
-    join: approvalWorkflow.steps.join,
-    done: approvalWorkflow.steps.done,
+  approvalWorkflow.steps.prepare.next = 'choose_path';
+  approvalWorkflow.steps.choose_path = {
+    name: 'Choose path',
+    kind: 'approval',
+    input: { summary: '${{ input.prepare.outcome }}' },
+    next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'join' } },
   };
   approvalWorkflow.steps.join.input.prompt = 'Join without branch prompt input.';
   approvalWorkflow.steps.join.next = 'done';
-  writeJson(workflowPath, approvalWorkflow);
+  return approvalWorkflow;
+}
 
-  const next = await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next approval generic');
+async function reachTypedApproval({ runId, runDir, workflowPath }) {
+  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next typed approval producer');
+  const prepareOutput = path.join(runDir, 'prepare-output.json');
+  writeJson(prepareOutput, workerOutput('approval summary'));
+  return continueWithOutputs({ runId, runDir, workflowPath, refs: prepareOutput, label: 'continue to typed approval' });
+}
+
+test('runner: wait_for_approval accepts the closed runner-owned decision JSON', async () => {
+  const { runId, runDir } = await runCase('approval-closed-output');
+  const workflowPath = path.join(tempDir, 'approval-closed-output-workflow.json');
+  writeJson(workflowPath, typedApprovalWorkflow());
+
+  const next = await reachTypedApproval({ runId, runDir, workflowPath });
   assert.equal(next.status, 'needs_host_actions');
   assert.equal(next.requests[0].action, 'wait_for_approval');
 
   const outputPath = path.join(runDir, 'choose-path-answer.json');
-  writeJson(outputPath, { choice: 'option_a', answer: 'Ship the smaller fix first.' });
-  const response = await continueWithOutputs({ runId, runDir, workflowPath, refs: `choose_path=${outputPath}`, label: 'continue approval generic' });
+  writeJson(outputPath, { approval: 'approved' });
+  const response = await continueWithOutputs({ runId, runDir, workflowPath, refs: `choose_path=${outputPath}`, label: 'continue closed approval' });
 
   assert.equal(response.status, 'done');
   assert.equal(response.baton.cursor, 'done');
-  assert.deepEqual(response.baton.state.choose_path, { choice: 'option_a', answer: 'Ship the smaller fix first.' });
+  assert.deepEqual(response.baton.state.choose_path, { approval: 'approved' });
 });
 
-test('runner: single approval request applies output by current stepId', async () => {
+test('runner: rejected approval stores bounded feedback and applies output by current stepId', async () => {
   const { runId, runDir } = await runCase('approval-step-id-output');
   const workflowPath = path.join(tempDir, 'approval-step-id-output-workflow.json');
-  const approvalWorkflow = structuredClone(workflowDoc);
-  approvalWorkflow.start = 'choose_path';
-  approvalWorkflow.steps = {
-    choose_path: {
-      name: 'Choose path',
-      kind: 'approval',
-      input: { prompt: 'Ask the user to choose option_a or option_b.' },
-      next: { match: '${{ output.choice }}', cases: { option_a: 'done', option_b: 'join' } },
-    },
-    join: approvalWorkflow.steps.join,
-    done: approvalWorkflow.steps.done,
-  };
-  approvalWorkflow.steps.join.input.prompt = 'Join without branch prompt input.';
-  approvalWorkflow.steps.join.next = 'done';
-  writeJson(workflowPath, approvalWorkflow);
+  writeJson(workflowPath, typedApprovalWorkflow());
 
-  const next = await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next opaque approval');
+  const next = await reachTypedApproval({ runId, runDir, workflowPath });
   assert.equal(next.status, 'needs_host_actions');
   assert.equal(next.requests[0].stepId, 'choose_path');
 
   const outputPath = path.join(runDir, 'choose-path-answer.json');
-  writeJson(outputPath, { choice: 'option_a', answer: 'Step id should not imply parallel.' });
+  writeJson(outputPath, { approval: 'rejected', feedback: 'Revise the proposal.' });
   const response = await continueWithOutputs({ runId, runDir, workflowPath, refs: `choose_path=${outputPath}`, label: 'continue approval step id' });
 
-  assert.equal(response.status, 'done');
-  assert.equal(response.baton.cursor, 'done');
-  assert.deepEqual(response.baton.state.choose_path, { choice: 'option_a', answer: 'Step id should not imply parallel.' });
+  assert.equal(response.baton.cursor, 'join');
+  assert.deepEqual(response.baton.state.choose_path, { approval: 'rejected', feedback: 'Revise the proposal.' });
 });
 
-test('runner: approval request exposes optional output schema reference', async () => {
+test('runner: approval workflow output schema is rejected as a removed authoring surface', async () => {
   const { runId, runDir } = await runCase('approval-output-schema-request');
   const workflowPath = path.join(tempDir, 'approval-output-schema-request-workflow.json');
-  const schemaPath = path.join(tempDir, 'approval-output-schema-request.schema.json');
-  writeJson(schemaPath, {
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    type: 'object',
-    required: ['choice'],
-    properties: { choice: { enum: ['approved'] } },
-    additionalProperties: false,
-  });
-  const approvalWorkflow = structuredClone(workflowDoc);
-  approvalWorkflow.start = 'choose_path';
-  approvalWorkflow.steps = {
-    choose_path: {
-      name: 'Choose path',
-      kind: 'approval',
-      input: { prompt: 'Ask the user whether to approve or block.' },
-      output: { schema: path.basename(schemaPath) },
-      next: { match: '${{ output.choice }}', cases: { approved: 'done' } },
-    },
-    done: approvalWorkflow.steps.done,
-  };
+  const approvalWorkflow = typedApprovalWorkflow();
+  approvalWorkflow.steps.choose_path.output = { schema: 'removed-approval-output.json' };
   writeJson(workflowPath, approvalWorkflow);
 
-  const response = await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next approval output schema request');
-
-  assert.equal(response.status, 'needs_host_actions');
-  assert.equal(response.requests[0].action, 'wait_for_approval');
-  assert.equal(response.requests[0].outputSchema, path.basename(schemaPath));
-  assert.equal(response.requests[0].resolvedOutputSchema.ref, path.basename(schemaPath));
-  assert.equal(Object.hasOwn(response.requests[0].resolvedOutputSchema, 'path'), false);
-  assert.deepEqual(response.requests[0].resolvedOutputSchema.schema.required, ['choice']);
+  const response = await runRunner(['next', '--run-id', runId, '--workflow', workflowPath]);
+  assert.notEqual(response.status, 0);
+  assert.match(response.stderr, /approval output\/schema authoring was removed; output is runner-owned/);
 });
 
-test('runner: typed approval retry preserves validation feedback in instructions', async () => {
+test('runner: invalid approval output fails directly and leaves the current gate unchanged', async () => {
   const { runId, runDir } = await runCase('approval-output-schema-retry');
   const workflowPath = path.join(tempDir, 'approval-output-schema-retry-workflow.json');
-  const schemaPath = path.join(tempDir, 'approval-output-schema-retry.schema.json');
-  writeJson(schemaPath, {
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    type: 'object',
-    required: ['choice'],
-    properties: { choice: { enum: ['approved'] } },
-    additionalProperties: false,
-  });
-  const approvalWorkflow = structuredClone(workflowDoc);
-  approvalWorkflow.start = 'choose_path';
-  approvalWorkflow.steps = {
-    choose_path: {
-      name: 'Choose path',
-      kind: 'approval',
-      input: { prompt: 'Ask the user whether to approve or block.' },
-      output: { schema: path.basename(schemaPath) },
-      next: { match: '${{ output.choice }}', cases: { approved: 'done' } },
-    },
-    done: approvalWorkflow.steps.done,
-  };
-  writeJson(workflowPath, approvalWorkflow);
+  writeJson(workflowPath, typedApprovalWorkflow());
 
-  await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next approval output schema retry');
+  await reachTypedApproval({ runId, runDir, workflowPath });
   const outputPath = path.join(runDir, 'invalid-approval.json');
   writeJson(outputPath, { choice: 'maybe' });
 
   const rejected = await runRunner(['write-output', '--run-id', runId, '--workflow', workflowPath, '--step-id', 'choose_path'], { input: readFileSync(outputPath, 'utf8') });
 
   assert.notEqual(rejected.status, 0);
-  assert.match(rejected.stderr, /output schema validation failed for step 'choose_path'/);
-  const response = await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'derive approval output schema retry request');
+  assert.match(rejected.stderr, /approval output failed schema validation: \/choice is not allowed/);
+  const response = await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'derive unchanged approval request');
   assert.equal(response.status, 'needs_host_actions');
   assert.equal(response.requests[0].action, 'wait_for_approval');
-  assert.equal(response.requests[0].outputSchema, path.basename(schemaPath));
-  assert.equal(response.requests[0].resolvedOutputSchema.ref, path.basename(schemaPath));
-  assert.equal(Object.hasOwn(response.requests[0].resolvedOutputSchema, 'path'), false);
-  assert.deepEqual(response.requests[0].resolvedOutputSchema.schema.required, ['choice']);
+  assert.equal(Object.hasOwn(response.requests[0], 'outputSchema'), false);
+  assert.equal(Object.hasOwn(response.requests[0], 'resolvedOutputSchema'), false);
 
   const loaded = await runRunner(['instructions', '--run-id', runId, '--step-id', 'choose_path']);
   assert.equal(loaded.status, 0, loaded.stderr);
   assert.doesNotMatch(loaded.stdout, /Previous output failed output\.schema validation/);
+  assert.match(loaded.stdout, /# Approval — Choose path/);
 });

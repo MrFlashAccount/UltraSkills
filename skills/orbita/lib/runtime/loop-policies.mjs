@@ -187,7 +187,8 @@ export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow
       if (region.has(limitEdge.to)) {
         fail(`loopPolicy '${policyId}' onLimit target '${limitEdge.to}' stays inside the exhausted loop region`);
       }
-      if (!external.some((edge) => edge.from === policy.boundary && edge.to === limitEdge.to)) {
+      if (workflow.steps[policy.boundary]?.kind !== 'approval'
+        && !external.some((edge) => edge.from === policy.boundary && edge.to === limitEdge.to)) {
         fail(`loopPolicy '${policyId}' onLimit target '${limitEdge.to}' must be a declared external target of boundary '${policy.boundary}'`);
       }
       if (reachesAny(adjacency, limitEdge.to, region)) {

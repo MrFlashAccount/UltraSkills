@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 import { assertWorkflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import { applyWorkflowOutput } from '../runtime/workflow-output/apply.mjs';
+import { renderWorkerInstructions } from '../runtime/render-worker-instructions.mjs';
 import { runNext } from '../use-cases/RunNext.mjs';
 import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
 
@@ -103,8 +104,9 @@ test('shard accepts arbitrary literal JSON values and exposes only explicit inte
   const response = runNext({ workflowDoc, batonDoc: initialBaton(), resources });
   assert.deepEqual(response.baton.state.shards.shard_work.values, values);
   assert.equal(response.steps.length, values.length);
-  assert.match(response.steps[0].compiledPrompt.prompt, /Process shard index 0 of 6/);
-  assert.doesNotMatch(response.steps[1].compiledPrompt.prompt, /SECRET_VALUE/);
+  assert.match(renderWorkerInstructions({ workflow: workflowDoc, baton: response.baton, entry: response.steps[0], resources }), /Process shard index 0 of 6/);
+  assert.doesNotMatch(renderWorkerInstructions({ workflow: workflowDoc, baton: response.baton, entry: response.steps[1], resources }), /SECRET_VALUE/);
+  assert.equal(Object.hasOwn(response.steps[0], 'compiledPrompt'), false);
   assert.equal(Object.hasOwn(response.steps[0].shard, 'value'), false);
 });
 
@@ -120,8 +122,8 @@ test('shard dynamic input snapshots values and supports nested value interpolati
   });
   const baton = initialBaton({ producer: { outcome: 'ready', items: [{ name: 'api' }, { name: 'runtime' }, { name: 'cli' }] } });
   const first = runNext({ workflowDoc, batonDoc: baton, resources });
-  assert.match(first.steps[0].compiledPrompt.prompt, /Package=api index=0 total=3/);
-  assert.match(first.steps[1].compiledPrompt.prompt, /Package=runtime index=1 total=3/);
+  assert.match(renderWorkerInstructions({ workflow: workflowDoc, baton: first.baton, entry: first.steps[0], resources }), /Package=api index=0 total=3/);
+  assert.match(renderWorkerInstructions({ workflow: workflowDoc, baton: first.baton, entry: first.steps[1], resources }), /Package=runtime index=1 total=3/);
 
   const changedUpstream = structuredClone(first.baton);
   changedUpstream.state.producer.items = [{ name: 'changed-after-activation' }];
@@ -139,7 +141,7 @@ test('shard dynamic input snapshots values and supports nested value interpolati
   assert.deepEqual(second.baton.state.shards.shard_work.values, [{ name: 'api' }, { name: 'runtime' }, { name: 'cli' }]);
   assert.deepEqual(second.steps.map((entry) => entry.id), ['shard_work__shard__1__2']);
   const renderedSecond = runNext({ workflowDoc, batonDoc: second.baton, resources });
-  assert.match(renderedSecond.steps[0].compiledPrompt.prompt, /Package=cli index=2 total=3/);
+  assert.match(renderWorkerInstructions({ workflow: workflowDoc, baton: renderedSecond.baton, entry: renderedSecond.steps[0], resources }), /Package=cli index=2 total=3/);
 });
 
 test('shard batches durably, retains bounded refs, then runs its genuine final worker', () => {

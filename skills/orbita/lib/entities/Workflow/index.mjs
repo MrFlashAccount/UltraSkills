@@ -10,10 +10,23 @@ import { assertRoleDirectoryName } from '../../runtime/role-ref.mjs';
 import { RESERVED_STATE_KEYS, DANGEROUS_OBJECT_KEYS, isDangerousObjectKey, isReservedStateKey } from '../../runtime/state-keys.mjs';
 import { statusForStep } from '../../runtime/step-status.mjs';
 import { assertLoopPolicies } from '../../runtime/loop-policies.mjs';
-import { assertTransitionDescriptorTargets, normalizeTransitionNext } from '../../runtime/transition-next.mjs';
+import { assertTransitionDescriptorTargets, NEXT_KIND, normalizeTransitionNext } from '../../runtime/transition-next.mjs';
 import { isShardStep } from '../../runtime/shard.mjs';
 import { fanoutBranchIdIssues, isFanoutStep } from '../../runtime/fanout.mjs';
-import { compileWorkflowOutputSchema } from './schema-ref-validation.mjs';
+import {
+  assertClosedDynamicTargetSchema,
+  assertClosedStringValueSchema,
+  assertSchemaRequiresExpressionPath,
+  mergeSelectorAnalysis,
+  normalizeStepOutputSchemas,
+  possibleStringTargetsForSchema,
+  schemaAllowsNonArray,
+  schemaAllowsNonString,
+  schemaForPath,
+  schemaRootsForPath,
+  schemaVariants,
+  selectorAnalysis,
+} from './schema-semantics.mjs';
 
 function cloneBoundaryData(dto) {
   return typeof dto?.toJSON === 'function' ? dto.toJSON() : structuredClone(dto);
@@ -24,13 +37,8 @@ function cloneStepBoundaryData(stepId, step) {
 }
 
 const WORKFLOW_NAME = /^[a-z][a-z0-9-]*$/;
-
 function fail(message) {
   throw new WorkflowRuntimeError(`workflow semantic validation failed: ${message}`);
-}
-
-function fieldPath(...parts) {
-  return parts.filter((part) => part !== undefined && part !== '').join('.');
 }
 
 function assertWorkflowRootTargets(workflow) {
@@ -121,368 +129,6 @@ function assertWorkflowStepRoles(workflow, allowedRoleNames) {
   }
 }
 
-function isExternalWorkflowOutputSchema(_schemaRef, schema) {
-  return typeof schema?.$id === 'string' && schema.$id.includes('/schemas/workflow/dev-harness/');
-}
-
-function collectFieldAnnotationWarnings(schema, schemaRef, warnings, pathSegments = []) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return;
-
-  const hasFieldNote = typeof schema.description === 'string' || typeof schema['x-usage'] === 'string';
-  if (hasFieldNote && pathSegments.length > 0 && typeof schema.description === 'string' && typeof schema['x-usage'] !== 'string') {
-    warnings.push(`output.schema '${schemaRef}' field '${fieldPath(...pathSegments)}' has description but no x-usage receiver instruction`);
-  }
-
-  if (schema.properties && typeof schema.properties === 'object') {
-    for (const [propertyName, propertySchema] of Object.entries(schema.properties)) {
-      if (propertyName === 'x-usage') continue;
-      collectFieldAnnotationWarnings(propertySchema, schemaRef, warnings, [...pathSegments, propertyName]);
-    }
-  }
-  if (schema.$defs && typeof schema.$defs === 'object') {
-    for (const [defName, defSchema] of Object.entries(schema.$defs)) {
-      collectFieldAnnotationWarnings(defSchema, schemaRef, warnings, [...pathSegments, '$defs', defName]);
-    }
-  }
-  if (schema.items) collectFieldAnnotationWarnings(schema.items, schemaRef, warnings, [...pathSegments, 'items']);
-}
-
-function decodeJsonPointerSegment(segment) {
-  return segment.replace(/~1/g, '/').replace(/~0/g, '~');
-}
-
-function resolveLocalSchemaRef(rootSchema, ref) {
-  if (typeof ref !== 'string' || !ref.startsWith('#')) return undefined;
-  if (ref === '#') return rootSchema;
-  if (!ref.startsWith('#/')) return undefined;
-
-  let current = rootSchema;
-  for (const rawSegment of ref.slice(2).split('/')) {
-    const segment = decodeJsonPointerSegment(rawSegment);
-    if (!current || typeof current !== 'object' || Array.isArray(current) || !Object.hasOwn(current, segment)) return undefined;
-    current = current[segment];
-  }
-  return current;
-}
-
-function normalizeSchemaForSemanticIntrospection(schema, rootSchema = schema, refStack = []) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema;
-
-  let baseSchema = {};
-  if (typeof schema.$ref === 'string') {
-    if (refStack.includes(schema.$ref)) {
-      fail(`output.schema contains circular local $ref: ${[...refStack, schema.$ref].join(' -> ')}`);
-    }
-    const resolved = resolveLocalSchemaRef(rootSchema, schema.$ref);
-    if (resolved) {
-      baseSchema = normalizeSchemaForSemanticIntrospection(resolved, rootSchema, [...refStack, schema.$ref]);
-    }
-  }
-
-  const normalized = { ...baseSchema };
-  for (const [key, value] of Object.entries(schema)) {
-    if (key === '$ref') continue;
-    if (Array.isArray(value)) {
-      normalized[key] = value.map((item) => normalizeSchemaForSemanticIntrospection(item, rootSchema, refStack));
-    } else if (value && typeof value === 'object') {
-      const objectValue = {};
-      for (const [childKey, childValue] of Object.entries(value)) {
-        objectValue[childKey] = normalizeSchemaForSemanticIntrospection(childValue, rootSchema, refStack);
-      }
-      normalized[key] = objectValue;
-    } else {
-      normalized[key] = value;
-    }
-  }
-  return normalized;
-}
-
-function rootSchemaBranches(schema) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return [];
-  const branches = [schema];
-  for (const keyword of ['allOf', 'anyOf', 'oneOf']) {
-    for (const branch of schema[keyword] ?? []) branches.push(...rootSchemaBranches(branch));
-  }
-  for (const keyword of ['if', 'then', 'else']) {
-    if (schema[keyword]) branches.push(...rootSchemaBranches(schema[keyword]));
-  }
-  return branches;
-}
-
-function rootPropertyDeclaresStringValue(schema, propertyName, value) {
-  return rootSchemaBranches(schema).some((branch) => {
-    const propertySchema = branch.properties?.[propertyName];
-    return propertySchema?.const === value || (Array.isArray(propertySchema?.enum) && propertySchema.enum.includes(value));
-  });
-}
-
-function rootSchemaDeclaresProperty(schema, propertyName) {
-  return rootSchemaBranches(schema).some((branch) => Object.hasOwn(branch.properties ?? {}, propertyName));
-}
-
-function validateOutputSchemaDocument(schema, schemaRef, workflow, _runtimeContext, warnings, { stepId, step, requireWorkerOutcomeContract = true, externalSchemas = [] } = {}) {
-  let validation;
-  try {
-    validation = compileWorkflowOutputSchema(schema, { externalSchemas });
-  } catch (error) {
-    fail(`output.schema '${schemaRef}' is not a valid JSON Schema: ${error.message}`);
-  }
-  // Validation result is irrelevant here: compiling the schema is the check.
-  void validation;
-
-  const normalizedSchema = normalizeSchemaForSemanticIntrospection(schema);
-  if (
-    rootPropertyDeclaresStringValue(normalizedSchema, 'outcome', 'blocked') ||
-    rootPropertyDeclaresStringValue(normalizedSchema, 'approval', 'blocked')
-  ) {
-    fail(`step '${stepId}' output.schema must not declare legacy terminal value 'blocked'; use the runner non-blocking stop control channel`);
-  }
-  if (rootSchemaDeclaresProperty(normalizedSchema, 'blocker')) {
-    fail(`step '${stepId}' output.schema must not declare legacy control field 'blocker'; use the runner non-blocking stop control channel`);
-  }
-  if (requireWorkerOutcomeContract && ['worker', 'fanout', 'shard'].includes(step?.kind)) assertWorkerOutputContract({ stepId, schema: normalizedSchema });
-  if (isExternalWorkflowOutputSchema(schemaRef, schema)) collectFieldAnnotationWarnings(schema, schemaRef, warnings);
-  return normalizedSchema;
-}
-
-function outputSchemaForStep(outputSchemas, stepId, schemaRef) {
-  const loaded = outputSchemas instanceof Map ? outputSchemas.get(stepId) ?? outputSchemas.get(schemaRef) : outputSchemas?.[stepId] ?? outputSchemas?.[schemaRef];
-  return loaded?.schema ?? loaded;
-}
-
-function normalizeStepOutputSchemas({ workflow, outputSchemas = new Map(), warnings, requireSchemaPresence = true, requireWorkerOutcomeContract = true, externalSchemas = [] }) {
-  const schemasByStep = new Map();
-  for (const [stepId, step] of Object.entries(workflow.steps)) {
-    const schemaRef = step.output?.schema;
-    if (!schemaRef) continue;
-    const schema = outputSchemaForStep(outputSchemas, stepId, schemaRef);
-    if (!schema) {
-      if (requireSchemaPresence) fail(`step '${stepId}' output.schema '${schemaRef}' was not provided to Workflow.validate()`);
-      continue;
-    }
-    const normalizedSchema = validateOutputSchemaDocument(schema, schemaRef, workflow, undefined, warnings, { stepId, step, requireWorkerOutcomeContract, externalSchemas });
-    schemasByStep.set(stepId, normalizedSchema);
-  }
-  for (const [stepId, step] of Object.entries(workflow.steps)) {
-    if (!isShardStep(step)) continue;
-    const schemaRef = step.worker?.output?.schema;
-    if (!schemaRef) continue;
-    const schema = outputSchemaForStep(outputSchemas, stepId, schemaRef);
-    const loadedSchema = schema ?? outputSchemaForStep(outputSchemas, `${stepId}.worker`, schemaRef);
-    if (!loadedSchema) {
-      if (requireSchemaPresence) fail(`step '${stepId}' shard.worker output.schema '${schemaRef}' was not provided to Workflow.validate()`);
-      continue;
-    }
-    validateOutputSchemaDocument(loadedSchema, schemaRef, workflow, undefined, warnings, {
-      stepId,
-      step: { kind: 'worker' },
-      requireWorkerOutcomeContract,
-      externalSchemas,
-    });
-  }
-  for (const [ownerStepId, step] of Object.entries(workflow.steps)) {
-    if (!isFanoutStep(step)) continue;
-    for (const [branchId, branch] of Object.entries(step.branches ?? {})) {
-      const schemaRef = branch.output?.schema;
-      if (!schemaRef) continue;
-      const loadedSchema = outputSchemaForStep(outputSchemas, branchId, schemaRef)
-        ?? outputSchemaForStep(outputSchemas, `${ownerStepId}.branches.${branchId}`, schemaRef);
-      if (!loadedSchema) {
-        if (requireSchemaPresence) fail(`step '${ownerStepId}' fanout branch '${branchId}' output.schema '${schemaRef}' was not provided to Workflow.validate()`);
-        continue;
-      }
-      const normalizedSchema = validateOutputSchemaDocument(loadedSchema, schemaRef, workflow, undefined, warnings, {
-        stepId: branchId,
-        step: { kind: 'worker' },
-        requireWorkerOutcomeContract,
-        externalSchemas,
-      });
-      schemasByStep.set(branchId, normalizedSchema);
-    }
-  }
-  return schemasByStep;
-}
-
-function schemaRequiresPath(schema, pathSegments) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return false;
-  if (pathSegments.length === 0) return true;
-  const [segment, ...rest] = pathSegments;
-
-  const propertySchema = schema.properties && typeof schema.properties === 'object'
-    ? schema.properties[segment]
-    : undefined;
-  const directRequired = Array.isArray(schema.required)
-    && schema.required.includes(segment)
-    && (rest.length === 0 || (propertySchema && schemaRequiresPath(propertySchema, rest)));
-
-  const allOfRequired = Array.isArray(schema.allOf) && schema.allOf.some((item) => schemaRequiresPath(item, pathSegments));
-  const oneOfRequired = Array.isArray(schema.oneOf) && schema.oneOf.length > 0 && schema.oneOf.every((item) => schemaRequiresPath(item, pathSegments));
-  const anyOfRequired = Array.isArray(schema.anyOf) && schema.anyOf.length > 0 && schema.anyOf.every((item) => schemaRequiresPath(item, pathSegments));
-
-  return directRequired || allOfRequired || oneOfRequired || anyOfRequired;
-}
-
-function schemaAllowsNonString(schema) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return true;
-  if (schema.const !== undefined) return typeof schema.const !== 'string';
-  if (Array.isArray(schema.enum)) return schema.enum.some((value) => typeof value !== 'string');
-  if (schema.type !== undefined) {
-    if (schema.type === 'string') return false;
-    if (Array.isArray(schema.type)) return schema.type.some((type) => type !== 'string');
-    return true;
-  }
-  if (Array.isArray(schema.allOf)) return schema.allOf.every((item) => schemaAllowsNonString(item));
-  if (Array.isArray(schema.oneOf)) return schema.oneOf.some((item) => schemaAllowsNonString(item));
-  if (Array.isArray(schema.anyOf)) return schema.anyOf.some((item) => schemaAllowsNonString(item));
-  return true;
-}
-
-function assertSchemaRequiresExpressionPath({ stepId, expression, field, rootSchema, pathSegments = expression.path }) {
-  if (!schemaRequiresPath(rootSchema, pathSegments)) {
-    fail(`step '${stepId}' ${field} expression ${expression.source} must reference a required output.schema path`);
-  }
-}
-
-function assertWorkerOutputContract({ stepId, schema }) {
-  if (!schemaRequiresPath(schema, ['outcome'])) {
-    fail(`step '${stepId}' output.schema must require string field 'outcome' for worker outputs`);
-  }
-  const outcomeSchemas = schemaForPath(schema, ['outcome']);
-  if (outcomeSchemas.length === 0 || outcomeSchemas.some((outcomeSchema) => schemaAllowsNonString(outcomeSchema))) {
-    fail(`step '${stepId}' output.schema field 'outcome' must allow only strings`);
-  }
-}
-
-function schemaVariants(schema) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return [];
-  const variants = [schema];
-  for (const key of ['oneOf', 'anyOf', 'allOf']) {
-    if (Array.isArray(schema[key])) variants.push(...schema[key].flatMap((item) => schemaVariants(item)));
-  }
-  return variants;
-}
-
-function schemaForPath(schema, pathSegments) {
-  let candidates = [schema];
-  for (const segment of pathSegments) {
-    const nextCandidates = [];
-    for (const candidate of candidates.flatMap((item) => schemaVariants(item))) {
-      const propertySchema = candidate?.properties?.[segment];
-      if (propertySchema) nextCandidates.push(propertySchema);
-    }
-    candidates = nextCandidates;
-    if (candidates.length === 0) return [];
-  }
-  return candidates.flatMap((item) => schemaVariants(item));
-}
-
-function schemaRootsForPath(schema, pathSegments) {
-  let candidates = [schema];
-  for (const segment of pathSegments) {
-    candidates = candidates
-      .flatMap((item) => schemaVariants(item))
-      .map((candidate) => candidate?.properties?.[segment])
-      .filter(Boolean);
-    if (candidates.length === 0) return [];
-  }
-  return candidates;
-}
-
-function schemaAllowsNonArray(schema) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return true;
-  if (schema.type !== undefined) {
-    if (schema.type === 'array') return false;
-    if (Array.isArray(schema.type)) return schema.type.some((type) => type !== 'array');
-    return true;
-  }
-  if (schema.items !== undefined) return false;
-  if (Array.isArray(schema.allOf)) return schema.allOf.every((item) => schemaAllowsNonArray(item));
-  if (Array.isArray(schema.oneOf)) return schema.oneOf.some((item) => schemaAllowsNonArray(item));
-  if (Array.isArray(schema.anyOf)) return schema.anyOf.some((item) => schemaAllowsNonArray(item));
-  return true;
-}
-
-
-function mergeSelectorAnalysis(target, source) {
-  for (const value of source.directValues) target.directValues.add(value);
-  for (const value of source.itemValues) target.itemValues.add(value);
-  target.arraySchemas.push(...source.arraySchemas);
-  return target;
-}
-
-function selectorAnalysis({ directValues = new Set(), itemValues = new Set(), arraySchemas = [] } = {}) {
-  return { directValues, itemValues, arraySchemas };
-}
-
-function assertClosedStringValueSchema(schema, errorContext) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
-    fail(`${errorContext} must resolve from a closed string enum/const schema`);
-  }
-  if (schema.const !== undefined) {
-    if (typeof schema.const !== 'string') fail(`${errorContext} schema allows non-string value ${JSON.stringify(schema.const)}`);
-    return selectorAnalysis({ directValues: new Set([schema.const]) });
-  }
-  if (Array.isArray(schema.enum)) {
-    if (schema.enum.length === 0) fail(`${errorContext} enum schema must declare at least one string value`);
-    for (const value of schema.enum) {
-      if (typeof value !== 'string') fail(`${errorContext} schema allows non-string value ${JSON.stringify(value)}`);
-    }
-    return selectorAnalysis({ directValues: new Set(schema.enum) });
-  }
-  if (Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf)) {
-    const variants = schema.anyOf ?? schema.oneOf;
-    if (variants.length === 0) fail(`${errorContext} union schema must declare at least one closed string enum/const branch`);
-    return variants.reduce((acc, variant) => mergeSelectorAnalysis(acc, assertClosedStringValueSchema(variant, errorContext)), selectorAnalysis());
-  }
-  if (Array.isArray(schema.allOf)) {
-    const finiteBranches = schema.allOf
-      .map((variant) => {
-        try {
-          return assertClosedStringValueSchema(variant, errorContext);
-        } catch (error) {
-          if (error instanceof WorkflowRuntimeError && /open string schema|must resolve from a closed string enum\/const schema/.test(error.message)) return undefined;
-          throw error;
-        }
-      })
-      .filter(Boolean);
-    if (finiteBranches.length === 0) fail(`${errorContext} must resolve from a closed string enum/const schema`);
-    return finiteBranches.reduce((acc, branch) => mergeSelectorAnalysis(acc, branch), selectorAnalysis());
-  }
-  if (schema.type === 'string' || (Array.isArray(schema.type) && schema.type.includes('string'))) {
-    fail(`${errorContext} open string schema must be constrained with enum or const values`);
-  }
-  if (schema.type !== undefined) fail(`${errorContext} schema allows non-string type ${JSON.stringify(schema.type)}`);
-  fail(`${errorContext} must resolve from a closed string enum/const schema`);
-}
-
-function assertClosedDynamicTargetSchema(schema, errorContext) {
-  return assertClosedStringValueSchema(schema, errorContext);
-}
-
-function collectStringValues(schema, values = new Set()) {
-  for (const candidate of schemaVariants(schema)) {
-    if (typeof candidate.const === 'string') values.add(candidate.const);
-    if (Array.isArray(candidate.enum)) {
-      for (const value of candidate.enum) if (typeof value === 'string') values.add(value);
-    }
-  }
-  return values;
-}
-
-function possibleStringTargetsForSchema(schema) {
-  const directValues = collectStringValues(schema);
-  const itemValues = new Set();
-  const arraySchemas = [];
-  for (const candidate of schemaVariants(schema)) {
-    if (candidate.type === 'array' || candidate.items) {
-      arraySchemas.push(candidate);
-      collectStringValues(candidate.items, itemValues);
-    }
-  }
-
-  return { directValues, itemValues, arraySchemas, possible: new Set([...directValues, ...itemValues]) };
-}
-
 function schemaForExpression({ workflow, schemasByStep, stepId, step, expression }) {
   if (expression.root === 'output') {
     const schema = schemasByStep.get(stepId);
@@ -554,10 +200,6 @@ function assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descrip
   return transitionCaseKeys;
 }
 
-function targetSetsForMatchCases(possibleCaseKeys, cases) {
-  return [...possibleCaseKeys].map((key) => [cases[key]]);
-}
-
 function targetSetsForDynamicTarget(aggregate) {
   return [...aggregate.directValues].map((target) => [target]);
 }
@@ -572,6 +214,14 @@ function assertTransitionSemantics(workflow, schemasByStep, { requireSchemaCover
     } catch (error) {
       if (error instanceof WorkflowRuntimeError) fail(error.message);
       throw error;
+    }
+    if (Object.hasOwn(step, 'onReject')) {
+      try {
+        assertTransitionDescriptorTargets(workflow, stepId, normalizeTransitionNext(step.onReject), 'onReject');
+      } catch (error) {
+        if (error instanceof WorkflowRuntimeError) fail(error.message);
+        throw error;
+      }
     }
 
     if (descriptor.kind === 'dynamic-target') {
@@ -610,7 +260,9 @@ function collectExpandedDescriptorEdges({ workflow, schemasByStep, stepId, step,
   }
   if (descriptor.kind === 'match-cases') {
     const possibleCaseKeys = assertMatchCasesSchema({ workflow, schemasByStep, stepId, step, descriptor, field, requireSchemaCoverage, requireExpressionRequiredPaths, allowUnreachableCases });
-    return possibleCaseKeys ? edgeRows(stepId, targetSetsForMatchCases(possibleCaseKeys, descriptor.cases)) : [];
+    return possibleCaseKeys ? [...possibleCaseKeys].flatMap((matchValue) => (
+      edgeRows(stepId, [[descriptor.cases[matchValue]]]).map((edge) => ({ ...edge, matchValue }))
+    )) : [];
   }
   return [];
 }
@@ -630,6 +282,19 @@ function collectExpandedRouteGraphEdges(workflow, schemasByStep, { requireSchema
       requireExpressionRequiredPaths,
       allowUnreachableCases,
     }));
+    if (Object.hasOwn(step, 'onReject')) {
+      edges.push(...collectExpandedDescriptorEdges({
+        workflow,
+        schemasByStep,
+        stepId,
+        step,
+        next: step.onReject,
+        field: 'onReject',
+        requireSchemaCoverage,
+        requireExpressionRequiredPaths,
+        allowUnreachableCases,
+      }).map((edge) => ({ ...edge, approval: 'rejected' })));
+    }
   }
   return edges;
 }
@@ -871,6 +536,221 @@ function assertPromptExpressionSemantics(workflow, schemasByStep, { requireSchem
   }
 }
 
+function parseApprovalInputSelector(stepId, field, source) {
+  let expression;
+  try {
+    expression = parsePathExpression(source, { allowedRoots: ['input'] });
+  } catch (error) {
+    if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' ${field} ${error.message}`);
+    throw error;
+  }
+  if (expression.path.length < 2) fail(`step '${stepId}' ${field} selector must include an input producer and output field path`);
+  if (expression.path[0] === stepId) fail(`step '${stepId}' ${field} selector cannot select the current approval gate`);
+  return expression;
+}
+
+function assertSchemasAllowOnlyString(schemas, context) {
+  if (schemas.length === 0 || schemas.some((schema) => schemaAllowsNonString(schema))) fail(`${context} must resolve only to strings`);
+}
+
+function schemaAllowsOnlyArray(schema) {
+  return !schemaAllowsNonArray(schema);
+}
+
+function schemaArrayItemsAllowOnlyStrings(schema) {
+  const arrays = schemaVariants(schema).filter((candidate) => candidate?.type === 'array' || candidate?.items);
+  return arrays.length > 0 && arrays.every((candidate) => {
+    if (!candidate.items) return false;
+    try {
+      assertClosedStringValueSchema(candidate.items, 'approval verdict summary array item');
+      return true;
+    } catch {
+      return candidate.items.type === 'string';
+    }
+  });
+}
+
+function assertApprovalSelector({ workflow, schemasByStep, stepId, step, field, source, kind, requirePath = true }) {
+  const expression = parseApprovalInputSelector(stepId, field, source);
+  const resolved = assertExpressionSchemaAvailable({
+    workflow,
+    schemasByStep,
+    stepId,
+    step,
+    expression,
+    field,
+    requireSchemaCoverage: true,
+  });
+  if (requirePath) assertSchemaRequiresExpressionPath({ stepId, expression, field, rootSchema: resolved.rootSchema, pathSegments: resolved.requiredPath });
+  if (kind === 'string') assertSchemasAllowOnlyString(resolved.schema, `step '${stepId}' ${field}`);
+  if (kind === 'array' && resolved.schema.some((schema) => !schemaAllowsOnlyArray(schema))) {
+    fail(`step '${stepId}' ${field} must resolve only to arrays`);
+  }
+  if (kind === 'string-or-string-array') {
+    const invalid = resolved.schema.some((schema) => schemaAllowsNonString(schema) && !schemaArrayItemsAllowOnlyStrings(schema));
+    if (invalid) fail(`step '${stepId}' ${field} must resolve only to a string or array of strings`);
+  }
+  return expression;
+}
+
+function executableRouteGraphEdges(workflow, expandedEdges, expandedOnLimitEdges) {
+  const edges = [...expandedEdges];
+  for (const [policyId, policy] of Object.entries(workflow.loopPolicies ?? {})) {
+    const region = new Set(policy.steps);
+    const limitEdges = expandedOnLimitEdges.filter((edge) => edge.policyId === policyId);
+    for (const edge of expandedEdges) {
+      if (region.has(edge.from) && region.has(edge.to)
+        && edge.from === policy.boundary && edge.to === policy.entry) {
+        for (const limitEdge of limitEdges) {
+          edges.push({ ...edge, to: limitEdge.to, fanout: false, onLimitPolicyId: policyId });
+        }
+      }
+    }
+  }
+  return edges.filter((edge, index) => edges.findIndex((candidate) => (
+    candidate.from === edge.from && candidate.to === edge.to && candidate.fanout === edge.fanout
+      && candidate.matchValue === edge.matchValue && candidate.onLimitPolicyId === edge.onLimitPolicyId
+  )) === index);
+}
+
+function workflowPathExists(routeEdges, from, to, { excluding } = {}) {
+  if (from === excluding || to === excluding) return false;
+  const adjacency = new Map();
+  for (const edge of routeEdges) {
+    const targets = adjacency.get(edge.from) ?? [];
+    targets.push(edge.to);
+    adjacency.set(edge.from, targets);
+  }
+  const pending = [from];
+  const visited = new Set();
+  while (pending.length > 0) {
+    const current = pending.shift();
+    if (current === to) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    for (const target of adjacency.get(current) ?? []) {
+      if (target !== excluding && !visited.has(target)) pending.push(target);
+    }
+  }
+  return false;
+}
+
+function assertSelectorProducerGuaranteedBefore(workflow, routeEdges, stepId, field, expression) {
+  const producerStepId = expression.path[0];
+  if (producerStepId === stepId) {
+    fail(`step '${stepId}' ${field} selector cannot select the current approval gate`);
+  }
+  const producerIsReachable = workflowPathExists(routeEdges, workflow.start, producerStepId);
+  const gateIsReachableWithoutProducer = workflowPathExists(routeEdges, workflow.start, stepId, { excluding: producerStepId });
+  if (!producerIsReachable || gateIsReachableWithoutProducer) {
+    fail(`step '${stepId}' ${field} selector producer '${producerStepId}' is not guaranteed to execute before the approval gate`);
+  }
+}
+
+function assertApprovalVerdictTopology({ workflow, routeEdges, stepId, verdict, selectorExpressions }) {
+  const includeExpression = selectorExpressions.includeWhen;
+  const criticExpression = selectorExpressions.outcome;
+  const producerStepId = includeExpression.path[0];
+  const criticStepId = criticExpression.path[0];
+  for (const [field, expression] of Object.entries({ summary: selectorExpressions.summary, findings: selectorExpressions.findings })) {
+    if (expression.path[0] !== criticStepId) fail(`step '${stepId}' input.verdict.${field} must select the same critic '${criticStepId}' as input.verdict.outcome`);
+  }
+
+  const producer = workflow.steps[producerStepId];
+  const producerNext = producer?.next;
+  const producerMatch = typeof producerNext?.match === 'string'
+    ? parsePathExpression(producerNext.match)
+    : undefined;
+  if (!producerMatch || producerMatch.root !== 'output' || JSON.stringify(producerMatch.path) !== JSON.stringify(includeExpression.path.slice(1))) {
+    fail(`step '${stepId}' verdict include_when selector must match producer '${producerStepId}' next.match output path`);
+  }
+  if (producerNext.cases?.[verdict.include_when.equals] !== criticStepId) {
+    fail(`step '${stepId}' verdict include_when value '${verdict.include_when.equals}' must route producer '${producerStepId}' to critic '${criticStepId}'`);
+  }
+  const directCorrection = Object.entries(producerNext.cases ?? {})
+    .some(([value, target]) => value !== verdict.include_when.equals && target === stepId);
+  if (!directCorrection) {
+    fail(`step '${stepId}' verdict topology must include a producer '${producerStepId}' direct-correction route to the gate where include_when is false`);
+  }
+
+  const critic = workflow.steps[criticStepId];
+  const criticNext = critic?.next;
+  const criticMatch = typeof criticNext?.match === 'string'
+    ? parsePathExpression(criticNext.match)
+    : undefined;
+  if (!criticMatch || criticMatch.root !== 'output' || JSON.stringify(criticMatch.path) !== JSON.stringify(criticExpression.path.slice(1))) {
+    fail(`step '${stepId}' verdict outcome selector must match critic '${criticStepId}' next.match output path`);
+  }
+  if (criticNext.cases?.approved !== stepId) {
+    fail(`step '${stepId}' verdict critic '${criticStepId}' approved route must target the current approval gate`);
+  }
+
+  const conditionalEdges = routeEdges.filter((edge) => !(
+    edge.from === producerStepId && edge.matchValue !== undefined && edge.matchValue !== verdict.include_when.equals
+  ));
+  const ordinaryEdges = conditionalEdges.filter((edge) => !edge.onLimitPolicyId);
+  const onLimitEdges = conditionalEdges.filter((edge) => edge.onLimitPolicyId);
+  const reachesGateWithoutCritic = (from) => workflowPathExists(conditionalEdges, from, stepId, { excluding: criticStepId });
+  const canReachOnLimitWithoutCritic = (from, limitEdge) => workflowPathExists(ordinaryEdges, from, limitEdge.from, { excluding: criticStepId });
+  const edgeCanTriggerOnLimit = (edge, limitEdge) => (
+    (edge.from === limitEdge.from && edge.matchValue === limitEdge.matchValue)
+    || canReachOnLimitWithoutCritic(edge.to, limitEdge)
+  );
+  const producerAttackEdges = conditionalEdges.filter((edge) => edge.from === producerStepId
+    && edge.matchValue === verdict.include_when.equals && !edge.onLimitPolicyId);
+  if (producerAttackEdges.some((edge) => onLimitEdges.some((limitEdge) => (
+    edgeCanTriggerOnLimit(edge, limitEdge) && reachesGateWithoutCritic(limitEdge.to)
+  )))) {
+    fail(`step '${stepId}' verdict topology permits loopPolicies.onLimit to bypass critic '${criticStepId}' while include_when is true`);
+  }
+  const criticNonSuccessEdges = conditionalEdges.filter((edge) => edge.from === criticStepId
+    && edge.matchValue !== 'approved' && !edge.onLimitPolicyId);
+  if (criticNonSuccessEdges.some((edge) => onLimitEdges.some((limitEdge) => (
+    edgeCanTriggerOnLimit(edge, limitEdge) && reachesGateWithoutCritic(limitEdge.to)
+  )))) {
+    fail(`step '${stepId}' verdict topology permits loopPolicies.onLimit to route critic '${criticStepId}' non-success to the approval gate`);
+  }
+}
+
+function assertApprovalRoutingSemantics(workflow) {
+  for (const [stepId, step] of Object.entries(workflow.steps)) {
+    if (step.kind !== 'approval') continue;
+    const next = normalizeTransitionNext(step.next);
+    if (Object.hasOwn(step, 'onReject')) continue;
+    if (next.kind !== NEXT_KIND.MATCH_CASES || next.expression.root !== 'output' || next.expression.path.length !== 1 || next.expression.path[0] !== 'approval') {
+      fail(`step '${stepId}' approval next must match \${{ output.approval }} with approved and rejected cases, or declare onReject for a separate approved route`);
+    }
+  }
+}
+
+function assertApprovalProjectionSemantics(workflow, schemasByStep, routeEdges) {
+  for (const [stepId, step] of Object.entries(workflow.steps)) {
+    if (step.kind !== 'approval') continue;
+    const summary = assertApprovalSelector({ workflow, schemasByStep, stepId, step, field: 'input.summary', source: step.input?.summary, kind: 'string' });
+    assertSelectorProducerGuaranteedBefore(workflow, routeEdges, stepId, 'input.summary', summary);
+
+    for (const [index, source] of (step.input?.artifacts ?? []).entries()) {
+      const expression = assertApprovalSelector({ workflow, schemasByStep, stepId, step, field: `input.artifacts[${index}]`, source, kind: 'array' });
+      assertSelectorProducerGuaranteedBefore(workflow, routeEdges, stepId, `input.artifacts[${index}]`, expression);
+    }
+
+    if (step.input?.verdict) {
+      const verdict = step.input.verdict;
+      const selectorExpressions = {
+        includeWhen: assertApprovalSelector({ workflow, schemasByStep, stepId, step, field: 'input.verdict.include_when.selector', source: verdict.include_when?.selector, kind: 'string' }),
+        outcome: assertApprovalSelector({ workflow, schemasByStep, stepId, step, field: 'input.verdict.outcome', source: verdict.outcome, kind: 'string' }),
+        summary: assertApprovalSelector({ workflow, schemasByStep, stepId, step, field: 'input.verdict.summary', source: verdict.summary, kind: 'string-or-string-array' }),
+        findings: assertApprovalSelector({ workflow, schemasByStep, stepId, step, field: 'input.verdict.findings', source: verdict.findings, kind: 'array' }),
+      };
+      assertSelectorProducerGuaranteedBefore(workflow, routeEdges, stepId, 'input.verdict.include_when.selector', selectorExpressions.includeWhen);
+      const includeResolved = schemaForExpression({ workflow, schemasByStep, stepId, step, expression: selectorExpressions.includeWhen });
+      const allowedValues = includeResolved.schema.reduce((acc, schema) => mergeSelectorAnalysis(acc, assertClosedStringValueSchema(schema, `step '${stepId}' input.verdict.include_when.selector`)), selectorAnalysis()).directValues;
+      if (!allowedValues.has(verdict.include_when.equals)) fail(`step '${stepId}' input.verdict.include_when.equals '${verdict.include_when.equals}' is not allowed by the selected producer schema`);
+      assertApprovalVerdictTopology({ workflow, routeEdges, stepId, verdict, selectorExpressions });
+    }
+  }
+}
+
 function validateWorkflowDocument(workflow, options = {}) {
   assertWorkflowIdentity(workflow);
   assertWorkflowStepIds(workflow);
@@ -887,24 +767,28 @@ function validateWorkflowDocument(workflow, options = {}) {
   });
   assertWorkflowShardPolicies(workflow, schemasByStep);
   assertWorkflowFanoutPolicies(workflow, schemasByStep);
+  assertApprovalRoutingSemantics(workflow);
   assertTransitionSemantics(workflow, schemasByStep, {
     requireSchemaCoverage: options.requireSchemaCoverage ?? true,
     requireExpressionRequiredPaths: options.requireExpressionRequiredPaths ?? true,
     allowUnreachableCases: options.allowUnreachableCases ?? false,
     allowOpenTransitionSchemas: options.allowOpenTransitionSchemas ?? false,
   });
+  const expandedRouteEdges = collectExpandedRouteGraphEdges(workflow, schemasByStep, {
+    requireSchemaCoverage: options.requireSchemaCoverage ?? true,
+    requireExpressionRequiredPaths: options.requireExpressionRequiredPaths ?? true,
+    allowUnreachableCases: options.allowUnreachableCases ?? false,
+  });
+  const loopValidationOptions = {
+    requireSchemaCoverage: options.requireSchemaCoverage ?? true,
+    requireExpressionRequiredPaths: options.requireExpressionRequiredPaths ?? true,
+    allowUnreachableCases: options.allowUnreachableCases ?? false,
+  };
+  const expandedOnLimitEdges = collectExpandedOnLimitEdges(workflow, schemasByStep, loopValidationOptions);
   if (workflow.loopPolicies !== undefined) {
-    const loopValidationOptions = {
-      requireSchemaCoverage: options.requireSchemaCoverage ?? true,
-      requireExpressionRequiredPaths: options.requireExpressionRequiredPaths ?? true,
-      allowUnreachableCases: options.allowUnreachableCases ?? false,
-    };
-    assertLoopPolicies(
-      workflow,
-      collectExpandedRouteGraphEdges(workflow, schemasByStep, loopValidationOptions),
-      collectExpandedOnLimitEdges(workflow, schemasByStep, loopValidationOptions),
-    );
+    assertLoopPolicies(workflow, expandedRouteEdges, expandedOnLimitEdges);
   }
+  assertApprovalProjectionSemantics(workflow, schemasByStep, executableRouteGraphEdges(workflow, expandedRouteEdges, expandedOnLimitEdges));
   assertPromptExpressionSemantics(workflow, schemasByStep, {
     requireSchemaCoverage: options.requireSchemaCoverage ?? true,
   });
@@ -933,6 +817,7 @@ export class Workflow {
     for (const [stepId, step] of Object.entries(this.data.steps)) {
       if (!Object.hasOwn(step, 'next')) continue;
       assertTransitionDescriptorTargets(this.data, stepId, normalizeTransitionNext(step.next));
+      if (Object.hasOwn(step, 'onReject')) assertTransitionDescriptorTargets(this.data, stepId, normalizeTransitionNext(step.onReject), 'onReject');
     }
     return { ok: true };
   }

@@ -29,6 +29,26 @@ function assertWorkflowNoNestedMatchCases(workflowDoc) {
   }
 }
 
+function assertNoLegacyApprovalAuthoring(workflowDoc) {
+  const steps = workflowDoc?.steps;
+  if (!steps || typeof steps !== 'object' || Array.isArray(steps)) return;
+  for (const [stepId, step] of Object.entries(steps)) {
+    if (step?.kind !== 'approval') continue;
+    const input = step.input;
+    if (input && typeof input === 'object' && !Array.isArray(input)) {
+      if (Object.hasOwn(input, 'prompt') || Object.hasOwn(input, 'template')) {
+        throw new WorkflowSchemaError(`step '${stepId}' approval prompt/template authoring was removed; use typed input.summary, input.artifacts, and optional input.verdict selectors`);
+      }
+      if (!Object.hasOwn(input, 'summary')) {
+        throw new WorkflowSchemaError(`step '${stepId}' approval input.summary is required and must select an upstream producer string`);
+      }
+    }
+    if (Object.hasOwn(step, 'output') || Object.hasOwn(step, 'approvalOutput')) {
+      throw new WorkflowSchemaError(`step '${stepId}' approval output/schema authoring was removed; output is runner-owned and next must route output.approval`);
+    }
+  }
+}
+
 function assertUnambiguousAgentRuntimeHarnesses(workflowDoc) {
   for (const [stepId, step] of Object.entries(workflowDoc.steps)) {
     const sources = [];
@@ -60,6 +80,7 @@ export { workflowSchema };
 export function assertWorkflowSchema(workflowDoc, { externalSchemas = [] } = {}) {
   try {
     assertWorkflowNoNestedMatchCases(workflowDoc);
+    assertNoLegacyApprovalAuthoring(workflowDoc);
     assertJsonSchema(workflowSchema, workflowDoc, 'workflow', { schemas: [workflowSchema, ...externalSchemas] });
     assertUnambiguousAgentRuntimeHarnesses(workflowDoc);
   } catch (error) {

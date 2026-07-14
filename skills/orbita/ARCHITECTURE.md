@@ -25,6 +25,14 @@ current runtime architecture. Orchestrator debug notes and worker binding are
 bounded `continue` side effects; they do not navigate separately and do not
 accept worker output. Obsolete backward-compatibility surfaces do not.
 
+`instructions --step-id` dispatches from the current effective host action,
+not from a prompt cached on an executable step. A current `run_worker` request
+returns Template-compiled worker instructions. A current
+`wait_for_approval` request returns the same dedicated approval projection used
+by `next` and `continue`. A request superseded by an unresolved non-blocking
+stop, a terminal response, or a missing/stale current request has no loadable
+step instructions and must fail before lease renewal.
+
 `listPointerTransitions` and `movePointer` are runner API control-plane recovery
 surfaces for repositioning only the current baton pointer among state-bearing
 workflow predecessors. Their shell-facing CLI modes are `list-pointer-transitions` and
@@ -173,12 +181,34 @@ Owner: `lib/use-cases/runtime/**` and `lib/runtime/**`
 Runtime helpers are deterministic and IO-free. They operate over supplied
 values, entities, DTOs, and supplied schema/path facts.
 
+Executable-step records are neutral: they identify the normal step action and
+execution context but do not carry `compiledPrompt` or any other rendered text.
+One host-work projection combines each executable record with runner control
+state to select the effective host action before rendering. An unresolved stop
+for that request projects `resolve_non_blocking_stop`; otherwise the normal
+`run_worker`, `wait_for_approval`, or terminal path remains effective.
+
+Template owns worker instructions and is reachable only from the effective
+`run_worker` branch. A colocated approval contract/projection owner selects a
+producer-authored summary, ordered safe artifact metadata, and an optional
+route-applicable current verdict, then renders the bounded human gate. Stop and
+terminal projections remain separate from both Template and approval
+selection. Removing either the host-work projection or approval owner would
+duplicate effective-action selection or the closed approval contract across
+`next`, `continue`, `instructions`, and output acceptance, so both zones pass
+the deletion test without requiring a renderer hierarchy.
+
 Runtime helpers must not import:
 
 - `node:fs`
 - `node:path`
 - persistence modules
 - workflow-resource loaders
+
+The host-work projection must additionally not import entrypoints, Template,
+command builders, or output-schema loaders. Approval, stop, and terminal
+projection must not import Template or output-schema loaders. Entrypoints must
+not dispatch renderer internals.
 
 Output validation in runtime helpers consumes loaded schemas and explicit path
 facts. Schema loading, realpath probing, symlink checks, and artifact path facts
@@ -240,6 +270,30 @@ Shard execution adds two durable file-contract surfaces:
 
 These contracts are shared across validation, runtime, persistence validation, tests, and documentation.
 
+Approval steps use a runner-owned, typed contract rather than a
+workflow-authored prompt/output-schema pair. `workflow-document.json` owns the
+approval input projection: required path-only `summary`, optional ordered
+path-only `artifacts`, and optional `verdict` selectors for outcome, concise
+summary, and actionable findings with a required route-applicability
+`include_when` predicate. Startup semantic validation proves selector type and
+cardinality plus guaranteed producer execution before the approval gate. The
+dominance check uses the complete executable route graph: static and match-case
+edges, schema-expanded dynamic-target edges, and the retarget edges that each
+`loopPolicies.onLimit` can introduce. Each selected producer must be reachable
+from workflow start, and removing it from that graph must make the gate
+unreachable. Approval routing either covers both `output.approval` values or
+declares a static `onReject` revision target while `next` owns the approved
+route. Validation also proves producer -> critic -> gate/direct-correction
+topology before a verdict selector is accepted.
+
+Approval steps declare no output schema. The accepted decision is the closed
+runner-owned record `{ approval: "approved" | "rejected", feedback?: string }`;
+`feedback`, when present, is bounded and non-blank, and additional properties
+are invalid. The runner host-response schema owns action-specific negative
+fields and the terminal split: approval requests expose no output-schema or
+worker-reuse metadata, while `done` requires one top-level baton and forbids
+requests.
+
 ### Boundary Checks
 
 Owner: `.dependency-cruiser.cjs`
@@ -266,6 +320,10 @@ Checks should cover:
 - top-level use cases importing filesystem/path/persistence
 - top-level use cases importing catalog readers
 - runtime helpers importing filesystem/path/persistence
+- host-work projection importing persistence, entrypoints, Node IO, Template,
+  command builders, or output-schema loaders
+- approval/stop/terminal projection importing Template or output-schema loaders
+- entrypoints dispatching renderer internals
 - persistence importing use cases
 - persistence importing entity-owned Baton schema after migration
 - run-state persistence importing startup validation
@@ -298,6 +356,23 @@ IO-free runtime helpers, and supplied contracts. Persistence loads workflow
 resources, schemas, run-state records, leases, and path facts, then passes plain
 values or contracts across the boundary.
 
+Runtime execution is action-first. The runner resolves neutral executable work,
+projects the effective host action from that work plus Baton stop state, renders
+only the selected consumer, validates the complete public response, and only
+then persists `currentRequests` or Baton changes. This render-before-persist
+order keeps failed rendering from committing a cursor/request set that no host
+can execute. Worker/fanout/shard rendering still converges on Template through
+`run_worker`; approval, unresolved stop, and terminal paths never enter
+Template.
+
+Approval projection evaluates `include_when` against the current producer
+output before selecting any critic fields. A false predicate omits the stored
+verdict entirely; a true predicate may select only the current critic outcome,
+concise summary, and actionable findings. Prior approval state is not a
+freshness signal. Artifact metadata keeps declared order, is deduplicated after
+existing containment/realpath/symlink checks, renders absolute links once, and
+never causes artifact body reads.
+
 Entrypoints format current public output and errors. They do not reach into
 runtime helper internals to assemble behavior.
 
@@ -325,6 +400,17 @@ duplicating it, and fails closed on any unrelated tail, truncation, or invalid
 hash. Baton and current-request files retain their atomic-write behavior. The
 legacy v1 full-history pending format remains recoverable for commits already in
 flight, but new commits must use v2.
+
+The first aggregate commit uses that same pending record as its recovery
+authority while `history.md`, `baton.json`, and current requests are all absent.
+If journal application fails after any pending/history/baton/current-request
+stage, rollback restores those absent-file snapshots but retains the journal,
+the run's `running` authority, and the original hashed lease. Failure-history
+recording must not consume that journal or clear the lease. A retry with the
+same explicit token recovers the retained transaction before normal execution,
+materializes all three durable targets once, and removes the journal. Failures
+before a pending journal exists have no partial durable commit to recover and
+may use the normal new-run failure cleanup.
 
 `history.md` remains the canonical human-facing projection. Commands that only
 need baton/current requests carry a file reference plus byte size and do not
@@ -447,14 +533,18 @@ Lifecycle:
   erase its resolution, while a genuinely new stop must use a new id.
 - `continue` projects an unresolved record as a
   `resolve_non_blocking_stop` host action. Completed siblings in fanout/shard
-  batches remain accepted while the stopped request stays active.
+  batches remain accepted while the stopped request stays active. Projection
+  happens before normal consumer selection, so the matching worker or approval
+  renderer is not called while its stop is unresolved.
 - `resolve-stop` requires the exact current `stop_id` and persists the bounded
   orchestrator/user resolution on that control record. Exact retries are
   idempotent; conflicting retries and stale resolutions for an older stop are
   rejected without mutation.
 - `continue` renders the same request again with resolution context and the
-  preferred worker hint when available. The record is cleared only after that
-  request submits normal completed output through `write-output`.
+  preferred worker hint when available. Approval recovery receives the same
+  bounded resolved context without becoming a Template path. The record is
+  cleared only after that request submits normal completed output through
+  `write-output`.
 
 Managed history records only the stop id for report/resolve lifecycle events;
 it never copies the free-text stop or resolution fields. Those bounded fields
@@ -733,10 +823,12 @@ The intended shape is static-graph first:
 - baton stores only loop progress counters in a loop-specific namespace, never
   workflow policy definitions.
 
-Loop policies are separate from output.schema retry. Invalid worker or approval
-output that is retried by output.schema validation must not increment loop
-policy progress. The retry key shape `<stepId>:output.schema` remains reserved
-for output.schema attempts; loop policy progress must use a distinct namespace.
+Loop policies are separate from worker `output.schema` retry. Invalid worker
+output retried by output-schema validation must not increment loop policy
+progress. Invalid approval decisions are rejected by the closed runner-owned
+contract and do not enter workflow output-schema retry. The retry key shape
+`<stepId>:output.schema` remains reserved for worker output-schema attempts;
+loop policy progress must use a distinct namespace.
 
 Rejected primary models:
 
@@ -766,6 +858,10 @@ Allowed:
 - `use-cases -> file contracts`
 - `runtime helpers -> entities`
 - `runtime helpers -> file contracts`
+- host-work projection -> plain workflow/Baton records, step-action policy,
+  and public stop shaping
+- approval projection -> typed state selection, supplied artifact path facts,
+  redaction, runner approval contract, and command builders
 - `persistence -> DTOs/records/file contracts`
 - Workflow loop policy validation may depend on workflow contracts, output
   schema target enumerability, route graph expansion, and SCC/self-loop
@@ -787,6 +883,13 @@ Forbidden:
 - `lib/runtime -> node:fs`
 - `lib/runtime -> node:path`
 - `lib/runtime -> persistence`
+- host-work projection -> entrypoints
+- host-work projection -> Template
+- host-work projection -> command builders
+- host-work projection -> workflow output-schema loaders
+- approval/stop/terminal projection -> Template
+- approval/stop/terminal projection -> workflow output-schema loaders
+- entrypoints -> renderer internals
 - top-level use cases -> catalog readers
 - runner runtime -> catalog/config discovery
 - `persistence -> use-cases`
@@ -813,6 +916,18 @@ Architecture review must verify:
 - helper/schema zones are colocated unless shared ownership pressure is proven
 - docs, checks, and source agree on supported command surface and dependency
   rules
+- executable entries remain text-free, unresolved stops are selected before
+  rendering, and only effective `run_worker` reaches Template
+- the approval owner is the single typed selection/decision boundary, verdict
+  inclusion is proven by current route applicability, every selected producer
+  dominates the gate across static, match-case, schema-expanded dynamic, and
+  loop-policy `onLimit` edges, and no approval prompt, output schema, Template
+  branch, compatibility wrapper, or deprecated export survives
+- first-commit failure recovery retains the absent-file v2 journal and original
+  lease authority until same-token recovery materializes history, baton, and
+  current requests atomically
+- full-JSON `done` has one top-level baton and no requests, while terminal
+  instruction text has no baton, serialized response, or next runner command
 - pointer recovery docs, API exports, CLI modes, tests, and source agree that
   `listPointerTransitions` and `movePointer` require active lease authority,
   preserve baton state, derive predecessors from workflow transitions resolved
@@ -835,10 +950,19 @@ Backend review must verify:
 - output validation, artifact metadata handling, run-state persistence, leases,
   history, and current migration semantics did not change accidentally
 - imports obey the dependency rules above
+- `instructions --step-id` returns the current worker or approval projection
+  and rejects stop-superseded, terminal, missing, and stale requests before
+  renewing the lease
+- accepted approval output is exactly `approved|rejected` plus optional bounded
+  non-blank `feedback`; rejection routes through `output.approval` or a static
+  `onReject` target, and approval never invokes a workflow output-schema loader
 - custom workflow roots validate before run creation, retain source-qualified
   catalog identity, and do not widen resource access by duplicate workflow name
 - shard `input.shards` expansion snapshots arbitrary JSON values once, restart rerenders the durable current batch, accepted outputs remain single primary records, and final worker output follows normal `next`
-- existing sequential, approval, fanout, output schema, lease, artifact/debug-summary, history, worker binding, and non-blocking stop behavior remains compatible
+- existing sequential, fanout, worker output-schema, lease,
+  artifact/debug-summary, history, worker binding, and non-blocking-stop
+  behavior remains compatible; approval prompt/schema variants are an
+  intentional atomic breaking migration with no compatibility layer
 
 QA/reliability review must verify:
 

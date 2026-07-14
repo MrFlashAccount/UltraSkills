@@ -1,23 +1,12 @@
-/** ContinueRun use-case applies output, then renders the next or terminal runtime response. */
+/** ContinueRun applies output and returns the next neutral executable response. */
 import { assertResponseSchema } from '../runtime/output/response-schema.mjs';
 import { applyWorkflowOutput } from '../runtime/workflow-output/apply.mjs';
-import { renderStepPrompts } from '../runtime/render-step-prompts.mjs';
 import { assertLoadedWorkflowAndBaton } from '../runtime/guards/workflow.mjs';
 
-export function renderAppliedResponse({ workflowDoc, response, resources, includeDiagnostics = false } = {}) {
-  const { workflow } = assertLoadedWorkflowAndBaton(workflowDoc, response.baton, { allowedRoles: resources?.allowedRoles, outputSchemas: resources?.outputSchemas });
-  const rendered = {
-    ...response,
-    steps: renderStepPrompts({
-      workflow,
-      baton: response.baton,
-      steps: response.steps,
-      resources,
-      includeDiagnostics,
-    }),
-  };
-  assertResponseSchema(rendered);
-  return rendered;
+export function renderAppliedResponse({ workflowDoc, response, resources } = {}) {
+  assertLoadedWorkflowAndBaton(workflowDoc, response.baton, { allowedRoles: resources?.allowedRoles, outputSchemas: resources?.outputSchemas });
+  assertResponseSchema(response);
+  return response;
 }
 
 export function continueRun({ workflowDoc, batonDoc, outputContent, outputValue, resources, includeDiagnostics = false } = {}) {

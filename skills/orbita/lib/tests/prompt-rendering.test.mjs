@@ -4,12 +4,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
-import { renderStepPrompts } from '../runtime/render-step-prompts.mjs';
+import { renderWorkerInstructions } from '../runtime/render-worker-instructions.mjs';
 import { selectState } from '../runtime/state-selection.mjs';
 import { renderWorkflowPrompt } from '../entities/Template/index.mjs';
 import { validateAgainstOutputSchema } from '../runtime/output/output-schema-validation.mjs';
 import { loadWorkflowResources } from '../persistence/workflow-resources/runtime-reader.mjs';
 import { loadOutputSchema } from '../persistence/workflow-resources/output-schema-loader.mjs';
+import { readWorkflowDocument } from '../persistence/workflow-resources/workflow-document-reader.mjs';
+import { toHostResponse } from '../runner/host-requests.mjs';
+import { reportStopCommandForStep, writeOutputCommandForStep } from '../runner/runner-command-builder.mjs';
 import { runWorkflowRuntimeApi } from './helpers/workflow-runtime-api-client.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -39,18 +42,6 @@ writeFileSync(path.join(tempDir, 'review-output.schema.json'), `${JSON.stringify
   },
   additionalProperties: false,
 }, null, 2)}\n`);
-writeFileSync(path.join(tempDir, 'approval-output.schema.json'), `${JSON.stringify({
-  $schema: 'https://json-schema.org/draft/2020-12/schema',
-  type: 'object',
-  required: ['approval'],
-  properties: {
-    approval: { enum: ['approved', 'rejected'] },
-    artifacts: { type: 'array' },
-    results: { type: 'array' },
-    choice: { const: 'approved' },
-  },
-  additionalProperties: false,
-}, null, 2)}\n`);
 mkdirSync(path.join(tempDir, 'templates'), { recursive: true });
 writeFileSync(path.join(tempDir, 'templates', 'implementation-plan-template.md'), '## Implementation plan\nReturn implementation plan.\n');
 writeFileSync(path.join(tempDir, 'templates', 'reasons-canvas-template.md'), '## REASONS Canvas\nReturn research Canvas.\n');
@@ -66,7 +57,6 @@ function outputContract(name = 'worker') {
     worker: 'worker-output.schema.json',
     research: 'worker-output.schema.json',
     review: 'review-output.schema.json',
-    approval: 'approval-output.schema.json',
   };
   return { template: templates[name] ?? 'templates/review-verdict-template.md', schema: schemas[name] ?? 'worker-output.schema.json' };
 }
@@ -87,7 +77,7 @@ const schemaWorkflowDoc = {
       approval_step: {
         name: 'Approval step',
         kind: 'approval',
-        input: { prompt: 'Approve.' },
+        input: { summary: '${{ input.worker_step.outcome }}' },
         next: { match: '${{ output.approval }}', cases: { approved: 'direct_next_worker', rejected: 'worker_step' } },
       },
       direct_next_worker: {
@@ -142,10 +132,21 @@ function renderPromptWithResources(context) {
 }
 
 function renderStepsWithResources(context) {
-  return renderStepPrompts({
-    ...context,
-    resources: context.resources ?? resourcesForRender(context),
-  });
+  const resources = context.resources ?? resourcesForRender(context);
+  return context.steps.map((entry) => ({
+    ...entry,
+    compiledPrompt: {
+      prompt: renderWorkerInstructions({
+        workflow: context.workflow,
+        baton: context.baton,
+        entry,
+        currentEntries: context.steps,
+        resources,
+        includeDiagnostics: context.includeDiagnostics,
+        followUp: context.followUp,
+      }),
+    },
+  }));
 }
 
 function assertMarkersInOrder(value, markers) {
@@ -246,26 +247,26 @@ function renderFixture(overrides = {}) {
   });
 }
 
-test('prompt renderer: default prompt omits prompt input context dump and keeps deterministic newline formatting without diagnostics by default', () => {
-  const step = { name: 'Approval step', kind: 'approval', input: { prompt: 'Approve.' }, next: 'done' };
-  const compiled = renderFixture({ label: 'render-default', step, batonDoc: baton({ cursor: 'approval_step', state: { artifacts: [], results: [], worker_step: [{ id: 'a' }], approval_step: [] } }) });
+test('prompt renderer: default worker prompt omits prompt input context dump and keeps deterministic newline formatting without diagnostics by default', () => {
+  const step = { name: 'Worker step', kind: 'worker', input: { prompt: 'Implement.' }, output: { template: 'output.md' }, next: 'done' };
+  const compiled = renderFixture({ label: 'render-default', step, batonDoc: baton({ state: { artifacts: [], results: [], worker_step: [{ id: 'a' }] } }) });
 
   assert.equal(Object.hasOwn(compiled, 'stepId'), false);
   assert.equal(Object.hasOwn(compiled, 'action'), false);
   assert.equal(Object.hasOwn(compiled, 'kind'), false);
   assert.equal(Object.hasOwn(compiled, 'name'), false);
-  assert.match(compiled.prompt, /^# Approval step\n/);
+  assert.match(compiled.prompt, /^# Worker step\n/);
   assertMarkersInOrder(compiled.prompt, [
     '## Workflow step prompt',
-    'Approve.',
+    'Implement.',
   ]);
   assert.doesNotMatch(compiled.prompt, /## Prompt input context/);
   assert.equal(Object.hasOwn(compiled, 'diagnostics'), false);
   assert.equal(compiled.prompt.endsWith('\n'), true);
 });
 
-test('prompt renderer: default prompt diagnostics are opt-in', () => {
-  const step = { name: 'Approval step', kind: 'approval', input: { prompt: 'Approve.' }, next: 'done' };
+test('prompt renderer: default worker prompt diagnostics are opt-in', () => {
+  const step = { name: 'Worker step', kind: 'worker', input: { prompt: 'Implement.' }, output: { template: 'output.md' }, next: 'done' };
   const compiled = renderFixture({ label: 'render-default-diagnostics', step, includeDiagnostics: true });
 
   assert.deepEqual(compiled.diagnostics, [
@@ -527,43 +528,78 @@ test('prompt renderer: appends required reads, output, and workflow prompt in fi
   assert.doesNotMatch(compiled.prompt, /## Prompt input context/);
 });
 
-test('prompt renderer: approval keeps role reads but renders prompt input artifacts as attachment-only', () => {
-  writeRoleMaterial('backend');
-  writeFileSync(path.join(tempDir, 'runtime-required-reads-template.md'), '# Worker step\n');
-  const runDir = path.join(tempDir, 'runs', 'runtime-required-reads');
-  mkdirSync(path.join(runDir, 'worker_step', 'artifacts'), { recursive: true });
-  const step = {
-    name: 'Approval step',
-    kind: 'approval',
-    input: { template: 'runtime-required-reads-template.md', role: 'backend', prompt: 'Approve.\n\nArtifacts:\n${{ input.worker_step.artifacts }}' },
-    next: 'done',
-  };
-  const workflow = {
-    ...schemaWorkflowDoc,
-    steps: { ...schemaWorkflowDoc.steps, approval_step: step },
-  };
-  const workflowPath = writeJson('runtime-required-reads-workflow.json', workflow);
-  const resources = loadWorkflowResources({ workflow, workflowPath, repositoryRoot: tempDir, runDir });
-
-  const compiled = renderPromptWithResources({
-    workflowPath,
-    workflow,
-    baton: baton({ cursor: 'approval_step', state: { artifacts: [], results: [], worker_step: { artifacts: [{ id: 'packet', content_type: 'text/markdown', path: 'worker_step/artifacts/packet.md' }] } } }),
-    stepId: 'approval_step',
-    step,
-    repositoryRoot: tempDir,
-    resources,
+test('dev-harness research approval stays within the compact stdout budget', () => {
+  const workflowPath = path.join(root, 'workflows/dev-harness/workflow.toml');
+  const workflow = readWorkflowDocument(workflowPath);
+  const runId = 'dev-harness-approval-budget';
+  const runsRoot = path.join(tempDir, 'runs');
+  const runDir = path.join(runsRoot, runId);
+  const stepId = 'approve_research';
+  const leaseToken = 'approval-budget-token';
+  const artifactPath = path.join(runDir, 'research_draft', 'artifacts', 'reasons-canvas-research.md');
+  const evidencePath = path.join(runDir, 'research_draft', 'artifacts', 'research-evidence.md');
+  mkdirSync(path.dirname(artifactPath), { recursive: true });
+  writeFileSync(artifactPath, '# Research Canvas\n');
+  writeFileSync(evidencePath, '# Research Evidence\n');
+  const batonDoc = baton({
+    cursor: stepId,
+    state: {
+      artifacts: [],
+      results: [],
+      research_draft: {
+        outcome: 'ready_for_attack',
+        summary: 'The revised research contract is ready for approval with explicit traversal semantics and bounded snapshot reads.',
+        artifacts: [
+          { id: 'reasons-canvas-research', content_type: 'text/markdown', path: artifactPath, summary: 'Research contract.' },
+          { id: 'reasons-canvas-research', content_type: 'text/markdown', path: artifactPath, summary: 'Duplicate metadata.' },
+          { id: 'research-evidence', content_type: 'text/markdown', path: evidencePath, summary: 'Research evidence.' },
+        ],
+      },
+      research_attack: {
+        outcome: 'approved',
+        verdict: {
+          summary: ['The proposal is evidence-backed.', 'No must-fix research gaps remain.'],
+          evidence_checked: ['Current workflow and dashboard contracts'],
+          findings: [],
+        },
+      },
+      approve_research: { approval: 'approved' },
+    },
   });
+  const writer = writeOutputCommandForStep(runId, stepId, { runsRoot, leaseToken });
+  const reportStop = reportStopCommandForStep(runId, stepId, { runsRoot, leaseToken });
+  const resources = {
+    ...loadWorkflowResources({ workflow, workflowPath, repositoryRoot: root, runDir }),
+    validatingWriterCommand: writer,
+    reportStopCommand: reportStop,
+    artifactOutputDir: path.join(runDir, stepId, 'artifacts'),
+  };
+  const step = workflow.steps[stepId];
+  const response = toHostResponse(
+    { baton: batonDoc, steps: [{ id: stepId, action: 'wait_for_approval', step }] },
+    { runId, workflow, workflowPath, repositoryRoot: root, runsRoot, leaseToken, includeInlineInstructions: true, resources },
+  );
 
-  assertMarkersInOrder(compiled.prompt, [
-    '## Required reads',
-    `1. Role material for 'backend': \`${path.join(tempDir, 'roles', 'backend', 'ROLE.md')}\``,
-    `2. Role material for 'backend': \`${path.join(tempDir, 'roles', 'backend', 'RUBRIC.md')}\``,
-    '## Approval attachments',
-    `1. Prompt input artifact 'packet' from 'worker_step' (text/markdown): \`${path.join(runDir, 'worker_step', 'artifacts', 'packet.md')}\``,
-    'Attachments are not required reads.',
-  ]);
-  assert.doesNotMatch(compiled.prompt, /3\. Prompt input artifact/);
+  assert.ok(Buffer.byteLength(response.orchestratorInstruction) <= 3_000, 'real DevHarness approval stdout exceeded the 3 KB outer-envelope budget');
+  assert.match(response.orchestratorInstruction, /The revised research contract is ready for approval/);
+  assert.match(response.orchestratorInstruction, /\[reasons-canvas-research\]\(<.*reasons-canvas-research\.md>\)/);
+  assert.match(response.orchestratorInstruction, /\[research-evidence\]\(<.*research-evidence\.md>\)/);
+  assert.equal(response.orchestratorInstruction.split(artifactPath).length - 1, 1);
+  assert.equal(response.orchestratorInstruction.split(evidencePath).length - 1, 1);
+  assert.equal(response.orchestratorInstruction.split("workflow-runner.mjs' continue").length - 1, 1);
+  assert.match(response.orchestratorInstruction, /\{ "approval": "approved" \}/);
+  assert.match(response.orchestratorInstruction, /## Current critic verdict/);
+  assert.match(response.orchestratorInstruction, /The proposal is evidence-backed/);
+  assert.doesNotMatch(response.orchestratorInstruction, /evidence_checked|Current workflow and dashboard contracts/);
+  assert.doesNotMatch(response.orchestratorInstruction, /Schema-derived artifact field notes|Artifact output directory for this step|"\$schema"|compiledPrompt|outputSchema/);
+
+  const correctedBaton = structuredClone(batonDoc);
+  correctedBaton.state.research_draft.outcome = 'ready_for_approval';
+  const corrected = toHostResponse(
+    { baton: correctedBaton, steps: [{ id: stepId, action: 'wait_for_approval', step }] },
+    { runId, workflow, workflowPath, repositoryRoot: root, runsRoot, leaseToken, includeInlineInstructions: true, resources },
+  );
+  assert.doesNotMatch(corrected.orchestratorInstruction, /## Current critic verdict|The proposal is evidence-backed|Current workflow and dashboard contracts/);
 });
 
 test('prompt renderer: worker prompt input artifacts remain required reads', () => {
@@ -602,9 +638,10 @@ test('prompt renderer: worker prompt input artifacts remain required reads', () 
 test('prompt renderer: rejects relative prompt input artifact attachment paths when no runtime resolver is available', () => {
   writeFileSync(path.join(tempDir, 'cwd-ambiguity-template.md'), '# Worker step\n');
   const step = {
-    name: 'Approval step',
-    kind: 'approval',
-    input: { template: 'cwd-ambiguity-template.md', prompt: 'Approve.\n\nArtifacts:\n${{ input.worker_step.artifacts }}' },
+    name: 'Worker step',
+    kind: 'worker',
+    input: { template: 'cwd-ambiguity-template.md', prompt: 'Implement.\n\nArtifacts:\n${{ input.worker_step.artifacts }}' },
+    output: { template: 'output.md' },
     next: 'done',
   };
 
@@ -705,25 +742,17 @@ test('prompt renderer: ignores render-time user prompt after persisted injection
   assert.equal(compiled.prompt.includes(rawPrompt), false);
 });
 
-test('prompt renderer: ignores render-time user prompt for non-worker steps', () => {
-  const rawPrompt = 'Approval steps must not receive startup prompt.';
-  const step = {
-    name: 'Approval step',
-    kind: 'approval',
-    input: { prompt: 'Approve.' },
-    next: 'done',
-  };
-
-  const compiled = renderFixture({
-    label: 'render-user-prompt-approval-guard',
-    stepId: 'approval_step',
-    step,
-    batonDoc: baton({ cursor: 'approval_step', user_prompt: rawPrompt }),
-    userPrompt: rawPrompt,
-  });
-
-  assert.doesNotMatch(compiled.prompt, /## User prompt/);
-  assert.equal(compiled.prompt.includes(rawPrompt), false);
+test('worker instruction renderer rejects non-worker steps before Template compilation', () => {
+  const step = { name: 'Approval step', kind: 'approval', input: { summary: '${{ input.worker_step.outcome }}' }, next: 'done' };
+  assert.throws(
+    () => renderWorkerInstructions({
+      workflow: schemaWorkflowDoc,
+      baton: baton({ cursor: 'approval_step', state: { artifacts: [], results: [], worker_step: { outcome: 'ready' } } }),
+      entry: { id: 'approval_step', action: 'wait_for_approval', step },
+      resources: {},
+    }),
+    /worker instruction renderer only accepts effective run_worker entries/,
+  );
 });
 
 test('prompt renderer: does not render empty user prompt even when render context provides it', () => {
@@ -840,7 +869,7 @@ test('prompt renderer: initial parallel workers put user prompt on first worker 
   assert.equal(rendered[1].compiledPrompt.prompt.includes(rawPrompt), false);
 });
 
-test('prompt renderer: mixed current approval and worker gives user prompt only to worker', () => {
+test('worker instruction renderer excludes a mixed current approval and gives the user prompt to the worker', () => {
   const workflow = {
     ...schemaWorkflowDoc,
     steps: {
@@ -848,7 +877,7 @@ test('prompt renderer: mixed current approval and worker gives user prompt only 
       current_gate: {
         name: 'Current gate',
         kind: 'approval',
-        input: { prompt: 'Ask for approval.' },
+        input: { summary: '${{ input.worker_step.outcome }}' },
         next: 'done',
       },
       current_worker: {
@@ -861,21 +890,21 @@ test('prompt renderer: mixed current approval and worker gives user prompt only 
     },
   };
   const rawPrompt = 'Worker gets startup prompt after a same-batch gate.';
-  const rendered = renderStepsWithResources({
+  const context = {
     workflowPath: writeJson('mixed-current-user-prompt-workflow.json', workflow),
     workflow,
     baton: baton({ user_prompt: rawPrompt, user_prompt_target: 'current_worker' }),
-    steps: [
-      { id: 'current_gate', action: 'wait_for_approval', step: workflow.steps.current_gate },
-      { id: 'current_worker', action: 'run_worker', step: workflow.steps.current_worker },
-    ],
     repositoryRoot: tempDir,
+  };
+  const gate = { id: 'current_gate', action: 'wait_for_approval', step: workflow.steps.current_gate };
+  assert.throws(() => renderStepsWithResources({ ...context, steps: [gate] }), /only accepts effective run_worker entries/);
+  const rendered = renderStepsWithResources({
+    ...context,
+    steps: [{ id: 'current_worker', action: 'run_worker', step: workflow.steps.current_worker }],
   });
 
-  assert.doesNotMatch(rendered[0].compiledPrompt.prompt, /## User prompt/);
-  assert.equal(rendered[0].compiledPrompt.prompt.includes(rawPrompt), false);
-  assert.match(rendered[1].compiledPrompt.prompt, /## User prompt/);
-  assert.equal(rendered[1].compiledPrompt.prompt.includes(rawPrompt), true);
+  assert.match(rendered[0].compiledPrompt.prompt, /## User prompt/);
+  assert.equal(rendered[0].compiledPrompt.prompt.includes(rawPrompt), true);
 });
 
 test('prompt renderer: resolves input.role as required reads for ROLE.md and RUBRIC.md', () => {
@@ -1390,7 +1419,7 @@ test('prompt renderer: validation feedback appends to prompt arrays', () => {
 
 test('runtime render: prompt input expressions cannot read aggregate runtime state', () => {
   const workflowDoc = structuredClone(schemaWorkflowDoc);
-  workflowDoc.steps.approval_step.input.prompt = 'Bad aggregate:\n${{ input.artifacts }}';
+  workflowDoc.steps.approval_step.input = { summary: '${{ input.artifacts.summary }}' };
   const workflowPath = writeJson('runtime-reserved-render-workflow.json', workflowDoc);
   const batonPath = writeJson('runtime-reserved-render-baton.json', baton({ cursor: 'approval_step', status: 'running', state: { artifacts: [{ producerStepId: 'worker_step', artifact: { id: 'packet', content_type: 'text/markdown', path: '/runs/worker_step/artifacts/packet.md', summary: 'leaked' } }], results: [] } }));
 
@@ -1400,7 +1429,7 @@ test('runtime render: prompt input expressions cannot read aggregate runtime sta
   assert.match(response.stderr, /input step or fanout branch 'artifacts' is not declared/);
 });
 
-test('runtime render: fixture returns compiledPrompt and does not mutate baton', () => {
+test('runtime render: fixture returns neutral executable entry and does not mutate baton', () => {
   const outputTemplateRef = `${path.basename(tempDir)}-worker-output.md`;
   writeFileSync(path.join(tempDir, 'worker.md'), '# Worker template\n');
   writeFileSync(path.join(tempDir, outputTemplateRef), '## Required return\nUse this contract.\n');
@@ -1416,41 +1445,26 @@ test('runtime render: fixture returns compiledPrompt and does not mutate baton',
 
   assert.equal(readFileSync(batonPath, 'utf8'), before, 'render mutated baton file');
   assert.equal(response.steps[0].id, 'worker_step');
-  assert.equal(Object.hasOwn(response.steps[0].compiledPrompt, 'stepId'), false);
-  assert.equal(Object.hasOwn(response.steps[0].compiledPrompt, 'action'), false);
-  assert.equal(Object.hasOwn(response.steps[0].compiledPrompt, 'kind'), false);
-  assert.equal(Object.hasOwn(response.steps[0].compiledPrompt, 'name'), false);
-  assert.equal(response.steps[0].compiledPrompt.metadata.outputTemplate, outputTemplateRef);
-  assert.equal(Object.hasOwn(response.steps[0].compiledPrompt.metadata, 'promptInputKeys'), false);
-  assert.equal(Object.hasOwn(response.steps[0].compiledPrompt, 'diagnostics'), false);
-  assertMarkersInOrder(response.steps[0].compiledPrompt.prompt, [
-    '# Worker template',
-    '## Output contract',
-    `<!-- output template: ${outputTemplateRef} -->`,
-    '## Required return\nUse this contract.',
-    '## Workflow step prompt',
-    'Run worker.',
-    '## Final reminder',
-    'Return exactly according to the output contract above.',
-  ]);
-  assert.doesNotMatch(response.steps[0].compiledPrompt.prompt, /## Prompt input context/);
+  assert.equal(response.steps[0].action, 'run_worker');
+  assert.equal(Object.hasOwn(response.steps[0], 'compiledPrompt'), false);
 });
 
-test('runtime render: diagnostics are included only when explicitly requested', () => {
+test('runtime render: diagnostics flag cannot attach compiled consumer text to neutral entries', () => {
   const workflowPath = writeJson('render-diagnostics-workflow.json', schemaWorkflowDoc);
-  const batonPath = writeJson('render-diagnostics-baton.json', baton({ cursor: 'approval_step' }));
+  const batonPath = writeJson('render-diagnostics-baton.json', baton());
 
   const defaultResponse = expectRuntimeResult(
     'render-diagnostics-default',
     runWorkflowRuntimeApi({ mode: 'render', workflowPath, batonPath }),
     true,
   );
-  assert.equal(Object.hasOwn(defaultResponse.steps[0].compiledPrompt, 'diagnostics'), false);
+  assert.equal(Object.hasOwn(defaultResponse.steps[0], 'compiledPrompt'), false);
 
   const diagnosticsResponse = expectRuntimeResult(
     'render-diagnostics-opt-in',
     runWorkflowRuntimeApi({ mode: 'render', workflowPath, batonPath, includeDiagnostics: true }),
     true,
   );
-  assert.deepEqual(diagnosticsResponse.steps[0].compiledPrompt.diagnostics.map((diagnostic) => diagnostic.code), ['default_prompt_used']);
+  assert.equal(Object.hasOwn(diagnosticsResponse.steps[0], 'compiledPrompt'), false);
+  assert.deepEqual(diagnosticsResponse.steps, defaultResponse.steps);
 });

@@ -161,7 +161,7 @@ test('E2E fixture: long happy path loops through review revision and preserves l
   const approvalInstructions = await instructions(run, 'approval_gate');
   assert.doesNotMatch(approvalInstructions, /## Required reads/);
   assert.match(approvalInstructions, /## Approval attachments/);
-  assert.match(approvalInstructions, /Prompt input artifact 'plan' from 'plan' \(text\/markdown\):/);
+  assert.match(approvalInstructions, /\[plan\]\(<.*plan\/artifacts\/plan\.md>\) — text\/markdown/);
   assert.match(approvalInstructions, /plan\/artifacts\/plan\.md/);
   assert.doesNotMatch(approvalInstructions, /Plan artifact content for approval\./);
 
@@ -274,25 +274,25 @@ test('E2E fixture: output schema rejects invalid write-output and valid output a
   assert.equal(valid.baton.state.schema_worker.ticket, 'TCK-123');
 });
 
-test('E2E fixture: approval-first workflow preserves startup prompt for first worker only through fanout and final approval', async () => {
+test('E2E fixture: typed approval after the startup worker preserves the prompt only for that worker through fanout and final approval', async () => {
   const workflow = fixture('approval-first-fanout.workflow.json');
   const run = runDir('approval-first');
   const userPrompt = 'Original startup request. Preserve this only for prepare.';
 
-  const intake = await next(run, workflow, ['--user-prompt', userPrompt]);
-  assert.equal(intake.requests[0].id, 'intake_approval');
-  assert.equal(intake.baton.user_prompt, userPrompt);
-  assert.equal(intake.baton.user_prompt_target, 'prepare');
-  assert.doesNotMatch(await instructions(run, 'intake_approval'), /Original startup request/);
-
-  const preparedRequest = await continueWith(run, workflow, output('approval-approved.json'), 'continue intake approval');
-  assert.equal(preparedRequest.baton.cursor, 'prepare');
+  const preparedRequest = await next(run, workflow, ['--user-prompt', userPrompt]);
+  assert.equal(preparedRequest.requests[0].id, 'prepare');
+  assert.equal(preparedRequest.baton.user_prompt, userPrompt);
+  assert.equal(preparedRequest.baton.user_prompt_target, 'prepare');
   const prepareInstructions = await instructions(run, 'prepare');
   assert.match(prepareInstructions, /## User prompt/);
   assert.match(prepareInstructions, /Original startup request/);
 
-  const fanout = await continueWith(run, workflow, output('prepare-ready.json'), 'continue prepare to fanout');
-  assert.equal(fanout.baton.user_prompt_injected, true);
+  const intake = await continueWith(run, workflow, output('prepare-ready.json'), 'continue prepare to typed intake approval');
+  assert.equal(intake.baton.cursor, 'intake_approval');
+  assert.equal(intake.baton.user_prompt_injected, true);
+  assert.doesNotMatch(await instructions(run, 'intake_approval'), /Original startup request/);
+
+  const fanout = await continueWith(run, workflow, output('approval-approved.json'), 'continue intake approval');
   assert.equal(fanout.baton.cursor, 'implementation');
   assert.deepEqual(fanout.requests.map((request) => request.id), ['implementation__fanout__1__branch_a', 'implementation__fanout__1__branch_b']);
   assert.doesNotMatch(await instructions(run, 'implementation__fanout__1__branch_a'), /Original startup request/);
@@ -308,7 +308,7 @@ test('E2E fixture: approval-first workflow preserves startup prompt for first wo
   const finalApproval = await continueWith(run, workflow, output('owner-ready.json'), 'continue approval-first owner');
   assert.equal(finalApproval.baton.cursor, 'final_approval');
   assert.equal(finalApproval.requests[0].action, 'wait_for_approval');
-  assert.match(await instructions(run, 'final_approval'), /owner completed cleanly/);
+  assert.match(await instructions(run, 'final_approval'), /## Current summary\n\nready/);
 
   const done = await continueWith(run, workflow, output('approval-approved.json'), 'continue final approval');
   assert.equal(done.status, 'done');
