@@ -65,11 +65,13 @@ Binding rules:
 - A legacy run with no occurrence record is seeded once by the first successful
   mutating runner command that already has the required history loaded. The
   record stores the exact pre-seed history byte boundary, sets coverage to
-  `forward_only`, and marks the inherited current visit unavailable. Only a
-  later successful forward route/pointer route sets `currentAvailable: true`
-  for a newly observed owner visit. Existing history bytes, artifact paths, and
-  aggregate records remain unchanged; the seed and older facts must render as
-  `legacy_unavailable`, not occurrence `1` or another guessed ordinal.
+  `forward_only`, marks the inherited current visit unavailable, and starts
+  `firstAvailableByStep` empty. Each later successful forward/pointer route
+  records the first newly observable ordinal for its target owner. Availability
+  begins at that per-step boundary and never moves backward to the seeded
+  counter. Existing history bytes, artifact paths, and aggregate records remain
+  unchanged; the seed and older facts remain `legacy_unavailable` after later
+  routes and are never re-exposed as occurrence truth or artifact provenance.
 - Newly managed history entries carry deterministic parseable owner occurrence,
   activation/work-item, producer-request, route, accepted-output, stop-report,
   stop-resolution, and coverage facts in addition to the bounded human-facing
@@ -96,6 +98,15 @@ producerRequestId, artifactId)`. Repeated owners and repeated artifact ids are
   `legacy_unavailable` records but have no trusted content locator without the
   runner-owned provenance and accepted stamp. No alias directory, path rewrite,
   or invented occurrence is permitted.
+- Read-only artifact inspection has two independent scopes over that aggregate:
+  exact owner occurrence and exact workflow step. A request must choose one;
+  there is no run-wide artifact page or cursor, and the two scopes never share a
+  continuation token.
+- Content reopening is bound to the canonical occurrence/request directory
+  handle and accepted file stamp. A reader may expose bytes only after copying
+  exactly the accepted bounded size from the verified handle and confirming the
+  final stamp; full and Range responses use that immutable snapshot rather than
+  a live pathname or growing file stream.
 - Baton-only command paths retain `{ mode: 'file-ref', path }` plus process-local
   history byte size and do not read the history body. Full history reads are
   allowed only for consumers whose behavior depends on history content, such as

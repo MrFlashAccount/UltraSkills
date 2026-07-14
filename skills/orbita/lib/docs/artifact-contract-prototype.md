@@ -56,9 +56,18 @@ invented occurrence and without rewriting their bytes or paths.
 
 The accepted file stamp records device/inode/size/mtime/ctime after the runner
 has proven that the canonical occurrence-aware path is contained, regular, and
-not a followed symlink. Content readers must reopen and revalidate canonical
-aggregate metadata plus that stamp on every request; an opaque artifact ref is
-a locator, never filesystem authority.
+not a followed symlink. Content readers must reopen through the canonical
+occurrence/request directory handle and revalidate aggregate metadata plus that
+stamp on every request. They copy exactly the accepted bounded byte length,
+restat the handle, close it, and serve full or Range responses only from that
+immutable snapshot. An opaque artifact ref is a locator, never filesystem or
+live-stream authority.
+
+Dashboard artifact inspection has two separate aggregate scopes: exact owner
+occurrence for the Artifacts tab and exact workflow step for the Workflow pane.
+Each page request and cursor selects exactly one scope; there is no run-wide page
+or cursor and no scope substitution. This read-model split does not change the
+worker artifact schema or aggregate identity.
 
 The renderer does not choose artifact ids or read persisted artifact files. It
 renders the runner-selected occurrence-aware output directory from the

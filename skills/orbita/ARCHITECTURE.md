@@ -462,12 +462,16 @@ Synthetic request ids remain request addresses, never workflow occurrences.
 
 The first successful mutating command for a legacy run seeds missing provenance
 once and records the exact pre-seed `history.md` byte boundary. Its inherited
-current cursor is not assigned a trustworthy ordinal: coverage remains
-`forward_only` with `currentAvailable: false` until a later successful workflow
-route or pointer route opens a new, observable owner visit. The seed does not
-rewrite old history, Baton bytes, artifact records, or paths. Older ambiguity
-and the inherited current visit project as `legacy_unavailable`; neither runtime
-nor dashboard scans legacy history or labels the seed as occurrence `1`.
+current cursor is not assigned a trustworthy ordinal: coverage begins
+`forward_only` with `currentAvailable: false` and an empty
+`firstAvailableByStep`. Each later successful workflow or pointer route records
+the first newly observable ordinal for its target owner in
+`firstAvailableByStep`; availability for that owner begins at that boundary and
+never moves backward to the seeded counter. The seed does not rewrite old
+history, Baton bytes, artifact records, or paths. Older ambiguity and the
+inherited current visit remain `legacy_unavailable` even after later routes;
+neither runtime nor dashboard scans legacy history or relabels a seeded ordinal
+as covered.
 
 New managed-history entries carry deterministic parseable owner occurrence,
 activation/work-item, producer-request, route, accepted-output, stop-report,
@@ -607,6 +611,20 @@ application: Vite builds the React application and Nitro's Bun preset owns the
 only dashboard HTTP process. The dashboard is not a runner host adapter, a
 durable cache, or a control-plane participant.
 
+The activation-3 integration baseline is commit
+`7cbb0806f450f9d23572c82245ef61052f8344b1`, directly based on `origin/main`
+`b5a7cbf9f73060c8a79d6493e3e265c833514ff0`; the final activation-3 source and
+documentation changes remain the worktree delta above that baseline. The
+verified owners are
+`contracts/{browser,index}.ts`; the `project-run`, `project-workflow`,
+`project-history`, and `project-artifacts` projections; the read model,
+run-root reader, bounded history reader, artifact reader, and locator codec in
+`observer/**`; the Start composition/HTTP server plus exactly nine v2 route
+files; and the local run-detail surface, body, Workflow graph, occurrence,
+panel, preview, query, selector, state, and style owners. This inventory is the
+integration baseline; restoring a vanilla server/CLI/static surface or a v1
+route is not an alternate implementation.
+
 `skills/orbita/DESIGN.md` owns the approved board, card, detail, focus,
 responsive, and motion laws. `lib/dashboard/CONTEXT.md` owns local placement and
 dependency rules. This section records the stable product architecture and
@@ -720,7 +738,8 @@ the complete supported dashboard surface:
 - `/api/dashboard/v2/runs/:runId/traversal` — owner occurrence/activation page;
 - `/api/dashboard/v2/runs/:runId/activity` — occurrence-scoped Activity;
 - `/api/dashboard/v2/runs/:runId/logs` — occurrence-scoped managed Markdown;
-- `/api/dashboard/v2/runs/:runId/artifacts` — occurrence-scoped descriptors;
+- `/api/dashboard/v2/runs/:runId/artifacts` — descriptors for exactly one
+  `occurrenceRef` or workflow `stepId` scope;
 - `/api/dashboard/v2/runs/:runId/artifacts/:artifactRef?mode=preview|download`
   — verified preview/download content.
 
@@ -728,19 +747,24 @@ The server and browser contracts ship atomically under schema version 2.
 Snapshot refresh reads zero history-body, workflow-body, and artifact bytes.
 Light detail uses only bounded recent traversal facts. Workflow, traversal,
 Activity, Logs, artifact descriptors, and content are distinct cancellable
-observer capabilities. Workflow selection is run-scoped; occurrence selection
-scopes only Activity, Logs, and Artifacts.
+observer capabilities. Workflow graph and workflow-step artifacts are scoped by
+run plus selected workflow `stepId`; occurrence selection changes only Activity,
+Logs, and the occurrence-scoped Artifacts tab. The artifact page rejects a
+missing scope and rejects a request that supplies both `occurrenceRef` and
+`stepId`; there is no run-wide artifact page.
 
-Refs and cursors are process-scoped opaque HMAC tokens and never contain or
-grant filesystem authority. Their canonical identities, offsets, run/resource
-scope, and occurrence scope stay in one bounded server-side locator registry;
-restart or eviction makes the token stale. Workflow cursors resolve to a
-content fingerprint and offset; backward history cursors resolve to an immutable
-file snapshot and byte position; artifact refs resolve to aggregate identity.
-Every use revalidates the resolved identity against current canonical state.
-Malformed, cross-run, cross-route, cross-occurrence, stale, replaced, shrunk,
-evicted, restarted, or forged locators return fixed public errors without
-revealing their payload.
+Refs and cursors are deterministic authenticated-encrypted locators with a
+512-character public ceiling. Their sealing key derives from the configured
+canonical runs-root authority, including its canonical location and directory
+identity, so normal process restart preserves valid locators without a registry
+or eviction lifecycle. Moving or replacing that authority intentionally makes
+old locators stale. Locators carry no path or content authority; workflow
+cursors bind a content fingerprint and offset, history cursors bind an immutable
+file snapshot and byte position, artifact cursors bind exactly one occurrence or
+workflow-step scope, and artifact refs bind aggregate identity. Every use opens
+the sealed payload and revalidates it against current canonical state. Malformed,
+cross-authority, cross-run, cross-route, cross-scope, stale, replaced, shrunk, or
+forged locators return fixed public errors without revealing their payload.
 
 History paging reads backward from one append-stable file snapshot, returns only
 whole managed entries, applies both byte and entry-count ceilings, and exposes
@@ -762,15 +786,18 @@ fingerprints/parses one verified no-follow file snapshot so validation cannot
 mix identities.
 
 Artifact descriptor projection and content transport share one MIME/size policy.
-Content is reopened from canonical metadata, revalidated against the accepted
-device/inode/size/mtime/ctime stamp, and kept on that verified handle for the
-bounded stream. Declared/effective MIME mismatch is download-only; unsupported,
-oversized, legacy, or mismatch content cannot enter preview even with a forged
-preview URL. The class limit is checked before any full response, and Range
-streaming cannot bypass it. PDF/audio/video/download support one valid Range;
-malformed, multiple, or unsatisfiable ranges return fixed 416. Responses use
-exact content type, `nosniff`, safe disposition, `no-store`, no-referrer,
-ETag/file stamp, and bounded fixed errors.
+Content is reopened through the canonical occurrence/request directory handle,
+revalidated against the accepted device/inode/size/mtime/ctime stamp, copied as
+exactly the accepted bounded byte length, restatted, and only then exposed as an
+immutable response snapshot after the filesystem handle closes. Declared/
+effective MIME mismatch is download-only; unsupported, oversized, legacy, or
+mismatch content cannot enter preview even with a forged preview URL. The class
+limit is checked before any full response, and full or Range responses slice the
+same immutable snapshot, so concurrent growth cannot bypass accepted identity or
+size. PDF/audio/video/download support one valid Range; malformed, multiple, or
+unsatisfiable ranges return fixed 416. Responses use exact content type,
+`nosniff`, safe disposition, `no-store`, no-referrer, ETag/file stamp, and
+bounded fixed errors.
 
 Private JSON/data routes require the configured Host authority, permit only the
 request URL's same origin when an Origin header is present, and require the
@@ -908,8 +935,10 @@ are never rewritten or deleted. If any v2 provenance/history/artifact write may
 have occurred, rollback retains additive Baton parsing, provenance validation,
 and stamped aggregate compatibility while removing the v2 observer/UI surface;
 a strict pre-v2 runtime/schema rollback is permitted only with positive evidence
-that no v2 write occurred. Process-scoped locators are disposable and become
-stale across rollback/restart. Incorrect occurrence truth, read amplification,
+that no v2 write occurred. Locators have no separate server registry to migrate
+or purge; keeping the same canonical runs-root authority preserves their sealing
+lifecycle, while moving or replacing that authority intentionally invalidates
+them. Incorrect occurrence truth, read amplification,
 disclosure, unsafe preview/file races, silent truncation, inaccessible overlay
 focus, version residue, dependency failure, or source/schema/docs drift stops
 release or triggers this atomic rollback.

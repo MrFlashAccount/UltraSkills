@@ -7,6 +7,7 @@ import { ArtifactPreviewBody } from "./ArtifactPreviewBody";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { LogsPanel } from "./LogsPanel";
 import { OccurrenceSelector } from "./OccurrenceSelector";
+import { WorkflowStepArtifacts } from "./WorkflowStepArtifacts";
 
 const occurrences = [
   { occurrenceRef: "research:1", ordinal: 1, state: "completed" as const, stepId: "research" },
@@ -125,6 +126,7 @@ describe("run detail Direction A components", () => {
         occurrenceLabel="architecture · 1"
         pagination="complete"
         runArtifactCount={4}
+        state="ready"
       />,
     );
     const row = screen.getByRole("listitem");
@@ -159,6 +161,7 @@ describe("run detail Direction A components", () => {
         occurrenceLabel="architecture · 1"
         pagination="complete"
         runArtifactCount={1}
+        state="ready"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
@@ -190,6 +193,7 @@ describe("run detail Direction A components", () => {
         occurrenceLabel="architecture · 1"
         pagination="complete"
         runArtifactCount={1}
+        state="ready"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
@@ -220,12 +224,79 @@ describe("run detail Direction A components", () => {
         onRetryPaging={retry}
         pagination="stale"
         runArtifactCount={3}
+        state="ready"
       />,
     );
     expect(screen.getByText("legacy.txt")).toBeVisible();
     expect(screen.getByText(/provenance unavailable/i)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Reload from latest" }));
     expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it("distinguishes traversal-pending and vanished-selection evidence from successful emptiness", () => {
+    renderFeature(
+      <>
+        <ActivityPanel
+          groups={[]}
+          occurrenceLabel="occurrence pending"
+          pagination="complete"
+          state="traversal_pending"
+        />
+        <LogsPanel
+          entries={[]}
+          occurrenceLabel="selection unavailable"
+          pagination="complete"
+          state="missing_selection"
+        />
+        <ArtifactsPanel
+          artifacts={[]}
+          occurrenceLabel="selection unavailable"
+          pagination="complete"
+          runArtifactCount={4}
+          state="missing_selection"
+        />
+      </>,
+    );
+    expect(
+      screen.getByText("Waiting for occurrence traversal before loading selected evidence…"),
+    ).toBeVisible();
+    expect(screen.getAllByText("Selected occurrence unavailable")).toHaveLength(2);
+    expect(screen.queryByText("No logs")).not.toBeInTheDocument();
+    expect(screen.queryByText("No artifacts for this occurrence")).not.toBeInTheDocument();
+  });
+
+  it("renders workflow-step legacy descriptors without inventing content authority", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              complete: true,
+              items: [
+                {
+                  declaredContentType: "text/plain",
+                  effectiveContentType: "text/plain",
+                  id: "legacy.txt",
+                  mimeMismatch: false,
+                  previewState: "legacy_unavailable",
+                  producerStepId: "architecture",
+                },
+              ],
+              runAggregateCount: 4,
+              runId: "run-1",
+              schemaVersion: "2",
+              scope: { kind: "workflow_step", stepId: "architecture" },
+            }),
+            { headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+    renderFeature(<WorkflowStepArtifacts runId="run-1" stepId="architecture" />);
+    expect(await screen.findByText("legacy.txt")).toBeVisible();
+    expect(screen.getByText(/provenance unavailable/i)).toBeVisible();
+    expect(screen.getByText(/content unavailable/i)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Preview" })).not.toBeInTheDocument();
   });
 
   it("uses accessible native media controls for typed media previews", () => {

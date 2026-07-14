@@ -64,9 +64,10 @@ resources:
   activation peers.
 - `/api/dashboard/v2/runs/:runId/activity` — occurrence-scoped Activity.
 - `/api/dashboard/v2/runs/:runId/logs` — occurrence-scoped managed Markdown.
-- `/api/dashboard/v2/runs/:runId/artifacts` — occurrence-scoped descriptors.
+- `/api/dashboard/v2/runs/:runId/artifacts` — descriptors for exactly one
+  occurrence (`occurrenceRef`) or workflow step (`stepId`).
 - `/api/dashboard/v2/runs/:runId/artifacts/:artifactRef?mode=preview|download`
-  — verified content from a canonical open handle.
+  — verified content from an immutable accepted-byte snapshot.
 
 There are no version-1 routes, aliases, redirects, unversioned dashboard APIs,
 custom static server/assets, supported `orbita-dashboard serve` CLI, or public
@@ -74,10 +75,12 @@ custom static server/assets, supported `orbita-dashboard serve` CLI, or public
 
 Board snapshot reads consume zero `history.md` body bytes, workflow bodies, and
 artifact bytes. Workflow, traversal, Activity, Logs, artifacts, and content are
-separate bounded and cancellable reads. Refs and cursors are process-scoped
-opaque HMAC tokens whose canonical state stays in one bounded server registry;
-restart or eviction makes them stale. They never contain or grant path
-authority.
+separate bounded and cancellable reads. Refs and cursors are deterministic
+authenticated-encrypted values capped at 512 characters. Their sealing key
+derives from the configured canonical runs-root location and directory identity,
+so normal process restart preserves them without registry/eviction state;
+moving or replacing that authority intentionally makes them stale. They never
+contain or grant path or content authority.
 
 Approved bounds:
 
@@ -95,10 +98,11 @@ History pages contain whole managed entries under byte and entry-count limits,
 remain stable across append, and report `complete`, `truncated`, and
 `nextCursor` separately. Workflow cursors resolve to a content fingerprint;
 history cursors resolve to resource/occurrence scope and one immutable file
-snapshot; artifact refs resolve to canonical aggregate identity. Stale,
-cross-run, cross-route, cross-occurrence, evicted/restarted, replaced, shrunk,
+snapshot; artifact cursors resolve to exactly one occurrence or workflow-step
+scope; artifact refs resolve to canonical aggregate identity. Stale,
+cross-authority, cross-run, cross-route, cross-scope, replaced, shrunk,
 malformed, or forged locators return fixed public failures without disclosing
-their server-side state.
+their sealed state.
 
 Traversal reads at most 100 source entries, Activity at most 11 source entries
 before its 200-event DTO ceiling, and Logs at most 200 source entries. Workflow
@@ -111,17 +115,21 @@ An occurrence is one durable workflow cursor-owner visit identified by
 `(stepId, ordinal)`. Self/backward loops produce distinct ordinals. Fanout and
 shard work remains nested under the owning activation and is not promoted to a
 workflow occurrence. When a legacy run is seeded, its inherited current cursor
-remains unavailable until the next successful forward route opens a new visit.
-Ambiguous panels show `legacy_unavailable`; the dashboard does not infer an
-ordinal from old history or label the seed as occurrence `1`.
+remains unavailable. Later routes persist per-step `firstAvailableByStep`
+boundaries for newly observed visits without moving coverage backward over the
+seed. Ambiguous panels show `legacy_unavailable`; the dashboard does not infer
+an ordinal from old history or relabel a seeded occurrence as covered.
 
 Workflow is run-scoped and independent of occurrence selection. Selecting an
-occurrence changes only Activity, Logs, and Artifacts. Aggregate artifact
-identity includes owner step, owner occurrence, producer request, and artifact
-id, so repeated owners cannot overwrite or merge one another. Worker-authored
-artifact metadata remains `{id, content_type, path, summary?}`. Legacy aggregate
-wrappers remain descriptor-visible with `legacy_unavailable`, but receive no
-artifact ref or content capability when provenance/stamp truth is absent.
+occurrence changes only Activity, Logs, and the occurrence-scoped Artifacts tab;
+the Workflow pane requests artifacts independently by selected `stepId`. The
+artifact resource requires exactly one scope and has no run-wide form. Aggregate
+artifact identity includes owner step, owner occurrence, producer request, and
+artifact id, so repeated owners cannot overwrite or merge one another.
+Worker-authored artifact metadata remains `{id, content_type, path, summary?}`.
+Legacy aggregate wrappers remain descriptor-visible with
+`legacy_unavailable`, but receive no artifact ref or content capability when
+provenance/stamp truth is absent.
 
 Paged panels expose continuation/end explicitly. A stale cursor preserves
 already loaded evidence and restarts only that resource at page 1. Query
@@ -140,10 +148,13 @@ preview state from one run/occurrence into another.
   sandbox and without same-origin, top-navigation, popup, or download
   capability. It may still execute scripts and contact HTTP(S) network
   resources, which the trusted parent must disclose.
-- Artifact files are reopened and verified as contained regular files against
-  the accepted device/inode/size/mtime/ctime stamp. Descriptor and transport use
-  one MIME/size policy. Mismatch is download-only; mismatch, unsupported,
-  oversized, and legacy content cannot enter preview even through a direct URL.
+- Artifact files are reopened through their canonical occurrence/request
+  directory handle and verified against the accepted
+  device/inode/size/mtime/ctime stamp. Exactly the accepted bounded byte length
+  is copied and restatted before the filesystem handle closes; full and Range
+  responses serve only that immutable snapshot. Descriptor and transport use one
+  MIME/size policy. Mismatch is download-only; mismatch, unsupported, oversized,
+  and legacy content cannot enter preview even through a direct URL.
 - Content uses exact MIME, `nosniff`, safe disposition, `no-store`,
   no-referrer, ETag/file stamp, and fixed errors. PDF/audio/video/download allow
   one valid Range; malformed, multiple, or unsatisfiable ranges return 416.
@@ -173,5 +184,6 @@ rewritten or deleted. If any v2 provenance/history/artifact write may have
 occurred, keep additive Baton parsing, provenance validation, and stamped
 aggregate compatibility while rolling back the observer/UI. A strict pre-v2
 runtime/schema rollback is allowed only with positive evidence that no v2 write
-occurred. Browser refs/cursors are process-local and correctly become stale on
-restart or rollback.
+occurred. Locators have no registry state to migrate; the same canonical
+runs-root authority preserves their lifecycle, while moving or replacing that
+authority intentionally invalidates them.

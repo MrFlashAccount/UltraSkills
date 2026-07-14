@@ -64,23 +64,29 @@ shared utility zone for this concrete observer.
 - Occurrence identity is the durable cursor-owner pair `(stepId, ordinal)`.
   Repeated self/backward traversal remains distinct. Fanout/shard peers group
   below their owning activation and never become owner occurrences. A seeded
-  legacy current cursor remains `legacy_unavailable` until a successful forward
-  route opens a newly observed visit; the dashboard never scans old history,
-  calls the seed occurrence `1`, or fabricates an ordinal.
+  legacy current cursor remains `legacy_unavailable`. Successful forward routes
+  persist `firstAvailableByStep` boundaries for newly observed visits; those
+  boundaries never move backward to expose the inherited seed. The dashboard
+  never scans old history, calls a seeded occurrence covered, or fabricates an
+  ordinal.
 - Workflow projection preserves declaration order and stays independent of the
   selected occurrence. A partial workflow page set is explicitly incomplete.
-  Selecting an occurrence changes only Activity, Logs, and Artifacts.
+  Selecting an occurrence changes only Activity, Logs, and the occurrence-scoped
+  Artifacts tab; Workflow step artifacts follow the graph's selected `stepId`.
 - Activity and Logs are distinct managed-history projections. Paging preserves
   complete entry boundaries and exposes truncation separately from completion.
   Logs construct positive Markdown from allowlisted structured v2 facts; raw
   history details, stdout/stderr, and `debug-summary.md` bodies are not browser
   log or activity sources.
 - Aggregate artifact identity is `(ownerStepId, ownerOccurrence,
-producerRequestId, artifactId)`. Browser artifact references are process-scoped
-  opaque locators, not filesystem authority. Every descriptor/content request
-  is revalidated against canonical aggregate metadata and the accepted file
-  stamp. Legacy wrappers remain descriptor-visible as `legacy_unavailable` but
-  have no artifact ref or content capability.
+producerRequestId, artifactId)`. Artifact pages require exactly one scope:
+  `occurrenceRef` for the Artifacts tab or workflow `stepId` for the Workflow
+  pane. They have separate scope-bound cursors and no run-wide form. Browser
+  artifact references are restart-stable sealed locators, not filesystem
+  authority. Every descriptor/content request is revalidated against canonical
+  aggregate metadata and the accepted file stamp. Legacy wrappers remain
+  descriptor-visible as `legacy_unavailable` but have no artifact ref or content
+  capability.
 - Degraded dashboard state describes observer/read health only. It is ephemeral
   and never becomes workflow state or a terminal result.
 - SSE is lossy invalidation, not state. Connected clients cannot create
@@ -100,8 +106,8 @@ supported dashboard surface:
 - `/api/dashboard/v2/runs/:runId/activity` — selected-occurrence Activity page.
 - `/api/dashboard/v2/runs/:runId/logs` — selected-occurrence managed Markdown
   page.
-- `/api/dashboard/v2/runs/:runId/artifacts` — selected-occurrence artifact
-  descriptor page plus run aggregate count.
+- `/api/dashboard/v2/runs/:runId/artifacts` — artifact descriptor page plus run
+  aggregate count, requiring exactly one `occurrenceRef` or workflow `stepId`.
 - `/api/dashboard/v2/runs/:runId/artifacts/:artifactRef?mode=preview|download`
   — verified preview or download content.
 
@@ -109,14 +115,17 @@ Version 1 routes/contracts/client references are `delete_now`: there are no
 aliases, redirects, mixed versions, or unversioned fallbacks. Server and browser
 contracts ship atomically under schema version 2.
 
-Refs and cursors are process-scoped opaque HMAC tokens. Canonical identity,
-offset, run/resource scope, and occurrence scope stay in a bounded server-side
-registry and are never encoded into browser values. Workflow cursors resolve to
-a content fingerprint; history cursors resolve to an immutable file snapshot
-and backward byte position; artifact refs resolve to canonical aggregate
-identity. Malformed, overlong, cross-run, cross-route, cross-occurrence, stale,
-evicted, restarted, replaced, shrunk, or forged locators fail with fixed public
-errors and never reveal paths, offsets, file identity, or raw exceptions.
+Refs and cursors are deterministic authenticated-encrypted values with a
+512-character ceiling. The sealing key derives from the configured canonical
+runs-root location and directory identity, so locators survive normal process
+restart without server-side registry state; moving or replacing that authority
+intentionally invalidates them. Workflow cursors resolve to a content
+fingerprint; history cursors resolve to an immutable file snapshot and backward
+byte position; artifact cursors resolve to exactly one occurrence or workflow
+step; artifact refs resolve to canonical aggregate identity. Malformed,
+overlong, cross-authority, cross-run, cross-route, cross-scope, stale, replaced,
+shrunk, or forged locators fail with fixed public errors and never reveal paths,
+offsets, file identity, or raw exceptions.
 
 Approved response/content bounds are:
 
@@ -131,10 +140,13 @@ Approved response/content bounds are:
 History pagination returns whole managed entries under byte and entry-count
 limits, remains stable across append, rejects shrink/replacement, and reports
 `complete`, `truncated`, and `nextCursor` without conflating them. Artifact
-content is streamed from the verified open handle only after the shared
-descriptor/content MIME and size policy approves it. PDF/audio/video/download
-support one valid Range; malformed, multiple, or unsatisfiable ranges return
-fixed 416 and Range cannot bypass the class limit.
+content is reopened through the canonical occurrence/request directory handle,
+read as exactly the accepted bounded byte length, restatted, and served only
+from the resulting immutable snapshot after the filesystem handle closes. The
+shared descriptor/content MIME and size policy is applied before exposure.
+PDF/audio/video/download support one valid Range; malformed, multiple, or
+unsatisfiable ranges return fixed 416, and both full and Range responses slice
+the same snapshot so concurrent growth cannot bypass the accepted class limit.
 
 Traversal reads at most 100 source entries, Activity at most 11 source entries
 before its 200-event DTO ceiling, and Logs at most 200 source entries. Workflow
@@ -185,13 +197,15 @@ snapshot refresh. EventSource connectivity alone never proves Live.
 
 Request authority is split deliberately: process configuration owns the runs
 root; snapshot revision owns board/freshness; the exact `run` search value owns
-run selection; local run-detail state owns selected occurrence and tab; each
-query key includes schema version, run id, resource, relevant occurrence or
-artifact ref, and cursor. Cancellation propagates to fetch aborts. Missing or
-filtered selection is preserved and never falls back to a neighboring run.
-Placeholder/previous data must match that exact key and must not cross a run or
-occurrence boundary. A stale paging token preserves accumulated evidence and
-restarts only that resource from page 1 with fresh locators.
+run selection; local run-detail state owns selected occurrence and tab; the
+Workflow pane independently owns selected `stepId`. Each query key includes
+schema version, run id, resource, exact occurrence or workflow-step artifact
+scope, relevant ref, and cursor. Cancellation propagates to fetch aborts.
+Missing or filtered selection is preserved and never falls back to a neighboring
+run. Placeholder/previous data must match that exact key and must not cross a
+run, occurrence, or workflow-step boundary. A stale paging token preserves
+accumulated evidence and restarts only that resource from page 1 with freshly
+derived locators.
 
 ## Binding dependency rules
 

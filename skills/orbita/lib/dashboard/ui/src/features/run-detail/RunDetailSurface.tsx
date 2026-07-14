@@ -15,8 +15,8 @@ type DetailSurfaceProps = {
 };
 
 export function RunDetailSurface(props: DetailSurfaceProps) {
-  const [retained, setRetained] = useState(props);
-  const visible = props.selectedId ? props : retained;
+  const [closingSnapshot, setClosingSnapshot] = useState<DetailSurfaceProps | null>(null);
+  const visible = props.selectedId ? props : (closingSnapshot ?? props);
 
   return (
     <Sheet
@@ -28,7 +28,7 @@ export function RunDetailSurface(props: DetailSurfaceProps) {
       }}
       onOpenChange={(open) => {
         if (!open) {
-          setRetained(props);
+          setClosingSnapshot(props);
           props.onClose();
         }
       }}

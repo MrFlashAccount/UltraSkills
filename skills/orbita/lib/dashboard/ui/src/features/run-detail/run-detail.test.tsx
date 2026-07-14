@@ -87,7 +87,8 @@ beforeEach(() => {
         });
       }
       if (url.includes("/artifacts")) {
-        const scoped = url.includes("occurrenceRef=");
+        const occurrenceScoped = url.includes("occurrenceRef=");
+        const stepId = new URL(url, "http://dashboard.test").searchParams.get("stepId");
         return json({
           complete: true,
           items: [
@@ -100,13 +101,15 @@ beforeEach(() => {
               previewState: "previewable",
               producerOccurrence: 1,
               producerRequestId: "request-01",
-              producerStepId: scoped ? "step-1" : "research",
+              producerStepId: occurrenceScoped ? "step-1" : (stepId ?? "research"),
             },
           ],
           runAggregateCount: 1,
           runId: "run-1",
           schemaVersion: "2",
-          scope: scoped ? { kind: "occurrence", occurrenceRef } : { kind: "run" },
+          scope: occurrenceScoped
+            ? { kind: "occurrence", occurrenceRef }
+            : { kind: "workflow_step", stepId: stepId ?? "research" },
         });
       }
       return json({}, 404);

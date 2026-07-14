@@ -72,10 +72,13 @@ earlier`; chips, statuses, and controls do not wrap. After initial load,
 selection, or earlier-page accumulation, the selector scrolls the exact selected
 identity into view without changing selection or stealing document focus.
 
-Occurrence selection scopes only Activity, Logs, and Artifacts. Workflow is
-always run-scoped: its graph, zoom/fit controls, node selection, Step Details,
-and workflow-step artifact pane neither receive nor reset from occurrence
-selection. A partially loaded workflow is visibly incomplete until
+Occurrence selection scopes only Activity, Logs, and the occurrence-scoped
+Artifacts tab. Workflow is always run-scoped: its graph, zoom/fit controls, node
+selection, Step Details, and separately queried workflow-step artifact pane
+neither receive nor reset from occurrence selection. The artifact endpoint
+requires exactly one of the selected occurrence ref or selected workflow step
+id; no run-wide artifact page feeds either surface. A partially loaded workflow
+is visibly incomplete until
 both its definition and traversal inputs are complete; accumulated partial data
 must never be labeled as a complete graph.
 
@@ -106,7 +109,7 @@ Run detail composition has stable responsibilities:
 - Logs owns bounded managed Markdown with load-older/truncated/end states;
 - Artifacts owns the selected-occurrence subset while retaining run aggregate
   count, producer/type/preview/download facts, explicit continuation, and end
-  state;
+  state; Workflow owns a separate selected-step artifact query and pane;
 - the local Markdown renderer is shared by Logs and safe Markdown artifacts,
   disables raw HTML, escapes code, and discloses external links;
 - the artifact preview overlay owns preview/gallery state and never injects
@@ -154,16 +157,19 @@ index identity.
 
 ## Detail overlay and focus law
 
-- At 1100px and wider, detail is a complementary right region, 340–400px and
-  at most 34vw. The board stays visible and operable.
-- From 760–1099px, detail is a modal right sheet sized `min(420px, 92vw)` with
-  backdrop, inert background, and inner scroll.
-- Below 760px, detail is a modal bottom sheet, full width and at most 88dvh,
-  with safe-area padding, sticky header, and inner scroll.
+- Above 1100px, detail is a modal right sheet, full-height and up to 680px wide,
+  with backdrop, inert board background, and inner scroll.
+- From 640–1100px, detail is a centered modal sheet with a 32px block inset,
+  width `min(900px, 100vw - 48px)`, bounded height, border, and rounded corners.
+- Below 640px, detail is an inset bottom sheet with 8px side gutters, height
+  `min(92dvh, 820px)`, a viewport-minus-8px ceiling, safe-area padding, rounded
+  top corners, sticky header, and inner scroll.
 
 The outer surface restores focus to the exact originating run card. If that
 card vanished, focus returns to its lane header. A filtered/missing selection
-keeps its id and never selects a neighbor.
+keeps its id and never selects a neighbor. During close animation, the surface
+retains the last rendered detail snapshot instead of flashing a generic loading
+shell.
 
 Artifact preview is a nested Radix dialog/gallery. The trusted parent owns
 close/download controls, metadata, disclosure, and visible loading/error/
@@ -183,11 +189,12 @@ ineligible content stays download-only/unavailable and never opens an empty or
 misleading success frame.
 
 Stale paging preserves already loaded evidence while restarting that resource
-from page 1 under a fresh process locator. It does not clear the panel, borrow
+from page 1 under a fresh canonical locator. It does not clear the panel, borrow
 placeholder data from another run/occurrence, or silently advance selection.
 Traversal recovery is owned and rendered once by the occurrence selector;
 Workflow must not duplicate a second recovery control for the same traversal
-query failure.
+query failure. On narrow/mobile surfaces, the paging failure region stacks its
+message and action so neither the status nor recovery control is clipped.
 
 Drawer spatial motion is 180ms; preview spatial motion is 140ms. Motion explains
 only location/overlay change. Reduced-motion mode uses 0ms/static transitions,
@@ -295,7 +302,8 @@ reality conflict requires approved plan revision; do not redesign locally.
 
 - no mutation/control affordance, drag/drop, or manual lane movement;
 - no automatic first/neighbor run or occurrence selection;
-- no occurrence-scoped Workflow or merged repeated identities;
+- no occurrence-scoped Workflow, run-wide artifact page, mixed artifact scope,
+  or merged repeated identities;
 - no fabricated legacy ordinal or fanout/shard trail occurrence;
 - no raw debug/durable/private content or browser path authority;
 - no active artifact bytes injected into the parent DOM;

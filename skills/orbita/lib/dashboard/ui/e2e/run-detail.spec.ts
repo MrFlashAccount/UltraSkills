@@ -13,6 +13,7 @@ test("Direction A preserves Workflow and scopes selected-occurrence evidence", a
   await origin.click();
   const dialog = page.getByRole("dialog", { name: "Run detail inspection" });
   await expect(dialog).toBeVisible();
+  await expectOverlayPlacement(dialog, testInfo.project.name);
   const tabs = dialog.getByRole("tab");
   await expect(tabs).toHaveCount(4);
   expect(await tabs.allTextContents()).toEqual(["Workflow", "Activity", "Logs", "Artifacts"]);
@@ -26,6 +27,9 @@ test("Direction A preserves Workflow and scopes selected-occurrence evidence", a
   const workflowGraph = dialog.getByRole("region", { name: "Workflow graph" });
   const selectedWorkflowStep = workflowGraph.locator(".react-flow__node.selected");
   await expect(selectedWorkflowStep).toHaveAttribute("data-id", "architecture");
+  await expect(dialog.getByLabel("Artifacts produced by architecture")).toContainText(
+    "workflow-trail.png",
+  );
   await page.screenshot({ path: `${proofDir}/v2-direction-a-${testInfo.project.name}.png` });
   const researchOccurrence = dialog.getByRole("button", { name: /research · 1/i });
   await researchOccurrence.click();
@@ -65,8 +69,27 @@ test("preview and drawer restore independent focus origins", async ({ page }, te
   await page.keyboard.press("Escape");
   await expect(previewOpener).toBeFocused();
   await expect(page.getByRole("dialog", { name: "Run detail inspection" })).toBeVisible();
+  await page.evaluate(() => {
+    const sheet = document.querySelector<HTMLElement>(".sheet-content");
+    if (!sheet) {
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (sheet.dataset.state === "closed") {
+        (window as typeof window & { closingSheetText?: string }).closingSheetText =
+          sheet.textContent ?? "";
+        observer.disconnect();
+      }
+    });
+    observer.observe(sheet, { attributes: true, attributeFilter: ["data-state"] });
+  });
   await page.keyboard.press("Escape");
   await expect(origin).toBeFocused();
+  expect(
+    await page.evaluate(
+      () => (window as typeof window & { closingSheetText?: string }).closingSheetText,
+    ),
+  ).toContain("Run detail inspection");
   await page.screenshot({ path: `${proofDir}/v2-focus-return-${testInfo.project.name}.png` });
 });
 
@@ -144,12 +167,30 @@ test("stale traversal paging preserves evidence and restarts from the latest pag
   const snapshot = await mockDashboard(page);
   const run = snapshot.runs[0]!;
   const traversal = resourcesFor(run).traversal;
+  let staleSeen = false;
+  let releaseReplacement: (() => void) | undefined;
+  let markReplacementRequested: (() => void) | undefined;
+  const replacementGate = new Promise<void>((resolve) => {
+    releaseReplacement = resolve;
+  });
+  const replacementRequested = new Promise<void>((resolve) => {
+    markReplacementRequested = resolve;
+  });
   await page.route("**/api/dashboard/v2/runs/*/traversal*", async (route) => {
     const url = new URL(route.request().url());
     if (url.searchParams.has("cursor")) {
+      staleSeen = true;
       await route.fulfill({
         json: { error: { code: "stale_locator", message: "Resource locator is stale" } },
         status: 409,
+      });
+      return;
+    }
+    if (staleSeen) {
+      markReplacementRequested?.();
+      await replacementGate;
+      await route.fulfill({
+        json: { ...traversal, complete: true, items: [traversal.items[0]] },
       });
       return;
     }
@@ -162,6 +203,9 @@ test("stale traversal paging preserves evidence and restarts from the latest pag
   await expect(
     page.getByText("Workflow definition complete · execution evidence partial"),
   ).toBeVisible();
+  await expectContained(page.getByText(/loaded · partial/u), page.getByRole("dialog"));
+  await page.getByRole("tab", { name: "Activity" }).click();
+  await expect(page.getByRole("heading", { name: "Activity · architecture · 2" })).toBeVisible();
   await page.getByRole("button", { name: "Show earlier" }).click();
   await expect(page.getByText(/Occurrences changed while paging/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /architecture · 2/i })).toBeVisible();
@@ -170,7 +214,72 @@ test("stale traversal paging preserves evidence and restarts from the latest pag
     .getByRole("region", { name: "Step occurrences" })
     .getByRole("button", { name: "Reload from latest" })
     .click();
-  await expect(page.getByRole("button", { name: "Show earlier" })).toBeVisible();
+  await replacementRequested;
+  await expect(page.getByRole("heading", { name: "Activity · architecture · 2" })).toBeVisible();
+  await expect(page.getByText("Fanout activation 1 started")).toBeVisible();
+  releaseReplacement?.();
+  await expect(page.getByText("Selected occurrence unavailable")).toBeVisible();
+  await page.screenshot({ path: `${proofDir}/v2-vanished-selection-${testInfo.project.name}.png` });
+});
+
+test("occurrence panels show traversal pending instead of successful emptiness", async ({
+  page,
+}, testInfo) => {
+  const snapshot = await mockDashboard(page);
+  const traversal = resourcesFor(snapshot.runs[0]!).traversal;
+  let releaseTraversal: (() => void) | undefined;
+  const traversalGate = new Promise<void>((resolve) => {
+    releaseTraversal = resolve;
+  });
+  await page.route("**/api/dashboard/v2/runs/*/traversal*", async (route) => {
+    await traversalGate;
+    await route.fulfill({ json: traversal });
+  });
+  await page.goto("/");
+  await page.locator(".run-card").first().click();
+  await page.getByRole("tab", { name: "Activity" }).click();
+  await expect(
+    page.getByText("Waiting for occurrence traversal before loading selected evidence…"),
+  ).toBeVisible();
+  await page.screenshot({ path: `${proofDir}/v2-traversal-pending-${testInfo.project.name}.png` });
+  releaseTraversal?.();
+  await expect(page.getByRole("heading", { name: "Activity · architecture · 2" })).toBeVisible();
+});
+
+test("workflow renders legacy descriptors without occurrence or content authority", async ({
+  page,
+}, testInfo) => {
+  await mockDashboard(page);
+  await page.route("**/api/dashboard/v2/runs/*/artifacts?stepId=*", async (route) => {
+    const url = new URL(route.request().url());
+    const runId = url.pathname.split("/")[5]!;
+    const stepId = url.searchParams.get("stepId")!;
+    await route.fulfill({
+      json: {
+        complete: true,
+        items: [
+          {
+            declaredContentType: "text/plain",
+            effectiveContentType: "text/plain",
+            id: "legacy-evidence.txt",
+            mimeMismatch: false,
+            previewState: "legacy_unavailable",
+            producerStepId: stepId,
+          },
+        ],
+        runAggregateCount: 4,
+        runId,
+        schemaVersion: "2",
+        scope: { kind: "workflow_step", stepId },
+      },
+    });
+  });
+  await page.goto("/");
+  await page.locator(".run-card").first().click();
+  await expect(page.getByText("legacy-evidence.txt")).toBeVisible();
+  await expect(page.getByText(/content unavailable/u)).toBeVisible();
+  await expect(page.getByText(/provenance unavailable/u)).toBeVisible();
+  await page.screenshot({ path: `${proofDir}/v2-legacy-artifact-${testInfo.project.name}.png` });
 });
 
 test("artifact continuation reaches an explicit end state", async ({ page }, testInfo) => {
@@ -212,4 +321,19 @@ async function expectContained(inner: Locator, outer: Locator) {
   expect(innerBounds!.x + innerBounds!.width).toBeLessThanOrEqual(
     outerBounds!.x + outerBounds!.width + 1,
   );
+}
+
+async function expectOverlayPlacement(dialog: Locator, project: string) {
+  const bounds = await dialog.boundingBox();
+  const viewport = dialog.page().viewportSize();
+  expect(bounds).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  if (project === "mobile") {
+    expect(bounds!.x).toBeGreaterThanOrEqual(7);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport!.width - 7);
+    expect(bounds!.y + bounds!.height).toBeCloseTo(viewport!.height, 0);
+  } else {
+    expect(bounds!.x + bounds!.width).toBeCloseTo(viewport!.width, 0);
+    expect(bounds!.y).toBe(0);
+  }
 }

@@ -141,10 +141,7 @@ export function resourcesFor(run: RunSummaryDTO) {
     },
     workflowArtifacts: {
       complete: true,
-      items: [
-        artifactDescriptor("architecture", 2),
-        longIdentifierArtifact(),
-      ],
+      items: [artifactDescriptor("architecture", 2), longIdentifierArtifact()],
       runAggregateCount: 3,
       runId,
       schemaVersion: "2",

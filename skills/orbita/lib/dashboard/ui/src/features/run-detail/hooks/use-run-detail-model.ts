@@ -1,7 +1,7 @@
 import type { RunLightDetailDTO, WorkflowPageDTO } from "@dashboard-contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { type OccurrenceEvidenceState, type PagingState } from "../run-detail-view-model";
+import { type OccurrenceEvidenceState } from "../run-detail-view-model";
 import {
   accumulatePages,
   mergeTraversalPages,
@@ -11,7 +11,8 @@ import {
   toOccurrenceItems,
   toRunArtifactItems,
 } from "../selectors/page-selectors";
-import { isStaleLocatorError, resourceQueryKey } from "./query-client";
+import { resourceQueryKey } from "./query-client";
+import { type PagingQuery, usePagingRecovery } from "./use-paging-recovery";
 import {
   useActivityPages,
   useLogPages,
@@ -24,12 +25,14 @@ import {
 export function useRunDetailModel(detail: RunLightDetailDTO) {
   const runId = detail.run.runId;
   const client = useQueryClient();
+  const paging = usePagingRecovery();
   const workflow = useWorkflowPages(runId);
   const traversal = useTraversalPages(runId);
   const occurrences = toOccurrenceItems(traversal.data?.pages);
   const [selection, setSelection] = useState<{ ref: string; runId: string }>();
   const explicitSelection = selection?.runId === runId ? selection.ref : undefined;
-  const selected = selectOccurrence(occurrences, explicitSelection);
+  const stableSelection = explicitSelection ?? detail.currentOccurrence?.occurrenceRef;
+  const selected = selectOccurrence(occurrences, stableSelection);
   const selectedRef = selected?.occurrenceRef;
   const activity = useActivityPages(runId, selectedRef);
   const logs = useLogPages(runId, selectedRef);
@@ -55,6 +58,9 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
     occurrences.length,
     Boolean(selected),
   );
+  const activityKey = `activity:${selectedRef ?? "none"}`;
+  const artifactsKey = `artifacts:${selectedRef ?? "none"}`;
+  const logsKey = `logs:${selectedRef ?? "none"}`;
 
   const reset = (resource: string, locator?: string) =>
     void client.resetQueries({ exact: true, queryKey: resourceQueryKey(runId, resource, locator) });
@@ -63,28 +69,28 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
   return {
     activity: {
       groups: activityGroups,
-      onLoadMore: () => void activity.fetchNextPage(),
-      onRetry: () => void activity.refetch(),
-      onRetryPaging: () => recover(activity),
-      pagination: pagingState(activity),
+      onLoadMore: () => paging.loadNext(activityKey, activity),
+      onRetry: () => paging.refetch(activityKey, activity),
+      onRetryPaging: () => paging.recover(activityKey, activity),
+      pagination: paging.state(activityKey, activity),
       state: panelState(occurrenceState, activity, activityGroups.length > 0),
     },
     artifacts: {
       artifacts: selectedArtifactItems,
-      onLoadMore: () => void artifacts.fetchNextPage(),
-      onRetry: () => void artifacts.refetch(),
-      onRetryPaging: () => recover(artifacts),
-      pagination: pagingState(artifacts),
+      onLoadMore: () => paging.loadNext(artifactsKey, artifacts),
+      onRetry: () => paging.refetch(artifactsKey, artifacts),
+      onRetryPaging: () => paging.recover(artifactsKey, artifacts),
+      pagination: paging.state(artifactsKey, artifacts),
       runArtifactCount: artifacts.data?.pages[0]?.runAggregateCount ?? 0,
       state: panelState(occurrenceState, artifacts, selectedArtifactItems.length > 0),
     },
     legacyUnavailable,
     logs: {
       entries: logEntries,
-      onLoadOlder: () => void logs.fetchNextPage(),
-      onRetry: () => void logs.refetch(),
-      onRetryPaging: () => recover(logs),
-      pagination: pagingState(logs),
+      onLoadOlder: () => paging.loadNext(logsKey, logs),
+      onRetry: () => paging.refetch(logsKey, logs),
+      onRetryPaging: () => paging.recover(logsKey, logs),
+      pagination: paging.state(logsKey, logs),
       state: panelState(occurrenceState, logs, logEntries.length > 0),
     },
     occurrenceLabel: selected
@@ -99,60 +105,31 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
       isPending: traversal.isPending,
       occurrences,
       onRetry: () => reset("traversal"),
-      onRetryPaging: () => recover(traversal),
+      onRetryPaging: () => paging.recover("traversal", traversal),
       onSelect: (ref: string) => setSelection({ ref, runId }),
-      onShowEarlier: () => void traversal.fetchNextPage(),
-      pagination: pagingState(traversal),
+      onShowEarlier: () => paging.loadNext("traversal", traversal),
+      pagination: paging.state("traversal", traversal),
       selectedRef,
     },
     workflow: {
-      definitionComplete: pageComplete(workflow),
+      definitionComplete: pageComplete(workflow, paging.state("workflow", workflow)),
       edges: workflowEdges,
-      executionComplete: pageComplete(traversal),
+      executionComplete: pageComplete(traversal, paging.state("traversal", traversal)),
       isLoading: workflow.isPending,
       nodes: workflowNodes,
       occurrences: traversalRecords,
       onLoadMore: () =>
-        workflow.isError ? recover(workflow) : void workflow.fetchNextPage(),
-      pagination: pagingState(workflow),
+        ["error", "stale"].includes(paging.state("workflow", workflow))
+          ? paging.recover("workflow", workflow)
+          : paging.loadNext("workflow", workflow),
+      pagination: paging.state("workflow", workflow),
       runId,
     },
   };
 }
 
-type PageQuery = {
-  error: unknown;
-  fetchNextPage: () => Promise<unknown>;
-  hasNextPage: boolean;
-  isError: boolean;
-  isFetchingNextPage: boolean;
-  isFetchNextPageError: boolean;
-  isPending: boolean;
-  refetch: () => Promise<unknown>;
-};
-
-function recover(query: PageQuery) {
-  if (isStaleLocatorError(query.error)) {
-    // Infinite-query refetch starts from page one and retains last-good pages
-    // until the replacement chain succeeds.
-    void query.refetch();
-  } else {
-    void query.fetchNextPage();
-  }
-}
-
-function pagingState(query: PageQuery): PagingState {
-  if (query.isFetchingNextPage) {
-    return "loading";
-  }
-  if (query.isFetchNextPageError || query.isError) {
-    return isStaleLocatorError(query.error) ? "stale" : "error";
-  }
-  return query.hasNextPage ? "more" : "complete";
-}
-
-function pageComplete(query: PageQuery): boolean {
-  return !query.isPending && !query.isError && !query.hasNextPage;
+function pageComplete(query: PagingQuery, pagination: string): boolean {
+  return pagination === "complete" && !query.isPending && !query.isError;
 }
 
 function occurrenceEvidenceState(
@@ -172,7 +149,7 @@ function occurrenceEvidenceState(
 
 function panelState(
   occurrenceState: OccurrenceEvidenceState,
-  query: PageQuery,
+  query: PagingQuery,
   hasLastGood = false,
 ): OccurrenceEvidenceState {
   if (occurrenceState !== "ready") {
