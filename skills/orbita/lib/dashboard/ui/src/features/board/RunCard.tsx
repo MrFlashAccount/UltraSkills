@@ -1,6 +1,6 @@
 import type { RunSummaryDTO } from "@dashboard-contracts";
 import { CircleAlert, CircleCheck, Clock3, LoaderCircle } from "lucide-react";
-import { formatAge, shortRunId } from "@/lib/time";
+import { formatDateTime, formatRelativeTime, shortRunId } from "@/lib/time";
 import type { RovingRunFocus } from "./hooks/use-roving-run-focus";
 
 const laneIcon = {
@@ -22,6 +22,7 @@ type RunCardProps = {
 export function RunCard({ ensureVisible, onSelect, roving, run, selected }: RunCardProps) {
   const Icon = laneIcon[run.laneId];
   const unsupported = run.cursor.kind === "unsupported";
+  const updatedAt = run.updatedAt ?? run.createdAt;
   return (
     <button
       aria-label={`${run.title.value}, ${run.reason?.value ?? run.status ?? run.laneId}`}
@@ -47,7 +48,9 @@ export function RunCard({ ensureVisible, onSelect, roving, run, selected }: RunC
               : (run.reason?.value ?? run.status ?? "Status update")}
           </span>
         </span>
-        <time dateTime={run.updatedAt}>{formatAge(run.updatedAt ?? run.createdAt)}</time>
+        <time dateTime={updatedAt} suppressHydrationWarning title={formatDateTime(updatedAt)}>
+          {formatRelativeTime(updatedAt)}
+        </time>
       </span>
       <strong className="card-title">{run.title.value}</strong>
       <span className="card-fact">

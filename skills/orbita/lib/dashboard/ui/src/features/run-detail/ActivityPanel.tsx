@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatDateTime, isDateTime } from "@/lib/time";
 import {
   type ActivityGroupItem,
   type StepEvidenceState,
@@ -65,7 +66,15 @@ export function ActivityPanel(props: ActivityPanelProps) {
                   <tbody>
                     {group.events.map((event) => (
                       <tr key={event.id}>
-                        <td data-label="Time">{event.time}</td>
+                        <td data-label="Time">
+                          {isDateTime(event.time) ? (
+                            <time dateTime={event.time} suppressHydrationWarning>
+                              {formatDateTime(event.time)}
+                            </time>
+                          ) : (
+                            event.time
+                          )}
+                        </td>
                         <td data-label="Source" title={event.source}>
                           {event.source}
                         </td>

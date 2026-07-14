@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatDateTime } from "@/lib/time";
 import { MarkdownContent } from "./MarkdownContent";
 import {
   type ManagedLogEntry,
@@ -68,7 +69,11 @@ export function LogsPanel(props: LogsPanelProps) {
               <li key={entry.id}>
                 {entry.timestamp || entry.source || entry.redacted || entry.truncated ? (
                   <header>
-                    {entry.timestamp ? <time>{entry.timestamp}</time> : null}
+                    {entry.timestamp ? (
+                      <time dateTime={entry.timestamp} suppressHydrationWarning>
+                        {formatDateTime(entry.timestamp)}
+                      </time>
+                    ) : null}
                     {entry.source ? <span>{entry.source}</span> : null}
                     {entry.redacted ? <Badge>Redacted to public facts</Badge> : null}
                     {entry.truncated ? <Badge>Entry truncated</Badge> : null}

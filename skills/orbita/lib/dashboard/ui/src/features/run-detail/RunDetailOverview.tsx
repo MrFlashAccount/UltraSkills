@@ -1,10 +1,11 @@
 import type { RunLightDetailDTO } from "@dashboard-contracts";
 import { Clock3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { formatAge } from "@/lib/time";
+import { formatDateTime, formatRelativeTime } from "@/lib/time";
 
 export function RunDetailOverview({ detail }: Readonly<{ detail: RunLightDetailDTO }>) {
   const run = detail.run;
+  const updatedAt = run.updatedAt ?? run.createdAt;
   return (
     <section aria-label="Run summary" className="detail-overview">
       <dl className="detail-overview-facts">
@@ -24,7 +25,9 @@ export function RunDetailOverview({ detail }: Readonly<{ detail: RunLightDetailD
           <dt>Updated</dt>
           <dd>
             <Clock3 aria-hidden="true" size={14} />
-            {formatAge(run.updatedAt ?? run.createdAt)} ago
+            <time dateTime={updatedAt} suppressHydrationWarning title={formatDateTime(updatedAt)}>
+              {formatRelativeTime(updatedAt)}
+            </time>
           </dd>
         </div>
       </dl>

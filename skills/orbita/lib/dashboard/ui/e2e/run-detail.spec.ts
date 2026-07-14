@@ -7,7 +7,7 @@ const proofDir = "skills/orbita/lib/dashboard/ui/e2e/proof";
 test("Direction A preserves Workflow and scopes selected-step evidence", async ({
   page,
 }, testInfo) => {
-  await mockDashboard(page);
+  const snapshot = await mockDashboard(page);
   await page.goto("/");
   const boardRegion = page.locator(".board-region");
   const boardBefore = await boardRegion.boundingBox();
@@ -53,7 +53,13 @@ test("Direction A preserves Workflow and scopes selected-step evidence", async (
   }
   await page.screenshot({ path: `${proofDir}/v2-activity-${testInfo.project.name}.png` });
   await dialog.getByRole("tab", { name: "Logs" }).click();
-  await expect(dialog.getByRole("heading", { name: "Managed evidence" })).toBeVisible();
+  const managedHeading = dialog.getByRole("heading", { name: "Managed evidence" });
+  await expect(managedHeading).toBeVisible();
+  await expect(managedHeading).toHaveCSS("font-size", "18px");
+  await expect(managedHeading).toHaveCSS("border-bottom-width", "1px");
+  const logTime = dialog.locator(".managed-logs time").first();
+  await expect(logTime).toHaveAttribute("datetime", snapshot.runs[0]!.updatedAt!);
+  await expect(logTime).not.toContainText("T");
   await page.screenshot({ path: `${proofDir}/v2-logs-${testInfo.project.name}.png` });
   await dialog.getByRole("tab", { name: "Artifacts" }).click();
   await expect(dialog.getByText(/Showing 2 of 3 run artifacts/)).toBeVisible();

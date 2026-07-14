@@ -129,6 +129,7 @@ export function resourcesFor(run: RunSummaryDTO) {
             "## Managed evidence\n\nFanout activation 1 completed.",
             "managed_markdown",
           ),
+          occurredAt: run.updatedAt,
           source: "workflow-runner",
         },
       ],
