@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
 import { AppProviders } from "@/app/AppProviders";
 import { makeDetail } from "@/test/fixtures";
+import { stubGlobal } from "@/test/globals";
 import { RunDetailSurface } from "./RunDetailSurface";
 
 const occurrenceRef = "occurrence_ref_01";
@@ -18,7 +19,7 @@ const renderDetail = (component: React.ReactNode) => {
 };
 
 beforeEach(() => {
-  vi.stubGlobal(
+  stubGlobal(
     "fetch",
     vi.fn(async (request: string | URL | Request) => {
       const url = String(typeof request === "object" && "url" in request ? request.url : request);
@@ -153,7 +154,7 @@ describe("RunDetailSurface", () => {
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Artifacts" }), { button: 0 });
     expect(await screen.findByText("workflow-trail.png")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Close details" }));
-    expect(close).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it("keeps Workflow available when legacy occurrence evidence is unavailable", async () => {

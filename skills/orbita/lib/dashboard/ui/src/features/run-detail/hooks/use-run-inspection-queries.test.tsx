@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { type ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
+import { stubGlobal } from "@/test/globals";
 import { usePagingRecovery } from "./use-paging-recovery";
 import {
   useActivityPages,
@@ -26,7 +27,7 @@ describe("run inspection query lifecycle", () => {
     const replacementGate = new Promise<void>((resolve) => {
       releaseReplacement = resolve;
     });
-    vi.stubGlobal(
+    stubGlobal(
       "fetch",
       vi.fn(async (request: string | URL | Request) => {
         const url = new URL(
@@ -84,7 +85,7 @@ describe("run inspection query lifecycle", () => {
 
   it("uses independent occurrence and workflow-step artifact scopes", async () => {
     const urls: Array<string> = [];
-    vi.stubGlobal(
+    stubGlobal(
       "fetch",
       vi.fn(async (request: string | URL | Request) => {
         const url = String(typeof request === "object" && "url" in request ? request.url : request);
@@ -124,7 +125,7 @@ describe("run inspection query lifecycle", () => {
 
   it("does not request scoped resources without a locator", () => {
     const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
+    stubGlobal("fetch", fetch);
     const { result } = renderHook(
       () => ({
         activity: useActivityPages("run-1"),

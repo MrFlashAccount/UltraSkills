@@ -4,7 +4,7 @@
     "target": "ES2023",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "allowImportingTsExtensions": true,
-    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom", "node", "bun"],
+    "types": ["vite/client", "@testing-library/jest-dom", "node", "bun"],
     "paths": {
       "@/*": ["./src/*"],
       "@dashboard-contracts": ["../contracts/browser.ts"]

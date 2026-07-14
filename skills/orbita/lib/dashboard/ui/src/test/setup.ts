@@ -1,8 +1,15 @@
-import "@testing-library/jest-dom/vitest";
-import { afterEach } from "vitest";
+// oxlint-disable import/no-namespace
 import { cleanup } from "@testing-library/react";
+import * as matchers from "@testing-library/jest-dom/matchers";
+import { afterEach, expect } from "bun:test";
+import { restoreStubbedGlobals } from "./globals";
 
-afterEach(cleanup);
+expect.extend(matchers);
+
+afterEach(() => {
+  cleanup();
+  restoreStubbedGlobals();
+});
 
 Object.defineProperty(window, "matchMedia", {
   value: (query: string) => ({

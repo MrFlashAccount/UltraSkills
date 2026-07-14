@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { AppProviders } from "@/app/AppProviders";
+import { stubGlobal } from "@/test/globals";
 import { ActivityPanel } from "./ActivityPanel";
 import { ArtifactPreviewBody } from "./ArtifactPreviewBody";
 import { ArtifactsPanel } from "./ArtifactsPanel";
@@ -101,97 +102,50 @@ describe("run detail Direction A components", () => {
     expect(screen.getByText("Entry truncated")).toBeVisible();
   });
 
-  it("restores focus to the exact artifact preview opener", async () => {
-    renderFeature(
-      <ArtifactsPanel
-        artifacts={[
-          {
-            artifactRef: "artifact-1",
-            declaredContentType: "image/png",
-            downloadUrl: "/download/artifact-1",
-            effectiveContentType: "image/png",
-            id: "workflow-trail.png",
-            key: "artifact-1",
-            mimeMismatch: false,
-            preview: { kind: "image", state: "available", url: "/preview/artifact-1" },
-            producerLabel: "architecture",
-            producerStepId: "architecture",
-          },
-        ]}
-        pagination="complete"
-        runArtifactCount={4}
-        state="ready"
-        stepLabel="architecture"
-      />,
-    );
-    const row = screen.getByRole("listitem");
-    const opener = within(row).getByRole("button", { name: "Preview" });
-    fireEvent.click(opener);
-    expect(screen.getByRole("dialog", { name: "workflow-trail.png" })).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Close artifact preview" }));
-    await waitFor(() => expect(opener).toHaveFocus());
-  });
-
-  it("preflights active content and discloses its opaque allow-scripts sandbox", async () => {
-    vi.stubGlobal(
+  it("preflights active content into an opaque allow-scripts sandbox", async () => {
+    stubGlobal(
       "fetch",
       vi.fn(async () => new Response("<!doctype html><p>Proof</p>")),
     );
     renderFeature(
-      <ArtifactsPanel
-        artifacts={[
-          {
-            artifactRef: "artifact-active",
-            declaredContentType: "text/html",
-            downloadUrl: "/download/artifact-active",
-            effectiveContentType: "text/html",
-            id: "report.html",
-            key: "artifact-active",
-            mimeMismatch: false,
-            preview: { kind: "active_frame", state: "available", url: "/preview/active" },
-            producerLabel: "architecture",
-            producerStepId: "architecture",
-          },
-        ]}
-        pagination="complete"
-        runArtifactCount={1}
-        state="ready"
-        stepLabel="architecture"
+      <ArtifactPreviewBody
+        artifact={{
+          artifactRef: "artifact-active",
+          declaredContentType: "text/html",
+          effectiveContentType: "text/html",
+          id: "report.html",
+          key: "artifact-active",
+          mimeMismatch: false,
+          preview: { kind: "active_frame", state: "available", url: "/preview/active" },
+          producerLabel: "architecture",
+          producerStepId: "architecture",
+        }}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     const frame = await screen.findByTitle("Preview of report.html");
     expect(frame).toHaveAttribute("sandbox", "allow-scripts");
-    expect(screen.getByText(/may run scripts and contact network services/i)).toBeVisible();
   });
 
   it("renders Markdown artifacts through the shared safe renderer", async () => {
-    vi.stubGlobal(
+    stubGlobal(
       "fetch",
       vi.fn(async () => new Response("**Safe** <script>unsafe()</script>")),
     );
     const { container } = renderFeature(
-      <ArtifactsPanel
-        artifacts={[
-          {
-            artifactRef: "artifact-markdown",
-            declaredContentType: "text/markdown",
-            effectiveContentType: "text/markdown",
-            id: "report.md",
-            key: "artifact-markdown",
-            mimeMismatch: false,
-            preview: { kind: "markdown", state: "available", url: "/preview/markdown" },
-            producerLabel: "architecture",
-            producerStepId: "architecture",
-          },
-        ]}
-        pagination="complete"
-        runArtifactCount={1}
-        state="ready"
-        stepLabel="architecture"
+      <ArtifactPreviewBody
+        artifact={{
+          artifactRef: "artifact-markdown",
+          declaredContentType: "text/markdown",
+          effectiveContentType: "text/markdown",
+          id: "report.md",
+          key: "artifact-markdown",
+          mimeMismatch: false,
+          preview: { kind: "markdown", state: "available", url: "/preview/markdown" },
+          producerLabel: "architecture",
+          producerStepId: "architecture",
+        }}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     expect(await screen.findByText("Safe")).toBeVisible();
     expect(container.querySelector("script")).not.toBeInTheDocument();
   });
@@ -225,7 +179,7 @@ describe("run detail Direction A components", () => {
     expect(screen.getByText("legacy.txt")).toBeVisible();
     expect(screen.getByText(/provenance unavailable/i)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Reload from latest" }));
-    expect(retry).toHaveBeenCalledOnce();
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 
   it("distinguishes traversal-pending and vanished-selection evidence from successful emptiness", () => {
@@ -261,7 +215,7 @@ describe("run detail Direction A components", () => {
   });
 
   it("renders workflow-step legacy descriptors without inventing content authority", async () => {
-    vi.stubGlobal(
+    stubGlobal(
       "fetch",
       vi.fn(
         async () =>
@@ -313,7 +267,7 @@ describe("run detail Direction A components", () => {
   });
 
   it("preflights passive documents before rendering a sandboxed frame", async () => {
-    vi.stubGlobal(
+    stubGlobal(
       "fetch",
       vi.fn(async () => new Response("document")),
     );

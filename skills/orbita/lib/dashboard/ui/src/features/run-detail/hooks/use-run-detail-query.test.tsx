@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { makeDetail, makeRun } from "@/test/fixtures";
+import { stubGlobal } from "@/test/globals";
 import { useRunDetailQuery } from "./use-run-detail-query";
 
 describe("useRunDetailQuery", () => {
@@ -9,7 +10,7 @@ describe("useRunDetailQuery", () => {
     const detailA = makeDetail(makeRun(1));
     const detailB = makeDetail(makeRun(2));
     let resolveB: ((response: Response) => void) | undefined;
-    vi.stubGlobal(
+    stubGlobal(
       "fetch",
       vi.fn((request: string | URL | Request) => {
         const url = String(typeof request === "object" && "url" in request ? request.url : request);

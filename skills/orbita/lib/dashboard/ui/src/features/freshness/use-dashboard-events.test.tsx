@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
+import { stubGlobal } from "@/test/globals";
 import { useDashboardEvents } from "./use-dashboard-events";
 
 class EventSourceStub extends EventTarget {
@@ -42,12 +43,11 @@ function withClient(client: QueryClient) {
 afterEach(() => {
   EventSourceStub.instances = [];
   vi.useRealTimers();
-  vi.unstubAllGlobals();
 });
 
 describe("useDashboardEvents", () => {
   it("seeds ordering from authoritative freshness and ignores delayed or duplicate events", () => {
-    vi.stubGlobal("EventSource", EventSourceStub);
+    stubGlobal("EventSource", EventSourceStub);
     const client = new QueryClient();
     const { rerender, result } = renderHook(
       ({ changeId, state }) => useDashboardEvents({ changeId, state }),
@@ -66,7 +66,7 @@ describe("useDashboardEvents", () => {
 
   it("coalesces a burst into one snapshot-and-active-detail invalidation per 100ms", () => {
     vi.useFakeTimers();
-    vi.stubGlobal("EventSource", EventSourceStub);
+    stubGlobal("EventSource", EventSourceStub);
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
     renderHook(() => useDashboardEvents({ changeId: "1", state: "fresh" }, "run-1"), {
