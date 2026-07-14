@@ -24,7 +24,7 @@ export class ObserverUnavailableError extends Error {
 type Reader = {
   getActivityPage?(
     runId: string,
-    occurrenceRef: string,
+    stepId: string,
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<ActivityPageDTO | undefined>;
@@ -35,14 +35,13 @@ type Reader = {
   ): Promise<VerifiedArtifactHandle | undefined>;
   getArtifactPage?(
     runId: string,
-    occurrenceRef?: string,
+    stepId: string,
     cursor?: string,
     signal?: AbortSignal,
-    workflowStepId?: string,
   ): Promise<ArtifactPageDTO | undefined>;
   getLogsPage?(
     runId: string,
-    occurrenceRef: string,
+    stepId: string,
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<LogsPageDTO | undefined>;
@@ -279,33 +278,32 @@ export class DashboardReadModel {
 
   async getActivityPage(
     runId: string,
-    occurrenceRef: string,
+    stepId: string,
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<ActivityPageDTO | undefined> {
     await this.ensureSnapshot();
-    return this.reader.getActivityPage?.(runId, occurrenceRef, cursor, signal);
+    return this.reader.getActivityPage?.(runId, stepId, cursor, signal);
   }
 
   async getLogsPage(
     runId: string,
-    occurrenceRef: string,
+    stepId: string,
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<LogsPageDTO | undefined> {
     await this.ensureSnapshot();
-    return this.reader.getLogsPage?.(runId, occurrenceRef, cursor, signal);
+    return this.reader.getLogsPage?.(runId, stepId, cursor, signal);
   }
 
   async getArtifactPage(
     runId: string,
-    occurrenceRef?: string,
+    stepId: string,
     cursor?: string,
     signal?: AbortSignal,
-    workflowStepId?: string,
   ): Promise<ArtifactPageDTO | undefined> {
     await this.ensureSnapshot();
-    return this.reader.getArtifactPage?.(runId, occurrenceRef, cursor, signal, workflowStepId);
+    return this.reader.getArtifactPage?.(runId, stepId, cursor, signal);
   }
 
   async getArtifactHandle(

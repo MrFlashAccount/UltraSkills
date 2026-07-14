@@ -156,11 +156,9 @@ export function PreviewFailure({
 function previewTitle(state: Exclude<RunArtifactItem["preview"]["state"], "available">) {
   return state === "download_only"
     ? "Download only"
-    : state === "legacy_unavailable"
-      ? "Legacy content unavailable"
-      : state === "oversized"
-        ? "Preview is too large"
-        : state === "unsupported"
-          ? "Preview is unsupported"
-          : "Preview unavailable";
+    : state === "oversized"
+      ? "Preview is too large"
+      : state === "unsupported"
+        ? "Preview is unsupported"
+        : "Preview unavailable";
 }

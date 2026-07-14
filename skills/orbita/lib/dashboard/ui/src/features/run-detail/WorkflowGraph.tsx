@@ -22,15 +22,15 @@ type WorkflowGraphProps = {
   executionComplete: boolean;
   isLoading: boolean;
   nodes: WorkflowPageDTO["nodes"];
-  occurrences: TraversalPageDTO["items"];
   onLoadMore: () => void;
   pagination: PagingState;
   runId: string;
+  traversedSteps: TraversalPageDTO["items"];
 };
 
 export default function WorkflowGraph(props: WorkflowGraphProps) {
   const currentStep = props.nodes.find(
-    (step) => stepState(step.stepId, props.occurrences) === "current",
+    (step) => stepState(step.stepId, props.traversedSteps) === "current",
   );
   const [selectedStepId, setSelectedStepId] = useState(
     currentStep?.stepId ?? props.nodes[0]?.stepId,
@@ -40,7 +40,7 @@ export default function WorkflowGraph(props: WorkflowGraphProps) {
   const { edges, nodes } = graphElements(
     props.nodes,
     props.edges,
-    props.occurrences,
+    props.traversedSteps,
     selectedStep?.stepId,
   );
   if (!props.nodes.length && !props.isLoading) {
@@ -116,7 +116,7 @@ export default function WorkflowGraph(props: WorkflowGraphProps) {
                 <span>Step details</span>
                 <h4>{selectedStep.stepId}</h4>
               </div>
-              <Badge>{STEP_LABELS[stepState(selectedStep.stepId, props.occurrences)]}</Badge>
+              <Badge>{STEP_LABELS[stepState(selectedStep.stepId, props.traversedSteps)]}</Badge>
             </div>
             <dl>
               <div>
@@ -127,7 +127,7 @@ export default function WorkflowGraph(props: WorkflowGraphProps) {
               </div>
               <div>
                 <dt>State</dt>
-                <dd>{STEP_LABELS[stepState(selectedStep.stepId, props.occurrences)]}</dd>
+                <dd>{STEP_LABELS[stepState(selectedStep.stepId, props.traversedSteps)]}</dd>
               </div>
               <div>
                 <dt>Kind</dt>

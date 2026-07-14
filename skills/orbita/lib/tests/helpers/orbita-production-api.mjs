@@ -13,7 +13,7 @@ import { runNext } from '../../use-cases/RunNext.mjs';
 import { resolveStartupUserPrompt, startupUserPromptTarget } from '../../runtime/user-prompt.mjs';
 import { loadWorkflowRuntime } from '../../persistence/workflow-resources/runtime-reader.mjs';
 import { readWorkflowDocument } from '../../persistence/workflow-resources/workflow-document-reader.mjs';
-import { artifactPathBoundaryInspection } from '../../persistence/workflow-resources/artifact-path-boundaries.mjs';
+import { artifactPathBoundaryErrors } from '../../persistence/workflow-resources/artifact-path-boundaries.mjs';
 import { writePersistedRunStateUpdate } from '../../persistence/run-state/PersistedRunStateWriter.mjs';
 import { toHostResponse, workerBindingKeyForStep } from '../../runner/host-requests.mjs';
 import { renderCurrentRequestInstructions } from '../../runner/current-request-instructions.mjs';
@@ -23,7 +23,7 @@ import { readText } from '../../persistence/run-state/atomic-file.mjs';
 import { assertFreshTokenAuthority, assertMatchingTokenAuthority, buildTokenLease, renewTokenLease } from '../../persistence/run-state/lease-authority.mjs';
 import { appendHistoryOnce, recoverDurableCommit } from '../../persistence/run-state/durable-commit.mjs';
 import { readPersistedRunState } from '../../persistence/run-state/PersistedRunStateReader.mjs';
-import { artifactOutputDirForOccurrence, defaultWorkflowPath, ensureRunDirectories, ensureRunFiles, initialRunBaton, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../../persistence/run-state/paths.mjs';
+import { defaultWorkflowPath, ensureRunDirectories, ensureRunFiles, initialRunBaton, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../../persistence/run-state/paths.mjs';
 import { createRunIndexEntry, upsertRunIndexEntry } from '../../persistence/run-state/run-index.mjs';
 import { readRunAuthorityWithLegacyFallback, runAuthorityFromIndexEntry, writeRunAuthority } from '../../persistence/run-state/run-authority.mjs';
 import { durableFileSignature } from '../../persistence/run-state/file-signature.mjs';
@@ -68,8 +68,7 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   startupUserPromptTarget,
   loadWorkflowRuntime,
   readWorkflowDocument,
-  artifactPathBoundaryInspection,
-  artifactOutputDirForOccurrence,
+  artifactPathBoundaryErrors,
   writePersistedRunStateUpdate,
   toHostResponse,
   renderCurrentRequestInstructions,

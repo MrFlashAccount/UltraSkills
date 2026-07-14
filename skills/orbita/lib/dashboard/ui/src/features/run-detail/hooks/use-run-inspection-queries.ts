@@ -58,7 +58,7 @@ export function useTraversalPages(runId?: string) {
   });
 }
 
-export function useActivityPages(runId?: string, occurrenceRef?: string) {
+export function useActivityPages(runId?: string, stepId?: string) {
   return useInfiniteQuery<
     ActivityPageDTO,
     Error,
@@ -66,20 +66,20 @@ export function useActivityPages(runId?: string, occurrenceRef?: string) {
     ReturnType<typeof resourceQueryKey>,
     string | undefined
   >({
-    enabled: scopedEnabled(runId, occurrenceRef),
+    enabled: scopedEnabled(runId, stepId),
     getNextPageParam: (page) => (page.complete ? undefined : page.nextCursor),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
       fetchDashboardResource<ActivityPageDTO>(
-        resourceUrl(runId!, "activity", { cursor: pageParam, occurrenceRef }),
+        resourceUrl(runId!, "activity", { cursor: pageParam, stepId }),
         ActivityPageSchema,
         signal,
       ),
-    queryKey: resourceQueryKey(runId, "activity", occurrenceRef),
+    queryKey: resourceQueryKey(runId, "activity", stepId),
   });
 }
 
-export function useLogPages(runId?: string, occurrenceRef?: string) {
+export function useLogPages(runId?: string, stepId?: string) {
   return useInfiniteQuery<
     LogsPageDTO,
     Error,
@@ -87,32 +87,20 @@ export function useLogPages(runId?: string, occurrenceRef?: string) {
     ReturnType<typeof resourceQueryKey>,
     string | undefined
   >({
-    enabled: scopedEnabled(runId, occurrenceRef),
+    enabled: scopedEnabled(runId, stepId),
     getNextPageParam: (page) => (page.complete ? undefined : page.nextCursor),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
       fetchDashboardResource<LogsPageDTO>(
-        resourceUrl(runId!, "logs", { cursor: pageParam, occurrenceRef }),
+        resourceUrl(runId!, "logs", { cursor: pageParam, stepId }),
         LogsPageSchema,
         signal,
       ),
-    queryKey: resourceQueryKey(runId, "logs", occurrenceRef),
+    queryKey: resourceQueryKey(runId, "logs", stepId),
   });
 }
 
-export function useOccurrenceArtifactPages(runId?: string, occurrenceRef?: string) {
-  return useArtifactPages(runId, "occurrence", occurrenceRef);
-}
-
 export function useWorkflowStepArtifactPages(runId?: string, stepId?: string) {
-  return useArtifactPages(runId, "workflow-step", stepId);
-}
-
-function useArtifactPages(
-  runId: string | undefined,
-  scope: "occurrence" | "workflow-step",
-  locator: string | undefined,
-) {
   return useInfiniteQuery<
     ArtifactPageDTO,
     Error,
@@ -120,19 +108,18 @@ function useArtifactPages(
     ReturnType<typeof resourceQueryKey>,
     string | undefined
   >({
-    enabled: scopedEnabled(runId, locator),
+    enabled: scopedEnabled(runId, stepId),
     getNextPageParam: (page) => (page.complete ? undefined : page.nextCursor),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
       fetchDashboardResource<ArtifactPageDTO>(
         resourceUrl(runId!, "artifacts", {
           cursor: pageParam,
-          occurrenceRef: scope === "occurrence" ? locator : undefined,
-          stepId: scope === "workflow-step" ? locator : undefined,
+          stepId,
         }),
         ArtifactPageSchema,
         signal,
       ),
-    queryKey: resourceQueryKey(runId, `artifacts:${scope}`, locator),
+    queryKey: resourceQueryKey(runId, "artifacts:workflow-step", stepId),
   });
 }

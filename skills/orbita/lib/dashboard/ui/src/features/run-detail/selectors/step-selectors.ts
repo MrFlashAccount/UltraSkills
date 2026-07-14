@@ -2,31 +2,9 @@ import type { ActivityPageDTO, TraversalPageDTO } from "@dashboard-contracts";
 import {
   type ActivityEventItem,
   type ActivityGroupItem,
-  type OccurrenceItem,
   type StepPathItem,
 } from "../run-detail-view-model";
-import { accumulatePages, mergeTraversalPages } from "./page-accumulation";
-
-/** Resolve the newest trustworthy occurrence behind a step-only UI selection. */
-export function selectOccurrenceForStep(
-  occurrences: ReadonlyArray<OccurrenceItem>,
-  stepId?: string,
-): OccurrenceItem | undefined {
-  return occurrences
-    .filter((occurrence) => occurrence.stepId === stepId)
-    .toSorted((left, right) => right.ordinal - left.ordinal)[0];
-}
-
-export function toOccurrenceItems(
-  pages: ReadonlyArray<TraversalPageDTO> | undefined,
-): Array<OccurrenceItem> {
-  return mergeTraversalPages(pages).map((occurrence) => ({
-    occurrenceRef: occurrence.occurrenceRef,
-    ordinal: occurrence.ordinal,
-    state: occurrence.state,
-    stepId: occurrence.stepId,
-  }));
-}
+import { accumulatePages } from "./page-accumulation";
 
 /** Collapse transition history to the unique active path; repeated visits never enter the UI. */
 export function toStepPathItems(
@@ -57,15 +35,13 @@ function alignPath(path: Array<string>, stepId: string): void {
   path.push(stepId);
 }
 
-type TraversalOccurrence = TraversalPageDTO["items"][number];
+type TraversalStep = TraversalPageDTO["items"][number];
 
 export function toActivityGroups(
   pages: ReadonlyArray<ActivityPageDTO> | undefined,
-  occurrence: TraversalOccurrence | undefined,
+  step: TraversalStep | undefined,
 ): Array<ActivityGroupItem> {
-  const peerByRequest = new Map(
-    (occurrence?.peers ?? []).map((peer) => [peer.producerRequestId, peer]),
-  );
+  const peerByRequest = new Map((step?.peers ?? []).map((peer) => [peer.producerRequestId, peer]));
   const groups = new Map<string, ActivityGroupItem>();
   const events = accumulatePages(pages, (event) =>
     [event.occurredAt, event.producerRequestId, event.source, event.state, event.event.value].join(
@@ -74,14 +50,14 @@ export function toActivityGroups(
   );
   events.forEach((event, index) => {
     const peer = event.producerRequestId ? peerByRequest.get(event.producerRequestId) : undefined;
-    const groupId = peer ? `activation:${peer.activation}:${peer.kind}` : "occurrence";
+    const groupId = peer ? `activation:${peer.activation}:${peer.kind}` : "step";
     const group = groups.get(groupId) ?? {
       events: [],
       id: groupId,
       label: peer
         ? `${peer.kind === "fanout_branch" ? "Fanout" : "Shard"} activation ${peer.activation}`
-        : "Occurrence lifecycle",
-      state: peer?.state ?? event.state ?? occurrence?.state ?? "completed",
+        : "Step lifecycle",
+      state: peer?.state ?? event.state ?? step?.state ?? "completed",
     };
     (group.events as Array<ActivityEventItem>).push({
       event: event.event.value,

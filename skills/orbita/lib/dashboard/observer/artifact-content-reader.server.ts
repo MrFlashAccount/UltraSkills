@@ -1,11 +1,8 @@
 /** Canonical artifact reopen, stamp revalidation, MIME probing, and verified-handle streaming. */
-import { type FileHandle } from "node:fs/promises";
-import { isAbsolute } from "node:path";
+import { closeSync, constants, fstatSync, lstatSync, openSync, realpathSync } from "node:fs";
+import { open as openAsync, type FileHandle } from "node:fs/promises";
+import { isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
-// @ts-expect-error Durable path policy is legacy MJS.
-import { artifactOutputDirForOccurrence } from "../../persistence/run-state/paths.mjs";
-// @ts-expect-error Durable path policy is legacy MJS.
-import { openArtifactFileWithinDirectory } from "../../persistence/workflow-resources/artifact-path-boundaries.mjs";
 import { artifactContentLimit, artifactPreviewState } from "../projection/project-artifacts";
 
 export type VerifiedArtifactHandle = {
@@ -21,14 +18,108 @@ export type VerifiedArtifactHandle = {
   stampTag: string;
 };
 
-function stampMatches(stat: any, stamp: any): boolean {
+function descriptorPath(descriptor: number, child?: string): string {
+  const root = "/proc/self/fd";
+  return child === undefined ? `${root}/${descriptor}` : `${root}/${descriptor}/${child}`;
+}
+
+function openDirectoryChain(directory: string): number {
+  const absolute = resolve(directory);
+  const root = parse(absolute).root;
+  const segments = relative(root, absolute).split(sep).filter(Boolean);
+  const flags = constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0);
+  let descriptor = openSync(root, flags);
+  try {
+    for (const segment of segments) {
+      const next = openSync(descriptorPath(descriptor, segment), flags);
+      closeSync(descriptor);
+      descriptor = next;
+    }
+    return descriptor;
+  } catch (error) {
+    closeSync(descriptor);
+    throw error;
+  }
+}
+
+async function openArtifactFileWithinDirectory(
+  pathname: string,
+  artifactOutputDir: string,
+): Promise<FileHandle> {
+  const expectedDir = resolve(artifactOutputDir);
+  const rel = relative(expectedDir, resolve(pathname));
+  if (!rel || rel.startsWith("..") || isAbsolute(rel)) {
+    throw new Error("content_unavailable");
+  }
+  const segments = rel.split(sep).filter(Boolean);
+  const leaf = segments.pop();
+  if (!leaf) {
+    throw new Error("content_unavailable");
+  }
+  const canonicalExpectedDir = realpathSync.native(expectedDir);
+  const directoryFlags =
+    constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0);
+  let directoryDescriptor = openDirectoryChain(canonicalExpectedDir);
+  try {
+    const namedDirectory = lstatSync(expectedDir);
+    const openedDirectory = fstatSync(directoryDescriptor);
+    if (
+      !namedDirectory.isDirectory() ||
+      namedDirectory.dev !== openedDirectory.dev ||
+      namedDirectory.ino !== openedDirectory.ino
+    ) {
+      throw new Error("content_unavailable");
+    }
+    for (const segment of segments) {
+      const next = openSync(descriptorPath(directoryDescriptor, segment), directoryFlags);
+      closeSync(directoryDescriptor);
+      directoryDescriptor = next;
+    }
+    const descriptor = openSync(
+      descriptorPath(directoryDescriptor, leaf),
+      constants.O_RDONLY | constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0),
+    );
+    try {
+      return await openAsync(descriptorPath(descriptor), constants.O_RDONLY | constants.O_NONBLOCK);
+    } finally {
+      closeSync(descriptor);
+    }
+  } catch {
+    throw new Error("content_unavailable");
+  } finally {
+    closeSync(directoryDescriptor);
+  }
+}
+
+function statMatches(left: any, right: any): boolean {
   return (
-    stat.dev === stamp?.device &&
-    stat.ino === stamp?.inode &&
-    stat.size === stamp?.size &&
-    stat.mtimeMs === stamp?.mtimeMs &&
-    stat.ctimeMs === stamp?.ctimeMs
+    left.dev === right?.dev &&
+    left.ino === right?.ino &&
+    left.size === right?.size &&
+    left.mtimeMs === right?.mtimeMs &&
+    left.ctimeMs === right?.ctimeMs
   );
+}
+
+function artifactOutputDirectory(paths: any, entry: any, pathname: string): string {
+  const runDir = resolve(paths.runDir);
+  const rel = relative(runDir, resolve(pathname));
+  const segments = rel.split(sep).filter(Boolean);
+  const requestId = segments[0];
+  const producerStepId = entry?.producerStepId;
+  if (
+    rel.startsWith("..") ||
+    isAbsolute(rel) ||
+    segments.length < 3 ||
+    segments[1] !== "artifacts" ||
+    typeof requestId !== "string" ||
+    !/^[A-Za-z_][A-Za-z0-9_-]*$/u.test(requestId) ||
+    typeof producerStepId !== "string" ||
+    (requestId !== producerStepId && !requestId.endsWith(`__${producerStepId}`))
+  ) {
+    throw new Error("content_unavailable");
+  }
+  return join(runDir, requestId, "artifacts");
 }
 
 function looksText(buffer: Buffer): boolean {
@@ -115,11 +206,7 @@ async function openVerifiedArtifact(
   if (typeof pathname !== "string" || !isAbsolute(pathname)) {
     throw new Error("content_unavailable");
   }
-  const expectedDir = artifactOutputDirForOccurrence(paths, {
-    occurrence: entry.producerOccurrence,
-    ownerStepId: entry.producerStepId,
-    producerRequestId: entry.producerRequestId,
-  });
+  const expectedDir = artifactOutputDirectory(paths, entry, pathname);
   let handle: FileHandle;
   try {
     handle = await openArtifactFileWithinDirectory(pathname, expectedDir);
@@ -128,7 +215,7 @@ async function openVerifiedArtifact(
   }
   try {
     const stat = await handle.stat();
-    if (!stat.isFile() || !stampMatches(stat, entry.acceptedFileStamp)) {
+    if (!stat.isFile()) {
       throw new Error("content_unavailable");
     }
     const probe = Buffer.alloc(Math.min(8192, stat.size));
@@ -166,7 +253,7 @@ async function openVerifiedArtifact(
       }
     }
     const restat = await handle.stat();
-    if (!stampMatches(restat, entry.acceptedFileStamp)) {
+    if (!statMatches(restat, stat)) {
       throw new Error("content_unavailable");
     }
     return { effectiveContentType, handle, stat };
@@ -180,10 +267,10 @@ export async function probeArtifactEntry(
   paths: any,
   entry: any,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<{ contentType: string; size: number }> {
   const opened = await openVerifiedArtifact(paths, entry, signal);
   await opened.handle.close();
-  return opened.effectiveContentType;
+  return { contentType: opened.effectiveContentType, size: opened.stat.size };
 }
 
 export async function verifiedArtifactHandle(
@@ -211,7 +298,7 @@ export async function verifiedArtifactHandle(
       offset += bytesRead;
     }
     const restat = await opened.handle.stat();
-    if (!stampMatches(restat, entry.acceptedFileStamp)) {
+    if (!statMatches(restat, opened.stat)) {
       throw new Error("content_unavailable");
     }
     await opened.handle.close();
@@ -231,7 +318,7 @@ export async function verifiedArtifactHandle(
         artifactPreviewState(declaredContentType, opened.effectiveContentType, opened.stat.size) ===
         "previewable",
       size: opened.stat.size,
-      stampTag: `"${entry.acceptedFileStamp.device.toString(16)}-${entry.acceptedFileStamp.inode.toString(16)}-${entry.acceptedFileStamp.size.toString(16)}-${Math.trunc(entry.acceptedFileStamp.mtimeMs).toString(16)}"`,
+      stampTag: `"${opened.stat.dev.toString(16)}-${opened.stat.ino.toString(16)}-${opened.stat.size.toString(16)}-${Math.trunc(opened.stat.mtimeMs).toString(16)}"`,
     };
   } catch (error) {
     await opened.handle.close().catch(() => {});

@@ -6,7 +6,6 @@ import { assertCentralArtifactMetadata } from './artifact-contract.mjs';
 import { LOOP_PROGRESS_STATE_KEY, applyOutputToBatonState } from '../../runtime/baton-state.mjs';
 import { normalizeCursor } from '../../runtime/cursor.mjs';
 import { statusForStep } from '../../runtime/step-status.mjs';
-import { validateOccurrenceProvenance } from '../../runtime/occurrence-provenance.mjs';
 
 function cloneBoundaryData(dto) {
   return typeof dto?.toJSON === 'function' ? dto.toJSON() : structuredClone(dto);
@@ -18,21 +17,7 @@ function workflowData(workflow) {
 
 
 function aggregateArtifactIdentity(entry) {
-  if (entry.producerOccurrence !== undefined) {
-    return `${entry.producerStepId}::${entry.producerOccurrence}::${entry.producerRequestId}::${entry.artifact.id}`;
-  }
-  return `legacy::${entry.producerStepId}::${entry.artifact.id}`;
-}
-
-function validateAcceptedFileStamp(stamp, path) {
-  if (!stamp || typeof stamp !== 'object' || Array.isArray(stamp)) {
-    throw new WorkflowRuntimeError(`baton semantic validation failed: ${path} must be an accepted file stamp`);
-  }
-  for (const field of ['device', 'inode', 'size', 'mtimeMs', 'ctimeMs']) {
-    if (!Number.isFinite(stamp[field]) || stamp[field] < 0) {
-      throw new WorkflowRuntimeError(`baton semantic validation failed: ${path}/${field} must be a non-negative finite number`);
-    }
-  }
+  return `${entry.producerStepId}::${entry.artifact.id}`;
 }
 
 function validateAggregateArtifacts(state) {
@@ -43,18 +28,7 @@ function validateAggregateArtifacts(state) {
       throw new WorkflowRuntimeError(`baton semantic validation failed: state.artifacts/${index} must be aggregate artifact {producerStepId, artifact}`);
     }
     for (const field of Object.keys(entry)) {
-      if (!['producerStepId', 'producerOccurrence', 'producerRequestId', 'acceptedFileStamp', 'artifact'].includes(field)) throw new WorkflowRuntimeError(`baton semantic validation failed: state.artifacts/${index}/${field} is not allowed`);
-    }
-    const v2Fields = ['producerOccurrence', 'producerRequestId', 'acceptedFileStamp'];
-    const presentV2Fields = v2Fields.filter((field) => entry[field] !== undefined);
-    if (presentV2Fields.length !== 0 && presentV2Fields.length !== v2Fields.length) {
-      throw new WorkflowRuntimeError(`baton semantic validation failed: state.artifacts/${index} must include all v2 producer provenance fields or none`);
-    }
-    if (presentV2Fields.length === v2Fields.length) {
-      if (!Number.isInteger(entry.producerOccurrence) || entry.producerOccurrence < 1 || typeof entry.producerRequestId !== 'string' || entry.producerRequestId.length === 0) {
-        throw new WorkflowRuntimeError(`baton semantic validation failed: state.artifacts/${index} has invalid v2 producer provenance`);
-      }
-      validateAcceptedFileStamp(entry.acceptedFileStamp, `state.artifacts/${index}/acceptedFileStamp`);
+      if (!['producerStepId', 'artifact'].includes(field)) throw new WorkflowRuntimeError(`baton semantic validation failed: state.artifacts/${index}/${field} is not allowed`);
     }
     assertCentralArtifactMetadata(entry.artifact, `state.artifacts/${index}/artifact`, { errorPrefix: 'baton semantic validation failed' });
     const identity = aggregateArtifactIdentity(entry);
@@ -128,7 +102,6 @@ export function validateBatonDataAgainstWorkflow(batonData, workflowInput) {
   }
   validateAggregateArtifacts(batonData.state);
   validateLoopProgress(batonData.state);
-  validateOccurrenceProvenance(batonData.state);
   const stepId = normalizeCursor(batonData.cursor);
   const cursorStep = workflow.steps?.[stepId];
   if (!cursorStep) throw new WorkflowRuntimeError(`baton cursor not found in workflow: ${stepId}`);

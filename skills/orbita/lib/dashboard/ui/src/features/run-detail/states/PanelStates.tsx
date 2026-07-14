@@ -38,16 +38,7 @@ export function PanelEmpty({
   );
 }
 
-export function LegacyUnavailable({ stepLabel }: Readonly<{ stepLabel: string }>) {
-  return (
-    <PanelEmpty
-      detail="This step is known from workflow history, but exact step evidence was not recorded for this run."
-      title={`Evidence unavailable for ${stepLabel}`}
-    />
-  );
-}
-
-export function OccurrenceEvidenceUnavailable({
+export function StepEvidenceUnavailable({
   state,
 }: Readonly<{ state: "missing_selection" | "traversal_pending" }>) {
   return state === "traversal_pending" ? (

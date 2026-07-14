@@ -18,7 +18,7 @@ type CursorPayload = {
 
 type RefPayload = { [key: string]: unknown; runId: string };
 type LocatorEnvelope =
-  | { identity: RefPayload; kind: "artifact" | "occurrence"; v: 2 }
+  | { identity: RefPayload; kind: "artifact"; v: 2 }
   | { kind: "cursor"; payload: CursorPayload; v: 2 };
 
 const MAX_LOCATOR_LENGTH = 512;
@@ -111,7 +111,7 @@ export class OpaqueLocatorCodec {
     }
   }
 
-  ref(kind: "occurrence" | "artifact", canonicalIdentity: unknown): string {
+  ref(kind: "artifact", canonicalIdentity: unknown): string {
     if (
       !canonicalIdentity ||
       typeof canonicalIdentity !== "object" ||
@@ -126,10 +126,7 @@ export class OpaqueLocatorCodec {
     });
   }
 
-  resolveRef(
-    locator: string,
-    expected: { kind: "occurrence" | "artifact"; runId: string },
-  ): RefPayload {
+  resolveRef(locator: string, expected: { kind: "artifact"; runId: string }): RefPayload {
     const resolved = this.open(locator);
     if (
       resolved.kind !== expected.kind ||

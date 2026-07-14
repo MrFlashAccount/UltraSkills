@@ -1,13 +1,4 @@
 /** Browser-safe view models consumed by the run-detail feature components. */
-export type OccurrenceStatus = "completed" | "current" | "failed" | "pending" | "unavailable";
-
-export type OccurrenceItem = {
-  occurrenceRef: string;
-  ordinal: number;
-  state: OccurrenceStatus;
-  stepId: string;
-};
-
 export type StepPathItem = {
   state: "completed" | "current";
   stepId: string;
@@ -30,9 +21,8 @@ export type ActivityGroupItem = {
 
 export type PagingState = "complete" | "error" | "loading" | "more" | "stale";
 
-export type OccurrenceEvidenceState =
+export type StepEvidenceState =
   | "error"
-  | "legacy_unavailable"
   | "loading"
   | "missing_selection"
   | "ready"
@@ -54,7 +44,7 @@ export type ArtifactPreview =
   | { kind: "media"; media: "audio" | "video"; state: "available"; url: string }
   | {
       reason: string;
-      state: "download_only" | "error" | "legacy_unavailable" | "oversized" | "unsupported";
+      state: "download_only" | "error" | "oversized" | "unsupported";
     };
 
 export type RunArtifactItem = {

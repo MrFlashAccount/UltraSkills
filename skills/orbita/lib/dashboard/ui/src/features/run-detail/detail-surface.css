@@ -1,6 +1,16 @@
-.sheet-overlay[data-state],
 .sheet-content[data-state] {
-  animation-duration: 180ms;
+  animation: none;
+}
+.sheet-content {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  width: min(680px, 48vw);
+  height: 100%;
+  flex: 0 0 min(680px, 48vw);
+  transform: none;
+  box-shadow: -10px 0 24px rgb(0 0 0 / 0.2);
+  will-change: auto;
 }
 .detail-header .ui-button {
   width: 44px;
@@ -44,44 +54,24 @@
 }
 @media (min-width: 640px) and (max-width: 1100px) {
   .sheet-content {
-    top: 32px;
-    right: auto;
-    left: 50%;
-    width: min(900px, calc(100vw - 48px));
-    height: calc(100dvh - 64px);
-    transform: translateX(-50%);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
-  }
-  .sheet-content[data-state="open"] {
-    animation-name: detail-sheet-in-tablet;
-  }
-  .sheet-content[data-state="closed"] {
-    animation-name: detail-sheet-out-tablet;
+    width: min(560px, 56vw);
+    height: 100%;
+    flex-basis: min(560px, 56vw);
+    transform: none;
+    border-block: 0;
+    border-right: 0;
+    border-radius: 0;
   }
 }
 @media (max-width: 639px) {
+  .dashboard-main[data-detail="open"] .board-region {
+    display: none;
+  }
   .sheet-content {
-    right: 8px;
-    bottom: 0;
-    left: 8px;
-    width: auto;
-    height: min(92dvh, 820px);
-    max-height: calc(100dvh - 8px);
-    border: 1px solid var(--border-strong);
-    border-bottom: 0;
-    border-radius: var(--radius-md) var(--radius-md) 0 0;
-  }
-}
-@keyframes detail-sheet-in-tablet {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 12px);
-  }
-}
-@keyframes detail-sheet-out-tablet {
-  to {
-    opacity: 0;
-    transform: translate(-50%, 12px);
+    width: 100%;
+    height: 100%;
+    flex-basis: 100%;
+    border: 0;
+    border-radius: 0;
   }
 }

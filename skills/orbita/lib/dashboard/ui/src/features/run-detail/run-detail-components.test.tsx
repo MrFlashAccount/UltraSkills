@@ -158,15 +158,15 @@ describe("run detail Direction A components", () => {
           {
             declaredContentType: "text/plain",
             effectiveContentType: "text/plain",
-            id: "legacy.txt",
-            key: "legacy",
+            id: "report.txt",
+            key: "report",
             mimeMismatch: false,
             preview: {
-              reason: "This legacy artifact has no verified content locator.",
-              state: "legacy_unavailable",
+              reason: "Preview is unsupported for this file.",
+              state: "unsupported",
             },
-            producerLabel: "legacy-owner · provenance unavailable",
-            producerStepId: "legacy-owner",
+            producerLabel: "architecture",
+            producerStepId: "architecture",
           },
         ]}
         onRetryPaging={retry}
@@ -176,8 +176,7 @@ describe("run detail Direction A components", () => {
         stepLabel="architecture"
       />,
     );
-    expect(screen.getByText("legacy.txt")).toBeVisible();
-    expect(screen.getByText(/provenance unavailable/i)).toBeVisible();
+    expect(screen.getByText("report.txt")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Reload from latest" }));
     expect(retry).toHaveBeenCalledTimes(1);
   });
@@ -214,7 +213,7 @@ describe("run detail Direction A components", () => {
     expect(screen.queryByText("No artifacts for this step")).not.toBeInTheDocument();
   });
 
-  it("renders workflow-step legacy descriptors without inventing content authority", async () => {
+  it("renders workflow-step descriptors from the durable artifact record", async () => {
     stubGlobal(
       "fetch",
       vi.fn(
@@ -224,11 +223,12 @@ describe("run detail Direction A components", () => {
               complete: true,
               items: [
                 {
+                  artifactRef: "artifact_ref_durable_01",
                   declaredContentType: "text/plain",
                   effectiveContentType: "text/plain",
-                  id: "legacy.txt",
+                  id: "report.txt",
                   mimeMismatch: false,
-                  previewState: "legacy_unavailable",
+                  previewState: "previewable",
                   producerStepId: "architecture",
                 },
               ],
@@ -242,9 +242,9 @@ describe("run detail Direction A components", () => {
       ),
     );
     renderFeature(<WorkflowStepArtifacts runId="run-1" stepId="architecture" />);
-    expect(await screen.findByText("legacy.txt")).toBeVisible();
-    expect(screen.getByText(/provenance unavailable/i)).toBeVisible();
-    expect(screen.getByText(/content unavailable/i)).toBeVisible();
+    expect(await screen.findByText("report.txt")).toBeVisible();
+    expect(screen.getByText("architecture")).toBeVisible();
+    expect(screen.queryByText(/content unavailable/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Preview" })).not.toBeInTheDocument();
   });
 

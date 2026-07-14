@@ -1,14 +1,12 @@
 import type { RunLightDetailDTO, WorkflowPageDTO } from "@dashboard-contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { type OccurrenceEvidenceState } from "../run-detail-view-model";
+import { type StepEvidenceState } from "../run-detail-view-model";
 import {
   accumulatePages,
   mergeTraversalPages,
-  selectOccurrenceForStep,
   toActivityGroups,
   toManagedLogEntries,
-  toOccurrenceItems,
   toRunArtifactItems,
   toStepPathItems,
 } from "../selectors/page-selectors";
@@ -17,9 +15,9 @@ import { type PagingQuery, usePagingRecovery } from "./use-paging-recovery";
 import {
   useActivityPages,
   useLogPages,
-  useOccurrenceArtifactPages,
   useTraversalPages,
   useWorkflowPages,
+  useWorkflowStepArtifactPages,
 } from "./use-run-inspection-queries";
 
 /** Owns run-scoped query and selection state; no identity survives a run-id transition. */
@@ -29,8 +27,7 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
   const paging = usePagingRecovery();
   const workflow = useWorkflowPages(runId);
   const traversal = useTraversalPages(runId);
-  const occurrences = toOccurrenceItems(traversal.data?.pages);
-  const currentStepId = detail.currentOccurrence?.stepId ?? detail.run.currentStep;
+  const currentStepId = detail.run.currentStep;
   const steps = toStepPathItems(traversal.data?.pages, currentStepId);
   const [selection, setSelection] = useState<{ runId: string; stepId: string }>();
   const explicitSelection = selection?.runId === runId ? selection.stepId : undefined;
@@ -39,15 +36,11 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
     currentStepId ??
     steps.find((step) => step.state === "current")?.stepId ??
     steps.at(-1)?.stepId;
-  const selected = selectOccurrenceForStep(occurrences, selectedStepId);
-  const selectedRef = selected?.occurrenceRef;
-  const activity = useActivityPages(runId, selectedRef);
-  const logs = useLogPages(runId, selectedRef);
-  const artifacts = useOccurrenceArtifactPages(runId, selectedRef);
+  const activity = useActivityPages(runId, selectedStepId);
+  const logs = useLogPages(runId, selectedStepId);
+  const artifacts = useWorkflowStepArtifactPages(runId, selectedStepId);
   const traversalRecords = mergeTraversalPages(traversal.data?.pages);
-  const selectedRecord = traversalRecords.find(
-    (occurrence) => occurrence.occurrenceRef === selectedRef,
-  );
+  const selectedRecord = traversalRecords.find((step) => step.stepId === selectedStepId);
   const workflowNodes = accumulatePages(
     workflow.data?.pages.map((page) => ({ items: page.nodes })),
     (node) => node.stepId,
@@ -56,18 +49,14 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
   const selectedArtifactItems = toRunArtifactItems(runId, artifacts.data?.pages);
   const activityGroups = toActivityGroups(activity.data?.pages, selectedRecord);
   const logEntries = toManagedLogEntries(logs.data?.pages);
-  const legacyUnavailable =
-    detail.occurrenceAvailability === "legacy_unavailable" ||
-    traversal.data?.pages.every((page) => page.availability === "legacy_unavailable") === true;
-  const occurrenceState = occurrenceEvidenceState(
-    legacyUnavailable,
+  const evidenceState = stepEvidenceState(
     traversal.isPending,
-    occurrences.length,
-    Boolean(selected),
+    traversalRecords.length,
+    Boolean(selectedStepId),
   );
-  const activityKey = `activity:${selectedRef ?? "none"}`;
-  const artifactsKey = `artifacts:${selectedRef ?? "none"}`;
-  const logsKey = `logs:${selectedRef ?? "none"}`;
+  const activityKey = `activity:${selectedStepId ?? "none"}`;
+  const artifactsKey = `artifacts:${selectedStepId ?? "none"}`;
+  const logsKey = `logs:${selectedStepId ?? "none"}`;
 
   const reset = (resource: string, locator?: string) =>
     void client.resetQueries({ exact: true, queryKey: resourceQueryKey(runId, resource, locator) });
@@ -80,7 +69,7 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
       onRetry: () => paging.refetch(activityKey, activity),
       onRetryPaging: () => paging.recover(activityKey, activity),
       pagination: paging.state(activityKey, activity),
-      state: panelState(occurrenceState, activity, activityGroups.length > 0),
+      state: panelState(evidenceState, activity, activityGroups.length > 0),
     },
     artifacts: {
       artifacts: selectedArtifactItems,
@@ -89,24 +78,21 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
       onRetryPaging: () => paging.recover(artifactsKey, artifacts),
       pagination: paging.state(artifactsKey, artifacts),
       runArtifactCount: artifacts.data?.pages[0]?.runAggregateCount ?? 0,
-      state: panelState(occurrenceState, artifacts, selectedArtifactItems.length > 0),
+      state: panelState(evidenceState, artifacts, selectedArtifactItems.length > 0),
     },
-    legacyUnavailable,
     logs: {
       entries: logEntries,
       onLoadOlder: () => paging.loadNext(logsKey, logs),
       onRetry: () => paging.refetch(logsKey, logs),
       onRetryPaging: () => paging.recover(logsKey, logs),
       pagination: paging.state(logsKey, logs),
-      state: panelState(occurrenceState, logs, logEntries.length > 0),
+      state: panelState(evidenceState, logs, logEntries.length > 0),
     },
     stepLabel: selectedStepId
       ? selectedStepId
-      : occurrenceState === "legacy_unavailable"
-        ? "legacy run"
-        : occurrenceState === "traversal_pending"
-          ? "step pending"
-          : "selection unavailable",
+      : evidenceState === "traversal_pending"
+        ? "step pending"
+        : "selection unavailable",
     selector: {
       isError: traversal.isError && steps.length === 0,
       isPending: traversal.isPending,
@@ -124,7 +110,7 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
       executionComplete: pageComplete(traversal, paging.state("traversal", traversal)),
       isLoading: workflow.isPending,
       nodes: workflowNodes,
-      occurrences: traversalRecords,
+      traversedSteps: traversalRecords,
       onLoadMore: () =>
         ["error", "stale"].includes(paging.state("workflow", workflow))
           ? paging.recover("workflow", workflow)
@@ -139,28 +125,24 @@ function pageComplete(query: PagingQuery, pagination: string): boolean {
   return pagination === "complete" && !query.isPending && !query.isError;
 }
 
-function occurrenceEvidenceState(
-  legacy: boolean,
+function stepEvidenceState(
   traversalPending: boolean,
-  occurrenceCount: number,
+  stepCount: number,
   hasSelection: boolean,
-): OccurrenceEvidenceState {
-  if (legacy) {
-    return "legacy_unavailable";
-  }
-  if (traversalPending && occurrenceCount === 0) {
+): StepEvidenceState {
+  if (traversalPending && stepCount === 0) {
     return "traversal_pending";
   }
   return hasSelection ? "ready" : "missing_selection";
 }
 
 function panelState(
-  occurrenceState: OccurrenceEvidenceState,
+  evidenceState: StepEvidenceState,
   query: PagingQuery,
   hasLastGood = false,
-): OccurrenceEvidenceState {
-  if (occurrenceState !== "ready") {
-    return occurrenceState;
+): StepEvidenceState {
+  if (evidenceState !== "ready") {
+    return evidenceState;
   }
   if (query.isError && !hasLastGood) {
     return "error";

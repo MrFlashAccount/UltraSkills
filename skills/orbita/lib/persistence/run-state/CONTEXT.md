@@ -55,65 +55,11 @@ Binding rules:
   append, hash mismatch, unsafe path, or symlink fails closed. A complete entry
   is never appended twice. Legacy v1 full-history pending records remain
   recoverable but are not emitted by new writes.
-- `$occurrenceProvenance` is optional runner-owned Baton state. New runs begin
-  with ordinal `1` for the workflow start owner. A counter advances only after
-  a successful workflow start/route/pointer event opens another owner visit;
-  self-loops and backward routes therefore create new occurrences. Schema or
-  output retries, fanout/shard batches and phases, owner/final-worker phases,
-  heartbeat, stop report/resolution, and worker-binding changes do not advance
-  it. Occurrence is cursor-owner identity, never synthetic request identity.
-- A legacy run with no occurrence record is seeded once by the first successful
-  mutating runner command that already has the required history loaded. The
-  record stores the exact pre-seed history byte boundary, sets coverage to
-  `forward_only`, marks the inherited current visit unavailable, and starts
-  `firstAvailableByStep` empty. Each later successful forward/pointer route
-  records the first newly observable ordinal for its target owner. Availability
-  begins at that per-step boundary and never moves backward to the seeded
-  counter. Existing history bytes, artifact paths, and aggregate records remain
-  unchanged; the seed and older facts remain `legacy_unavailable` after later
-  routes and are never re-exposed as occurrence truth or artifact provenance.
-- Newly managed history entries carry deterministic parseable owner occurrence,
-  activation/work-item, producer-request, route, accepted-output, stop-report,
-  stop-resolution, and coverage facts in addition to the bounded human-facing
-  entry. Managed history remains the only durable source for those facts.
-  Browser Logs project only allowlisted structured facts; stdout/stderr,
-  free-form history details, and `debug-summary.md` bodies are not occurrence,
-  traversal, Activity, or Logs authorities.
-- New artifact output directories are occurrence-aware and are rendered from
-  the applied/current Baton after routing, never from a stale pre-transition
-  Baton. Before acceptance, an artifact must resolve inside the exact canonical
-  directory for its owner occurrence and producer request, be opened without
-  following symlinks where supported, be a regular file, and still match
-  containment/race checks. The accepted aggregate wrapper records owner
-  occurrence, producer request id, and a device/inode/size/mtime/ctime file
-  stamp. Worker artifact metadata itself remains exactly
-  `{id, content_type, path, summary?}`.
-- Fanout and shard producers share the current owner occurrence but retain their
-  own producer request id and occurrence-aware directory. Second-step rendering,
-  fanout branches, and shards must use the applied Baton and may not inherit the
-  previous owner's directory.
-- New aggregate artifact identity is `(ownerStepId, ownerOccurrence,
-producerRequestId, artifactId)`. Repeated owners and repeated artifact ids are
-  distinct. Legacy wrappers remain descriptor-readable as explicit
-  `legacy_unavailable` records but have no trusted content locator without the
-  runner-owned provenance and accepted stamp. No alias directory, path rewrite,
-  or invented occurrence is permitted.
-- Read-only artifact inspection has two independent scopes over that aggregate:
-  exact owner occurrence and exact workflow step. A request must choose one;
-  there is no run-wide artifact page or cursor, and the two scopes never share a
-  continuation token.
-- Content reopening is bound to the canonical occurrence/request directory
-  handle and accepted file stamp. A reader may expose bytes only after copying
-  exactly the accepted bounded size from the verified handle and confirming the
-  final stamp; full and Range responses use that immutable snapshot rather than
-  a live pathname or growing file stream.
 - Baton-only command paths retain `{ mode: 'file-ref', path }` plus process-local
   history byte size and do not read the history body. Full history reads are
   allowed only for consumers whose behavior depends on history content, such as
-  pointer projection/mutation, legacy provenance seeding, bounded dashboard
-  Activity/Logs pages, and orchestrator debug-note deduplication. Dashboard
-  snapshot refreshes must use the no-history form and read zero history-body
-  bytes. Neither form is cached across commands.
+  pointer projection/mutation, dashboard projection, and orchestrator debug-note
+  deduplication. Neither form is cached across commands.
 - New `current-requests.json` records bind requests to the post-commit baton
   file signature (absolute path, device/inode, mtime/ctime, and byte size), computed after the baton
   side effect during recovery. This avoids reserializing a large unchanged baton

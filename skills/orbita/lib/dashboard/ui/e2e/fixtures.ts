@@ -20,7 +20,6 @@ const nonDone: Array<DashboardLaneId> = [
   "needs_help",
   "degraded",
 ];
-export const occurrenceRef = "occurrence_ref_proof_01";
 
 export function buildSnapshot(
   count = 1000,
@@ -40,8 +39,8 @@ export function buildSnapshot(
           : lanes[index % lanes.length];
     return {
       createdAt: now,
-      currentStep: `step-${index}`,
-      cursor: { kind: "single", step: `step-${index}` },
+      currentStep: "architecture",
+      cursor: { kind: "single", step: "architecture" },
       laneId,
       occupancy: { state: "unclaimed" },
       reason: publicText(
@@ -83,8 +82,6 @@ export function buildSnapshot(
 
 export function detailFor(run: RunSummaryDTO): RunLightDetailDTO {
   return RunLightDetailSchema.parse({
-    currentOccurrence: { occurrenceRef, ordinal: 2, state: "current", stepId: "architecture" },
-    occurrenceAvailability: "available",
     run,
     schemaVersion: "2",
     summary: publicText("Inspect workflow traversal, managed logs, and artifacts.", "run_summary"),
@@ -112,17 +109,17 @@ export function resourcesFor(run: RunSummaryDTO) {
           state: "accepted",
         },
       ],
-      occurrenceRef,
       runId,
       schemaVersion: "2",
+      stepId: "architecture",
     },
     artifacts: {
       complete: true,
-      items: [artifactDescriptor("architecture", 2), longIdentifierArtifact()],
+      items: [artifactDescriptor("architecture"), longIdentifierArtifact()],
       runAggregateCount: 3,
       runId,
       schemaVersion: "2",
-      scope: { kind: "occurrence", occurrenceRef },
+      scope: { kind: "workflow_step", stepId: "architecture" },
     },
     logs: {
       complete: true,
@@ -135,53 +132,32 @@ export function resourcesFor(run: RunSummaryDTO) {
           source: "workflow-runner",
         },
       ],
-      occurrenceRef,
       runId,
       schemaVersion: "2",
+      stepId: "architecture",
     },
     workflowArtifacts: {
       complete: true,
-      items: [artifactDescriptor("architecture", 2), longIdentifierArtifact()],
+      items: [artifactDescriptor("architecture"), longIdentifierArtifact()],
       runAggregateCount: 3,
       runId,
       schemaVersion: "2",
       scope: { kind: "workflow_step", stepId: "architecture" },
     },
     traversal: {
-      availability: "available",
       complete: true,
       items: [
         {
-          occurrenceRef: "occurrence_ref_proof_00",
-          ordinal: 1,
           peers: [],
           state: "completed",
           stepId: "research",
         },
         {
-          occurrenceRef: "occurrence_ref_proof_ui_01",
-          ordinal: 1,
           peers: [],
           state: "completed",
           stepId: "ui_intent",
         },
         {
-          occurrenceRef: "occurrence_ref_proof_arch_01",
-          ordinal: 1,
-          peers: [],
-          state: "completed",
-          stepId: "architecture",
-        },
-        {
-          occurrenceRef: "occurrence_ref_proof_ui_02",
-          ordinal: 2,
-          peers: [],
-          state: "completed",
-          stepId: "ui_intent",
-        },
-        {
-          occurrenceRef,
-          ordinal: 2,
           peers: [
             {
               activation: 1,
@@ -222,16 +198,14 @@ export function resourcesFor(run: RunSummaryDTO) {
   } as const;
 }
 
-function artifactDescriptor(producerStepId: string, producerOccurrence: number) {
+function artifactDescriptor(producerStepId: string) {
   return {
-    artifactRef: `artifact_ref_${producerStepId}_${producerOccurrence}`,
+    artifactRef: `artifact_ref_${producerStepId}`,
     declaredContentType: "image/png",
     effectiveContentType: "image/png",
     id: producerStepId === "research" ? "reasons-canvas-research.png" : "workflow-trail.png",
     mimeMismatch: false,
     previewState: "previewable",
-    producerOccurrence,
-    producerRequestId: `request-${producerStepId}`,
     producerStepId,
   } as const;
 }
@@ -244,8 +218,6 @@ function longIdentifierArtifact() {
     id: "architecture-review-evidence-with-an-intentionally-long-identifier-for-contained-layout.json",
     mimeMismatch: false,
     previewState: "download_only",
-    producerOccurrence: 2,
-    producerRequestId: "request-architecture-long-identifier",
     producerStepId: "architecture",
   } as const;
 }

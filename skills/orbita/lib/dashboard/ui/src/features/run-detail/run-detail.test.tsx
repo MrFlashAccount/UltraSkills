@@ -6,7 +6,6 @@ import { makeDetail } from "@/test/fixtures";
 import { stubGlobal } from "@/test/globals";
 import { RunDetailSurface } from "./RunDetailSurface";
 
-const occurrenceRef = "occurrence_ref_01";
 const artifactRef = "artifact_ref_0001";
 
 const renderDetail = (component: React.ReactNode) => {
@@ -42,17 +41,14 @@ beforeEach(() => {
       }
       if (url.includes("/traversal")) {
         return json({
-          availability: "available",
           complete: true,
           items: [
             {
-              occurrenceRef: "occurrence_ref_00",
-              ordinal: 1,
               peers: [],
               state: "completed",
               stepId: "research",
             },
-            { occurrenceRef, ordinal: 1, peers: [], state: "current", stepId: "step-1" },
+            { peers: [], state: "current", stepId: "step-1" },
           ],
           runId: "run-1",
           schemaVersion: "2",
@@ -69,9 +65,9 @@ beforeEach(() => {
               state: "completed",
             },
           ],
-          occurrenceRef,
           runId: "run-1",
           schemaVersion: "2",
+          stepId: "step-1",
         });
       }
       if (url.includes("/logs")) {
@@ -83,13 +79,12 @@ beforeEach(() => {
               source: "workflow-runner",
             },
           ],
-          occurrenceRef,
           runId: "run-1",
           schemaVersion: "2",
+          stepId: "step-1",
         });
       }
       if (url.includes("/artifacts")) {
-        const occurrenceScoped = url.includes("occurrenceRef=");
         const stepId = new URL(url, "http://dashboard.test").searchParams.get("stepId");
         return json({
           complete: true,
@@ -101,17 +96,13 @@ beforeEach(() => {
               id: "workflow-trail.png",
               mimeMismatch: false,
               previewState: "previewable",
-              producerOccurrence: 1,
-              producerRequestId: "request-01",
-              producerStepId: occurrenceScoped ? "step-1" : (stepId ?? "research"),
+              producerStepId: stepId ?? "research",
             },
           ],
           runAggregateCount: 1,
           runId: "run-1",
           schemaVersion: "2",
-          scope: occurrenceScoped
-            ? { kind: "occurrence", occurrenceRef }
-            : { kind: "workflow_step", stepId: stepId ?? "research" },
+          scope: { kind: "workflow_step", stepId: stepId ?? "research" },
         });
       }
       return json({}, 404);
@@ -120,7 +111,7 @@ beforeEach(() => {
 });
 
 describe("RunDetailSurface", () => {
-  it("renders Direction A and scopes occurrence detail without recomposing Workflow", async () => {
+  it("renders Direction A and scopes step detail without recomposing Workflow", async () => {
     const close = vi.fn();
     renderDetail(
       <RunDetailSurface
@@ -133,7 +124,7 @@ describe("RunDetailSurface", () => {
         visibleInResults
       />,
     );
-    expect(screen.getByRole("dialog", { name: "Run 1 needs attention" })).toHaveTextContent(
+    expect(screen.getByRole("complementary", { name: "Run 1 needs attention" })).toHaveTextContent(
       "A bounded public summary",
     );
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
@@ -157,14 +148,10 @@ describe("RunDetailSurface", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps Workflow available when legacy occurrence evidence is unavailable", async () => {
+  it("keeps step evidence available from the durable run format", async () => {
     renderDetail(
       <RunDetailSurface
-        detail={{
-          ...makeDetail(),
-          currentOccurrence: null,
-          occurrenceAvailability: "legacy_unavailable",
-        }}
+        detail={makeDetail()}
         isError={false}
         isLoading={false}
         onClose={() => {}}
@@ -176,7 +163,7 @@ describe("RunDetailSurface", () => {
     expect(await screen.findByRole("region", { name: "Workflow graph" })).toBeVisible();
     expect(screen.getByRole("button", { name: /step-1.*current/i })).toBeVisible();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Activity" }), { button: 0 });
-    expect(screen.getByText(/step is known from workflow history/i)).toBeVisible();
+    expect(await screen.findByText("Fanout activation started")).toBeVisible();
   });
 
   it("preserves a missing selection instead of selecting a neighbor", () => {

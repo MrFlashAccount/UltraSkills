@@ -260,11 +260,7 @@ test('runner pointer API moves to a state-bearing predecessor while preserving r
   assert.equal(moved.current.cursor, 'prepare');
   assert.equal(afterMove.baton.cursor, 'prepare');
   assert.equal(afterMove.baton.status, 'running');
-  const { $occurrenceProvenance: afterProvenance, ...afterPreservedState } = afterMove.baton.state;
-  const { $occurrenceProvenance: _beforeProvenance, ...beforePreservedState } = beforeMove.baton.state;
-  assert.deepEqual(afterPreservedState, beforePreservedState);
-  assert.equal(afterProvenance.current.ownerStepId, 'prepare');
-  assert.equal(afterProvenance.current.occurrence, 2);
+  assert.deepEqual(afterMove.baton.state, beforeMove.baton.state);
   assert.deepEqual(afterMove.baton.workerBindings, beforeMove.baton.workerBindings);
   assert.equal(afterMove.baton.user_prompt_injected, beforeMove.baton.user_prompt_injected);
   assert.equal(afterMove.history.startsWith(beforeMove.history), true);

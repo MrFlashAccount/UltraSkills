@@ -15,7 +15,7 @@ test("board remains dense, keyboard reachable, and contained", async ({ page }, 
   await first.focus();
   await expect(first).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("dialog", { name: "Run detail inspection" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Run detail inspection" })).toBeVisible();
   await page.getByRole("button", { name: "Close details" }).click();
   await expect(first).toBeFocused();
   await page.screenshot({

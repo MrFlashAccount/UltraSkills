@@ -14,7 +14,7 @@ type StepPathSelectorProps = {
   steps: ReadonlyArray<StepPathItem>;
 };
 
-/** Unique current workflow path. Occurrence identity remains an internal evidence locator. */
+/** Unique current workflow path reconstructed from durable history transitions. */
 export function StepPathSelector({
   onRetryPaging,
   onSelect,
@@ -41,11 +41,11 @@ export function StepPathSelector({
   }, [selectedIndex]);
 
   return (
-    <section aria-label="Current workflow path" className="occurrence-selector">
-      <div className="occurrence-scroll">
+    <section aria-label="Current workflow path" className="step-path-selector">
+      <div className="step-path-scroll">
         {pagination === "more" || pagination === "loading" ? (
           <Button
-            className="occurrence-earlier"
+            className="step-path-earlier"
             disabled={pagination === "loading"}
             onClick={onShowEarlier}
             variant="quiet"
@@ -65,7 +65,7 @@ export function StepPathSelector({
                   <button
                     aria-current={step.state === "current" ? "step" : undefined}
                     aria-pressed={selected}
-                    className="occurrence-item"
+                    className="step-path-item"
                     data-selected={selected}
                     data-state={step.state}
                     data-step=""
@@ -88,11 +88,11 @@ export function StepPathSelector({
                     type="button"
                   >
                     <StatusIcon aria-hidden="true" size={18} />
-                    <span className="occurrence-copy">
+                    <span className="step-path-copy">
                       <strong>{step.stepId}</strong>
                       <span>{status}</span>
                     </span>
-                    <ChevronRight aria-hidden="true" className="occurrence-edge" size={14} />
+                    <ChevronRight aria-hidden="true" className="step-path-edge" size={14} />
                   </button>
                 </TooltipLabel>
               </li>

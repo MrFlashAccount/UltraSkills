@@ -3,12 +3,11 @@ import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "./MarkdownContent";
 import {
   type ManagedLogEntry,
-  type OccurrenceEvidenceState,
+  type StepEvidenceState,
   type PagingState,
 } from "./run-detail-view-model";
 import {
-  LegacyUnavailable,
-  OccurrenceEvidenceUnavailable,
+  StepEvidenceUnavailable,
   PagingFailure,
   PanelEmpty,
   PanelError,
@@ -21,7 +20,7 @@ type LogsPanelProps = {
   onRetry?: () => void;
   onRetryPaging?: () => void;
   pagination: PagingState;
-  state: OccurrenceEvidenceState;
+  state: StepEvidenceState;
   stepLabel: string;
 };
 
@@ -29,8 +28,8 @@ export function LogsPanel(props: LogsPanelProps) {
   const truncated =
     props.pagination !== "complete" || props.entries.some((entry) => entry.truncated);
   return (
-    <section aria-labelledby="logs-title" className="occurrence-panel">
-      <header className="occurrence-panel-heading">
+    <section aria-labelledby="logs-title" className="step-panel">
+      <header className="step-panel-heading">
         <div>
           <h3 id="logs-title">Logs · {props.stepLabel}</h3>
           <p>Bounded managed Markdown</p>
@@ -40,11 +39,9 @@ export function LogsPanel(props: LogsPanelProps) {
       {props.state === "loading" ? (
         <PanelLoading label={`Loading ${props.stepLabel} logs…`} />
       ) : props.state === "missing_selection" || props.state === "traversal_pending" ? (
-        <OccurrenceEvidenceUnavailable state={props.state} />
+        <StepEvidenceUnavailable state={props.state} />
       ) : props.state === "error" ? (
         <PanelError message="Selected step logs are unavailable." onRetry={props.onRetry} />
-      ) : props.state === "legacy_unavailable" ? (
-        <LegacyUnavailable stepLabel={props.stepLabel} />
       ) : props.entries.length === 0 ? (
         <PanelEmpty detail="No managed log entries exist for this step." title="No logs" />
       ) : (

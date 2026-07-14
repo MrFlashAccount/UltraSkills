@@ -660,7 +660,6 @@ test('output.schema: contextual artifact validation requires paths under the exp
   };
   const artifactOutputDir = path.join(tempDir, 'contextual-artifacts', 'prepare', 'artifacts');
   mkdirSync(artifactOutputDir, { recursive: true });
-  writeFileSync(path.join(artifactOutputDir, 'packet.md'), '# packet\n');
 
   assert.equal(validateAgainstOutputSchema({
     schema,

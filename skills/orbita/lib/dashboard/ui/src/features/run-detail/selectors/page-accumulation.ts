@@ -23,29 +23,29 @@ export function accumulatePages<T>(
   return accumulated;
 }
 
-type TraversalOccurrence = TraversalPageDTO["items"][number];
+type TraversalStep = TraversalPageDTO["items"][number];
 
-/** Merge replayed occurrence pages while retaining peers first seen in older bounded pages. */
+/** Merge replayed step pages while retaining peers first seen in older bounded pages. */
 export function mergeTraversalPages(
   pages: ReadonlyArray<TraversalPageDTO> | undefined,
-): Array<TraversalOccurrence> {
-  const occurrences = new Map<string, TraversalOccurrence>();
+): Array<TraversalStep> {
+  const steps = new Map<string, TraversalStep>();
   for (const page of pages ?? []) {
-    for (const occurrence of page.items) {
-      const existing = occurrences.get(occurrence.occurrenceRef);
+    for (const step of page.items) {
+      const existing = steps.get(step.stepId);
       if (!existing) {
-        occurrences.set(occurrence.occurrenceRef, { ...occurrence, peers: [...occurrence.peers] });
+        steps.set(step.stepId, { ...step, peers: [...step.peers] });
         continue;
       }
       const peerIds = new Set(existing.peers.map((peer) => peer.producerRequestId));
-      const olderPeers = occurrence.peers.filter((peer) => !peerIds.has(peer.producerRequestId));
+      const olderPeers = step.peers.filter((peer) => !peerIds.has(peer.producerRequestId));
       if (olderPeers.length) {
-        occurrences.set(occurrence.occurrenceRef, {
+        steps.set(step.stepId, {
           ...existing,
           peers: [...existing.peers, ...olderPeers],
         });
       }
     }
   }
-  return [...occurrences.values()];
+  return [...steps.values()];
 }

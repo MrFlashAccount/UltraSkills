@@ -5,13 +5,12 @@ import { Button } from "@/components/ui/button";
 import { TooltipLabel } from "@/components/ui/tooltip";
 import { ArtifactPreviewDialog } from "./ArtifactPreviewDialog";
 import {
-  type OccurrenceEvidenceState,
+  type StepEvidenceState,
   type PagingState,
   type RunArtifactItem,
 } from "./run-detail-view-model";
 import {
-  LegacyUnavailable,
-  OccurrenceEvidenceUnavailable,
+  StepEvidenceUnavailable,
   PagingFailure,
   PanelEmpty,
   PanelError,
@@ -25,7 +24,7 @@ type ArtifactsPanelProps = {
   onRetryPaging?: () => void;
   pagination: PagingState;
   runArtifactCount: number;
-  state: OccurrenceEvidenceState;
+  state: StepEvidenceState;
   stepLabel: string;
 };
 
@@ -34,28 +33,22 @@ export function ArtifactsPanel(props: ArtifactsPanelProps) {
   const [previewOpeners] = useState(() => new Map<string, HTMLButtonElement>());
   const lastPreviewKey = useRef<string | undefined>(undefined);
   return (
-    <section aria-labelledby="artifacts-title" className="occurrence-panel">
-      <header className="occurrence-panel-heading">
+    <section aria-labelledby="artifacts-title" className="step-panel">
+      <header className="step-panel-heading">
         <div>
           <h3 id="artifacts-title">Artifacts · {props.stepLabel}</h3>
           <p>
             Showing {props.artifacts.length} of {props.runArtifactCount} run artifacts
           </p>
         </div>
-        <Badge>
-          {props.state === "legacy_unavailable"
-            ? "Legacy provenance unavailable"
-            : "Produced by selected step"}
-        </Badge>
+        <Badge>Produced by selected step</Badge>
       </header>
       {props.state === "loading" ? (
         <PanelLoading label={`Loading ${props.stepLabel} artifacts…`} />
       ) : props.state === "missing_selection" || props.state === "traversal_pending" ? (
-        <OccurrenceEvidenceUnavailable state={props.state} />
+        <StepEvidenceUnavailable state={props.state} />
       ) : props.state === "error" ? (
         <PanelError message="Selected step artifacts are unavailable." onRetry={props.onRetry} />
-      ) : props.state === "legacy_unavailable" ? (
-        <LegacyUnavailable stepLabel={props.stepLabel} />
       ) : props.artifacts.length === 0 ? (
         <PanelEmpty
           detail="The run may still have artifacts produced by other steps."

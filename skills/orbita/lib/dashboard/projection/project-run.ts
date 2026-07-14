@@ -86,10 +86,7 @@ export function projectRunSummary(
 
 export function projectRunLightDetail(
   input: { degraded?: boolean; persistedState?: any; run: any },
-  options: {
-    encodeOccurrenceRef: (value: { ordinal: number; runId: string; stepId: string }) => string;
-    now?: Date;
-  },
+  options: { now?: Date } = {},
 ): RunLightDetailDTO {
   const run = baseProjection(
     input.run,
@@ -97,34 +94,8 @@ export function projectRunLightDetail(
     Boolean(input.degraded),
     options.now ?? new Date(),
   );
-  const provenance = input.persistedState?.baton?.state?.$occurrenceProvenance;
-  const current = provenance?.current;
-  const firstAvailable = provenance?.coverage?.firstAvailableByStep?.[current?.ownerStepId];
-  const currentAvailable =
-    provenance?.coverage?.mode === "complete" ||
-    (Number.isInteger(firstAvailable) && current?.occurrence >= firstAvailable) ||
-    (firstAvailable === undefined && provenance?.coverage?.currentAvailable === true);
-  const safeStepId = exposeIdentifier("step_id", current?.ownerStepId);
-  const currentOccurrence =
-    currentAvailable &&
-    safeStepId &&
-    Number.isInteger(current?.occurrence) &&
-    current.occurrence >= 1
-      ? {
-          occurrenceRef: options.encodeOccurrenceRef({
-            runId: run.runId,
-            stepId: safeStepId,
-            ordinal: current.occurrence,
-          }),
-          ordinal: current.occurrence,
-          state: "current" as const,
-          stepId: safeStepId,
-        }
-      : null;
   const summary = exposePublicText("run_summary", input.run?.summary);
   return RunLightDetailSchema.parse({
-    currentOccurrence,
-    occurrenceAvailability: currentAvailable ? "available" : "legacy_unavailable",
     run,
     schemaVersion: "2",
     ...(summary ? { summary } : {}),

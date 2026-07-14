@@ -269,8 +269,7 @@ async function pageRequest(
   const url = new URL(request.url);
   const allowedKeys = new Set([
     "cursor",
-    ...(["activity", "logs", "artifacts"].includes(kind) ? ["occurrenceRef"] : []),
-    ...(kind === "artifacts" ? ["stepId"] : []),
+    ...(["activity", "logs", "artifacts"].includes(kind) ? ["stepId"] : []),
   ]);
   if (
     [...url.searchParams.keys()].some((key) => !allowedKeys.has(key)) ||
@@ -283,20 +282,12 @@ async function pageRequest(
   if (rawCursor !== null && !cursor) {
     return publicError("invalid_request", "Invalid request", 400);
   }
-  const rawOccurrence = url.searchParams.get("occurrenceRef");
-  const occurrenceRef = rawOccurrence === null ? undefined : locator(rawOccurrence, true);
-  if (rawOccurrence !== null && !occurrenceRef) {
-    return publicError("invalid_request", "Invalid request", 400);
-  }
-  if (["activity", "logs"].includes(kind) && !occurrenceRef) {
-    return publicError("invalid_request", "Invalid request", 400);
-  }
   const rawStepId = url.searchParams.get("stepId");
   const workflowStepId = rawStepId === null ? undefined : StepIdSchema.safeParse(rawStepId).data;
   if (rawStepId !== null && !workflowStepId) {
     return publicError("invalid_request", "Invalid request", 400);
   }
-  if (kind === "artifacts" && Boolean(occurrenceRef) === Boolean(workflowStepId)) {
+  if (["activity", "logs", "artifacts"].includes(kind) && !workflowStepId) {
     return publicError("invalid_request", "Invalid request", 400);
   }
   try {
@@ -306,15 +297,14 @@ async function pageRequest(
         : kind === "traversal"
           ? await context.readModel.getTraversalPage(id, cursor, request.signal)
           : kind === "activity"
-            ? await context.readModel.getActivityPage(id, occurrenceRef!, cursor, request.signal)
+            ? await context.readModel.getActivityPage(id, workflowStepId!, cursor, request.signal)
             : kind === "logs"
-              ? await context.readModel.getLogsPage(id, occurrenceRef!, cursor, request.signal)
+              ? await context.readModel.getLogsPage(id, workflowStepId!, cursor, request.signal)
               : await context.readModel.getArtifactPage(
                   id,
-                  occurrenceRef,
+                  workflowStepId!,
                   cursor,
                   request.signal,
-                  workflowStepId,
                 );
     if (!value) {
       return publicError("not_found", "Run not found", 404);

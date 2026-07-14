@@ -7,7 +7,6 @@ import { usePagingRecovery } from "./use-paging-recovery";
 import {
   useActivityPages,
   useLogPages,
-  useOccurrenceArtifactPages,
   useTraversalPages,
   useWorkflowStepArtifactPages,
 } from "./use-run-inspection-queries";
@@ -83,7 +82,7 @@ describe("run inspection query lifecycle", () => {
     expect(firstPageRequests).toBe(2);
   });
 
-  it("uses independent occurrence and workflow-step artifact scopes", async () => {
+  it("uses the selected workflow step as the artifact scope", async () => {
     const urls: Array<string> = [];
     stubGlobal(
       "fetch",
@@ -91,7 +90,6 @@ describe("run inspection query lifecycle", () => {
         const url = String(typeof request === "object" && "url" in request ? request.url : request);
         urls.push(url);
         const parsed = new URL(url, "http://dashboard.test");
-        const occurrenceRef = parsed.searchParams.get("occurrenceRef");
         const stepId = parsed.searchParams.get("stepId");
         return json({
           complete: true,
@@ -99,28 +97,16 @@ describe("run inspection query lifecycle", () => {
           runAggregateCount: 0,
           runId: "run-1",
           schemaVersion: "2",
-          scope: occurrenceRef
-            ? { kind: "occurrence", occurrenceRef }
-            : { kind: "workflow_step", stepId },
+          scope: { kind: "workflow_step", stepId },
         });
       }),
-    );
-    const occurrence = renderHook(
-      () => useOccurrenceArtifactPages("run-1", "occurrence_ref_0001"),
-      { wrapper: wrapper() },
     );
     const workflow = renderHook(() => useWorkflowStepArtifactPages("run-1", "architecture"), {
       wrapper: wrapper(),
     });
-    await waitFor(() => expect(occurrence.result.current.isSuccess).toBe(true));
     await waitFor(() => expect(workflow.result.current.isSuccess).toBe(true));
-    expect(urls).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining("occurrenceRef=occurrence_ref_0001"),
-        expect.stringContaining("stepId=architecture"),
-      ]),
-    );
-    expect(urls.every((url) => /[?&](occurrenceRef|stepId)=/u.test(url))).toBe(true);
+    expect(urls).toEqual(expect.arrayContaining([expect.stringContaining("stepId=architecture")]));
+    expect(urls.every((url) => /[?&]stepId=/u.test(url))).toBe(true);
   });
 
   it("does not request scoped resources without a locator", () => {
@@ -130,7 +116,6 @@ describe("run inspection query lifecycle", () => {
       () => ({
         activity: useActivityPages("run-1"),
         logs: useLogPages("run-1"),
-        occurrenceArtifacts: useOccurrenceArtifactPages("run-1"),
         workflowStepArtifacts: useWorkflowStepArtifactPages("run-1"),
       }),
       { wrapper: wrapper() },
@@ -138,7 +123,6 @@ describe("run inspection query lifecycle", () => {
 
     expect(result.current.activity.fetchStatus).toBe("idle");
     expect(result.current.logs.fetchStatus).toBe("idle");
-    expect(result.current.occurrenceArtifacts.fetchStatus).toBe("idle");
     expect(result.current.workflowStepArtifacts.fetchStatus).toBe("idle");
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -146,12 +130,9 @@ describe("run inspection query lifecycle", () => {
 
 function traversalPage(stepId: string, complete: boolean) {
   return {
-    availability: "available",
     complete,
     items: [
       {
-        occurrenceRef: `occurrence-${stepId}`,
-        ordinal: 1,
         peers: [],
         state: "current",
         stepId,

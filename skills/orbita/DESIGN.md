@@ -3,46 +3,60 @@
 ## Scope
 
 This document is the durable design contract for the read-only Orbita runs
-dashboard and atomic run-inspection v2 surface. It covers the attention-first
-board, run detail, truthful occurrence selection, Workflow/Activity/Logs/
-Artifacts inspection, artifact preview, responsive containment, focus, motion,
-and visible states. It does not define style for other skills.
+dashboard from issue #201. It applies to the dashboard board, toolbar, run
+cards, freshness/state surfaces, responsive detail, and supporting run-
+observation UI. It does not define visual style for other skills.
 
 Implementation must also follow `ARCHITECTURE.md` and
-`lib/dashboard/CONTEXT.md`. The approved Direction A HTML/proof assets remain
-the visual evidence source; this document records their stable laws rather than
-replacing those assets.
+`lib/dashboard/CONTEXT.md`. The approved UI proposal remains the visual proof
+source; this document records the selected direction and stable laws rather
+than replacing that artifact.
 
-## User and product route
+## User and Product Route
 
-Orbita dashboard is an operational inspection surface for expert local users
-watching `workflow-runner` and DevHarness runs. It is closed/private tooling,
-not a public SaaS product.
+Orbita dashboard is an operations surface for watching live `workflow-runner`
+and `dev-harness` runs.
 
-The first board read answers what needs attention. The detail read answers:
+Audience:
+- expert local users running multiple Codex/Orbita sessions
+- closed/private tooling, not a public SaaS product
 
-- where the run is now and how workflow ownership moved;
-- which repeated owner occurrence is selected;
-- which fanout/shard peers belong to that activation;
-- what Activity, managed Logs, and artifacts belong to the occurrence;
-- whether evidence is complete, truncated, legacy-unavailable, previewable, or
-  download-only.
+Primary read:
+- what needs attention right now
+- which runs are waiting for a human, which are executing worker actions, which
+  need help, are done, or are degraded
 
-Primary actions are selecting a run, selecting an occurrence, switching among
-Workflow/Activity/Logs/Artifacts, selecting a workflow node, loading bounded
-earlier pages, and previewing or downloading an artifact. Search/filter and
-closing overlays are secondary. None of these actions mutates runner state.
+The primary job is to identify Waiting, Needs help, and Degraded work in
+seconds, inspect one run, and return to the same board position without causing
+or implying mutation.
 
-Forbidden actions include retry, continue, repair, move, bind, write, lease,
-drag/drop, manual lane movement, and every other runner-shaped control.
+Primary action:
 
-## Selected direction
+- select one run for read-only inspection.
 
-Direction A is selected for run inspection v2. Direction B and Direction C
-detail alternatives are rejected. Direction A composes inside the existing
-attention-weighted five-lane board; it does not replace or reorder board lanes.
+Secondary actions:
 
-Board lanes remain observer classification buckets in this order:
+- search and filter;
+- expand or collapse a lane on narrow layouts;
+- copy a policy-approved run id from detail;
+- close detail and return focus.
+
+Columns are host-action/status buckets, not workflow steps:
+- `Waiting for user`
+- `Worker running`
+- `Needs help`
+- `Degraded`
+- `Done`
+
+Forbidden actions include retry, continue, repair, move, bind, write, drag/drop,
+manual lane movement, and every other runner-shaped control. The surface is not
+a table, chart wall, workflow editor, graph-first navigator, marketing page, or
+decorative cockpit.
+
+## Selected Direction
+
+Use Direction B: an attention-weighted five-lane Kanban. Lanes are observer
+classification buckets, not mutable workflow steps, and remain in this order:
 
 1. `Waiting for user`
 2. `Worker running`
@@ -50,272 +64,288 @@ Board lanes remain observer classification buckets in this order:
 4. `Degraded`
 5. `Done`
 
-The detail hierarchy is fixed and flat:
+Waiting and Running receive a modest width advantage without hiding or
+reordering any lane. Done remains present with lower border/surface emphasis,
+never reduced text readability. Lane placement and count must communicate
+status faster than repeated card copy.
 
-1. stable run identity and status;
-2. compact ordered occurrence selector;
-3. exactly four tabs: `Workflow`, `Activity`, `Logs`, `Artifacts`;
-4. one selected panel;
-5. optional nested artifact preview.
+Current runtime cursor truth is `0..1`. Cards and detail render at most one
+current step. An array-shaped DTO may remain internal, but multiple values are a
+bounded unsupported/degraded state, never parallel cursor chips or fanout
+semantics. A future durable multi-cursor runtime requires a separate approved
+design change.
 
-There is no standalone Metadata tab. Safe run metadata belongs above the tabs
-or in its relevant panel. Avoid oversized headings, nested cards, decorative
-containers, and file splitting that does not own behavior.
+## First Read and Screen Zones
 
-## Identity and selection law
+The visual and semantic hierarchy is:
 
-Occurrence items use truthful `(stepId, ordinal)` identity and display
-`stepId · ordinal`, state, selection, and current status. Repeated visits never
-merge. Long safe identifiers truncate in the row while retaining accessible
-full text. The ordered selector progressively scrolls or discloses `Show
-earlier`; chips, statuses, and controls do not wrap. After initial load,
-selection, or earlier-page accumulation, the selector scrolls the exact selected
-identity into view without changing selection or stealing document focus.
+1. freshness/connection only when unhealthy;
+2. stable lane order and counts, especially Waiting, Needs help, and Degraded;
+3. card status reason and bounded title;
+4. workflow, current step, and age;
+5. detail only after selection.
 
-Occurrence selection scopes only Activity, Logs, and the occurrence-scoped
-Artifacts tab. Workflow is always run-scoped: its graph, zoom/fit controls, node
-selection, Step Details, and separately queried workflow-step artifact pane
-neither receive nor reset from occurrence selection. The artifact endpoint
-requires exactly one of the selected occurrence ref or selected workflow step
-id; no run-wide artifact page feeds either surface. A partially loaded workflow
-is visibly incomplete until
-both its definition and traversal inputs are complete; accumulated partial data
-must never be labeled as a complete graph.
+Screen zones:
 
-Fanout/shard work appears as peer work nested under its durable activation. It
-does not become a workflow occurrence or parallel cursor chip. Legacy ambiguity
-renders `legacy_unavailable`; the UI never invents an ordinal or silently shows
-an empty/success state. When replayed pages contain the same peer, the newest
-durable lifecycle fact wins so pending/accepted/stopped state does not regress.
+- sticky compact top bar: Orbita identity, search, filters, quiet freshness,
+  and bounded run count;
+- board: five attention-weighted rails with sticky headers and independent
+  vertical scrolling/virtualization;
+- wide contextual right detail: complementary, non-modal inspection;
+- tablet/mobile detail: non-modal right sidebar that may cover the board only on
+  the narrowest viewport;
+- narrow attention summary and stacked lane disclosures;
+- global feedback/live region for load, connectivity, and reclassification.
 
-## Screen zones and composition
+The board is the surface; do not wrap it in a decorative outer card.
 
-The board remains the primary surface and has no decorative outer card. Its
-sticky compact top bar owns identity, search/filter, freshness, and bounded run
-count. Five attention-weighted lanes own cards and counts. Selecting a card
-opens the existing responsive run-detail surface.
+## Product Data Hierarchy
 
-Run detail composition has stable responsibilities:
+Lane primary facts are stable label, semantic text/icon/color cue, and filtered
+count. Classification internals stay hidden.
 
-- the outer surface owns desktop/tablet/mobile placement, close behavior, and
-  focus return to the originating run card;
-- the body owns header, selector, tabs, local query/selection orchestration, and
-  panel composition;
-- Workflow owns graph interaction independently of occurrence;
-- Activity owns durable activation peers and bounded events; it may use a dense
-  table where width permits, but narrow/mobile presentation reflows the same
-  semantics into contained labeled rows rather than clipping a desktop-width
-  table;
-- Logs owns bounded managed Markdown with load-older/truncated/end states;
-- Artifacts owns the selected-occurrence subset while retaining run aggregate
-  count, producer/type/preview/download facts, explicit continuation, and end
-  state; Workflow owns a separate selected-step artifact query and pane;
-- the local Markdown renderer is shared by Logs and safe Markdown artifacts,
-  disables raw HTML, escapes code, and discloses external links;
-- the artifact preview overlay owns preview/gallery state and never injects
-  active HTML/SVG bytes into the parent React tree.
+Run card primary facts are status/reason, policy-approved title, and age.
+Workflow identity and one current step are secondary. A shortened run id appears
+only when needed for disambiguation. Full id, artifacts/results/history,
+diagnostics, raw paths, commands, prompts, tokens, bindings, and host metadata
+do not belong on the card.
 
-Repeated table/list/state/overlay scaffolding belongs in named local feature
-components or state surfaces. Existing Button, Badge, Tabs, Select/Popover,
-Tooltip, Sheet/Dialog, Skeleton, tokens, spacing, and focus conventions remain
-the primitive path. No shared primitive or repo-global Markdown renderer is
-justified by this slice.
+Run detail primary facts are safe identity, lane/status, workflow, current step,
+and freshness. A compact ordered step path sits above the tabs. Workflow remains
+the full authored graph and does not react to step selection. Activity, Logs,
+and Artifacts are scoped by the selected existing workflow step. Managed
+Markdown is formatted through the safe renderer; image artifacts use a gallery,
+and all supported artifacts have a contained preview/download viewer. Raw
+Baton/history/transcript, filesystem paths, token/hash or command text, and
+private host/worker metadata never render.
 
-## Product data hierarchy
+Connection UI answers whether the board is trustworthy. Healthy/live is quiet;
+stale/reconnecting is explicit. Transport stack traces and raw events stay
+hidden.
 
-Board primary facts are lane/status reason, policy-approved title, and age;
-workflow identity and one current owner are secondary. Full ids, artifacts,
-history, diagnostics, raw paths, commands, prompts, tokens, bindings, and host
-metadata do not belong on cards.
+## Card Law
 
-Detail primary facts are safe run identity/status, current occurrence, ordered
-occurrence identity, and selected evidence. Secondary facts include activation
-peers, completeness/truncation, artifact producer/type/preview/download state,
-and fixed public errors. Private records, filesystem paths, prompts, tokens,
-bindings, raw errors, and unbounded logs never render.
+Each run card is one semantic selection target with this anatomy:
 
-Artifact rows keep id as primary and producer occurrence, type, preview state,
-and download state as secondary. Activity rows keep time/source/status/event.
-Logs preserve complete managed Markdown entry boundaries. Metadata remains
-visible through loading/error/unsupported/download-only states so failure does
-not erase identity.
+- top line: status/reason chip and updated age; one line, chip at most 55%, age
+  never wraps;
+- title: policy-approved title or `Untitled run`; maximum two lines,
+  14px/600 at 1.3 line height;
+- facts: workflow and zero or one current step; two compact label/value rows,
+  values ellipsize;
+- optional footer: shortened run id only when needed; monospace and one line.
 
-## Card law
+Visual contract:
 
-Each run card is one semantic selection target keyed by `runId`:
+- radius 7px;
+- padding 10–12px;
+- lane width 240–340px;
+- target card height 112–144px, with measured virtualization for exceptions;
+- hover changes surface/border;
+- selected uses `card selected` surface plus inset focus-color border;
+- focus-visible uses a distinct 2px outer focus ring with 2px offset and may
+  coexist with selection;
+- card minimum target is 44px.
 
-- top line: non-wrapping status/reason and updated age;
-- title: policy-approved title or `Untitled run`, at most two lines;
-- facts: workflow and zero/one current owner, ellipsized;
-- optional short run id only when needed for disambiguation.
+Do not use nested cards, accent-only left borders, raw debug dumps, full
+unbounded ids, arbitrary card growth, one-letter wraps, inline execution
+buttons, or index identity. `runId` is the card, selection, ordering, query, and
+virtual item identity.
 
-Cards use compact 10–12px padding, 7px radius, readable metadata, distinct
-hover/selected/focus states, and a minimum 44px target. Selection may use an
-inset accent edge; focus-visible remains a separate 2px ring. Do not use raw
-debug dumps, arbitrary height, one-letter wraps, inline execution controls, or
-index identity.
+## Detail Law
 
-## Detail overlay and focus law
+No selection means no drawer/sheet and no reserved blank rail. The board uses
+the available width; a subtle toolbar hint may invite inspection.
 
-- Above 1100px, detail is a modal right sheet, full-height and up to 680px wide,
-  with backdrop, inert board background, and inner scroll.
-- From 640–1100px, detail is a centered modal sheet with a 32px block inset,
-  width `min(900px, 100vw - 48px)`, bounded height, border, and rounded corners.
-- Below 640px, detail is an inset bottom sheet with 8px side gutters, height
-  `min(92dvh, 820px)`, a viewport-minus-8px ceiling, safe-area padding, rounded
-  top corners, sticky header, and inner scroll.
+- At 1100px and wider, detail is a non-modal complementary right region with
+  internal scrolling. The board remains
+  visible, operable, and not inert. Focus enters the heading/close target but is
+  not trapped; normal navigation and Shift+Tab may return to the board.
+- From 760–1099px, detail remains a non-modal complementary right region. There
+  is no backdrop and the board is not inert.
+- Below 760px, detail uses the full available width with safe-area padding,
+  sticky header, and inner scroll. It is still an `aside`, not a dialog; explicit
+  close and Escape are supported.
 
-The outer surface restores focus to the exact originating run card. If that
-card vanished, focus returns to its lane header. A filtered/missing selection
-keeps its id and never selects a neighbor. During close animation, the surface
-retains the last rendered detail snapshot instead of flashing a generic loading
-shell.
+Escape while focus is within detail or explicit close returns focus to the
+originating card. If that card vanished, focus returns to its lane header. A
+filtered or missing selection keeps its id and displays `This run is no longer
+in the current results`; it never selects a neighbor.
 
-Artifact preview is a nested Radix dialog/gallery. The trusted parent owns
-close/download controls, metadata, disclosure, and visible loading/error/
-unsupported/oversized/download-only states. Closing preview restores focus to
-the exact artifact control that opened it. Escape closes only the top overlay;
-closing the outer detail then restores the separate run-card origin.
+The sidebar opens without modal-sheet motion. Missing-selection content may
+crossfade at most 100ms. Reduced-motion mode changes visibility instantly.
 
-For active HTML/SVG, disclosure states that the opaque sandbox still permits
-artifact scripts and HTTP(S) network access while denying same-origin,
-top-navigation, popup, and download capability. Preview chrome remains in the
-trusted parent.
+## Responsive and Containment Law
 
-Preview state is authoritative before navigation. A typed stale locator is a
-recoverable local state that refreshes the descriptor/page and preserves the
-selected occurrence; mismatch, unsupported, oversized, legacy, or otherwise
-ineligible content stays download-only/unavailable and never opens an empty or
-misleading success frame.
+- At 1440px and wider, all five lanes are visible with detail closed. Direction
+  B attention widths apply.
+- From 1100–1439px, the first three or four lanes remain visible and the board,
+  not the page, may scroll horizontally.
+- From 760–1099px, lanes use stacked or two-column sections and selected detail
+  remains a non-modal right sidebar.
+- Below 760px, lanes are one-column disclosures in the same order. Every
+  non-empty Waiting, Needs help, and Degraded lane starts expanded and is repeated
+  in an always-visible attention summary. Running and Done alone may start
+  collapsed. Selected detail takes the available viewport width.
 
-Stale paging preserves already loaded evidence while restarting that resource
-from page 1 under a fresh canonical locator. It does not clear the panel, borrow
-placeholder data from another run/occurrence, or silently advance selection.
-Traversal recovery is owned and rendered once by the occurrence selector;
-Workflow must not duplicate a second recovery control for the same traversal
-query failure. On narrow/mobile surfaces, the paging failure region stacks its
-message and action so neither the status nor recovery control is clipped.
+Page-level horizontal overflow is forbidden. Counts remain visible for
+collapsed lanes. Secondary filters move into one Filter popover on narrow
+layouts.
 
-Drawer spatial motion is 180ms; preview spatial motion is 140ms. Motion explains
-only location/overlay change. Reduced-motion mode uses 0ms/static transitions,
-no transform, pulse, or looping indicator.
+Buttons, tabs, segmented controls, status chips, badges, counts, and lane
+headers never wrap. Shorten or ellipsize, use an accessible named icon, or move
+secondary controls to overflow. Workflow, step, and short id use one line with
+ellipsis. Drawer prose wraps at words; bounded opaque values may break inside a
+contained code region.
 
-## Responsive and containment law
+## Visual System
 
-Reading order and semantics remain the same at desktop, tablet, and mobile.
-The outer sheet changes placement, not information architecture. The occurrence
-selector scrolls/discloses progressively inside the sheet. Tabs, chips, badges,
-pills, statuses, and buttons never wrap. Long ids ellipsize with accessible
-full text; bounded opaque values may break only inside contained code regions.
+Use a warm graphite, Catppuccin Mocha-derived dark system:
 
-The page must not overflow horizontally. Inner graph, selector, log, and gallery
-regions own bounded overflow. Activity changes presentation at narrow widths
-instead of keeping a clipped minimum-width table. Narrow layouts keep Waiting,
-Needs help, and Degraded attention visible; secondary filters move into one
-Filter popover.
+- app foundation: `#14131A`;
+- top bar/detail: `#191720`;
+- lane: `#201D29`;
+- card: `#292632`;
+- selected card: `#332F40`;
+- primary/body/metadata text: `#F4F0F7`;
+- disabled/unavailable text only: `#AFA6BA`;
+- border: `#4A4357`;
+- strong divider: `#5C536A`;
+- focus/running: `#CBA6F7`;
+- Waiting: `#FAB387`;
+- Needs help: `#F38BA8`;
+- Degraded: `#9A92A8`;
+- Done: `#A6E3A1`.
 
-Occurrence rows have at least 40px targets; compact primary controls have at
-least 44px targets. Keyboard traversal follows visual order, focus is always
-visible, live updates do not steal focus, and query/page replacement does not
-silently reset run, occurrence, tab, graph node, or overlay origin.
-
-## Visual system
-
-Use the existing warm graphite, Catppuccin Mocha-derived dark system:
-
-- app `#14131A`; top/detail `#191720`; lane `#201D29`; card `#292632`;
-  selected `#332F40`;
-- primary/body/metadata text `#F4F0F7`; disabled/unavailable only `#AFA6BA`;
-- border `#4A4357`; strong divider `#5C536A`; focus/running `#CBA6F7`;
-- Waiting `#FAB387`; Needs help `#F38BA8`; Degraded `#9A92A8`; Done
-  `#A6E3A1`.
+State roles:
+- waiting for user: `#FAB387` or `#F9E2AF`
+- worker running: `#CBA6F7` or `#B4BEFE`, never cyan-first
+- needs help: `#F38BA8`
+- degraded: `#9A92A8`
+- done: `#A6E3A1`
 
 Foundation brightness progresses page < top/detail < lane < card < selected.
-Semantic color is paired with text/icon/shape and never carries meaning alone.
-Use sans-first dense type, monospace only for ids/steps, the 4/8/12/16/24px
-spacing scale, 10–12px gaps, 6–8px radii, flat separators, and readable
-non-muted metadata. Avoid marketing spacing, saturated panels, novelty mood,
-and decorative nesting.
+Semantic color never carries meaning alone; pair it with text and an icon or
+shape. Accents are state markers, not decoration. Avoid blue/cyan as the product
+mood and preserve WCAG 2.2 AA contrast.
 
-## Required states
+Typography is sans-first and dense: page 18–20px/700, lane 13px/700, card title
+14px/600 at 1.3, body 13px/1.45, metadata 11–12px at full readable contrast.
+Monospace is limited to ids and steps. Do not create hierarchy by dimming small
+text.
 
-Distinct visible states are mandatory:
+Use the 4/8/12/16/24px spacing scale, 10–12px lane gaps, and 6–8px radii. Avoid
+marketing spacing, large empty areas, saturated panels, novelty branding, and
+unused generated UI-kit components.
 
-- initial/detail loading and panel-local loading;
-- true empty versus filtered empty;
-- first-load error, local panel/preview error, and last-good stale recovery;
-- `legacy_unavailable` and missing occurrence selection;
-- partial/truncated/load-more/end and stale cursor recovery;
-- unsupported, oversized, disabled, MIME-mismatch, and download-only content;
-- preview loading/success/error;
-- long/pathological identifiers;
-- one corrupt Degraded run among healthy runs;
-- filtered/missing run selection without fallback.
+## UI Kit and Interaction Inventory
 
-Failed data never looks empty or successful. Local failure preserves the board,
-other tabs, stable identity, and recoverable metadata. Copy must remain
-inspection-oriented and avoid execution language such as `retry run`, `repair`,
-or `continue`.
+Use source-owned shadcn/ui components on approved Radix primitives, Tailwind
+CSS variables, and Lucide icons. Prefer semantic native controls. Add only
+primitives used by the product: Button, Input, Badge, Sheet/Dialog, Popover,
+Select, Tooltip, Skeleton, and Collapsible. Native overflow is preferred;
+ScrollArea requires concrete evidence that native overflow is insufficient.
 
-Query placeholder/previous data is scoped to the exact schema version, run,
-resource, occurrence/artifact ref, and cursor. Opening another run must not show
-the previous run's detail, selection, evidence, or preview while its own request
-is pending.
+Icon roles:
 
-## Performance and proof contract
+- Search for search;
+- Filter for filter menu;
+- Wifi/WifiOff for transport state;
+- ChevronDown/Up for narrow disclosure;
+- X for close;
+- Copy for safe run id copy;
+- CircleAlert for Needs help/Degraded support;
+- Check for Done;
+- LoaderCircle for Running, static under reduced motion.
 
-The board retains independent lane virtualization with stable `runId` keys and
-the approved 1,000-run responsiveness gates. Run inspection adds these hard
-proof requirements:
+Compact icon buttons have at least a 36px hit area and an accessible name.
+Keyboard order is toolbar, lanes/cards in visual order, then complementary
+detail. Virtualized navigation scrolls a logical offscreen run into the mounted
+range before focus; offscreen runs are never skipped. Live updates do not steal
+focus or selection. Reclassification keeps detail open, announces the new lane
+politely, and does not move keyboard focus.
 
-- desktop, tablet, and mobile Direction A layouts;
-- the six-moment operations storyboard;
-- Activity, Logs, and Artifacts selected-occurrence panels;
-- loading/empty/error/legacy/stale/truncated/unsupported/long-id state matrix;
-- independent drawer/preview focus origins, Escape stack, keyboard access, and
-  reduced motion;
-- repeated traversal proving occurrence identity and Workflow independence;
-- large workflow progressive loading without presenting a partial graph as
-  complete.
+Only drawer/sheet orientation and 100–120ms surface/focus transitions animate.
+Live changes never pulse or loop. Reduced-motion indicators are static.
 
-Approved visual evidence names are `ui-selected-desktop`,
-`ui-selected-mobile`, `ui-tablet`, `ui-operations-storyboard`, `ui-activity`,
-`ui-logs`, `ui-artifacts`, `ui-state-matrix`, `ui-interaction-proof`, and
-`ui-repeated-traversal`, with `ui-direction-a` as the selected comparison frame.
+## Required States and Copy
 
-Implementation recapture evidence lives under `ui/e2e/proof/` and uses the
-`v2-board-{desktop,mobile}`, `v2-direction-a-{desktop,tablet,mobile}`,
-`v2-activity-{desktop,mobile}`,
-`v2-logs-{desktop,mobile}`, `v2-artifacts-{desktop,mobile}`,
-`v2-artifact-paging-{desktop,mobile}`, `v2-stale-paging-{desktop,mobile}`,
-`v2-preview-{desktop,mobile}`, `v2-artifact-recovery-{desktop,mobile}`,
-`v2-focus-return-{desktop,mobile}`, and
-`v2-artifacts-long-id-{desktop,mobile}` files. These are implementation proof,
-not replacements for the approved Direction A comparison assets.
+Degraded:
+- one unreadable run must appear as degraded without crashing or hiding other
+  runs
+- degraded is observer/read health, not the same as a workflow request needing help
 
-Acceptance requires visible focus, deterministic dual focus return, no page
-overflow, no clipped/wrapped compact controls, explicit state truth, stable
-selection during updates, and fidelity to Direction A. Architecture or source
-reality conflict requires approved plan revision; do not redesign locally.
+Needs help:
+- needs help is an active request lane, not a workflow terminal state
+- show the bounded non-blocking stop summary when available
 
-## Hard nos
+Required distinct states:
+
+- stable lane-shell loading skeletons;
+- first-load failure: `Could not load runs` with transport-only `Try again`;
+- `Runs root is not configured`;
+- `No runs yet`;
+- `No runs match these filters` with `Clear filters`;
+- empty individual lane;
+- stale/reconnecting last-good board: `Reconnecting · last update {age}`;
+- one corrupt Degraded run among usable healthy runs;
+- drawer-local `Run details unavailable`;
+- missing/filtered selection with `Back to board`;
+- unsupported multiple-cursor input;
+- Done and zero-result states.
+
+Failed data never looks empty or successful. Stale state does not replace the
+last-good board with a destructive full-screen error. Avoid execution language
+such as `retry run`, `repair`, or `continue`.
+
+## Performance and Proof Contract
+
+Each expanded lane owns one independent vertical TanStack Virtual instance with
+stable runId keys, measured exceptional rows, and at most eight overscan items
+before and after the visible range.
+
+At 1,000 runs:
+
+- at most 150 RunCard elements are mounted;
+- the board becomes interactive within 2 seconds p95 after process readiness;
+- one validated snapshot reconciles within 100ms p95 on the main thread;
+- a 100-change burst introduces no task longer than 50ms.
+
+Proof fixtures include balanced lanes, 900 Waiting, 900 Done, long allowed
+text/id, rapid reclassification, detail open, and narrow layout.
+
+Required rendered evidence:
+
+- 1440x900, balanced distribution, detail closed and open;
+- 1024x768, selected run and filter open;
+- 390x844, attention summary, attention lanes expanded, Running/Done collapsed,
+  and full-width non-modal detail;
+- pathological density;
+- initial error, empty root/result, stale/reconnect, corrupt run, detail failure,
+  and missing selection;
+- keyboard-only navigation and reduced motion.
+
+Acceptance requires visible focus, reachable virtual items, deterministic focus
+return, no page overflow, no clipped compact controls, no attention lane hidden
+by default on mobile, bounded mounted nodes, stable scroll/focus during updates,
+and fidelity to Direction B. Architecture or implementation conflict requires
+approved plan revision; do not silently redesign or weaken the proof gate.
+
+## Hard Nos
 
 - no mutation/control affordance, drag/drop, or manual lane movement;
-- no automatic first/neighbor run or occurrence selection;
-- no occurrence-scoped Workflow, run-wide artifact page, mixed artifact scope,
-  or merged repeated identities;
-- no fabricated legacy ordinal or fanout/shard trail occurrence;
-- no raw debug/durable/private content or browser path authority;
-- no active artifact bytes injected into the parent DOM;
-- no same-origin active preview, popup/top-navigation/download sandbox power;
-- no nested-card hierarchy, novelty theme, page-level overflow, or wrapping
-  chips/tabs/buttons;
+- no automatic first/neighbor selection;
+- no parallel active cursor chips under the current runtime;
+- no raw debug/durable/private content;
+- no chart/graph/table as the primary surface;
+- no novelty theme, aviation metaphor, decorative outer card, or fake metric;
+- no page-level horizontal overflow, unbounded card, or index-keyed virtual row;
+- no browser-side run-root/filesystem read;
 - no looping decorative animation or motion-only meaning.
 
-## Downstream review
+## Downstream Review
 
-Frontend implementation and frontend-taste review compare rendered proof with
-the approved Direction A assets. Architecture review compares this document,
-`ARCHITECTURE.md`, dashboard `CONTEXT.md`/`README.md`, persistence/artifact
-contracts, schemas/routes/tests, and implementation. Contract drift is
-blocker-level.
+Frontend implementation and frontend-taste review must inspect the approved UI
+proposal directly and compare rendered proof. Architecture review must compare
+this document, `ARCHITECTURE.md`, dashboard `CONTEXT.md`, routes/schemas/tests,
+and implementation. Contract drift is blocker-level.

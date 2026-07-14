@@ -23,6 +23,7 @@ import type {
 } from "../contracts/browser";
 import { projectArtifactPage } from "../projection/project-artifacts";
 import {
+  artifactProducerBelongsToStep,
   parseManagedHistoryEntries,
   projectActivityPage,
   projectLogsPage,
@@ -75,30 +76,8 @@ function sortRuns(left: any, right: any): number {
 function artifactIdentity(entry: any): object {
   return {
     artifactId: entry?.artifact?.id,
-    fileStamp: entry?.acceptedFileStamp,
-    ownerOccurrence: entry?.producerOccurrence,
-    ownerStepId: entry?.producerStepId,
-    producerRequestId: entry?.producerRequestId,
+    producerStepId: entry?.producerStepId,
   };
-}
-
-function occurrenceAvailable(provenance: any, stepId: string, ordinal: number): boolean {
-  const coverage = provenance?.coverage;
-  if (!coverage || !Number.isSafeInteger(ordinal) || ordinal < 1) {
-    return false;
-  }
-  if (coverage.mode === "complete") {
-    return true;
-  }
-  const firstAvailable = coverage.firstAvailableByStep?.[stepId];
-  if (Number.isSafeInteger(firstAvailable)) {
-    return ordinal >= firstAvailable;
-  }
-  return Boolean(
-    coverage.currentAvailable === true &&
-    provenance?.current?.ownerStepId === stepId &&
-    provenance?.current?.occurrence === ordinal,
-  );
 }
 
 function snapshotFromIdentity(identity: string): HistorySnapshot {
@@ -163,38 +142,42 @@ export class RunsRootObserverReader {
     }
   }
 
-  private occurrence(
-    entry: any,
-    occurrenceRef: string,
-    signal?: AbortSignal,
-  ): { ordinal: number; stepId: string } {
-    signal?.throwIfAborted();
-    const identity = this.locators.resolveRef(occurrenceRef, {
-      kind: "occurrence",
-      runId: entry.run.runId,
-    });
-    const stepId = typeof identity.stepId === "string" ? identity.stepId : undefined;
-    const ordinal = identity.ordinal;
-    const provenance = entry?.persistedState?.baton?.state?.$occurrenceProvenance;
-    const counters = provenance?.counters ?? {};
-    if (
-      stepId &&
-      Number.isSafeInteger(ordinal) &&
-      Number(ordinal) >= 1 &&
-      Number(ordinal) <= Number(counters[stepId] ?? 0) &&
-      occurrenceAvailable(provenance, stepId, Number(ordinal))
-    ) {
-      return { ordinal: Number(ordinal), stepId };
-    }
-    throw new Error("stale_locator");
-  }
-
-  private occurrenceRef(runId: string, stepId: string, ordinal: number): string {
-    return this.locators.ref("occurrence", { ordinal, runId, stepId });
-  }
-
   private artifactRef(runId: string, entry: any): string {
     return this.locators.ref("artifact", { runId, ...artifactIdentity(entry) });
+  }
+
+  private async workflowDocument(entry: any, signal?: AbortSignal): Promise<any> {
+    const workflowPath = entry.run?.workflow?.path;
+    if (typeof workflowPath !== "string") {
+      throw new Error("not_found");
+    }
+    signal?.throwIfAborted();
+    const handle = await open(
+      workflowPath,
+      constants.O_RDONLY | constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0),
+    );
+    try {
+      const before = await handle.stat();
+      if (!before.isFile() || before.size > WORKFLOW_FILE_MAX_BYTES) {
+        throw new Error("content_unavailable");
+      }
+      const content = Buffer.alloc(before.size);
+      const { bytesRead } = await handle.read(content, 0, content.length, 0);
+      const after = await handle.stat();
+      if (
+        bytesRead !== before.size ||
+        before.dev !== after.dev ||
+        before.ino !== after.ino ||
+        before.size !== after.size ||
+        before.mtimeMs !== after.mtimeMs ||
+        before.ctimeMs !== after.ctimeMs
+      ) {
+        throw new Error("stale_locator");
+      }
+      return parseWorkflowDocument(content.toString("utf8"), workflowPath, "workflow");
+    } finally {
+      await handle.close();
+    }
   }
 
   async listRuns(signal?: AbortSignal): Promise<Array<RunSummaryDTO>> {
@@ -211,11 +194,7 @@ export class RunsRootObserverReader {
       return undefined;
     }
     const entry = await this.loadEntry(indexed, signal);
-    return projectRunLightDetail(entry, {
-      encodeOccurrenceRef: ({ runId: id, stepId, ordinal }) =>
-        this.occurrenceRef(id, stepId, ordinal),
-      now: this.now(),
-    });
+    return projectRunLightDetail(entry, { now: this.now() });
   }
 
   async getWorkflowPage(
@@ -347,39 +326,34 @@ export class RunsRootObserverReader {
       return undefined;
     }
     const entry = await this.loadEntry(indexed, signal);
-    const page = await this.historyPage(entry, runId, "traversal", cursor, signal);
-    const provenance = entry.persistedState?.baton?.state?.$occurrenceProvenance;
-    const currentAvailable = Boolean(
-      provenance?.current &&
-      occurrenceAvailable(
-        provenance,
-        provenance.current.ownerStepId,
-        provenance.current.occurrence,
-      ),
-    );
+    const historyPages: Array<Awaited<ReturnType<RunsRootObserverReader["historyPage"]>>> = [];
+    let historyCursor = cursor;
+    for (let pageIndex = 0; pageIndex < 128; pageIndex += 1) {
+      const page = await this.historyPage(entry, runId, "traversal", historyCursor, signal);
+      historyPages.push(page);
+      if (!page.nextCursor) {
+        break;
+      }
+      historyCursor = page.nextCursor;
+    }
+    const entries = historyPages.toReversed().flatMap((page) => page.entries);
+    const currentStepId =
+      typeof entry.persistedState?.baton?.cursor === "string"
+        ? entry.persistedState.baton.cursor
+        : undefined;
     return projectTraversalPage({
-      availability: provenance?.coverage?.mode === "complete" ? "available" : "legacy_unavailable",
-      complete: page.nextCursor === undefined,
-      ...(currentAvailable && provenance?.current
-        ? {
-            current: {
-              ordinal: provenance.current.occurrence,
-              stepId: provenance.current.ownerStepId,
-            },
-          }
-        : {}),
-      encodeOccurrenceRef: (stepId, ordinal) => this.occurrenceRef(runId, stepId, ordinal),
-      entries: page.entries,
-      isOccurrenceAvailable: (stepId, ordinal) => occurrenceAvailable(provenance, stepId, ordinal),
-      ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+      complete: historyPages.at(-1)?.nextCursor === undefined,
+      ...(currentStepId ? { currentStepId } : {}),
+      entries,
       runId,
-      truncated: page.truncated,
+      truncated: historyPages.at(-1)?.nextCursor !== undefined,
+      workflowDocument: await this.workflowDocument(entry, signal),
     });
   }
 
   async getActivityPage(
     runId: string,
-    occurrenceRef: string,
+    stepId: string,
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<ActivityPageDTO | undefined> {
@@ -388,22 +362,30 @@ export class RunsRootObserverReader {
       return undefined;
     }
     const entry = await this.loadEntry(indexed, signal);
-    const occurrence = this.occurrence(entry, occurrenceRef, signal);
-    const page = await this.historyPage(entry, runId, "activity", cursor, signal, occurrenceRef);
-    return projectActivityPage({
-      complete: page.nextCursor === undefined,
-      entries: page.entries,
-      ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
-      occurrenceRef,
-      ...occurrence,
-      runId,
-      truncated: page.truncated,
-    });
+    const workflowDocument = await this.workflowDocument(entry, signal);
+    let historyCursor = cursor;
+    for (let pageIndex = 0; pageIndex < 128; pageIndex += 1) {
+      const page = await this.historyPage(entry, runId, "activity", historyCursor, signal, stepId);
+      const projected = projectActivityPage({
+        complete: page.nextCursor === undefined,
+        entries: page.entries,
+        ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+        runId,
+        stepId,
+        truncated: page.truncated,
+        workflowDocument,
+      });
+      if (projected.items.length > 0 || !page.nextCursor) {
+        return projected;
+      }
+      historyCursor = page.nextCursor;
+    }
+    throw new Error("content_unavailable");
   }
 
   async getLogsPage(
     runId: string,
-    occurrenceRef: string,
+    stepId: string,
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<LogsPageDTO | undefined> {
@@ -412,25 +394,32 @@ export class RunsRootObserverReader {
       return undefined;
     }
     const entry = await this.loadEntry(indexed, signal);
-    const occurrence = this.occurrence(entry, occurrenceRef, signal);
-    const page = await this.historyPage(entry, runId, "logs", cursor, signal, occurrenceRef);
-    return projectLogsPage({
-      complete: page.nextCursor === undefined,
-      entries: page.entries,
-      ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
-      occurrenceRef,
-      ...occurrence,
-      runId,
-      truncated: page.truncated,
-    });
+    const workflowDocument = await this.workflowDocument(entry, signal);
+    let historyCursor = cursor;
+    for (let pageIndex = 0; pageIndex < 128; pageIndex += 1) {
+      const page = await this.historyPage(entry, runId, "logs", historyCursor, signal, stepId);
+      const projected = projectLogsPage({
+        complete: page.nextCursor === undefined,
+        entries: page.entries,
+        ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+        runId,
+        stepId,
+        truncated: page.truncated,
+        workflowDocument,
+      });
+      if (projected.entries.length > 0 || !page.nextCursor) {
+        return projected;
+      }
+      historyCursor = page.nextCursor;
+    }
+    throw new Error("content_unavailable");
   }
 
   async getArtifactPage(
     runId: string,
-    occurrenceRef?: string,
+    stepId: string,
     cursor?: string,
     signal?: AbortSignal,
-    workflowStepId?: string,
   ): Promise<ArtifactPageDTO | undefined> {
     const indexed = await this.indexedRun(runId, signal);
     if (!indexed) {
@@ -443,18 +432,11 @@ export class RunsRootObserverReader {
     const all = Array.isArray(entry.persistedState?.baton?.state?.artifacts)
       ? entry.persistedState.baton.state.artifacts
       : [];
-    if (Boolean(occurrenceRef) === Boolean(workflowStepId)) {
-      throw new Error("invalid_request");
-    }
-    const occurrence = occurrenceRef ? this.occurrence(entry, occurrenceRef, signal) : undefined;
-    const scoped = occurrence
-      ? all.filter(
-          (artifact: any) =>
-            artifact.producerStepId === occurrence.stepId &&
-            artifact.producerOccurrence === occurrence.ordinal,
-        )
-      : all.filter((artifact: any) => artifact.producerStepId === workflowStepId);
-    const scopeKey = occurrenceRef ?? `workflow_step:${workflowStepId}`;
+    const workflowDocument = await this.workflowDocument(entry, signal);
+    const scoped = all.filter((artifact: any) =>
+      artifactProducerBelongsToStep(workflowDocument, artifact?.producerStepId, stepId),
+    );
+    const scopeKey = `workflow_step:${stepId}`;
     const identity = createHash("sha256")
       .update(JSON.stringify(scoped.map(artifactIdentity)))
       .digest("base64url");
@@ -470,28 +452,17 @@ export class RunsRootObserverReader {
       throw new Error("stale_locator");
     }
     const selected = scoped.slice(offset, offset + 100);
-    const effectiveTypes = new Map<string, string>();
+    const files = new Map<string, { contentType: string; size: number }>();
     await mapWithConcurrency(selected, LAZY_IO_CONCURRENCY, async (artifact: any) => {
       signal?.throwIfAborted();
-      if (
-        typeof artifact?.producerRequestId !== "string" ||
-        !artifact?.acceptedFileStamp ||
-        !occurrenceAvailable(
-          entry.persistedState?.baton?.state?.$occurrenceProvenance,
-          artifact?.producerStepId,
-          artifact?.producerOccurrence,
-        )
-      ) {
-        return;
-      }
       const ref = this.artifactRef(runId, artifact);
-      effectiveTypes.set(
+      files.set(
         ref,
         await probeArtifactEntry(entry.paths, artifact, signal).catch((error) => {
           if (signal?.aborted) {
             throw error;
           }
-          return "application/octet-stream";
+          return { contentType: "application/octet-stream", size: 0 };
         }),
       );
     });
@@ -500,14 +471,8 @@ export class RunsRootObserverReader {
     return projectArtifactPage({
       artifacts: selected,
       complete: nextOffset >= scoped.length,
-      effectiveTypes,
+      files,
       encodeArtifactRef: (artifact) => this.artifactRef(runId, artifact),
-      isOccurrenceAvailable: (stepId, ordinal) =>
-        occurrenceAvailable(
-          entry.persistedState?.baton?.state?.$occurrenceProvenance,
-          stepId,
-          ordinal,
-        ),
       ...(nextOffset < scoped.length
         ? {
             nextCursor: this.locators.cursor({
@@ -519,12 +484,9 @@ export class RunsRootObserverReader {
             }),
           }
         : {}),
-      scope:
-        occurrence && occurrenceRef
-          ? { kind: "occurrence", occurrenceRef }
-          : { kind: "workflow_step", stepId: workflowStepId! },
       runAggregateCount: all.length,
       runId,
+      stepId,
     });
   }
 
@@ -555,10 +517,7 @@ export class RunsRootObserverReader {
         JSON.stringify(artifactIdentity(candidate)) ===
         JSON.stringify({
           artifactId: identity.artifactId,
-          fileStamp: identity.fileStamp,
-          ownerOccurrence: identity.ownerOccurrence,
-          ownerStepId: identity.ownerStepId,
-          producerRequestId: identity.producerRequestId,
+          producerStepId: identity.producerStepId,
         })
       ) {
         artifact = candidate;
@@ -566,15 +525,6 @@ export class RunsRootObserverReader {
       }
     }
     if (!artifact) {
-      return undefined;
-    }
-    if (
-      !occurrenceAvailable(
-        entry.persistedState?.baton?.state?.$occurrenceProvenance,
-        artifact.producerStepId,
-        artifact.producerOccurrence,
-      )
-    ) {
       return undefined;
     }
     return verifiedArtifactHandle(entry.paths, artifact, signal);

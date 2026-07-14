@@ -3,7 +3,6 @@ import { describe, expect, it } from "bun:test";
 import {
   accumulatePages,
   mergeTraversalPages,
-  selectOccurrenceForStep,
   toActivityGroups,
   toRunArtifactItems,
   toStepPathItems,
@@ -11,12 +10,9 @@ import {
 
 const traversalPage = (peers: Array<Record<string, unknown>>): TraversalPageDTO =>
   ({
-    availability: "available",
     complete: false,
     items: [
       {
-        occurrenceRef: "occurrence_ref_architecture_1",
-        ordinal: 1,
         peers,
         state: "current",
         stepId: "architecture",
@@ -36,15 +32,6 @@ describe("run detail page selectors", () => {
     ).toEqual([{ id: "a" }, { id: "b" }, { id: "c" }]);
   });
 
-  it("resolves the latest occurrence behind a step selection", () => {
-    const occurrences = [
-      { occurrenceRef: "a:1", ordinal: 1, state: "completed" as const, stepId: "a" },
-      { occurrenceRef: "a:2", ordinal: 2, state: "current" as const, stepId: "a" },
-    ];
-    expect(selectOccurrenceForStep(occurrences, "a")?.occurrenceRef).toBe("a:2");
-    expect(selectOccurrenceForStep(occurrences, "missing")).toBeUndefined();
-  });
-
   it("collapses repeated visits to one active step path", () => {
     expect(
       toStepPathItems(
@@ -53,15 +40,11 @@ describe("run detail page selectors", () => {
             ...traversalPage([]),
             items: [
               {
-                occurrenceRef: "a_ref_2",
-                ordinal: 2,
                 peers: [],
                 state: "completed",
                 stepId: "a",
               },
               {
-                occurrenceRef: "b_ref_2",
-                ordinal: 2,
                 peers: [],
                 state: "current",
                 stepId: "b",
@@ -83,7 +66,7 @@ describe("run detail page selectors", () => {
   });
 
   it("merges peer facts across replayed traversal pages while newer lifecycle state wins", () => {
-    const [occurrence] = mergeTraversalPages([
+    const [step] = mergeTraversalPages([
       traversalPage([
         {
           activation: 1,
@@ -110,7 +93,7 @@ describe("run detail page selectors", () => {
         },
       ]),
     ]);
-    expect(occurrence?.peers).toMatchObject([
+    expect(step?.peers).toMatchObject([
       { producerRequestId: "request-a", state: "pending" },
       { producerRequestId: "request-b", state: "accepted" },
     ]);
@@ -133,9 +116,9 @@ describe("run detail page selectors", () => {
               state: "pending",
             },
           ],
-          occurrenceRef: "occurrence_ref_architecture_1" as never,
           runId: "run-1",
           schemaVersion: "2",
+          stepId: "architecture",
         },
         {
           complete: true,
@@ -151,9 +134,9 @@ describe("run detail page selectors", () => {
               state: "stopped",
             },
           ],
-          occurrenceRef: "occurrence_ref_architecture_1" as never,
           runId: "run-1",
           schemaVersion: "2",
+          stepId: "architecture",
         },
       ],
       mergeTraversalPages([
@@ -186,15 +169,13 @@ describe("run detail page selectors", () => {
             id: "report.html",
             mimeMismatch: true,
             previewState: "download_only",
-            producerOccurrence: 2,
-            producerRequestId: "request-2",
             producerStepId: "review",
           },
         ],
         runAggregateCount: 1,
         runId: "run-1",
         schemaVersion: "2",
-        scope: { kind: "occurrence", occurrenceRef: "occurrence_ref_2" },
+        scope: { kind: "workflow_step", stepId: "review" },
       }),
     ]);
     expect(artifact?.preview).toMatchObject({ state: "download_only" });

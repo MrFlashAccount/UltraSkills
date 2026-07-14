@@ -14,7 +14,7 @@ async function historyFixture(count: number): Promise<string> {
   const entries = Array.from(
     { length: count },
     (_, index) =>
-      `## 2026-07-14T00:00:${String(index).padStart(2, "0")}.000Z\n- source: workflow-runner\n- orbita-v2: {"event":"request","ownerStepId":"owner","ownerOccurrence":1,"producerRequestId":"request_${index}","workItem":${index}}\n`,
+      `## 2026-07-14T00:00:${String(index).padStart(2, "0")}.000Z\n- source: workflow-runner\n- requests: id=request_${index} status=pending\n`,
   );
   await writeFile(pathname, entries.join("\n"));
   return pathname;

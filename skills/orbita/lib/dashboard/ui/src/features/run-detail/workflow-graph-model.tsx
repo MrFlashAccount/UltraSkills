@@ -67,7 +67,7 @@ export function WorkflowStepNode({ data, selected }: NodeProps<WorkflowNode>) {
 export function graphElements(
   steps: WorkflowPageDTO["nodes"],
   declaredEdges: WorkflowPageDTO["edges"],
-  occurrences: TraversalPageDTO["items"],
+  traversedSteps: TraversalPageDTO["items"],
   selectedStepId?: string,
 ): { edges: Array<Edge>; nodes: Array<WorkflowNode> } {
   const visibleStepIds = new Set(steps.map((step) => step.stepId));
@@ -92,7 +92,7 @@ export function graphElements(
       const rowEnd = (index + 1) % columns === 0 && index < steps.length - 1;
       const rowStart = index % columns === 0 && index > 0;
       const rowDirection = row % 2 === 0 ? Position.Right : Position.Left;
-      const state = stepState(step.stepId, occurrences);
+      const state = stepState(step.stepId, traversedSteps);
       return {
         ariaLabel: `${step.stepId}, ${STEP_KIND_LABELS[step.kind]}, ${STEP_LABELS[state]}`,
         data: {
@@ -118,10 +118,10 @@ export function graphElements(
 
 export function stepState(
   stepId: string,
-  occurrences: TraversalPageDTO["items"],
+  traversedSteps: TraversalPageDTO["items"],
 ): WorkflowStepState {
-  const matches = occurrences.filter((occurrence) => occurrence.stepId === stepId);
-  return matches.some((occurrence) => occurrence.state === "current")
+  const matches = traversedSteps.filter((step) => step.stepId === stepId);
+  return matches.some((step) => step.state === "current")
     ? "current"
     : matches.length
       ? "completed"

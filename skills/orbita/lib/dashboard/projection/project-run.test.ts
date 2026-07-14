@@ -16,47 +16,6 @@ const run = {
 };
 
 describe("dashboard public projection", () => {
-  test("keeps the seeded legacy boundary unavailable until a successful forward route", () => {
-    const base = {
-      run: {
-        runId: "legacy-seed",
-        workflow: { identity: "dev-harness" },
-        status: "running",
-        title: "Legacy seed",
-      },
-      persistedState: {
-        baton: {
-          cursor: "implementation",
-          status: "running",
-          state: {
-            artifacts: [],
-            results: [],
-            $occurrenceProvenance: {
-              version: 2,
-              counters: { implementation: 1 },
-              current: { ownerStepId: "implementation", occurrence: 1 },
-              coverage: { mode: "forward_only", historyBytes: 4096, currentAvailable: false },
-              pendingArtifactAcceptances: {},
-            },
-          },
-        },
-      },
-    };
-    const unavailable = projectRunLightDetail(base as any, {
-      encodeOccurrenceRef: () => "opaque_occurrence_ref",
-      now: new Date("2026-07-14T00:00:00.000Z"),
-    });
-    expect(unavailable.occurrenceAvailability).toBe("legacy_unavailable");
-    expect(unavailable.currentOccurrence).toBeNull();
-
-    base.persistedState.baton.state.$occurrenceProvenance.coverage.currentAvailable = true;
-    const available = projectRunLightDetail(base as any, {
-      encodeOccurrenceRef: () => "opaque_occurrence_ref",
-      now: new Date("2026-07-14T00:00:00.000Z"),
-    });
-    expect(available.occurrenceAvailability).toBe("available");
-    expect(available.currentOccurrence?.ordinal).toBe(1);
-  });
   test("omits secret and command variants and enforces every source byte ceiling", () => {
     for (const unsafe of [
       "/home/private/token.txt",
@@ -117,11 +76,10 @@ describe("dashboard public projection", () => {
         },
         run,
       },
-      { encodeOccurrenceRef: () => "a".repeat(43), now: new Date("2026-07-12T00:01:00.000Z") },
+      { now: new Date("2026-07-12T00:01:00.000Z") },
     );
     expect(detail.run.laneId).toBe("degraded");
     expect(detail.run.cursor).toEqual({ kind: "unsupported" });
-    expect(detail.occurrenceAvailability).toBe("legacy_unavailable");
     expect(JSON.stringify(detail)).not.toMatch(
       /tokenHash|user_prompt|private|rawError|artifact\.md/u,
     );

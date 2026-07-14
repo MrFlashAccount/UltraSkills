@@ -2,81 +2,48 @@ import { describe, expect, test } from "bun:test";
 import { projectArtifactPage } from "./project-artifacts";
 
 describe("artifact descriptor projection", () => {
-  test("keeps legacy artifacts visible with explicit unavailable provenance", () => {
+  test("projects the existing durable artifact record with an opaque viewer ref", () => {
     const page = projectArtifactPage({
       artifacts: [
         {
-          producerStepId: "legacy_step",
+          producerStepId: "architecture",
           artifact: {
-            id: "legacy-packet",
+            id: "reasons-canvas",
             content_type: "text/markdown",
-            path: "/private/legacy.md",
+            path: "/private/reasons-canvas.md",
           },
         },
       ],
       complete: true,
-      effectiveTypes: new Map(),
-      encodeArtifactRef: () => {
-        throw new Error("legacy refs must not be minted");
-      },
+      encodeArtifactRef: () => "artifact_ref_0001",
+      files: new Map([["artifact_ref_0001", { contentType: "text/markdown", size: 1024 }]]),
       runAggregateCount: 1,
       runId: "run-a",
-      scope: { kind: "workflow_step", stepId: "legacy_step" },
+      stepId: "architecture",
     });
-    expect(page.items).toEqual([
-      expect.objectContaining({
-        id: "legacy-packet",
-        previewState: "legacy_unavailable",
-        producerStepId: "legacy_step",
-      }),
-    ]);
-    expect(Object.hasOwn(page.items[0]!, "artifactRef")).toBe(false);
+    expect(page.items[0]).toMatchObject({
+      artifactRef: "artifact_ref_0001",
+      id: "reasons-canvas",
+      previewState: "previewable",
+      producerStepId: "architecture",
+    });
+    expect(page.scope).toEqual({ kind: "workflow_step", stepId: "architecture" });
   });
 
-  test("uses the same size and MIME policy for descriptor eligibility", () => {
+  test("uses the current file size and MIME policy for descriptor eligibility", () => {
     const artifact = {
       producerStepId: "implementation",
-      producerOccurrence: 2,
-      producerRequestId: "implementation_request",
-      acceptedFileStamp: { device: 1, inode: 2, size: 2_097_153, mtimeMs: 3, ctimeMs: 4 },
       artifact: { id: "page", content_type: "text/html", path: "/private/page.html" },
     };
     const page = projectArtifactPage({
       artifacts: [artifact],
       complete: true,
-      effectiveTypes: new Map([["artifact_ref_0001", "text/html"]]),
       encodeArtifactRef: () => "artifact_ref_0001",
+      files: new Map([["artifact_ref_0001", { contentType: "text/html", size: 2_097_153 }]]),
       runAggregateCount: 1,
       runId: "run-a",
-      scope: { kind: "occurrence", occurrenceRef: "occurrence_ref_0001" },
+      stepId: "implementation",
     });
     expect(page.items[0]?.previewState).toBe("oversized");
-  });
-
-  test("does not mint v2 content capability before the persisted forward boundary", () => {
-    const page = projectArtifactPage({
-      artifacts: [
-        {
-          producerStepId: "seeded_step",
-          producerOccurrence: 1,
-          producerRequestId: "seeded_step",
-          acceptedFileStamp: { device: 1, inode: 2, size: 4, mtimeMs: 3, ctimeMs: 4 },
-          artifact: { id: "seeded", content_type: "text/plain", path: "/private/seeded.txt" },
-        },
-      ],
-      complete: true,
-      effectiveTypes: new Map(),
-      encodeArtifactRef: () => {
-        throw new Error("uncovered artifacts must not receive refs");
-      },
-      isOccurrenceAvailable: () => false,
-      runAggregateCount: 1,
-      runId: "run-a",
-      scope: { kind: "workflow_step", stepId: "seeded_step" },
-    });
-
-    expect(page.items[0]?.previewState).toBe("legacy_unavailable");
-    expect(page.items[0]).not.toHaveProperty("artifactRef");
-    expect(page.items[0]).not.toHaveProperty("producerOccurrence");
   });
 });

@@ -21,10 +21,7 @@ Required fields:
 
 - `id`: artifact id unique within the producer step.
 - `content_type`: MIME/content type, for example `text/markdown` or `application/json`.
-- `path`: full absolute filesystem path to the generated artifact file. The
-  runner renders the exact occurrence-aware output directory for the current
-  request; new worker output validation requires the path to remain inside that
-  canonical directory.
+- `path`: full absolute filesystem path to the generated artifact file. For new worker output validation, the path must be inside the current step artifact output directory: `<run>/<stepId>/artifacts/`.
 
 Optional fields:
 
@@ -34,54 +31,15 @@ Not included: `type`, `kind`, `ref`, `producer_step_id`, `version`, `replaces`, 
 
 ## Baton state boundary
 
-The worker-facing read path for the current producer output remains:
+The canonical read path for artifacts is the producer step output:
 
 ```js
 baton.state[producerStepId].artifacts[]
 ```
 
-Occurrence-aware inspection and audit use the runner-owned
-`baton.state.artifacts` aggregate rather than treating the current producer
-slot as complete traversal history. Each wrapped `artifact`
-must still satisfy the exact central `{ id, content_type, path, summary? }`
-schema with no extra fields. New wrappers also carry runner-owned
-`producerOccurrence`, `producerRequestId`, and `acceptedFileStamp` provenance;
-those fields never enter worker-authored artifact metadata.
+`baton.state.artifacts` is a strict aggregate of wrapper entries `{ producerStepId, artifact }`. It never accepts flat artifact metadata or extra wrapper fields. Each wrapped `artifact` must still satisfy the same central `{ id, content_type, path, summary? }` schema with no extra fields. Identity is the pair `{ producerStepId, artifact.id }`; the `producerStepId` lives outside the artifact metadata object so producer ownership never leaks into the artifact metadata contract.
 
-For new records, aggregate identity is
-`{ ownerStepId, ownerOccurrence, producerRequestId, artifactId }`. This keeps
-the same artifact id from repeated owner visits or requests distinct. Explicit
-legacy `{ producerStepId, artifact }` wrappers remain readable without an
-invented occurrence and without rewriting their bytes or paths.
-
-The accepted file stamp records device/inode/size/mtime/ctime after the runner
-has proven that the canonical occurrence-aware path is contained, regular, and
-not a followed symlink. Content readers must reopen through the canonical
-occurrence/request directory handle and revalidate aggregate metadata plus that
-stamp on every request. They copy exactly the accepted bounded byte length,
-restat the handle, close it, and serve full or Range responses only from that
-immutable snapshot. An opaque artifact ref is a locator, never filesystem or
-live-stream authority.
-
-Dashboard artifact inspection has two separate aggregate scopes: exact owner
-occurrence for the Artifacts tab and exact workflow step for the Workflow pane.
-Each page request and cursor selects exactly one scope; there is no run-wide page
-or cursor and no scope substitution. This read-model split does not change the
-worker artifact schema or aggregate identity.
-
-The renderer does not choose artifact ids or read persisted artifact files. It
-renders the runner-selected occurrence-aware output directory from the
-applied/current Baton, including a just-routed next owner rather than stale
-pre-transition state, and adds schema-derived notes from loaded schemas.
-External schema refs such as the central Baton artifact `$ref` must resolve
-deterministically; unresolved external refs fail prompt rendering instead of
-being silently omitted.
-
-Legacy aggregate wrappers remain descriptor-readable, but missing runner-owned
-occurrence/request/file-stamp provenance is represented as
-`legacy_unavailable`. Such a descriptor has no artifact ref and cannot acquire a
-preview/download capability by reusing its historical absolute path. This is a
-forward-only compatibility surface, not an alias or migration mechanism.
+The renderer does not choose artifact ids or paths and does not read persisted artifact files. It only renders schema-derived notes from loaded schemas. External schema refs such as the central Baton artifact `$ref` must resolve deterministically; unresolved external refs fail prompt rendering instead of being silently omitted.
 
 ## Artifact usage metadata
 
@@ -130,14 +88,8 @@ Those mechanics belong in schema definitions and renderer-generated field notes.
 
 The JSON output remains authoritative for workflow branching, prompt input context, and gates. The markdown artifact is the human-facing Canvas for review/approval. If the user asks the orchestrator for the research/proposal file, the orchestrator must retrieve or export the existing run artifact referenced by prompt input/output artifacts; it must not ask a worker to recreate the Canvas in an arbitrary temp path.
 
-## Explicit non-goals
+## Open questions
 
-- No artifact store, promotion model, alias/version system, bulk path migration,
-  or compatibility directory is introduced.
-- Workers continue to emit the absolute `path` in the unchanged central artifact
-  metadata shape; occurrence/request/file provenance remains runner-owned.
-- Host/orchestrator file requests use existing Baton/output artifact references;
-  no separate export service or preview repository is introduced.
-- Rollback never rewrites aggregate artifacts. Once v2 stamped wrappers may
-  exist, additive Baton parsing and aggregate compatibility remain even if the
-  dashboard v2 read surface is rolled back.
+- Should a later runtime derive local artifact paths from step id and artifact id instead of requiring workers to emit the current absolute `path`?
+- Should the runner provide a first-class artifact export helper for host/orchestrator file requests? Current fix keeps this prompt-level: workers and approval prompts must use existing baton/output artifact refs, and no runtime export helper is added here.
+- Should the schema eventually enforce the current step artifact directory convention, or should that remain renderer/runtime guidance outside JSON Schema?

@@ -1,4 +1,4 @@
-.occurrence-selector {
+.step-path-selector {
   min-width: 0;
   flex: 0 0 auto;
   display: grid;
@@ -6,14 +6,14 @@
   padding: 12px 18px;
   border-bottom: 1px solid var(--border);
 }
-.occurrence-scroll {
+.step-path-scroll {
   min-width: 0;
   display: flex;
   gap: var(--space-2);
   overflow-x: auto;
   overscroll-behavior-inline: contain;
 }
-.occurrence-selector ul {
+.step-path-selector ul {
   min-width: max-content;
   display: flex;
   gap: var(--space-2);
@@ -21,16 +21,16 @@
   padding: 0;
   list-style: none;
 }
-.occurrence-selector li {
+.step-path-selector li {
   display: flex;
 }
-.occurrence-item,
-.occurrence-earlier {
+.step-path-item,
+.step-path-earlier {
   min-height: 44px;
   flex: 0 0 auto;
   white-space: nowrap;
 }
-.occurrence-item {
+.step-path-item {
   min-width: 150px;
   max-width: 210px;
   display: grid;
@@ -44,44 +44,44 @@
   border-radius: var(--radius-md);
   cursor: pointer;
 }
-.occurrence-item:hover {
+.step-path-item:hover {
   background: var(--surface-selected);
   border-color: var(--border-strong);
 }
-.occurrence-item[data-selected="true"] {
+.step-path-item[data-selected="true"] {
   color: var(--text-primary);
   border-color: var(--focus);
   box-shadow: inset 3px 0 0 var(--focus);
 }
-.occurrence-item[data-state="completed"] > svg:first-child {
+.step-path-item[data-state="completed"] > svg:first-child {
   color: var(--done);
 }
-.occurrence-item[data-state="failed"] > svg:first-child {
+.step-path-item[data-state="failed"] > svg:first-child {
   color: var(--needs-help);
 }
-.occurrence-item[data-state="current"] > svg:first-child {
+.step-path-item[data-state="current"] > svg:first-child {
   color: var(--running);
 }
-.occurrence-copy {
+.step-path-copy {
   min-width: 0;
   display: grid;
   gap: 1px;
   text-align: left;
 }
-.occurrence-copy strong,
-.occurrence-copy span {
+.step-path-copy strong,
+.step-path-copy span {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.occurrence-copy strong {
+.step-path-copy strong {
   color: inherit;
   font-size: 12px;
 }
-.occurrence-copy span {
+.step-path-copy span {
   color: var(--text-secondary);
   font-size: 10px;
 }
-.occurrence-edge {
+.step-path-edge {
   color: var(--text-muted);
 }
 .detail-tabs-list,
@@ -94,26 +94,26 @@
 .ui-tabs-trigger {
   white-space: nowrap;
 }
-.occurrence-panel {
+.step-panel {
   min-height: 100%;
   padding: 18px;
 }
-.occurrence-panel-heading {
+.step-panel-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
 }
-.occurrence-panel-heading h3,
-.occurrence-panel-heading p {
+.step-panel-heading h3,
+.step-panel-heading p {
   margin: 0;
 }
-.occurrence-panel-heading h3 {
+.step-panel-heading h3 {
   color: var(--text-primary);
   font-size: 15px;
 }
-.occurrence-panel-heading p {
+.step-panel-heading p {
   color: var(--text-secondary);
   font-size: 11px;
 }
@@ -127,7 +127,7 @@
     font-size: 18px;
   }
   .detail-overview,
-  .occurrence-panel {
+  .step-panel {
     padding-inline: 14px;
   }
   .detail-overview-facts {
@@ -138,10 +138,10 @@
   .detail-overview-facts > div + div {
     padding-left: var(--space-2);
   }
-  .occurrence-selector {
+  .step-path-selector {
     padding-inline: 14px;
   }
-  .occurrence-panel-heading {
+  .step-panel-heading {
     align-items: flex-start;
     flex-direction: column;
   }

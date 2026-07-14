@@ -9,7 +9,7 @@ type WorkflowStepArtifactsProps = {
   stepId: string;
 };
 
-/** Independently paged workflow-step descriptors; occurrence selection never enters this query. */
+/** Independently paged workflow-step artifact descriptors. */
 export function WorkflowStepArtifacts({ runId, stepId }: WorkflowStepArtifactsProps) {
   const query = useWorkflowStepArtifactPages(runId, stepId);
   const artifacts = toRunArtifactItems(runId, query.data?.pages);

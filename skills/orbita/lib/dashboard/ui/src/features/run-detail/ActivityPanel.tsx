@@ -2,12 +2,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   type ActivityGroupItem,
-  type OccurrenceEvidenceState,
+  type StepEvidenceState,
   type PagingState,
 } from "./run-detail-view-model";
 import {
-  LegacyUnavailable,
-  OccurrenceEvidenceUnavailable,
+  StepEvidenceUnavailable,
   PagingFailure,
   PanelEmpty,
   PanelError,
@@ -20,14 +19,14 @@ type ActivityPanelProps = {
   onRetry?: () => void;
   onRetryPaging?: () => void;
   pagination: PagingState;
-  state: OccurrenceEvidenceState;
+  state: StepEvidenceState;
   stepLabel: string;
 };
 
 export function ActivityPanel(props: ActivityPanelProps) {
   return (
-    <section aria-labelledby="activity-title" className="occurrence-panel">
-      <header className="occurrence-panel-heading">
+    <section aria-labelledby="activity-title" className="step-panel">
+      <header className="step-panel-heading">
         <div>
           <h3 id="activity-title">Activity · {props.stepLabel}</h3>
           <p>Selected-step lifecycle and nested work</p>
@@ -36,11 +35,9 @@ export function ActivityPanel(props: ActivityPanelProps) {
       {props.state === "loading" ? (
         <PanelLoading label={`Loading ${props.stepLabel} activity…`} />
       ) : props.state === "missing_selection" || props.state === "traversal_pending" ? (
-        <OccurrenceEvidenceUnavailable state={props.state} />
+        <StepEvidenceUnavailable state={props.state} />
       ) : props.state === "error" ? (
         <PanelError message="Selected step activity is unavailable." onRetry={props.onRetry} />
-      ) : props.state === "legacy_unavailable" ? (
-        <LegacyUnavailable stepLabel={props.stepLabel} />
       ) : props.groups.length === 0 ? (
         <PanelEmpty
           detail="No durable activity was recorded for this step."

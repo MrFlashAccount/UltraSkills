@@ -48,13 +48,6 @@ export function makeSnapshot(runs: Array<RunSummaryDTO>): SnapshotEnvelope {
 
 export function makeDetail(run = makeRun()): RunLightDetailDTO {
   return RunLightDetailSchema.parse({
-    currentOccurrence: {
-      occurrenceRef: "occurrence_ref_01",
-      ordinal: 1,
-      state: "current",
-      stepId: run.currentStep ?? "step-1",
-    },
-    occurrenceAvailability: "available",
     run,
     schemaVersion: "2",
     summary: {

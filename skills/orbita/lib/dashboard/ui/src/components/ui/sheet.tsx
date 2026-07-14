@@ -1,13 +1,12 @@
-import { Dialog } from "radix-ui";
 import { X } from "lucide-react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useEffectEvent } from "react";
 import { Button } from "./button";
 
 type SheetProps = {
   children: ReactNode;
   description?: string;
   eyebrow?: string;
-  onCloseAutoFocus?: Dialog.DialogContentProps["onCloseAutoFocus"];
+  onCloseAutoFocus?: (event: { preventDefault(): void }) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   title: string;
@@ -22,40 +21,54 @@ export function Sheet({
   open,
   title,
 }: SheetProps) {
-  const openCloseAutoFocus = useRef(onCloseAutoFocus);
+  const closeFromEscape = useEffectEvent(() => {
+    onOpenChange(false);
+    queueMicrotask(() => onCloseAutoFocus?.({ preventDefault() {} }));
+  });
+
   useEffect(() => {
-    if (open) {
-      openCloseAutoFocus.current = onCloseAutoFocus;
+    if (!open) {
+      return;
     }
-  }, [onCloseAutoFocus, open]);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (document.querySelector('[role="dialog"]')) {
+        return;
+      }
+      event.preventDefault();
+      closeFromEscape();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  if (!open) {
+    return null;
+  }
 
   return (
-    <Dialog.Root onOpenChange={onOpenChange} open={open}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="sheet-overlay" />
-        <Dialog.Content
-          className="sheet-content"
-          onCloseAutoFocus={(event) => openCloseAutoFocus.current?.(event)}
+    <aside aria-label={title} className="sheet-content" data-state="open">
+      <header className="detail-header">
+        <div>
+          {eyebrow ? <span className="sheet-eyebrow">{eyebrow}</span> : null}
+          <h2 className="detail-title">{title}</h2>
+          {description ? <p className="detail-description">{description}</p> : null}
+        </div>
+        <Button
+          aria-label="Close details"
+          onClick={() => {
+            onOpenChange(false);
+            queueMicrotask(() => onCloseAutoFocus?.({ preventDefault() {} }));
+          }}
+          size="icon"
+          variant="quiet"
         >
-          <header className="detail-header">
-            <div>
-              {eyebrow ? <span className="sheet-eyebrow">{eyebrow}</span> : null}
-              <Dialog.Title className="detail-title">{title}</Dialog.Title>
-              {description ? (
-                <Dialog.Description className="detail-description">
-                  {description}
-                </Dialog.Description>
-              ) : null}
-            </div>
-            <Dialog.Close asChild>
-              <Button aria-label="Close details" size="icon" variant="quiet">
-                <X aria-hidden="true" size={18} />
-              </Button>
-            </Dialog.Close>
-          </header>
-          {children}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          <X aria-hidden="true" size={18} />
+        </Button>
+      </header>
+      {children}
+    </aside>
   );
 }

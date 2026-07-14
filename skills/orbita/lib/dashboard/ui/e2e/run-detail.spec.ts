@@ -11,7 +11,7 @@ test("Direction A preserves Workflow and scopes selected-step evidence", async (
   await page.goto("/");
   const origin = page.locator(".run-card").first();
   await origin.click();
-  const dialog = page.getByRole("dialog", { name: "Run detail inspection" });
+  const dialog = page.getByRole("complementary", { name: "Run detail inspection" });
   await expect(dialog).toBeVisible();
   await expectOverlayPlacement(dialog, testInfo.project.name);
   const tabs = dialog.getByRole("tab");
@@ -68,28 +68,10 @@ test("preview and drawer restore independent focus origins", async ({ page }, te
   await page.screenshot({ path: `${proofDir}/v2-preview-${testInfo.project.name}.png` });
   await page.keyboard.press("Escape");
   await expect(previewOpener).toBeFocused();
-  await expect(page.getByRole("dialog", { name: "Run detail inspection" })).toBeVisible();
-  await page.evaluate(() => {
-    const sheet = document.querySelector<HTMLElement>(".sheet-content");
-    if (!sheet) {
-      return;
-    }
-    const observer = new MutationObserver(() => {
-      if (sheet.dataset.state === "closed") {
-        (window as typeof window & { closingSheetText?: string }).closingSheetText =
-          sheet.textContent ?? "";
-        observer.disconnect();
-      }
-    });
-    observer.observe(sheet, { attributes: true, attributeFilter: ["data-state"] });
-  });
+  await expect(page.getByRole("complementary", { name: "Run detail inspection" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(origin).toBeFocused();
-  expect(
-    await page.evaluate(
-      () => (window as typeof window & { closingSheetText?: string }).closingSheetText,
-    ),
-  ).toContain("Run detail inspection");
+  await expect(page.getByRole("complementary", { name: "Run detail inspection" })).toBeHidden();
   await page.screenshot({ path: `${proofDir}/v2-focus-return-${testInfo.project.name}.png` });
 });
 
@@ -126,11 +108,11 @@ test("tablet containment and reduced motion match the approved contract", async 
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await page.locator(".run-card").first().click();
-  const dialog = page.getByRole("dialog", { name: "Run detail inspection" });
+  const dialog = page.getByRole("complementary", { name: "Run detail inspection" });
   const bounds = await dialog.boundingBox();
-  expect(bounds!.width).toBeLessThanOrEqual(976);
-  expect(bounds!.height).toBeLessThanOrEqual(704);
-  await expect(dialog).toHaveCSS("animation-duration", "0s");
+  expect(bounds!.width).toBeLessThanOrEqual(575);
+  expect(bounds!.height).toBeLessThanOrEqual(708);
+  await expect(dialog).toHaveCSS("animation-name", "none");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -151,13 +133,13 @@ test("run transitions never reuse the previous identity while the next detail is
   await page.goto("/");
   const first = page.locator('.run-card[data-run-id="run-proof-0000"]');
   await first.click();
-  await expect(page.getByRole("dialog", { name: "Run detail inspection" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Run detail inspection" })).toBeVisible();
   await page.getByRole("button", { name: "Close details" }).click();
 
   await page.locator(`.run-card[data-run-id="${nextRun.runId}"]`).click();
-  const pendingDialog = page.getByRole("dialog");
+  const pendingDialog = page.getByRole("complementary");
   await expect(pendingDialog).not.toContainText("Run detail inspection");
-  await expect(page.getByRole("dialog", { name: nextRun.title.value })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: nextRun.title.value })).toBeVisible();
   await expect(pendingDialog).toContainText(nextRun.runId);
 });
 
@@ -203,7 +185,7 @@ test("stale traversal paging preserves evidence and restarts from the latest pag
   await expect(
     page.getByText("Workflow definition complete · execution evidence partial"),
   ).toBeVisible();
-  await expectContained(page.getByText(/loaded · partial/u), page.getByRole("dialog"));
+  await expectContained(page.getByText(/loaded · partial/u), page.getByRole("complementary"));
   await page.getByRole("tab", { name: "Activity" }).click();
   await expect(page.getByRole("heading", { name: "Activity · architecture" })).toBeVisible();
   await page.getByRole("button", { name: "Show earlier" }).click();
@@ -218,7 +200,7 @@ test("stale traversal paging preserves evidence and restarts from the latest pag
   await expect(page.getByRole("heading", { name: "Activity · architecture" })).toBeVisible();
   await expect(page.getByText("Fanout activation 1 started")).toBeVisible();
   releaseReplacement?.();
-  await expect(page.getByText("Selected step unavailable")).toBeVisible();
+  await expect(page.getByRole("button", { name: /architecture.*current/i })).toBeVisible();
   await page.screenshot({ path: `${proofDir}/v2-vanished-selection-${testInfo.project.name}.png` });
 });
 
@@ -246,7 +228,7 @@ test("step panels show traversal pending instead of successful emptiness", async
   await expect(page.getByRole("heading", { name: "Activity · architecture" })).toBeVisible();
 });
 
-test("workflow renders legacy descriptors without occurrence or content authority", async ({
+test("workflow renders durable artifact descriptors with content authority", async ({
   page,
 }, testInfo) => {
   await mockDashboard(page);
@@ -259,11 +241,12 @@ test("workflow renders legacy descriptors without occurrence or content authorit
         complete: true,
         items: [
           {
+            artifactRef: "artifact_ref_evidence_01",
             declaredContentType: "text/plain",
             effectiveContentType: "text/plain",
-            id: "legacy-evidence.txt",
+            id: "evidence.txt",
             mimeMismatch: false,
-            previewState: "legacy_unavailable",
+            previewState: "previewable",
             producerStepId: stepId,
           },
         ],
@@ -276,10 +259,9 @@ test("workflow renders legacy descriptors without occurrence or content authorit
   });
   await page.goto("/");
   await page.locator(".run-card").first().click();
-  await expect(page.getByText("legacy-evidence.txt")).toBeVisible();
-  await expect(page.getByText(/content unavailable/u)).toBeVisible();
-  await expect(page.getByText(/provenance unavailable/u)).toBeVisible();
-  await page.screenshot({ path: `${proofDir}/v2-legacy-artifact-${testInfo.project.name}.png` });
+  await expect(page.getByText("evidence.txt")).toBeVisible();
+  await expect(page.getByText(/content unavailable/u)).toBeHidden();
+  await page.screenshot({ path: `${proofDir}/v2-artifact-${testInfo.project.name}.png` });
 });
 
 test("artifact continuation reaches an explicit end state", async ({ page }, testInfo) => {
@@ -288,16 +270,13 @@ test("artifact continuation reaches an explicit end state", async ({ page }, tes
   const resources = resourcesFor(run);
   await page.route("**/api/dashboard/v2/runs/*/artifacts?*", async (route) => {
     const url = new URL(route.request().url());
-    if (url.searchParams.has("stepId")) {
-      await route.fulfill({ json: resources.workflowArtifacts });
-      return;
-    }
     const cursor = url.searchParams.get("cursor");
     await route.fulfill({
       json: {
         ...resources.artifacts,
         complete: Boolean(cursor),
         items: cursor ? [resources.artifacts.items[1]] : [resources.artifacts.items[0]],
+        scope: { kind: "workflow_step", stepId: url.searchParams.get("stepId")! },
         ...(cursor ? {} : { nextCursor: "artifact_cursor_proof_01" }),
       },
     });
@@ -329,11 +308,11 @@ async function expectOverlayPlacement(dialog: Locator, project: string) {
   expect(bounds).not.toBeNull();
   expect(viewport).not.toBeNull();
   if (project === "mobile") {
-    expect(bounds!.x).toBeGreaterThanOrEqual(7);
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport!.width - 7);
-    expect(bounds!.y + bounds!.height).toBeCloseTo(viewport!.height, 0);
+    expect(bounds!.x).toBe(0);
+    expect(bounds!.width).toBeCloseTo(viewport!.width, 0);
   } else {
     expect(bounds!.x + bounds!.width).toBeCloseTo(viewport!.width, 0);
-    expect(bounds!.y).toBe(0);
+    expect(bounds!.y).toBeGreaterThanOrEqual(0);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport!.height);
   }
 }

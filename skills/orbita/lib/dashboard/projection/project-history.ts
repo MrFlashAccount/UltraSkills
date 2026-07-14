@@ -1,4 +1,4 @@
-/** Pure projection of complete bounded managed-history entries and v2 provenance facts. */
+/** Pure projection of bounded managed history using the durable runner format. */
 import {
   ActivityPageSchema,
   LogsPageSchema,
@@ -9,45 +9,60 @@ import {
 } from "../contracts/browser";
 import { exposeIdentifier, exposePublicText } from "./exposure-policy";
 
-const PEER_STATE_EVENTS = new Set(["accepted_output", "stop_reported"]);
-const PUBLIC_ACTIVITY_EVENTS = new Set([
-  "route",
-  "request",
-  "accepted_output",
-  "pointer_route",
-  "coverage_seed",
-  "stop_reported",
-  "stop_resolved",
-]);
-const MANAGED_LOG_SOURCES = new Set([
-  "workflow-runner",
-  "workflow-runner-continue",
-  "workflow-runner-write-output",
-  "workflow-runner-move-pointer",
-  "workflow-runner-report-stop",
-  "workflow-runner-resolve-stop",
-]);
+export type ManagedHistoryRequest = { action?: string; id: string };
 
 export type ManagedHistoryEntry = {
-  facts: Array<any>;
+  acceptedStepId?: string;
+  batonStepId?: string;
+  debugSummary?: string;
   markdown: string;
+  output?: string;
+  requests: Array<ManagedHistoryRequest>;
   source?: string;
   timestamp?: string;
   transition?: { from: string; to: string };
 };
 
-type TraversalOccurrenceProjection = {
-  ordinal: number;
-  peers: Array<{
-    activation: number;
-    kind: "fanout_branch" | "shard";
-    producerRequestId: string;
-    state: "pending" | "accepted" | "stopped";
-    workItem: string | number;
-  }>;
-  state: "completed";
-  stepId: string;
-};
+const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
+const DIGITS = /^\d+$/u;
+
+function identifier(value: unknown): string | undefined {
+  return typeof value === "string" && SAFE_ID.test(value)
+    ? exposeIdentifier("step_id", value)
+    : undefined;
+}
+
+function requestsFrom(markdown: string): Array<ManagedHistoryRequest> {
+  const line = /^- (?:requests|steps): (.+)$/mu.exec(markdown)?.[1];
+  if (!line) {
+    return [];
+  }
+  return line.split(/;\s*/u).flatMap((part) => {
+    const match = /^id=([^\s]+) action=([^\s]+)$/u.exec(part.trim());
+    const id = identifier(match?.[1]);
+    return id ? [{ id, ...(match?.[2] ? { action: match[2] } : {}) }] : [];
+  });
+}
+
+function debugSummaryFrom(markdown: string): string | undefined {
+  const lines = markdown.split("\n");
+  const marker = lines.indexOf("- debug-summary body:");
+  if (marker < 0) {
+    return undefined;
+  }
+  const bodyLines: Array<string> = [];
+  for (const line of lines.slice(marker + 1)) {
+    if (!line.startsWith("  ") && line.length !== 0) {
+      break;
+    }
+    bodyLines.push(line);
+  }
+  const body = bodyLines
+    .map((line) => (line.startsWith("  ") ? line.slice(2) : line))
+    .join("\n")
+    .trim();
+  return body || undefined;
+}
 
 export function parseManagedHistoryEntries(text: string): Array<ManagedHistoryEntry> {
   return text.split(/(?=^## )/gmu).flatMap((entry) => {
@@ -62,17 +77,20 @@ export function parseManagedHistoryEntries(text: string): Array<ManagedHistoryEn
       /^- (?:transition|pointer move edge): cursor=([A-Za-z0-9_.-]+) status=\S+ -> cursor=([A-Za-z0-9_.-]+) status=\S+$/mu.exec(
         markdown,
       );
-    const facts = [...markdown.matchAll(/^- orbita-v2: (\{.*\})$/gmu)].flatMap((match) => {
-      try {
-        return [JSON.parse(match[1]!)];
-      } catch {
-        return [];
-      }
-    });
+    const acceptedStepId = identifier(
+      /^- accepted output summary: step=([^\s]+) action=/mu.exec(markdown)?.[1],
+    );
+    const batonStepId = identifier(/^- baton: cursor=([^\s]+) status=/mu.exec(markdown)?.[1]);
+    const output = /^- output: (.+)$/mu.exec(markdown)?.[1]?.trim();
+    const debugSummary = debugSummaryFrom(markdown);
     return [
       {
-        facts,
         markdown,
+        requests: requestsFrom(markdown),
+        ...(acceptedStepId ? { acceptedStepId } : {}),
+        ...(batonStepId ? { batonStepId } : {}),
+        ...(debugSummary ? { debugSummary } : {}),
+        ...(output ? { output } : {}),
         ...(source ? { source } : {}),
         ...(timestamp ? { timestamp } : {}),
         ...(transitionMatch?.[1] && transitionMatch[2]
@@ -83,126 +101,140 @@ export function parseManagedHistoryEntries(text: string): Array<ManagedHistoryEn
   });
 }
 
-function occurrenceMatches(fact: any, stepId: string, ordinal: number): boolean {
-  return fact?.ownerStepId === stepId && fact?.ownerOccurrence === ordinal;
+function workflowSteps(workflowDocument: any): Array<[string, any]> {
+  const steps = workflowDocument?.steps;
+  return steps && typeof steps === "object" && !Array.isArray(steps) ? Object.entries(steps) : [];
+}
+
+/** Map durable request ids back to their existing workflow step owner. */
+export function ownerStepIdForRequest(
+  workflowDocument: any,
+  requestId: string,
+): string | undefined {
+  const safeRequest = identifier(requestId);
+  if (!safeRequest) {
+    return undefined;
+  }
+  const steps = workflowSteps(workflowDocument);
+  if (steps.some(([stepId]) => stepId === safeRequest)) {
+    return safeRequest;
+  }
+  for (const [ownerStepId, step] of steps) {
+    if (step?.kind === "fanout") {
+      for (const branchId of Object.keys(step.branches ?? {})) {
+        const prefix = `${ownerStepId}__fanout__`;
+        const suffix = `__${branchId}`;
+        const activation = safeRequest.slice(prefix.length, -suffix.length);
+        if (
+          safeRequest === branchId ||
+          (safeRequest.startsWith(prefix) &&
+            safeRequest.endsWith(suffix) &&
+            DIGITS.test(activation))
+        ) {
+          return ownerStepId;
+        }
+      }
+    }
+    if (step?.kind === "shard") {
+      const prefix = `${ownerStepId}__shard__`;
+      const [activation, index, extra] = safeRequest.slice(prefix.length).split("__");
+      if (
+        safeRequest.startsWith(prefix) &&
+        !extra &&
+        DIGITS.test(activation ?? "") &&
+        DIGITS.test(index ?? "")
+      ) {
+        return ownerStepId;
+      }
+    }
+  }
+  return undefined;
+}
+
+export function artifactProducerBelongsToStep(
+  workflowDocument: any,
+  producerStepId: string,
+  selectedStepId: string,
+): boolean {
+  if (producerStepId === selectedStepId) {
+    return true;
+  }
+  const step = workflowDocument?.steps?.[selectedStepId];
+  return step?.kind === "fanout" && Object.hasOwn(step.branches ?? {}, producerStepId);
+}
+
+function requestActivation(requestId: string):
+  | {
+      activation: number;
+      kind: "fanout_branch" | "shard";
+      workItem: string | number;
+    }
+  | undefined {
+  const fanout = /__fanout__(\d+)__(.+)$/u.exec(requestId);
+  if (fanout?.[1] && fanout[2]) {
+    return { activation: Number(fanout[1]), kind: "fanout_branch", workItem: fanout[2] };
+  }
+  const shard = /__shard__(\d+)__(\d+)$/u.exec(requestId);
+  if (shard?.[1] && shard[2]) {
+    return { activation: Number(shard[1]), kind: "shard", workItem: Number(shard[2]) };
+  }
+  return undefined;
+}
+
+function requestState(entries: Array<ManagedHistoryEntry>, requestId: string) {
+  if (entries.some((entry) => entry.acceptedStepId === requestId)) {
+    return "accepted" as const;
+  }
+  if (entries.some((entry) => entry.output === `stopped:${requestId}`)) {
+    return "stopped" as const;
+  }
+  return "pending" as const;
 }
 
 export function projectTraversalPage(input: {
-  availability: "available" | "legacy_unavailable";
   complete: boolean;
-  current?: { ordinal: number; stepId: string };
-  encodeOccurrenceRef: (stepId: string, ordinal: number) => string;
+  currentStepId?: string;
   entries: Array<ManagedHistoryEntry>;
-  isOccurrenceAvailable?: (stepId: string, ordinal: number) => boolean;
   nextCursor?: string;
   runId: string;
   truncated?: boolean;
+  workflowDocument: any;
 }): TraversalPageDTO {
-  const occurrences = new Map<string, TraversalOccurrenceProjection>();
-  const peersByRequest = new Map<string, TraversalOccurrenceProjection["peers"][number]>();
-  for (const entry of input.entries) {
-    for (const fact of entry.facts) {
-      const stepId = exposeIdentifier("step_id", fact?.ownerStepId);
-      const ordinal = fact?.ownerOccurrence;
-      if (!stepId || !Number.isInteger(ordinal) || ordinal < 1) {
-        continue;
-      }
-      if (input.isOccurrenceAvailable && !input.isOccurrenceAvailable(stepId, ordinal)) {
-        continue;
-      }
-      const key = `${stepId}\0${ordinal}`;
-      const occurrence: TraversalOccurrenceProjection = occurrences.get(key) ?? {
-        ordinal,
-        peers: [],
-        state: "completed",
-        stepId,
-      };
-      const producerRequestId = exposeIdentifier("step_id", fact.producerRequestId);
-      if (
-        fact.event === "request" &&
-        producerRequestId &&
-        (typeof fact.workItem === "string" || Number.isInteger(fact.workItem))
-      ) {
-        const peer: TraversalOccurrenceProjection["peers"][number] = {
-          activation:
-            Number.isInteger(fact.activation) && fact.activation > 0 ? fact.activation : 1,
-          kind: typeof fact.workItem === "number" ? "shard" : "fanout_branch",
-          producerRequestId,
-          state: "pending",
-          workItem: fact.workItem,
-        };
-        occurrence.peers.push(peer);
-        peersByRequest.set(`${key}\0${producerRequestId}`, peer);
-      }
-      if (PEER_STATE_EVENTS.has(fact.event) && producerRequestId) {
-        const peerKey = `${key}\0${producerRequestId}`;
-        let peer = peersByRequest.get(peerKey);
-        if (!peer && (typeof fact.workItem === "string" || Number.isInteger(fact.workItem))) {
-          peer = {
-            activation:
-              Number.isInteger(fact.activation) && fact.activation > 0 ? fact.activation : 1,
-            kind: typeof fact.workItem === "number" ? "shard" : "fanout_branch",
-            producerRequestId,
-            state: "pending",
-            workItem: fact.workItem,
-          };
-          occurrence.peers.push(peer);
-          peersByRequest.set(peerKey, peer);
-        }
-        if (peer) {
-          peer.state = fact.event === "accepted_output" ? "accepted" : "stopped";
-        }
-      }
-      if (fact.event === "stop_resolved" && producerRequestId) {
-        const peerKey = `${key}\0${producerRequestId}`;
-        let peer = peersByRequest.get(peerKey);
-        if (!peer && (typeof fact.workItem === "string" || Number.isInteger(fact.workItem))) {
-          peer = {
-            activation:
-              Number.isInteger(fact.activation) && fact.activation > 0 ? fact.activation : 1,
-            kind: typeof fact.workItem === "number" ? "shard" : "fanout_branch",
-            producerRequestId,
-            state: "pending",
-            workItem: fact.workItem,
-          };
-          occurrence.peers.push(peer);
-          peersByRequest.set(peerKey, peer);
-        }
-        if (peer && peer.state === "stopped") {
-          peer.state = "pending";
-        }
-      }
-      occurrences.set(key, occurrence);
-    }
+  const transitions = input.entries.flatMap((entry) =>
+    entry.transition ? [entry.transition] : [],
+  );
+  const stepIds = new Set<string>();
+  for (const transition of transitions) {
+    stepIds.add(transition.from);
+    stepIds.add(transition.to);
   }
-  const items = [...occurrences.values()]
-    .slice(-100)
-    .reverse()
-    .map((item) => ({
-      ...item,
-      peers: item.peers.toSorted(
-        (left, right) =>
-          left.activation - right.activation ||
-          (left.kind === "shard" && right.kind === "shard"
-            ? Number(left.workItem) - Number(right.workItem)
-            : 0),
-      ),
-      state:
-        input.current?.stepId === item.stepId && input.current.ordinal === item.ordinal
-          ? ("current" as const)
-          : ("completed" as const),
-      occurrenceRef: input.encodeOccurrenceRef(item.stepId, item.ordinal),
-    }));
-  const transitions = input.entries.flatMap((entry) => {
-    const routed = entry.facts.find(
-      (fact) => fact?.event === "route" && fact?.fromOwnerStepId && fact?.ownerStepId,
-    );
-    const from = exposeIdentifier("step_id", routed?.fromOwnerStepId ?? entry.transition?.from);
-    const to = exposeIdentifier("step_id", routed?.ownerStepId ?? entry.transition?.to);
-    return from && to ? [{ from, to }] : [];
+  if (input.currentStepId) {
+    stepIds.add(input.currentStepId);
+  }
+  const items = [...stepIds].slice(-100).map((stepId) => {
+    const peers = [];
+    for (const entry of input.entries) {
+      for (const request of entry.requests) {
+        if (ownerStepIdForRequest(input.workflowDocument, request.id) !== stepId) {
+          continue;
+        }
+        const activation = requestActivation(request.id);
+        if (activation) {
+          peers.push({
+            ...activation,
+            producerRequestId: request.id,
+            state: requestState(input.entries, request.id),
+          });
+        }
+      }
+    }
+    return {
+      peers,
+      state: stepId === input.currentStepId ? ("current" as const) : ("completed" as const),
+      stepId,
+    };
   });
   return TraversalPageSchema.parse({
-    availability: input.availability,
     complete: input.complete,
     items,
     ...(input.nextCursor ? { nextCursor: input.nextCursor } : {}),
@@ -213,60 +245,80 @@ export function projectTraversalPage(input: {
   });
 }
 
+function occurredAt(entry: ManagedHistoryEntry): string | undefined {
+  return entry.timestamp && Number.isFinite(Date.parse(entry.timestamp))
+    ? new Date(entry.timestamp).toISOString()
+    : undefined;
+}
+
 export function projectActivityPage(input: {
   complete: boolean;
   entries: Array<ManagedHistoryEntry>;
   nextCursor?: string;
-  occurrenceRef: string;
-  ordinal: number;
   runId: string;
   stepId: string;
   truncated?: boolean;
+  workflowDocument: any;
 }): ActivityPageDTO {
   const items = input.entries
-    .flatMap((entry) =>
-      entry.facts.flatMap((fact) => {
-        if (!occurrenceMatches(fact, input.stepId, input.ordinal)) {
-          return [];
+    .flatMap((entry) => {
+      const events: Array<Record<string, unknown>> = [];
+      if (entry.transition?.to === input.stepId) {
+        events.push({
+          event: `entered from ${entry.transition.from}`,
+          source: "route",
+          state: "completed",
+        });
+      } else if (entry.transition?.from === input.stepId) {
+        events.push({
+          event: `continued to ${entry.transition.to}`,
+          source: "route",
+          state: "completed",
+        });
+      }
+      for (const request of entry.requests) {
+        if (ownerStepIdForRequest(input.workflowDocument, request.id) === input.stepId) {
+          events.push({
+            event: request.action ? request.action.replaceAll("_", " ") : "request",
+            producerRequestId: request.id,
+            source: "request",
+            state: requestState(input.entries, request.id),
+          });
         }
-        const source = PUBLIC_ACTIVITY_EVENTS.has(fact.event) ? fact.event : undefined;
-        const event = exposePublicText("activity_label", source?.replaceAll("_", " "));
-        if (!source || !event) {
-          return [];
-        }
-        return [
-          {
-            event,
-            ...(entry.timestamp && Number.isFinite(Date.parse(entry.timestamp))
-              ? { occurredAt: new Date(entry.timestamp).toISOString() }
-              : {}),
-            ...(exposeIdentifier("step_id", fact.producerRequestId)
-              ? { producerRequestId: fact.producerRequestId }
-              : {}),
-            source,
-            ...(["accepted_output", "stop_resolved"].includes(source)
-              ? {
-                  state:
-                    source === "accepted_output" ? ("accepted" as const) : ("pending" as const),
-                }
-              : source === "stop_reported"
-                ? { state: "stopped" as const }
-                : source === "route"
-                  ? { state: "completed" as const }
-                  : {}),
-          },
-        ];
-      }),
-    )
+      }
+      if (
+        entry.acceptedStepId &&
+        ownerStepIdForRequest(input.workflowDocument, entry.acceptedStepId) === input.stepId
+      ) {
+        events.push({
+          event: "accepted output",
+          producerRequestId: entry.acceptedStepId,
+          source: "accepted_output",
+          state: "accepted",
+        });
+      }
+      return events.flatMap((event) => {
+        const label = exposePublicText("activity_label", event.event);
+        return label
+          ? [
+              {
+                ...event,
+                event: label,
+                ...(occurredAt(entry) ? { occurredAt: occurredAt(entry) } : {}),
+              },
+            ]
+          : [];
+      });
+    })
     .slice(-200)
     .reverse();
   return ActivityPageSchema.parse({
     complete: input.complete,
     items,
     ...(input.nextCursor ? { nextCursor: input.nextCursor } : {}),
-    occurrenceRef: input.occurrenceRef,
     runId: input.runId,
     schemaVersion: "2",
+    stepId: input.stepId,
     truncated: input.truncated ?? !input.complete,
   });
 }
@@ -275,54 +327,40 @@ export function projectLogsPage(input: {
   complete: boolean;
   entries: Array<ManagedHistoryEntry>;
   nextCursor?: string;
-  occurrenceRef: string;
-  ordinal: number;
   runId: string;
   stepId: string;
   truncated?: boolean;
+  workflowDocument: any;
 }): LogsPageDTO {
   const entries = input.entries.flatMap((entry) => {
-    if (!entry.facts.some((fact) => occurrenceMatches(fact, input.stepId, input.ordinal))) {
+    if (
+      !entry.acceptedStepId ||
+      ownerStepIdForRequest(input.workflowDocument, entry.acceptedStepId) !== input.stepId
+    ) {
       return [];
     }
-    const source = entry.source;
-    if (!MANAGED_LOG_SOURCES.has(source ?? "")) {
+    const body = entry.debugSummary ?? `Accepted output from \`${entry.acceptedStepId}\`.`;
+    const markdown = exposePublicText("managed_markdown", body);
+    if (!markdown) {
       return [];
     }
-    const lines = entry.facts.flatMap((fact) => {
-      if (!occurrenceMatches(fact, input.stepId, input.ordinal)) {
-        return [];
-      }
-      const event = PUBLIC_ACTIVITY_EVENTS.has(fact.event)
-        ? String(fact.event).replaceAll("_", " ")
-        : undefined;
-      if (!event) {
-        return [];
-      }
-      const requestId = exposeIdentifier("step_id", fact.producerRequestId);
-      const suffix = requestId ? ` — ${requestId}` : "";
-      return [`- ${event}${suffix}`];
-    });
-    if (lines.length === 0) {
-      return [];
-    }
-    const timestamp =
-      entry.timestamp && Number.isFinite(Date.parse(entry.timestamp))
-        ? new Date(entry.timestamp).toISOString()
-        : "Managed event";
-    const markdown = exposePublicText(
-      "managed_markdown",
-      `### ${timestamp}\n\n${lines.join("\n")}`,
-    );
-    return markdown ? [{ markdown, redacted: true, source, truncated: false }] : [];
+    return [
+      {
+        markdown,
+        ...(occurredAt(entry) ? { occurredAt: occurredAt(entry) } : {}),
+        redacted: true,
+        source: "workflow-runner-write-output" as const,
+        truncated: entry.markdown.includes("[truncated:"),
+      },
+    ];
   });
   return LogsPageSchema.parse({
     complete: input.complete,
     entries,
     ...(input.nextCursor ? { nextCursor: input.nextCursor } : {}),
-    occurrenceRef: input.occurrenceRef,
     runId: input.runId,
     schemaVersion: "2",
+    stepId: input.stepId,
     truncated: input.truncated ?? !input.complete,
   });
 }

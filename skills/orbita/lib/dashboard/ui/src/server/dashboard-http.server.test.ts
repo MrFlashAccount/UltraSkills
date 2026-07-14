@@ -80,8 +80,6 @@ describe("dashboard v2 HTTP", () => {
 
   test("serves light detail without embedded history/workflow/artifacts", async () => {
     const detail = {
-      currentOccurrence: null,
-      occurrenceAvailability: "legacy_unavailable",
       run,
       schemaVersion: "2",
     };
@@ -118,34 +116,22 @@ describe("dashboard v2 HTTP", () => {
     ).toBe(400);
   });
 
-  test("requires independently bounded occurrence or workflow-step artifact scope", async () => {
+  test("requires a bounded workflow-step artifact scope", async () => {
     const calls: Array<Array<unknown>> = [];
     const model = {
       getArtifactPage: async (...args: Array<unknown>) => {
         calls.push(args);
-        const occurrenceRef = args[1] as string | undefined;
-        const stepId = args[4] as string | undefined;
+        const stepId = args[1] as string | undefined;
         return {
           complete: true,
           items: [],
           runAggregateCount: 7,
           runId: "run-1",
           schemaVersion: "2",
-          scope: occurrenceRef
-            ? { kind: "occurrence", occurrenceRef }
-            : { kind: "workflow_step", stepId },
+          scope: { kind: "workflow_step", stepId },
         };
       },
     };
-    const occurrenceRef = "occurrence_ref_0001";
-    const occurrence = await handleArtifactsRequest(
-      request(`/api/dashboard/v2/runs/run-1/artifacts?occurrenceRef=${occurrenceRef}`),
-      "run-1",
-      composition(model),
-    );
-    expect(occurrence.status).toBe(200);
-    expect((await occurrence.json()).scope).toEqual({ kind: "occurrence", occurrenceRef });
-
     const workflowStep = await handleArtifactsRequest(
       request("/api/dashboard/v2/runs/run-1/artifacts?stepId=implementation"),
       "run-1",
@@ -156,23 +142,12 @@ describe("dashboard v2 HTTP", () => {
       kind: "workflow_step",
       stepId: "implementation",
     });
-    expect(calls[1]?.[4]).toBe("implementation");
+    expect(calls[0]?.[1]).toBe("implementation");
 
     expect(
       (
         await handleArtifactsRequest(
           request("/api/dashboard/v2/runs/run-1/artifacts"),
-          "run-1",
-          composition(model),
-        )
-      ).status,
-    ).toBe(400);
-    expect(
-      (
-        await handleArtifactsRequest(
-          request(
-            `/api/dashboard/v2/runs/run-1/artifacts?occurrenceRef=${occurrenceRef}&stepId=implementation`,
-          ),
           "run-1",
           composition(model),
         )

@@ -55,32 +55,30 @@ async function fulfillRunResource(route: Route, snapshot: ReturnType<typeof buil
   ) {
     await route.fulfill({ json: resources[resource] });
   } else if (resource === "artifacts" && segments.length === 6) {
-    const requestedOccurrence = url.searchParams.get("occurrenceRef");
     const requestedStep = url.searchParams.get("stepId");
     const selectedArtifacts =
-      requestedOccurrence === "occurrence_ref_proof_00"
+      requestedStep === "research"
         ? {
             ...resources.artifacts,
             items: [
               {
                 ...resources.artifacts.items[0],
-                producerOccurrence: 1,
+                artifactRef: "artifact_ref_research",
+                id: "reasons-canvas-research.png",
                 producerStepId: "research",
               },
             ],
-            scope: { kind: "occurrence" as const, occurrenceRef: requestedOccurrence },
+            scope: { kind: "workflow_step" as const, stepId: requestedStep },
           }
         : resources.artifacts;
     await route.fulfill({
-      json: requestedOccurrence
-        ? selectedArtifacts
-        : {
-            ...resources.workflowArtifacts,
-            items: resources.workflowArtifacts.items.filter(
-              (artifact) => artifact.producerStepId === requestedStep,
-            ),
-            scope: { kind: "workflow_step" as const, stepId: requestedStep },
-          },
+      json: {
+        ...selectedArtifacts,
+        items: selectedArtifacts.items.filter(
+          (artifact) => artifact.producerStepId === requestedStep,
+        ),
+        scope: { kind: "workflow_step" as const, stepId: requestedStep },
+      },
     });
   } else if (resource === "artifacts") {
     await route.fulfill({

@@ -9,7 +9,7 @@ export const DASHBOARD_RESOURCE_LIMITS = {
   pageBytes: 65_536,
   workflowPageBytes: 262_144,
   workflowSteps: 200,
-  traversalOccurrences: 100,
+  traversalSteps: 100,
   activityEvents: 200,
   artifacts: 100,
   textBytes: 1_048_576,
@@ -95,7 +95,6 @@ const OpaqueLocatorSchema = z
   .min(16)
   .max(512)
   .regex(/^[A-Za-z0-9_-]+$/u);
-export const OccurrenceRefSchema = OpaqueLocatorSchema.brand("OccurrenceRef");
 export const ArtifactRefSchema = OpaqueLocatorSchema.brand("ArtifactRef");
 export const PageCursorSchema = OpaqueLocatorSchema.brand("PageCursor");
 
@@ -150,20 +149,8 @@ export const SnapshotEnvelopeSchema = z
   })
   .strict();
 
-export const OccurrenceAvailabilitySchema = z.enum(["available", "legacy_unavailable"]);
-export const OccurrenceSummarySchema = z
-  .object({
-    occurrenceRef: OccurrenceRefSchema,
-    ordinal: z.number().int().min(1),
-    state: z.enum(["current", "completed"]),
-    stepId: StepIdSchema,
-  })
-  .strict();
-
 export const RunLightDetailSchema = z
   .object({
-    currentOccurrence: OccurrenceSummarySchema.nullable(),
-    occurrenceAvailability: OccurrenceAvailabilitySchema,
     run: RunSummarySchema,
     schemaVersion: z.literal(DASHBOARD_SCHEMA_VERSION),
     summary: PublicDisplayTextSchema.optional(),
@@ -210,9 +197,13 @@ export const ActivationPeerSchema = z
   })
   .strict();
 
-export const TraversalOccurrenceSchema = OccurrenceSummarySchema.extend({
-  peers: z.array(ActivationPeerSchema).max(1000),
-}).strict();
+export const TraversalStepSchema = z
+  .object({
+    peers: z.array(ActivationPeerSchema).max(1000),
+    state: z.enum(["current", "completed"]),
+    stepId: StepIdSchema,
+  })
+  .strict();
 export const TraversalStepTransitionSchema = z
   .object({
     from: StepIdSchema,
@@ -221,15 +212,14 @@ export const TraversalStepTransitionSchema = z
   .strict();
 export const TraversalPageSchema = z
   .object({
-    availability: OccurrenceAvailabilitySchema,
     complete: z.boolean(),
-    items: z.array(TraversalOccurrenceSchema).max(DASHBOARD_RESOURCE_LIMITS.traversalOccurrences),
+    items: z.array(TraversalStepSchema).max(DASHBOARD_RESOURCE_LIMITS.traversalSteps),
     nextCursor: PageCursorSchema.optional(),
     runId: RunIdSchema,
     schemaVersion: z.literal(DASHBOARD_SCHEMA_VERSION),
     transitions: z
       .array(TraversalStepTransitionSchema)
-      .max(DASHBOARD_RESOURCE_LIMITS.traversalOccurrences)
+      .max(DASHBOARD_RESOURCE_LIMITS.traversalSteps)
       .optional(),
     truncated: z.boolean().optional(),
   })
@@ -257,9 +247,9 @@ export const ActivityPageSchema = z
     complete: z.boolean(),
     items: z.array(ActivityEventSchema).max(DASHBOARD_RESOURCE_LIMITS.activityEvents),
     nextCursor: PageCursorSchema.optional(),
-    occurrenceRef: OccurrenceRefSchema,
     runId: RunIdSchema,
     schemaVersion: z.literal(DASHBOARD_SCHEMA_VERSION),
+    stepId: StepIdSchema,
     truncated: z.boolean().optional(),
   })
   .strict();
@@ -267,6 +257,7 @@ export const ActivityPageSchema = z
 export const ManagedLogEntrySchema = z
   .object({
     markdown: PublicDisplayTextSchema,
+    occurredAt: IsoDateSchema.optional(),
     redacted: z.boolean().optional(),
     source: z.enum([
       "workflow-runner",
@@ -284,9 +275,9 @@ export const LogsPageSchema = z
     complete: z.boolean(),
     entries: z.array(ManagedLogEntrySchema).max(200),
     nextCursor: PageCursorSchema.optional(),
-    occurrenceRef: OccurrenceRefSchema,
     runId: RunIdSchema,
     schemaVersion: z.literal(DASHBOARD_SCHEMA_VERSION),
+    stepId: StepIdSchema,
     truncated: z.boolean().optional(),
   })
   .strict();
@@ -296,7 +287,6 @@ export const PreviewStateSchema = z.enum([
   "download_only",
   "unsupported",
   "oversized",
-  "legacy_unavailable",
 ]);
 export const ArtifactDescriptorSchema = z
   .object({
@@ -314,8 +304,6 @@ export const ArtifactDescriptorSchema = z
     id: ArtifactIdSchema,
     mimeMismatch: z.boolean(),
     previewState: PreviewStateSchema,
-    producerOccurrence: z.number().int().min(1).optional(),
-    producerRequestId: SafeIdentifierSchema.optional(),
     producerStepId: StepIdSchema,
     summary: PublicDisplayTextSchema.optional(),
   })
@@ -325,10 +313,7 @@ export const ArtifactPageSchema = z
     complete: z.boolean(),
     items: z.array(ArtifactDescriptorSchema).max(DASHBOARD_RESOURCE_LIMITS.artifacts),
     nextCursor: PageCursorSchema.optional(),
-    scope: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("occurrence"), occurrenceRef: OccurrenceRefSchema }).strict(),
-      z.object({ kind: z.literal("workflow_step"), stepId: StepIdSchema }).strict(),
-    ]),
+    scope: z.object({ kind: z.literal("workflow_step"), stepId: StepIdSchema }).strict(),
     runAggregateCount: z.number().int().min(0),
     runId: RunIdSchema,
     schemaVersion: z.literal(DASHBOARD_SCHEMA_VERSION),

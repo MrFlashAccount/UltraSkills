@@ -55,9 +55,6 @@
             "minimum": 0
           }
         },
-        "$occurrenceProvenance": {
-          "$ref": "#/$defs/occurrenceProvenance"
-        },
         "shards": {
           "description": "Runner-owned shard activations keyed by their parent workflow step id. Resolved values are snapshotted once and accepted outputs are retained only as bounded references.",
           "type": "object",
@@ -203,93 +200,8 @@
           "minLength": 1,
           "description": "Producer step id used only for aggregate identity; not part of the artifact metadata contract."
         },
-        "producerOccurrence": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "producerRequestId": {
-          "type": "string",
-          "minLength": 1
-        },
-        "acceptedFileStamp": {
-          "$ref": "#/$defs/artifactFileStamp"
-        },
         "artifact": {
           "$ref": "#/$defs/artifact"
-        }
-      },
-      "additionalProperties": false
-    },
-    "artifactFileStamp": {
-      "type": "object",
-      "required": ["device", "inode", "size", "mtimeMs", "ctimeMs"],
-      "properties": {
-        "device": { "type": "number", "minimum": 0 },
-        "inode": { "type": "number", "minimum": 0 },
-        "size": { "type": "number", "minimum": 0 },
-        "mtimeMs": { "type": "number", "minimum": 0 },
-        "ctimeMs": { "type": "number", "minimum": 0 }
-      },
-      "additionalProperties": false
-    },
-    "occurrenceProvenance": {
-      "description": "Runner-owned forward-only occurrence counters and transient accepted artifact provenance. Legacy runs are seeded once without rewriting history.",
-      "type": "object",
-      "required": ["version", "counters", "current", "coverage", "pendingArtifactAcceptances"],
-      "properties": {
-        "version": { "const": 2 },
-        "counters": {
-          "type": "object",
-          "additionalProperties": { "type": "integer", "minimum": 1 }
-        },
-        "current": {
-          "type": "object",
-          "required": ["ownerStepId", "occurrence"],
-          "properties": {
-            "ownerStepId": { "type": "string", "minLength": 1 },
-            "occurrence": { "type": "integer", "minimum": 1 }
-          },
-          "additionalProperties": false
-        },
-        "coverage": {
-          "type": "object",
-          "required": ["mode", "historyBytes"],
-          "properties": {
-            "mode": { "enum": ["complete", "forward_only"] },
-            "historyBytes": { "type": "integer", "minimum": 0 },
-            "currentAvailable": { "type": "boolean" },
-            "firstAvailableByStep": {
-              "description": "First trustworthy forward-written occurrence per owner step. Older seeded ordinals remain unavailable permanently.",
-              "type": "object",
-              "additionalProperties": { "type": "integer", "minimum": 1 }
-            }
-          },
-          "additionalProperties": false
-        },
-        "pendingArtifactAcceptances": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "required": ["ownerStepId", "ownerOccurrence", "producerRequestId", "artifacts"],
-            "properties": {
-              "ownerStepId": { "type": "string", "minLength": 1 },
-              "ownerOccurrence": { "type": "integer", "minimum": 1 },
-              "producerRequestId": { "type": "string", "minLength": 1 },
-              "artifacts": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "required": ["id", "acceptedFileStamp"],
-                  "properties": {
-                    "id": { "type": "string", "minLength": 1 },
-                    "acceptedFileStamp": { "$ref": "#/$defs/artifactFileStamp" }
-                  },
-                  "additionalProperties": false
-                }
-              }
-            },
-            "additionalProperties": false
-          }
         }
       },
       "additionalProperties": false

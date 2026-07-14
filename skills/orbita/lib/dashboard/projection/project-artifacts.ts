@@ -1,4 +1,4 @@
-/** Pure occurrence/run-scoped aggregate artifact descriptor projection. */
+/** Pure workflow-step-scoped artifact descriptor projection. */
 import { ArtifactPageSchema, type ArtifactPageDTO } from "../contracts/browser";
 import { exposeIdentifier, exposePublicText } from "./exposure-policy";
 
@@ -36,52 +36,28 @@ export function artifactPreviewState(
 export function projectArtifactPage(input: {
   artifacts: Array<any>;
   complete: boolean;
-  effectiveTypes: Map<string, string>;
   encodeArtifactRef: (entry: any) => string;
-  isOccurrenceAvailable?: (stepId: string, occurrence: number) => boolean;
+  files: Map<string, { contentType: string; size: number }>;
   nextCursor?: string;
   runAggregateCount: number;
   runId: string;
-  scope: { kind: "occurrence"; occurrenceRef: string } | { kind: "workflow_step"; stepId: string };
+  stepId: string;
 }): ArtifactPageDTO {
   const items: Array<Record<string, unknown>> = input.artifacts.flatMap(
     (entry): Array<Record<string, unknown>> => {
       const id = exposeIdentifier("artifact_id", entry?.artifact?.id);
       const producerStepId = exposeIdentifier("step_id", entry?.producerStepId);
-      const producerRequestId = exposeIdentifier("step_id", entry?.producerRequestId);
-      const producerOccurrence = entry?.producerOccurrence;
       const declaredContentType = entry?.artifact?.content_type;
-      const hasV2Provenance =
-        producerRequestId &&
-        Number.isInteger(producerOccurrence) &&
-        producerOccurrence >= 1 &&
-        entry?.acceptedFileStamp &&
-        (input.isOccurrenceAvailable?.(producerStepId ?? "", producerOccurrence) ?? true);
       if (!id || !producerStepId || typeof declaredContentType !== "string") {
         return [];
       }
-      if (!hasV2Provenance) {
-        const summary = exposePublicText("artifact_summary", entry?.artifact?.summary);
-        return [
-          {
-            declaredContentType,
-            effectiveContentType: "application/octet-stream",
-            id,
-            mimeMismatch: true,
-            previewState: "legacy_unavailable" as const,
-            producerStepId,
-            ...(summary ? { summary } : {}),
-          },
-        ];
-      }
       const artifactRef = input.encodeArtifactRef(entry);
-      const effectiveContentType = input.effectiveTypes.get(artifactRef);
-      if (!effectiveContentType || !Number.isFinite(entry.acceptedFileStamp.size)) {
-        return [];
-      }
+      const file = input.files.get(artifactRef);
+      const effectiveContentType = file?.contentType ?? "application/octet-stream";
       const mimeMismatch = declaredContentType.toLowerCase() !== effectiveContentType.toLowerCase();
-      const size = entry?.acceptedFileStamp?.size;
-      const previewState = artifactPreviewState(declaredContentType, effectiveContentType, size);
+      const previewState = file
+        ? artifactPreviewState(declaredContentType, effectiveContentType, file.size)
+        : ("unsupported" as const);
       const summary = exposePublicText("artifact_summary", entry.artifact.summary);
       return [
         {
@@ -91,8 +67,6 @@ export function projectArtifactPage(input: {
           id,
           mimeMismatch,
           previewState,
-          producerOccurrence: Number(producerOccurrence),
-          producerRequestId: String(producerRequestId),
           producerStepId,
           ...(summary ? { summary } : {}),
         },
@@ -106,6 +80,6 @@ export function projectArtifactPage(input: {
     runAggregateCount: input.runAggregateCount,
     runId: input.runId,
     schemaVersion: "2",
-    scope: input.scope,
+    scope: { kind: "workflow_step", stepId: input.stepId },
   });
 }

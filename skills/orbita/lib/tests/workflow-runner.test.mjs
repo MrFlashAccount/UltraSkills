@@ -254,16 +254,7 @@ test('runner: approval host instruction lists prompt input artifacts as attachme
   writeJson(workflowPath, approvalWorkflow);
 
   await expectRunner(['next', '--run-id', runId, '--workflow', workflowPath], 'next before approval inline');
-  const artifactPath = path.join(
-    runDir,
-    'prepare',
-    'occurrences',
-    '1',
-    'requests',
-    'prepare',
-    'artifacts',
-    'reasons-canvas-research.md',
-  );
+  const artifactPath = path.join(runDir, 'prepare', 'artifacts', 'reasons-canvas-research.md');
   mkdirSync(path.dirname(artifactPath), { recursive: true });
   writeFileSync(artifactPath, '# REASONS Canvas\n\nFull Canvas body for approval.\n');
   const prepareOutputPath = path.join(tempDir, 'approval-inline-instructions-output.json');
@@ -291,8 +282,8 @@ test('runner: approval host instruction lists prompt input artifacts as attachme
   assert.equal(response.orchestratorInstruction.match(writerPattern)?.length, 1);
   assert.match(response.orchestratorInstruction, /<paste strict JSON here>/);
   assert.match(response.orchestratorInstruction, /## Approval attachments/);
-  assert.match(response.orchestratorInstruction, /\[reasons-canvas-research\]\(<.*prepare\/occurrences\/1\/requests\/prepare\/artifacts\/reasons-canvas-research\.md>\)/);
-  assert.match(response.orchestratorInstruction, /prepare\/occurrences\/1\/requests\/prepare\/artifacts\/reasons-canvas-research\.md/);
+  assert.match(response.orchestratorInstruction, /\[reasons-canvas-research\]\(<.*prepare\/artifacts\/reasons-canvas-research\.md>\)/);
+  assert.match(response.orchestratorInstruction, /prepare\/artifacts\/reasons-canvas-research\.md/);
   assert.match(response.orchestratorInstruction, /## Decision required/);
   assert.match(response.orchestratorInstruction, /\{ "approval": "approved" \}/);
   assert.doesNotMatch(response.orchestratorInstruction, /output schema|resolvedOutputSchema|compiled prompt/i);

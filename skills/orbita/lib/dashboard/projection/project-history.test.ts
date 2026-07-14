@@ -1,162 +1,120 @@
 import { describe, expect, test } from "bun:test";
 import {
   parseManagedHistoryEntries,
+  projectActivityPage,
   projectLogsPage,
   projectTraversalPage,
 } from "./project-history";
 
+const workflow = {
+  steps: {
+    research: { kind: "worker" },
+    implementation: {
+      kind: "fanout",
+      branches: { backend: {}, frontend: {} },
+    },
+    review: { kind: "worker" },
+  },
+};
+
 describe("managed history public projection", () => {
-  test("uses a positive structured log projection instead of arbitrary debug-summary markdown", () => {
+  test("projects the existing accepted-output debug summary as safe Markdown", () => {
     const entries = parseManagedHistoryEntries(`## 2026-07-14T00:00:00.000Z
 - source: workflow-runner-write-output
-- orbita-v2: {"event":"accepted_output","ownerStepId":"implementation","ownerOccurrence":1,"producerRequestId":"implementation"}
+- baton: cursor=implementation status=running
+- output: accepted:implementation
+- accepted output summary: step=implementation action=run_worker
 - debug-summary body:
-  SECRET_PROMPT lease-token-local-path
+  # Safe summary
+  API_SECRET=hidden
+  - verified tests
 `);
     const page = projectLogsPage({
       complete: true,
       entries,
-      occurrenceRef: "opaque_occurrence_ref",
-      ordinal: 1,
       runId: "run-a",
       stepId: "implementation",
+      workflowDocument: workflow,
     });
     expect(page.entries).toHaveLength(1);
-    expect(page.entries[0]?.redacted).toBe(true);
-    expect(page.entries[0]?.markdown.value).toContain("accepted output");
-    expect(page.entries[0]?.markdown.value).not.toMatch(/SECRET_PROMPT|lease-token|local-path/u);
+    expect(page.entries[0]?.markdown.value).toContain("Safe summary");
+    expect(page.entries[0]?.markdown.value).toContain("verified tests");
+    expect(page.entries[0]?.markdown.value).not.toContain("API_SECRET");
   });
 
-  test("reconstructs numeric shard order and stop lifecycle deterministically", () => {
+  test("reconstructs the exact durable path from transition entries", () => {
     const entries = parseManagedHistoryEntries(`## 2026-07-14T00:00:00.000Z
-- source: workflow-runner
-- orbita-v2: {"event":"request","ownerStepId":"owner","ownerOccurrence":1,"producerRequestId":"shard_2","activation":1,"workItem":2}
-- orbita-v2: {"event":"request","ownerStepId":"owner","ownerOccurrence":1,"producerRequestId":"shard_0","activation":1,"workItem":0}
-- orbita-v2: {"event":"stop_reported","ownerStepId":"owner","ownerOccurrence":1,"producerRequestId":"shard_0","activation":1,"workItem":0}
-- orbita-v2: {"event":"accepted_output","ownerStepId":"owner","ownerOccurrence":1,"producerRequestId":"shard_2","activation":1,"workItem":2}
+- source: workflow-runner-continue
+- transition: cursor=research status=running -> cursor=implementation status=running
+
+## 2026-07-14T00:00:01.000Z
+- source: workflow-runner-continue
+- transition: cursor=implementation status=running -> cursor=review status=running
 `);
     const page = projectTraversalPage({
-      availability: "available",
       complete: true,
-      encodeOccurrenceRef: () => "opaque_occurrence_ref",
+      currentStepId: "review",
       entries,
       runId: "run-a",
+      workflowDocument: workflow,
     });
-    expect(page.items[0]?.peers.map((peer) => [peer.workItem, peer.state])).toEqual([
-      [0, "stopped"],
-      [2, "accepted"],
+    expect(page.items.map(({ stepId, state }) => [stepId, state])).toEqual([
+      ["research", "completed"],
+      ["implementation", "completed"],
+      ["review", "current"],
+    ]);
+    expect(page.transitions).toEqual([
+      { from: "research", to: "implementation" },
+      { from: "implementation", to: "review" },
     ]);
   });
 
-  test("reconstructs repeated activations and split stop resolution without page-local state", () => {
+  test("groups existing fanout request ids and accepted outputs under their owner step", () => {
     const entries = parseManagedHistoryEntries(`## 2026-07-14T00:00:00.000Z
 - source: workflow-runner
-- orbita-v2: {"event":"request","ownerStepId":"owner","ownerOccurrence":3,"producerRequestId":"owner__fanout__1__branch_a","activation":1,"workItem":"branch_a"}
+- baton: cursor=implementation status=running
+- requests: id=implementation__fanout__1__backend action=run_worker; id=implementation__fanout__1__frontend action=run_worker
 
 ## 2026-07-14T00:00:01.000Z
-- source: workflow-runner-report-stop
-- orbita-v2: {"event":"stop_reported","ownerStepId":"owner","ownerOccurrence":3,"producerRequestId":"owner__fanout__1__branch_a","activation":1,"workItem":"branch_a"}
-
-## 2026-07-14T00:00:02.000Z
-- source: workflow-runner-resolve-stop
-- orbita-v2: {"event":"stop_resolved","ownerStepId":"owner","ownerOccurrence":3,"producerRequestId":"owner__fanout__1__branch_a","activation":1,"workItem":"branch_a"}
-
-## 2026-07-14T00:00:03.000Z
-- source: workflow-runner
-- orbita-v2: {"event":"request","ownerStepId":"owner","ownerOccurrence":3,"producerRequestId":"owner__fanout__2__branch_a","activation":2,"workItem":"branch_a"}
-
-## 2026-07-14T00:00:04.000Z
 - source: workflow-runner-write-output
-- orbita-v2: {"event":"accepted_output","ownerStepId":"owner","ownerOccurrence":3,"producerRequestId":"owner__fanout__1__branch_a","activation":1,"workItem":"branch_a"}
+- baton: cursor=implementation status=running
+- output: accepted:implementation__fanout__1__backend
+- accepted output summary: step=implementation__fanout__1__backend action=run_worker
 `);
-    const page = projectTraversalPage({
-      availability: "available",
-      complete: false,
-      encodeOccurrenceRef: () => "opaque_occurrence_ref",
+    const traversal = projectTraversalPage({
+      complete: true,
+      currentStepId: "implementation",
       entries,
-      nextCursor: "opaque_cursor_value",
       runId: "run-a",
-      truncated: true,
+      workflowDocument: workflow,
     });
-    expect(page.items[0]?.peers).toEqual([
+    expect(traversal.items[0]?.peers).toEqual([
       {
         activation: 1,
         kind: "fanout_branch",
-        producerRequestId: "owner__fanout__1__branch_a",
+        producerRequestId: "implementation__fanout__1__backend",
         state: "accepted",
-        workItem: "branch_a",
+        workItem: "backend",
       },
       {
-        activation: 2,
+        activation: 1,
         kind: "fanout_branch",
-        producerRequestId: "owner__fanout__2__branch_a",
+        producerRequestId: "implementation__fanout__1__frontend",
         state: "pending",
-        workItem: "branch_a",
+        workItem: "frontend",
       },
     ]);
-    expect(page.complete).toBe(false);
-    expect(page.truncated).toBe(true);
-  });
-
-  test("keeps the seeded legacy occurrence unavailable after later covered routes", () => {
-    const entries = parseManagedHistoryEntries(`## 2026-07-14T00:00:00.000Z
-- source: workflow-runner-provenance-seed
-- orbita-v2: {"event":"coverage_seed","ownerStepId":"implementation","ownerOccurrence":1,"historyBytes":4096}
-
-## 2026-07-14T00:00:01.000Z
-- source: workflow-runner-continue
-- orbita-v2: {"event":"route","fromOwnerStepId":"implementation","fromOccurrence":1,"ownerStepId":"review","ownerOccurrence":1}
-
-## 2026-07-14T00:00:02.000Z
-- source: workflow-runner-continue
-- orbita-v2: {"event":"route","fromOwnerStepId":"review","fromOccurrence":1,"ownerStepId":"implementation","ownerOccurrence":2}
-`);
-    const page = projectTraversalPage({
-      availability: "legacy_unavailable",
+    const activity = projectActivityPage({
       complete: true,
-      current: { stepId: "implementation", ordinal: 2 },
-      encodeOccurrenceRef: (stepId, ordinal) => `${stepId}_${ordinal}_covered_ref`,
-      entries,
-      isOccurrenceAvailable: (stepId, ordinal) =>
-        (stepId === "review" && ordinal >= 1) || (stepId === "implementation" && ordinal >= 2),
-      runId: "run-a",
-    });
-
-    expect(page.availability).toBe("legacy_unavailable");
-    expect(page.items.map(({ stepId, ordinal }) => [stepId, ordinal])).toEqual([
-      ["implementation", 2],
-      ["review", 1],
-    ]);
-    expect(page.items.some((item) => item.stepId === "implementation" && item.ordinal === 1)).toBe(
-      false,
-    );
-    expect(page.transitions).toEqual([
-      { from: "implementation", to: "review" },
-      { from: "review", to: "implementation" },
-    ]);
-  });
-
-  test("projects legacy transition history without inventing occurrence identity", () => {
-    const entries = parseManagedHistoryEntries(`## 2026-07-14T00:00:00.000Z
-- source: workflow-runner-continue
-- transition: cursor=research status=running -> cursor=architecture status=running
-
-## 2026-07-14T00:00:01.000Z
-- source: workflow-runner-pointer
-- pointer move edge: cursor=architecture status=running -> cursor=research status=running
-`);
-    const page = projectTraversalPage({
-      availability: "legacy_unavailable",
-      complete: true,
-      encodeOccurrenceRef: () => "unused_occurrence_ref",
       entries,
       runId: "run-a",
+      stepId: "implementation",
+      workflowDocument: workflow,
     });
-
-    expect(page.items).toEqual([]);
-    expect(page.transitions).toEqual([
-      { from: "research", to: "architecture" },
-      { from: "architecture", to: "research" },
+    expect(activity.items.map((item) => item.source)).toEqual([
+      "accepted_output",
+      "request",
+      "request",
     ]);
   });
 });

@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { appendFile, mkdir, mkdtemp, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -11,38 +11,16 @@ import {
 const roots: Array<string> = [];
 afterAll(async () => Promise.all(roots.map((root) => rm(root, { force: true, recursive: true }))));
 
-function stamp(value: Awaited<ReturnType<typeof stat>>) {
-  return {
-    device: value.dev,
-    inode: value.ino,
-    size: value.size,
-    mtimeMs: value.mtimeMs,
-    ctimeMs: value.ctimeMs,
-  };
-}
-
 async function artifactFixture(bytes: string, contentType = "text/html") {
   const runDir = await mkdtemp(join(tmpdir(), "orbita-artifact-content-"));
   roots.push(runDir);
-  const directory = join(
-    runDir,
-    "implementation",
-    "occurrences",
-    "1",
-    "requests",
-    "implementation",
-    "artifacts",
-  );
+  const directory = join(runDir, "implementation", "artifacts");
   await mkdir(directory, { recursive: true });
   const pathname = join(directory, "artifact.html");
   await writeFile(pathname, bytes);
-  const accepted = await stat(pathname);
   return {
     entry: {
       producerStepId: "implementation",
-      producerOccurrence: 1,
-      producerRequestId: "implementation",
-      acceptedFileStamp: stamp(accepted),
       artifact: { id: "artifact", content_type: contentType, path: pathname },
     },
     pathname,
@@ -63,9 +41,11 @@ describe("canonical artifact content authority", () => {
     );
   });
 
-  test("reopens the canonical accepted file and rejects replacement before streaming", async () => {
+  test("reopens the canonical durable artifact path without persisted side metadata", async () => {
     const fixture = await artifactFixture("<!doctype html><title>safe</title>");
-    expect(await probeArtifactEntry(fixture.paths, fixture.entry)).toBe("text/html");
+    expect(await probeArtifactEntry(fixture.paths, fixture.entry)).toMatchObject({
+      contentType: "text/html",
+    });
     const handle = await verifiedArtifactHandle(fixture.paths, fixture.entry);
     expect(handle.previewEligible).toBe(true);
     await handle.close();
@@ -73,9 +53,9 @@ describe("canonical artifact content authority", () => {
     const replacement = `${fixture.pathname}.replacement`;
     await writeFile(replacement, "<!doctype html><title>evil</title>");
     await rename(replacement, fixture.pathname);
-    await expect(probeArtifactEntry(fixture.paths, fixture.entry)).rejects.toThrow(
-      "content_unavailable",
-    );
+    expect(await probeArtifactEntry(fixture.paths, fixture.entry)).toMatchObject({
+      contentType: "text/html",
+    });
   });
 
   test("validates bounded JSON structure beyond the MIME probe window", async () => {
@@ -83,7 +63,9 @@ describe("canonical artifact content authority", () => {
       JSON.stringify({ payload: "x".repeat(16_384) }),
       "application/json",
     );
-    expect(await probeArtifactEntry(fixture.paths, fixture.entry)).toBe("application/json");
+    expect(await probeArtifactEntry(fixture.paths, fixture.entry)).toMatchObject({
+      contentType: "application/json",
+    });
   });
 
   test("rejects an intermediate parent replaced by a symlink", async () => {

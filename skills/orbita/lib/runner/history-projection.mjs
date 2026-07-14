@@ -127,20 +127,10 @@ async function debugSummaryBodyLines(pathname, { enabled, leaseToken }) {
   return lines;
 }
 
-export async function acceptedOutputHistoryDetails({ stepId, request, output, debugSummaryPath, env = process.env, leaseToken, occurrence } = {}) {
+export async function acceptedOutputHistoryDetails({ stepId, request, output, debugSummaryPath, env = process.env, leaseToken } = {}) {
   const options = { leaseToken };
   const action = compactValue(request?.action, 'unknown', options);
   const details = [`- accepted output summary: step=${compactValue(stepId, 'unknown', options)} action=${action}`];
-  if (occurrence) {
-    details.push(`- orbita-v2: ${JSON.stringify({
-      event: 'accepted_output',
-      ownerStepId: occurrence.ownerStepId,
-      ownerOccurrence: occurrence.occurrence,
-      producerRequestId: stepId,
-      activation: request?.fanout?.activation ?? request?.shard?.activation,
-      workItem: request?.fanout?.branch_id ?? request?.shard?.index,
-    })}`);
-  }
   const object = outputObject(output);
   if (!object) {
     details.push(`- accepted output value: ${compactValue(output, 'n/a', options)}`);
@@ -161,38 +151,12 @@ export function transitionHistoryDetails({ before, after, output, requests } = {
   const details = [
     `- transition: cursor=${compactValue(before?.cursor, 'unknown')} status=${compactValue(before?.status, 'unknown')} -> cursor=${compactValue(after?.cursor, 'unknown')} status=${compactValue(after?.status, 'unknown')}`,
   ];
-  const beforeOccurrence = before?.state?.$occurrenceProvenance?.current;
-  const afterOccurrence = after?.state?.$occurrenceProvenance?.current;
-  if (
-    beforeOccurrence &&
-    afterOccurrence &&
-    (beforeOccurrence.ownerStepId !== afterOccurrence.ownerStepId || beforeOccurrence.occurrence !== afterOccurrence.occurrence)
-  ) {
-    details.push(`- orbita-v2: ${JSON.stringify({
-      event: 'route',
-      fromOwnerStepId: beforeOccurrence.ownerStepId,
-      fromOccurrence: beforeOccurrence.occurrence,
-      ownerStepId: afterOccurrence.ownerStepId,
-      ownerOccurrence: afterOccurrence.occurrence,
-    })}`);
-  }
   if (output) details.push(`- applied output: ${compactValue(output)}`);
   if (after?.status === 'done') details.push(`- terminal: status=${after.status} cursor=${compactValue(after.cursor, 'unknown')}`);
   const nextRequests = Array.isArray(requests) && requests.length > 0
     ? requests.map((request) => `id=${request.id} action=${request.action}`).join('; ')
     : 'none';
   details.push(`- next requests: ${nextRequests}`);
-  for (const request of requests ?? []) {
-    details.push(`- orbita-v2: ${JSON.stringify({
-      event: 'request',
-      ownerStepId: request.parentStepId ?? request.ownerStepId ?? request.stepId ?? request.id,
-      ownerOccurrence: afterOccurrence?.occurrence,
-      producerRequestId: request.stepId ?? request.id,
-      activation: request.fanout?.activation ?? request.shard?.activation,
-      workItem: request.fanout?.branch_id ?? request.shard?.index,
-      action: request.action,
-    })}`);
-  }
   return details;
 }
 

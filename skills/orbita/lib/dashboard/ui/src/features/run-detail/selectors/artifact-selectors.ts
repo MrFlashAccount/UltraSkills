@@ -20,10 +20,7 @@ export function toRunArtifactItems(
       key: artifactIdentity(artifact),
       mimeMismatch: artifact.mimeMismatch,
       preview: previewFor(artifact, baseUrl),
-      producerLabel:
-        artifact.producerOccurrence === undefined
-          ? `${artifact.producerStepId} · provenance unavailable`
-          : artifact.producerStepId,
+      producerLabel: artifact.producerStepId,
       producerStepId: artifact.producerStepId,
       summary: artifact.summary?.value,
     };
@@ -31,22 +28,16 @@ export function toRunArtifactItems(
 }
 
 function artifactIdentity(artifact: ArtifactDescriptorDTO): string {
-  return (
-    artifact.artifactRef ??
-    `${artifact.producerStepId}:${artifact.producerOccurrence ?? "legacy"}:${artifact.producerRequestId ?? "legacy"}:${artifact.id}`
-  );
+  return artifact.artifactRef ?? `${artifact.producerStepId}:${artifact.id}`;
 }
 
 function previewFor(artifact: ArtifactDescriptorDTO, baseUrl?: string): RunArtifactItem["preview"] {
   if (artifact.previewState !== "previewable" || !baseUrl) {
     const state = artifact.previewState === "previewable" ? "error" : artifact.previewState;
     return {
-      reason:
-        state === "legacy_unavailable"
-          ? "This legacy artifact has no verified content locator."
-          : artifact.mimeMismatch
-            ? "Declared and effective MIME types differ; preview is disabled."
-            : "The artifact remains available through its permitted fallback.",
+      reason: artifact.mimeMismatch
+        ? "Declared and effective MIME types differ; preview is disabled."
+        : "The artifact remains available through its permitted fallback.",
       state,
     };
   }

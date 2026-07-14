@@ -1,6 +1,5 @@
 import { WorkflowRuntimeError } from '../errors.mjs';
 import { cloneCentralArtifactMetadata } from '../entities/Baton/artifact-contract.mjs';
-import { takeArtifactAcceptance } from './occurrence-provenance.mjs';
 
 export const LOOP_PROGRESS_STATE_KEY = '$loopProgress';
 
@@ -20,22 +19,11 @@ function producerStepIdForArtifact({ stepId, artifact, path }) {
   return stepId;
 }
 
-function aggregateArtifactEntry(stepId, artifact, { path = '/artifacts/*', acceptance } = {}) {
-  const entry = {
+function aggregateArtifactEntry(stepId, artifact, { path = '/artifacts/*' } = {}) {
+  return {
     producerStepId: producerStepIdForArtifact({ stepId, artifact, path }),
     artifact: cloneArtifactMetadata(artifact, path),
   };
-  if (acceptance) {
-    const acceptedArtifact = acceptance.artifacts.find((candidate) => candidate.id === artifact.id);
-    if (!acceptedArtifact) {
-      throw new WorkflowRuntimeError(`worker output failed schema validation: ${path} has no accepted file stamp for artifact '${artifact.id}'`);
-    }
-    entry.producerStepId = acceptance.ownerStepId;
-    entry.producerOccurrence = acceptance.ownerOccurrence;
-    entry.producerRequestId = acceptance.producerRequestId;
-    entry.acceptedFileStamp = structuredClone(acceptedArtifact.acceptedFileStamp);
-  }
-  return entry;
 }
 
 function normalizeAggregateArtifactEntry(entry, index) {
@@ -43,21 +31,14 @@ function normalizeAggregateArtifactEntry(entry, index) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry) || typeof entry.producerStepId !== 'string' || !entry.producerStepId || !entry.artifact) {
     throw new WorkflowRuntimeError(`worker output failed schema validation: ${path} must be aggregate artifact {producerStepId, artifact}`);
   }
-  const normalized = {
+  return {
     producerStepId: entry.producerStepId,
     artifact: cloneArtifactMetadata(entry.artifact, `${path}/artifact`),
   };
-  for (const field of ['producerOccurrence', 'producerRequestId', 'acceptedFileStamp']) {
-    if (entry[field] !== undefined) normalized[field] = structuredClone(entry[field]);
-  }
-  return normalized;
 }
 
-function artifactIdentity(entry) {
-  const { producerStepId, artifact } = entry;
-  return entry.producerOccurrence === undefined
-    ? `legacy::${producerStepId}::${artifact.id}`
-    : `${producerStepId}::${entry.producerOccurrence}::${entry.producerRequestId}::${artifact.id}`;
+function artifactIdentity({ producerStepId, artifact }) {
+  return `${producerStepId}::${artifact.id}`;
 }
 
 function assertUniqueAggregateArtifacts(entries, { errorPrefix }) {
@@ -73,16 +54,15 @@ function assertUniqueAggregateArtifacts(entries, { errorPrefix }) {
   }
 }
 
-function mergeArtifacts(existingArtifacts, newArtifacts = [], stepId, acceptance) {
+function mergeArtifacts(existingArtifacts, newArtifacts = [], stepId) {
   const merged = existingArtifacts.map((entry, index) => normalizeAggregateArtifactEntry(entry, index));
   assertUniqueAggregateArtifacts(merged, { errorPrefix: 'worker output failed schema validation: /state/artifacts' });
 
-  const incomingBatch = newArtifacts.map((artifact, index) => aggregateArtifactEntry(stepId, artifact, { path: `/artifacts/${index}`, acceptance }));
+  const incomingBatch = newArtifacts.map((artifact, index) => aggregateArtifactEntry(stepId, artifact, { path: `/artifacts/${index}` }));
   assertUniqueAggregateArtifacts(incomingBatch, { errorPrefix: 'worker output failed schema validation: /artifacts' });
 
   for (const incoming of incomingBatch) {
-    const incomingIdentity = artifactIdentity(incoming);
-    const existingIndex = merged.findIndex((existing) => artifactIdentity(existing) === incomingIdentity);
+    const existingIndex = merged.findIndex((existing) => existing.producerStepId === incoming.producerStepId && existing.artifact.id === incoming.artifact.id);
     if (existingIndex >= 0) merged[existingIndex] = incoming;
     else merged.push(incoming);
   }
@@ -100,14 +80,13 @@ function aggregateArray(output, fieldName) {
   return value;
 }
 
-export function applyOutputToBatonState(baton, output, attempts, stepId, { loopProgress, producerRequestId = stepId } = {}) {
+export function applyOutputToBatonState(baton, output, attempts, stepId, { loopProgress } = {}) {
   const batonData = cloneBoundaryData(baton);
   const state = {
     ...batonData.state,
+    artifacts: mergeArtifacts(batonData.state?.artifacts ?? [], aggregateArray(output, 'artifacts'), stepId),
     results: appendResults(batonData.state?.results ?? [], aggregateArray(output, 'results')),
   };
-  const acceptance = producerRequestId ? takeArtifactAcceptance(state, producerRequestId) : undefined;
-  state.artifacts = mergeArtifacts(batonData.state?.artifacts ?? [], aggregateArray(output, 'artifacts'), stepId, acceptance);
 
   if (stepId) {
     state[stepId] = structuredClone(output);

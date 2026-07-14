@@ -448,54 +448,6 @@ validates the requested state-resolved target, updates only baton
 cursor/status, validates persisted state, appends bounded pointer-move history,
 and renews the canonical per-run authority record.
 
-### Forward-only occurrence and artifact provenance
-
-Occurrence provenance is runner-owned durable truth, not a dashboard inference.
-The optional Baton `$occurrenceProvenance` record owns the current ordinal per
-workflow cursor owner and the forward-coverage boundary. New runs start with
-occurrence `1` for the workflow start owner. Only a successful workflow
-start/route/pointer event that opens an owner visit advances the relevant
-ordinal; self-loops and backward routes create new occurrences. Output/schema
-retries, fanout/shard batches and phases, owner/final-worker phases, heartbeat,
-non-blocking stop report/resolution, and worker-binding changes do not.
-Synthetic request ids remain request addresses, never workflow occurrences.
-
-The first successful mutating command for a legacy run seeds missing provenance
-once and records the exact pre-seed `history.md` byte boundary. Its inherited
-current cursor is not assigned a trustworthy ordinal: coverage begins
-`forward_only` with `currentAvailable: false` and an empty
-`firstAvailableByStep`. Each later successful workflow or pointer route records
-the first newly observable ordinal for its target owner in
-`firstAvailableByStep`; availability for that owner begins at that boundary and
-never moves backward to the seeded counter. The seed does not rewrite old
-history, Baton bytes, artifact records, or paths. Older ambiguity and the
-inherited current visit remain `legacy_unavailable` even after later routes;
-neither runtime nor dashboard scans legacy history or relabels a seeded ordinal
-as covered.
-
-New managed-history entries carry deterministic parseable owner occurrence,
-activation/work-item, producer-request, route, accepted-output, stop-report,
-stop-resolution, and coverage facts while retaining the bounded human-facing
-entry. `history.md` is the sole history source for these facts, but browser Logs
-are a positive projection of those structured facts rather than raw history
-Markdown. Stdout/stderr, free-form history details, and worker
-`debug-summary.md` bodies are not occurrence, traversal, Activity, or Logs
-authorities and never cross the browser contract.
-
-Worker artifact metadata remains the strict record
-`{id, content_type, path, summary?}`. Worker instructions derive the
-occurrence-aware artifact directory from the applied/current Baton, including
-the just-routed next owner rather than the pre-transition owner. Acceptance
-opens only a canonical contained regular file without following symlinks where
-supported, race-checks identity, and records device/inode/size/mtime/ctime.
-Runner-owned aggregate wrappers add producer occurrence, producer request id,
-and the accepted file stamp. New aggregate identity is
-`(ownerStepId, ownerOccurrence, producerRequestId, artifactId)`, so repeated
-owners and repeated artifact ids remain distinct. Legacy wrappers and old
-directories remain descriptor-readable without aliases, rewrites, or invented
-provenance; absent provenance/stamp means `legacy_unavailable` and no content
-locator.
-
 ## Fanout Owner Step
 
 `kind: "fanout"` is the first-class control step for a fixed table of named
@@ -611,20 +563,6 @@ application: Vite builds the React application and Nitro's Bun preset owns the
 only dashboard HTTP process. The dashboard is not a runner host adapter, a
 durable cache, or a control-plane participant.
 
-The activation-3 integration baseline is commit
-`7cbb0806f450f9d23572c82245ef61052f8344b1`, directly based on `origin/main`
-`b5a7cbf9f73060c8a79d6493e3e265c833514ff0`; the final activation-3 source and
-documentation changes remain the worktree delta above that baseline. The
-verified owners are
-`contracts/{browser,index}.ts`; the `project-run`, `project-workflow`,
-`project-history`, and `project-artifacts` projections; the read model,
-run-root reader, bounded history reader, artifact reader, and locator codec in
-`observer/**`; the Start composition/HTTP server plus exactly nine v2 route
-files; and the local run-detail surface, body, Workflow graph, occurrence,
-panel, preview, query, selector, state, and style owners. This inventory is the
-integration baseline; restoring a vanilla server/CLI/static surface or a v1
-route is not an alternate implementation.
-
 `skills/orbita/DESIGN.md` owns the approved board, card, detail, focus,
 responsive, and motion laws. `lib/dashboard/CONTEXT.md` owns local placement and
 dependency rules. This section records the stable product architecture and
@@ -635,11 +573,11 @@ Target request and dependency shape:
 ```text
 durable run files
   -> observer read model (server only, ephemeral)
-  -> bounded capability reads + pure safe projections
-  -> versioned v2 contracts
-  -> TanStack Start GET routes / content streaming / invalidation SSE
+  -> safe projection + exposure policy (server only)
+  -> versioned contracts
+  -> TanStack Start GET routes / invalidation SSE
   -> React Query + browser view model
-  -> five-lane board + progressive run inspection
+  -> five-lane React board
 ```
 
 There is no second API daemon, custom static server, generic repository port,
@@ -648,22 +586,19 @@ the versioned DTO boundary are the only justified seams.
 
 ### Dashboard Source Zones
 
-- `lib/dashboard/contracts/**` owns strict schema-version-2 runtime schemas and
-  inferred browser-safe types for snapshots, light detail, workflow/traversal/
-  activity/log/artifact pages, occurrence/artifact refs, cursors, preview state,
-  invalidation, and fixed errors. `contracts/index.ts` is the only shared
-  server/browser barrel and imports no implementation or Node-only code.
-- `lib/dashboard/projection/**` owns pure lane/detail/workflow/traversal/
-  Activity/Logs/artifact projection and source-specific exposure policy. It
-  receives validated records or bounded buffers and performs no IO. Declaration
-  order, occurrence order, activation peer order, complete managed-entry
-  boundaries, `legacy_unavailable`, and MIME classification are projection
-  contracts, not route/UI guesses.
+- `lib/dashboard/contracts/**` owns strict runtime schemas, inferred
+  browser-safe types, schema versions, the five lane ids/order, public error and
+  invalidation enums, identifier bounds, `PublicDisplayText`, and adversarial
+  contract fixtures. It imports no dashboard implementation or Node-only code.
+- `lib/dashboard/projection/**` owns lane classification, source-specific
+  exposure policy, fixed public diagnostics, cursor cardinality enforcement,
+  safe summary/detail projection, authored workflow pages, bounded managed
+  history, step-path reconstruction, step-scoped Activity/Logs, and artifact
+  facts. It is server-only even when helpers are pure.
 - `lib/dashboard/observer/**` owns read-only durable adapters, bounded-concurrency
   reads, per-run failure isolation, the process-local `DashboardReadModel`,
   watcher/poll reconciliation, immutable snapshot replacement, freshness
-  lifecycle, invalidation subscriptions, bounded history pagination, canonical
-  artifact content handles, and shutdown cleanup.
+  lifecycle, invalidation subscriptions, and shutdown cleanup.
 - `lib/dashboard/ui/**` is the TanStack Start application root. Its explicit
   `.server.ts` composition and API route files may reach the observer; its
   client-reachable routes, features, components, hooks, and primitives may
@@ -674,28 +609,35 @@ the versioned DTO boundary are the only justified seams.
 These zones are real responsibility owners, not folder ceremony: deleting
 `contracts` duplicates the cross-runtime schema; deleting `projection` smears
 classification/disclosure into readers and routes; deleting `observer` smears
-bounded durable reads/content policy and lifecycle into transport; deleting
-`ui` removes the product and Start deployment. Do not add a generic service,
-repository, cache, preview service, renderer framework, or shared-utility zone
-for one implementation.
+durable reads and lifecycle into transport; deleting `ui` removes the product
+and Start deployment. Do not add a generic service/repository/shared-utility
+zone for one implementation.
 
 ### Dashboard Records and Authority
 
 Dashboard projection is a read-model context. It owns allowlisted DTOs and
 classification policy for `Waiting for user`, `Worker running`, `Needs help`,
-`Degraded`, and `Done`, plus progressive workflow/traversal/Activity/Logs/
-Artifacts read models. It may expose bounded, redacted managed-history entries
-and artifact metadata, but it must not expose raw baton, raw history, compiled
+`Degraded`, and `Done`. It may expose bounded, redacted history excerpts and
+artifact metadata, but it must not expose raw baton, raw history, compiled
 instructions, private prompts, token-bearing commands, hidden transcripts,
 instruction storage paths, preferred worker agent ids, worker binding flags, or
 unnecessary host control-plane metadata.
 
-Durable run files remain the only authority. Snapshot, freshness, summary,
-light-detail, workflow/traversal/activity/log/artifact pages, occurrence/artifact
-refs, cursors, invalidation events, preview state, and browser stores are
-records/read models, not domain entities. `DashboardReadModel` has process
-identity and lifecycle but is ephemeral, immutable per published revision,
-fully rebuildable, and forbidden from writing cache data into run directories.
+Durable run files remain the only authority. `SnapshotEnvelope`,
+`ObserverFreshnessDTO`, `RunSummaryDTO`, `RunLightDetailDTO`, workflow/history/
+artifact pages, `InvalidationEvent`, `PublicDisplayText`, and the browser board
+store are records/read models, not domain entities. `DashboardReadModel` has
+process identity and lifecycle but is ephemeral, immutable per published
+revision, fully rebuildable, and forbidden from writing cache data into run
+directories.
+
+Run inspection introduces no durable execution identity. The selected workflow
+`stepId` is only a browser/read-model key. The ordered path, Activity, managed
+debug-summary logs, and artifact ownership are derived from the existing Baton,
+managed history, workflow document, and artifact records. Fanout/shard request
+ids remain request addresses and may be mapped to their owning workflow step for
+display; they never become workflow steps or new persisted entities. Workflow is
+run-wide; selecting a step scopes only Activity, Logs, and Artifacts.
 
 The projection exposes exactly five observer lanes in stable order:
 
@@ -706,115 +648,50 @@ The projection exposes exactly five observer lanes in stable order:
 5. `done`
 
 `Degraded` means observer/read health and is never persisted as workflow state.
-Current cursor cardinality is `0..1`. Occurrence identity is the durable
-`(stepId, ordinal)` cursor-owner visit. Repeated visits remain separate;
-fanout/shard peers remain nested under their activation and never become owner
-occurrences. Missing forward truth is `legacy_unavailable`, never a fabricated
-ordinal or parallel cursor.
+Current cursor cardinality is `0..1`. The DTO may retain an array shape, but a
+projection with more than one current step is an explicit bounded unsupported/
+degraded result, never fabricated fanout.
 
-All browser-visible prose must be produced by the approved exposure policy for
-one implemented source class: run title/summary, artifact summary, result
-summary, managed activity, or managed Markdown. The policy normalizes with
-NFKC, removes controls, applies schema-owned source-specific code-point and
-UTF-8 byte ceilings, and omits values matching path, secret/token/hash,
-runner/shell command, private-instruction, prompt, or transcript shapes. Logs
-receive newly constructed Markdown containing only allowlisted structured
-history facts; they never sanitize-and-forward an entire managed history entry.
-New prose source classes default to omission. Identifiers/enums use dedicated
-bounded schemas; raw durable records and raw exception messages never cross the
-route boundary. Board refresh loads state without history text and reads zero
-history-body, workflow-body, and artifact-content bytes. All richer resources
-are independently bounded and cancellable.
+All browser-visible prose must be produced by exposure policy version `2` for
+one of the implemented source classes: run title/summary, workflow identity,
+step id, artifact id/summary, result summary/ref, or history line. The policy
+normalizes with NFKC, replaces control characters with spaces, collapses
+whitespace, applies the source's 120/160/240-code-point ceiling, and omits the
+value when it matches an absolute path, secret/token/hash shape, runner/shell
+command, private-instruction marker, prompt, or transcript. The shared
+`PublicDisplayText` schema then enforces non-empty text with a maximum length of
+240. New prose source classes default to omission. Identifiers/enums use their
+dedicated bounded schemas; raw durable records and raw exception messages never
+cross the route boundary. The 1.5 MiB snapshot and 64 KiB detail response caps
+are the implemented aggregate UTF-8 byte boundaries; there is no separate
+per-field byte-limit contract.
 
-### Versioned HTTP, content, and reconciliation contract
+### Versioned HTTP and Reconciliation Contract
 
-The Start application root and these nine schema-version-2 GET resources are
-the complete supported dashboard surface:
+The Start application exposes the same-origin v2 GET surface:
 
-- `/api/dashboard/v2/runs` — snapshot and authoritative freshness;
-- `/api/dashboard/v2/events` — data-free invalidation SSE;
-- `/api/dashboard/v2/runs/:runId` — light detail;
-- `/api/dashboard/v2/runs/:runId/workflow` — declaration-ordered workflow page;
-- `/api/dashboard/v2/runs/:runId/traversal` — owner occurrence/activation page;
-- `/api/dashboard/v2/runs/:runId/activity` — occurrence-scoped Activity;
-- `/api/dashboard/v2/runs/:runId/logs` — occurrence-scoped managed Markdown;
-- `/api/dashboard/v2/runs/:runId/artifacts` — descriptors for exactly one
-  `occurrenceRef` or workflow `stepId` scope;
-- `/api/dashboard/v2/runs/:runId/artifacts/:artifactRef?mode=preview|download`
-  — verified preview/download content.
+- `/api/dashboard/v2/runs` and `/api/dashboard/v2/runs/:runId` return the
+  validated summary snapshot and light run detail.
+- `/api/dashboard/v2/runs/:runId/workflow` and `traversal` return the authored
+  graph and current ordered step path.
+- `/api/dashboard/v2/runs/:runId/activity`, `logs`, and `artifacts` require one
+  validated existing workflow `stepId`.
+- `/api/dashboard/v2/runs/:runId/artifacts/:artifactRef` streams one validated
+  preview/download artifact.
+- `/api/dashboard/v2/events` streams bounded invalidation envelopes and
+  heartbeat comments.
 
-The server and browser contracts ship atomically under schema version 2.
-Snapshot refresh reads zero history-body, workflow-body, and artifact bytes.
-Light detail uses only bounded recent traversal facts. Workflow, traversal,
-Activity, Logs, artifact descriptors, and content are distinct cancellable
-observer capabilities. Workflow graph and workflow-step artifacts are scoped by
-run plus selected workflow `stepId`; occurrence selection changes only Activity,
-Logs, and the occurrence-scoped Artifacts tab. The artifact page rejects a
-missing scope and rejects a request that supplies both `occurrenceRef` and
-`stepId`; there is no run-wide artifact page.
-
-Refs and cursors are deterministic authenticated-encrypted locators with a
-512-character public ceiling. Their sealing key derives from the configured
-canonical runs-root authority, including its canonical location and directory
-identity, so normal process restart preserves valid locators without a registry
-or eviction lifecycle. Moving or replacing that authority intentionally makes
-old locators stale. Locators carry no path or content authority; workflow
-cursors bind a content fingerprint and offset, history cursors bind an immutable
-file snapshot and byte position, artifact cursors bind exactly one occurrence or
-workflow-step scope, and artifact refs bind aggregate identity. Every use opens
-the sealed payload and revalidates it against current canonical state. Malformed,
-cross-authority, cross-run, cross-route, cross-scope, stale, replaced, shrunk, or
-forged locators return fixed public errors without revealing their payload.
-
-History paging reads backward from one append-stable file snapshot, returns only
-whole managed entries, applies both byte and entry-count ceilings, and exposes
-`complete`, `truncated`, and `nextCursor` independently. Append does not change
-an existing cursor snapshot; shrink/replacement fails stale. A page that cannot
-include a partial oversized entry reports truncation and advances through a
-bounded continuation instead of presenting the fragment as a complete log.
-Traversal reads at most 100 source entries, Activity at most 11 source entries
-before its 200-event DTO ceiling, and Logs at most 200 source entries. The lower
-Activity entry ceiling leaves room for one owner entry carrying up to 16 peer
-facts without exceeding the response event contract.
-
-Approved bounds are snapshot 1.5 MiB; light-detail/traversal/Activity/Logs/
-artifact pages 64 KiB; workflow pages 256 KiB and 200 steps; traversal 100
-occurrences; Activity 200 events; artifacts 100 descriptors; text 1 MiB; active
-HTML/SVG 2 MiB; raster/PDF 32 MiB; audio/video 64 MiB; MIME probe 8 KiB.
-The workflow source reader additionally rejects a workflow file above 8 MiB and
-fingerprints/parses one verified no-follow file snapshot so validation cannot
-mix identities.
-
-Artifact descriptor projection and content transport share one MIME/size policy.
-Content is reopened through the canonical occurrence/request directory handle,
-revalidated against the accepted device/inode/size/mtime/ctime stamp, copied as
-exactly the accepted bounded byte length, restatted, and only then exposed as an
-immutable response snapshot after the filesystem handle closes. Declared/
-effective MIME mismatch is download-only; unsupported, oversized, legacy, or
-mismatch content cannot enter preview even with a forged preview URL. The class
-limit is checked before any full response, and full or Range responses slice the
-same immutable snapshot, so concurrent growth cannot bypass accepted identity or
-size. PDF/audio/video/download support one valid Range; malformed, multiple, or
-unsatisfiable ranges return fixed 416. Responses use exact content type,
-`nosniff`, safe disposition, `no-store`, no-referrer, ETag/file stamp, and
-bounded fixed errors.
-
-Private JSON/data routes require the configured Host authority, permit only the
-request URL's same origin when an Origin header is present, and require the
-exact same-origin Fetch Metadata shape for programmatic reads. They reject
-`Origin: null`, cross-site, document/iframe/image/script navigation, duplicate
-parameters, and unknown query fields. Only an eligible canonical preview
-content request admits same-origin iframe navigation; download and data reads do
-not inherit that exception. Active HTML/SVG executes only in an opaque-origin
-nested frame with CSP sandbox and without same-origin, top-navigation, popup,
-or download capability. It may still run scripts and contact HTTP(S) network
-resources, so the parent discloses that capability, owns controls, and never
-injects active bytes into its React DOM.
-
-SSE is a lossy hint, never a state transition or authority: events may be
-dropped, duplicated, delayed, reordered, or reset. Frames carry only reason and
-observer revision. Browser reconciliation remains validated periodic GET plus
-coalesced invalidation; connected EventSource alone never proves fresh data.
+The server and browser contracts ship atomically under one schema version. SSE
+is a lossy hint, never a state transition or authority: events may be dropped,
+duplicated, delayed, reordered, or reset. The SSE frame carries a bounded
+invalidation envelope and revision id; it carries no run-state data.
+`snapshot_changed` publication is coalesced to the configured interval, while
+stale/recovered events publish immediately. The browser ignores invalid or
+non-increasing ids, coalesces query invalidation to one signal per 100ms, resets
+sequence tracking and refetches after reconnect, and also performs a normal
+validated snapshot GET every 15 seconds. `If-None-Match` remains a supported
+route contract for other same-origin callers; the current browser fetch adapter
+does not send a conditional header.
 
 `DashboardReadModel` owns both the last-good immutable runs and authoritative
 observer freshness. A successful refresh increments revision, atomically
@@ -837,11 +714,11 @@ render as empty success; detail failure remains local to the detail surface;
 one corrupt run becomes one Degraded summary without hiding healthy runs.
 
 Request authority is explicit. Process configuration alone selects the runs
-root. Snapshot revision owns board/freshness. The exact `run` search value owns
-run selection. Local run-detail state owns occurrence/tab selection. Query keys
-include schema version, run id, resource, relevant occurrence/artifact ref, and
-cursor; cancellation propagates to fetch abort. Filtered or missing selection
-retains its id and never falls back to another run or occurrence.
+root. The validated snapshot revision owns summary/freshness state. The
+router's `run` search value owns detail selection; React Query keys detail data
+by that exact id, the fetch adapter URL-encodes it, and the route decodes and
+validates it before exact index lookup. Filtered or missing selection retains
+the id and never authorizes fallback to the first or neighboring run.
 
 ### Relationships and Dependency Rules
 
@@ -881,8 +758,7 @@ Binding rules:
   mutation/control APIs, CLI shells, host lifecycle, or UI/browser modules.
 - Start server routes may reach observer code only through one explicit
   server-only composition module. Routes do not classify lanes, redact values,
-  parse durable state, select filesystem paths, reopen files independently, or
-  expose raw errors.
+  parse durable state, or expose raw errors.
 - No dashboard module may import or construct `next`, `continue`,
   `write-output`, `instructions`, `movePointer`, `listPointerTransitions`,
   claim/lease/bind-agent, repair/retry-run, or manual-move surfaces.
@@ -897,16 +773,12 @@ path, prompt, token, or transcript implementation material.
 
 ### Compatibility, Operations, and Architecture Memory
 
-HTTP/contracts version 1 and the vanilla/CLI/static-server surface are
-`delete_now`. The final implementation contains no v1 route/export/client
-reference, `listDashboardRuns`, `getDashboardRun`, `startDashboardServer`,
+The prototype compatibility decision is `delete_now`. The final implementation
+contains no `listDashboardRuns`, `getDashboardRun`, `startDashboardServer`,
 `orbita-dashboard serve`, custom Node HTTP server, string renderer, direct
 dashboard assets, whole-snapshot SSE, `/api/runs`, `/api/events`, unversioned
-`/api/dashboard/*`, or redirect/wrapper. Provenance-free durable runs are the
-only temporary public exception: summary and descriptor facts remain readable,
-while inherited occurrence panels and legacy artifact content are explicit
-`legacy_unavailable`. There are no aliases, bulk migration, invented identity,
-or content locator for an unstamped legacy artifact.
+`/api/dashboard/*`, or redirects/wrappers for them. Durable workflow-runner
+formats and mutation/control APIs remain unchanged.
 
 Process configuration owns runs root, loopback host/port, poll/reconciliation,
 coalescing, and stale intervals. Browser routes cannot choose a filesystem path.
@@ -922,26 +794,16 @@ on request abort or stream cancellation. Do not claim a broader signal-hook
 contract without production evidence for that hook.
 
 Architecture artifact decision: `update_existing`. This section,
-`lib/dashboard/CONTEXT.md`, `lib/dashboard/README.md`, `DESIGN.md`,
-`lib/persistence/run-state/CONTEXT.md`,
-`lib/docs/artifact-contract-prototype.md`, and `.dependency-cruiser.cjs` must
-stay consistent with routes, schemas, tests, commands, provenance, content
-security, and rendered behavior. No ADR or new `CONTEXT.md` is added because
-these existing owners are sufficient. Contract/docs drift is blocker-level.
+`lib/dashboard/CONTEXT.md`, `DESIGN.md`, and `.dependency-cruiser.cjs` must stay
+consistent with routes, schemas, tests, commands, and rendered behavior. No ADR
+is added because these existing owning artifacts already record the decision.
+Contract/docs drift is blocker-level.
 
-Dashboard rollback restores the previous complete React dashboard contract; it
-does not leave mixed v1/v2 routes, aliases, flags, or partial UI. Durable runs
-are never rewritten or deleted. If any v2 provenance/history/artifact write may
-have occurred, rollback retains additive Baton parsing, provenance validation,
-and stamped aggregate compatibility while removing the v2 observer/UI surface;
-a strict pre-v2 runtime/schema rollback is permitted only with positive evidence
-that no v2 write occurred. Locators have no separate server registry to migrate
-or purge; keeping the same canonical runs-root authority preserves their sealing
-lifecycle, while moving or replacing that authority intentionally invalidates
-them. Incorrect occurrence truth, read amplification,
-disclosure, unsafe preview/file races, silent truncation, inaccessible overlay
-focus, version residue, dependency failure, or source/schema/docs drift stops
-release or triggers this atomic rollback.
+Source rollback restores the previous complete source revision; there is no
+merged dual server/UI fallback and no data migration because durable run formats
+do not change. Failure of Bun Start/SSE/shutdown, freshness truth, disclosure or
+bundle boundaries, accessibility/focus, or approved performance gates reopens
+the approved architecture rather than silently weakening it.
 
 ### Workflow Loop Policies
 
@@ -1020,10 +882,6 @@ Allowed:
   workflow policy definitions.
 - Baton schema may define loop progress storage, but workflow schema remains
   the policy source of truth.
-- Dashboard observer capabilities may depend on read-only persistence,
-  projection, and contracts; projection may depend only on contracts and plain
-  validated inputs; Start routes may depend on observer only through server
-  composition; browser code may depend only on contracts and UI libraries.
 
 Forbidden:
 
@@ -1058,11 +916,6 @@ Forbidden:
 - dashboard code mutating run state, acquiring leases, invoking runner
   navigation/output/pointer-recovery commands, or exposing private runner
   control data through browser-visible DTOs
-- dashboard contracts -> projection/observer/server/persistence/Node
-- dashboard projection -> filesystem/process/observer/routes/control/UI
-- dashboard routes -> persistence/filesystem/projection directly
-- browser-reachable dashboard code -> observer/projection/persistence/server/
-  Node/private runtime
 
 ## Review Gates
 
@@ -1091,22 +944,12 @@ Architecture review must verify:
   preserve baton state, derive predecessors from workflow transitions resolved
   against `baton.state`, never use debug history as navigation state, reject
   invalid legacy array cursor state, and expose only redacted bounded metadata
-- dashboard changes preserve the read-only observer boundary, pure projection,
-  bounded capability reads, SSE/poll recovery, degraded per-run isolation,
-  occurrence-scoped evidence, Workflow independence, active-preview boundary,
-  and `DESIGN.md` Direction A/no-control contract
+- dashboard changes preserve the read-only observer boundary, safe projection
+  layer, SSE/poll recovery behavior, degraded per-run isolation, and
+  `DESIGN.md` board/drawer/no-control contract
 - dashboard tests or boundary checks prove browser DTOs exclude private
   runner/control fields and dashboard code does not import or call runner
   mutation/control surfaces
-- runtime/schema/tests/docs agree on forward-only occurrence counter lifecycle,
-  legacy coverage seeding, parseable managed-history facts, occurrence-aware
-  artifact identity/output placement, accepted file stamps, and unchanged
-  worker artifact metadata
-- route inventory proves root plus nine v2 GET resources and no v1/unversioned
-  residue; IO instrumentation proves board refresh reads zero history-body,
-  workflow-body, and artifact-content bytes
-- contract, cursor, MIME/range/header, origin/Fetch Metadata, opaque sandbox,
-  cancellation, and rendered proof gates match dashboard docs and source
 - shard docs, workflow schema, Baton schema, runtime behavior, tests, and boundary checks agree on the first-class `kind: "shard"` contract and `state.shards` ownership
 - shard execution keeps `baton.cursor` on the parent step, snapshots values once, batches by activation/index, stores bounded output references, and runs the genuine final step worker
 - shard DTO and prompt tests prove values appear only through explicitly authored interpolation and public request context excludes raw values, prompts, transcripts, private paths, and standalone token fields
@@ -1143,13 +986,7 @@ QA/reliability review must verify:
 Security and privacy review must verify:
 
 - artifact path handling remains constrained to approved run artifact
-  directories and new acceptance records a race-checked regular-file stamp
-- dashboard artifact content reopens canonical metadata, revalidates the stamp,
-  enforces MIME/range/size/header policy, and gives active HTML/SVG only the
-  approved opaque-origin sandbox capability
-- private dashboard data routes reject opaque/cross-site/navigation/resource
-  requests through host/origin plus Fetch Metadata gates, while refs/cursors
-  never grant filesystem authority or disclose raw failures
+  directories
 - run-state, lease, history, and output records do not expose new private data
   surfaces while ownership moves
 - shard values are durably snapshotted only as required for resume, omitted from public request DTOs, and rendered into prompts only through explicit interpolation

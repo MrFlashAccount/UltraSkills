@@ -114,7 +114,7 @@ function applyBranchBatch({ workflow, baton, ownerStepId, ownerStep, activation,
       );
     }
 
-    updatedBaton.state = applyOutputToBatonState(updatedBaton, validation.workerOutput, undefined, record.branch_id, { producerRequestId: requestId });
+    updatedBaton.state = applyOutputToBatonState(updatedBaton, validation.workerOutput, undefined, record.branch_id);
     delete updatedBaton.state[requestId];
     acceptedRequestIds.add(requestId);
     acceptedOutputs[record.branch_id] = acceptedRecord(record);
