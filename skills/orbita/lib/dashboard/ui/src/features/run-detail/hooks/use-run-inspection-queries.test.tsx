@@ -4,6 +4,8 @@ import { type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { usePagingRecovery } from "./use-paging-recovery";
 import {
+  useActivityPages,
+  useLogPages,
   useOccurrenceArtifactPages,
   useTraversalPages,
   useWorkflowStepArtifactPages,
@@ -118,6 +120,26 @@ describe("run inspection query lifecycle", () => {
       ]),
     );
     expect(urls.every((url) => /[?&](occurrenceRef|stepId)=/u.test(url))).toBe(true);
+  });
+
+  it("does not request scoped resources without a locator", () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const { result } = renderHook(
+      () => ({
+        activity: useActivityPages("run-1"),
+        logs: useLogPages("run-1"),
+        occurrenceArtifacts: useOccurrenceArtifactPages("run-1"),
+        workflowStepArtifacts: useWorkflowStepArtifactPages("run-1"),
+      }),
+      { wrapper: wrapper() },
+    );
+
+    expect(result.current.activity.fetchStatus).toBe("idle");
+    expect(result.current.logs.fetchStatus).toBe("idle");
+    expect(result.current.occurrenceArtifacts.fetchStatus).toBe("idle");
+    expect(result.current.workflowStepArtifacts.fetchStatus).toBe("idle");
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 

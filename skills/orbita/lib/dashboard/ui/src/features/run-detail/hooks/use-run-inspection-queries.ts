@@ -13,8 +13,8 @@ import {
 import { type InfiniteData, useInfiniteQuery } from "@tanstack/react-query";
 import { fetchDashboardResource, resourceQueryKey, resourceUrl } from "./query-client";
 
-const enabled = (runId?: string, locator?: string) =>
-  typeof window !== "undefined" && Boolean(runId) && (locator === undefined || Boolean(locator));
+const runEnabled = (runId?: string) => typeof window !== "undefined" && Boolean(runId);
+const scopedEnabled = (runId?: string, locator?: string) => runEnabled(runId) && Boolean(locator);
 
 export function useWorkflowPages(runId?: string) {
   return useInfiniteQuery<
@@ -24,7 +24,7 @@ export function useWorkflowPages(runId?: string) {
     ReturnType<typeof resourceQueryKey>,
     string | undefined
   >({
-    enabled: enabled(runId),
+    enabled: runEnabled(runId),
     getNextPageParam: (page) => (page.complete ? undefined : page.nextCursor),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
@@ -45,7 +45,7 @@ export function useTraversalPages(runId?: string) {
     ReturnType<typeof resourceQueryKey>,
     string | undefined
   >({
-    enabled: enabled(runId),
+    enabled: runEnabled(runId),
     getNextPageParam: (page) => (page.complete ? undefined : page.nextCursor),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
@@ -66,7 +66,7 @@ export function useActivityPages(runId?: string, occurrenceRef?: string) {
     ReturnType<typeof resourceQueryKey>,
     string | undefined
   >({
-    enabled: enabled(runId, occurrenceRef),
+    enabled: scopedEnabled(runId, occurrenceRef),
     getNextPageParam: (page) => (page.complete ? undefined : page.nextCursor),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
@@ -87,7 +87,7 @@ export function useLogPages(runId?: string, occurrenceRef?: string) {
     ReturnType<typeof resourceQueryKey>,
     string | undefined
   >({
-    enabled: enabled(runId, occurrenceRef),
+    enabled: scopedEnabled(runId, occurrenceRef),
     getNextPageParam: (page) => (page.complete ? undefined : page.nextCursor),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
@@ -120,7 +120,7 @@ function useArtifactPages(
     ReturnType<typeof resourceQueryKey>,
     string | undefined
   >({
-    enabled: enabled(runId, locator),
+    enabled: scopedEnabled(runId, locator),
     getNextPageParam: (page) => (page.complete ? undefined : page.nextCursor),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>

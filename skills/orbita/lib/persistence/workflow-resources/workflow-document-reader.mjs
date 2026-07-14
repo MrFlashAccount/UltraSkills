@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { extname } from 'node:path';
+import { parse as parseTomlPortable } from 'smol-toml';
 import { WorkflowRuntimeError } from '../../errors.mjs';
 
 function parseWorkflowJson(content, kind) {
@@ -11,11 +12,9 @@ function parseWorkflowJson(content, kind) {
 }
 
 function parseWorkflowToml(content, kind) {
-  if (!globalThis.Bun?.TOML?.parse) {
-    throw new WorkflowRuntimeError(`failed to read ${kind} TOML: Bun.TOML.parse is not available`);
-  }
   try {
-    return globalThis.Bun.TOML.parse(content);
+    const parse = globalThis.Bun?.TOML?.parse ?? parseTomlPortable;
+    return parse(content);
   } catch (error) {
     throw new WorkflowRuntimeError(`failed to read ${kind} TOML: ${error.message}`);
   }
