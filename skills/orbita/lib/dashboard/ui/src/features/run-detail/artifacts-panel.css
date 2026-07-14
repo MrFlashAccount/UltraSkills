@@ -1,8 +1,8 @@
 .artifact-list {
   display: grid;
-  gap: var(--space-2);
+  gap: 0;
   margin: 0;
-  padding: 0;
+  padding: 0 0 var(--space-3);
   list-style: none;
 }
 .artifact-list > li {
@@ -12,7 +12,9 @@
   align-items: center;
   gap: var(--space-3);
   padding: 12px;
-  border-block: 1px solid var(--border);
+}
+.artifact-list > li + li {
+  border-top: 1px solid var(--border);
 }
 .artifact-icon {
   color: var(--focus);

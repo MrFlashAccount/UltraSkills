@@ -161,6 +161,7 @@
 }
 .lane-scroll {
   overflow-y: auto;
+  background: var(--surface-lane);
   contain: strict;
 }
 .virtual-stack {
@@ -839,12 +840,30 @@
   color: var(--text-secondary);
 }
 .state-board {
-  min-height: 100dvh;
+  min-height: 0;
+  flex: 1;
   display: grid;
   grid-template-columns: repeat(5, minmax(220px, 1fr));
   gap: 10px;
-  padding: 72px 12px 12px;
+  padding: 12px;
   overflow-x: auto;
+}
+.state-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.state-toolbar-controls .ui-skeleton {
+  min-height: 36px;
+}
+.state-toolbar-search {
+  width: min(310px, 32vw);
+}
+.state-toolbar-action {
+  width: 78px;
+}
+.state-toolbar-status {
+  width: 64px;
 }
 .state-lane {
   display: grid;

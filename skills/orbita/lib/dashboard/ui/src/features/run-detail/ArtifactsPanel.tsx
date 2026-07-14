@@ -37,9 +37,7 @@ export function ArtifactsPanel(props: ArtifactsPanelProps) {
       <header className="step-panel-heading">
         <div>
           <h3 id="artifacts-title">Artifacts · {props.stepLabel}</h3>
-          <p>
-            Showing {props.artifacts.length} of {props.runArtifactCount} run artifacts
-          </p>
+          <p>{artifactScopeSummary(props)}</p>
         </div>
         <Badge>Produced by selected step</Badge>
       </header>
@@ -77,33 +75,39 @@ export function ArtifactsPanel(props: ArtifactsPanelProps) {
                     <strong className="artifact-warning">MIME mismatch · download only</strong>
                   ) : null}
                 </div>
-                <div className="artifact-trust">
-                  <ShieldCheck aria-hidden="true" size={15} />
-                  {previewLabel(artifact)}
-                </div>
+                {artifact.preview.state === "available" ? null : (
+                  <div className="artifact-trust">
+                    <ShieldCheck aria-hidden="true" size={15} />
+                    {previewLabel(artifact)}
+                  </div>
+                )}
                 <div className="artifact-actions">
-                  <Button
-                    onClick={() => {
-                      lastPreviewKey.current = artifact.key;
-                      setPreviewArtifact(artifact);
-                    }}
-                    ref={(node) => {
-                      if (node) {
-                        previewOpeners.set(artifact.key, node);
-                      }
-                    }}
-                    variant="quiet"
-                  >
-                    <Eye aria-hidden="true" size={15} />
-                    Preview
-                  </Button>
-                  {artifact.downloadUrl ? (
-                    <Button asChild variant="ghost">
-                      <a download href={artifact.downloadUrl}>
-                        <Download aria-hidden="true" size={15} />
-                        Download
-                      </a>
+                  <TooltipLabel label="Preview">
+                    <Button
+                      aria-label="Preview"
+                      onClick={() => {
+                        lastPreviewKey.current = artifact.key;
+                        setPreviewArtifact(artifact);
+                      }}
+                      ref={(node) => {
+                        if (node) {
+                          previewOpeners.set(artifact.key, node);
+                        }
+                      }}
+                      size="icon"
+                      variant="quiet"
+                    >
+                      <Eye aria-hidden="true" size={15} />
                     </Button>
+                  </TooltipLabel>
+                  {artifact.downloadUrl ? (
+                    <TooltipLabel label="Download">
+                      <Button asChild size="icon" variant="ghost">
+                        <a aria-label="Download" download href={artifact.downloadUrl}>
+                          <Download aria-hidden="true" size={15} />
+                        </a>
+                      </Button>
+                    </TooltipLabel>
                   ) : null}
                 </div>
               </li>
@@ -143,6 +147,13 @@ export function ArtifactsPanel(props: ArtifactsPanelProps) {
       />
     </section>
   );
+}
+
+function artifactScopeSummary(props: ArtifactsPanelProps): string {
+  if (props.pagination === "complete") {
+    return `${props.artifacts.length} for this step · ${Math.max(0, props.runArtifactCount - props.artifacts.length)} on other steps`;
+  }
+  return `${props.artifacts.length} loaded for this step · ${props.runArtifactCount} total in run`;
 }
 
 function previewLabel(artifact: RunArtifactItem) {

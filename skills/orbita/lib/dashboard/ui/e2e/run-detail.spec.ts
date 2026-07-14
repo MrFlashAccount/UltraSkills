@@ -62,7 +62,7 @@ test("Direction A preserves Workflow and scopes selected-step evidence", async (
   await expect(logTime).not.toContainText("T");
   await page.screenshot({ path: `${proofDir}/v2-logs-${testInfo.project.name}.png` });
   await dialog.getByRole("tab", { name: "Artifacts" }).click();
-  await expect(dialog.getByText(/Showing 2 of 3 run artifacts/)).toBeVisible();
+  await expect(dialog.getByText("2 for this step · 1 on other steps")).toBeVisible();
   await page.screenshot({ path: `${proofDir}/v2-artifacts-${testInfo.project.name}.png` });
 });
 
@@ -309,10 +309,10 @@ test("artifact continuation reaches an explicit end state", async ({ page }, tes
   await page.goto("/");
   await page.locator('.run-card[data-run-id="run-proof-0000"]').click();
   await page.getByRole("tab", { name: "Artifacts" }).click();
-  await expect(page.getByText("Showing 1 of 3 run artifacts")).toBeVisible();
+  await expect(page.getByText("1 loaded for this step · 3 total in run")).toBeVisible();
   await page.getByRole("button", { name: "Load more artifacts" }).click();
   await expect(page.getByText("End of artifacts")).toBeVisible();
-  await expect(page.getByText("Showing 2 of 3 run artifacts")).toBeVisible();
+  await expect(page.getByText("2 for this step · 1 on other steps")).toBeVisible();
   await page.screenshot({ path: `${proofDir}/v2-artifact-paging-${testInfo.project.name}.png` });
 });
 

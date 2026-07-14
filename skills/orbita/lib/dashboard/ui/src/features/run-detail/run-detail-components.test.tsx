@@ -184,6 +184,7 @@ describe("run detail Direction A components", () => {
       />,
     );
     expect(screen.getByText("report.txt")).toBeVisible();
+    expect(screen.getByText("1 loaded for this step · 3 total in run")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Reload from latest" }));
     expect(retry).toHaveBeenCalledTimes(1);
   });

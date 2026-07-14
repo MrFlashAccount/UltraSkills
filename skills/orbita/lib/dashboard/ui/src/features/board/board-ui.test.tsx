@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "bun:test";
 import { RunCard } from "./RunCard";
-import { SnapshotError, EmptyRoot, NoMatches } from "./states/BoardStates";
+import { BoardLoading, SnapshotError, EmptyRoot, NoMatches } from "./states/BoardStates";
 import { makeRun } from "@/test/fixtures";
 
 const roving = {
@@ -14,6 +14,13 @@ const roving = {
 };
 
 describe("board UI contracts", () => {
+  it("keeps the dashboard header stable while runs are loading", () => {
+    render(<BoardLoading />);
+    expect(screen.getByRole("heading", { name: "Orbita runs" })).toBeVisible();
+    expect(screen.getByLabelText("Loading dashboard controls")).toBeVisible();
+    expect(screen.getByLabelText("Loading runs")).toBeVisible();
+  });
+
   it("renders one bounded selection target with approved anatomy", () => {
     const onSelect = vi.fn();
     render(
