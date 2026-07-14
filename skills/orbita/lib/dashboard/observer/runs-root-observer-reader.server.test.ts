@@ -41,6 +41,15 @@ async function fixture() {
       workerLease: null,
       title: "Healthy",
     },
+    legacy: {
+      runId: "legacy",
+      workflow: { path: workflowPath },
+      status: "running",
+      createdAt: "2026-07-12T00:00:00.000Z",
+      updatedAt: "2026-07-12T00:04:00.000Z",
+      workerLease: null,
+      title: "Legacy",
+    },
   };
   await writeFile(
     join(runsRoot, "runs.json"),
@@ -85,6 +94,7 @@ describe("RunsRootObserverReader", () => {
     expect(first.find((run) => run.runId === "created")?.laneId).toBe("worker_running");
     expect(first.find((run) => run.runId === "healthy")?.laneId).toBe("waiting_for_user");
     expect(first.find((run) => run.runId === "corrupt")?.laneId).toBe("degraded");
+    expect(first.find((run) => run.runId === "legacy")?.workflow).toBe("dev-harness");
   });
 
   test("treats whole-index corruption as snapshot failure, never empty success", async () => {

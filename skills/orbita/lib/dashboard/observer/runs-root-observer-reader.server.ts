@@ -1,4 +1,4 @@
-/** Concrete bounded read capabilities over durable runs. Board reads never load history/workflow/artifact bytes. */
+/** Concrete bounded reads over durable runs. Board reads open workflow bytes only to recover a missing legacy identity. */
 import { createHash } from "node:crypto";
 import { constants, existsSync } from "node:fs";
 import { open } from "node:fs/promises";
@@ -90,6 +90,7 @@ function snapshotFromIdentity(identity: string): HistorySnapshot {
 
 export class RunsRootObserverReader {
   private readonly locators: OpaqueLocatorCodec;
+  private readonly workflowIdentityLookups = new Map<string, Promise<string | undefined>>();
 
   constructor(
     readonly runsRoot: string,
@@ -122,7 +123,14 @@ export class RunsRootObserverReader {
       });
       const authority =
         (await readRunAuthority(lookupPaths)) ?? runAuthorityFromIndexEntry(lookupPaths, entry);
-      const run = mergeRunAuthorityIntoIndexEntry(entry, authority);
+      let run = mergeRunAuthorityIntoIndexEntry(entry, authority);
+      if (typeof run.workflow?.identity !== "string" && typeof run.workflow?.path === "string") {
+        const identity = await this.workflowIdentityFromDocument(run);
+        signal?.throwIfAborted();
+        if (identity) {
+          run = { ...run, workflow: { ...run.workflow, identity } };
+        }
+      }
       const paths = resolveRunPaths({
         runId: run.runId,
         runsRoot: this.runsRoot,
@@ -144,6 +152,21 @@ export class RunsRootObserverReader {
 
   private artifactRef(runId: string, entry: any): string {
     return this.locators.ref("artifact", { runId, ...artifactIdentity(entry) });
+  }
+
+  private workflowIdentityFromDocument(run: any): Promise<string | undefined> {
+    const workflowPath = run.workflow.path as string;
+    const cached = this.workflowIdentityLookups.get(workflowPath);
+    if (cached) {
+      return cached;
+    }
+    const lookup = this.workflowDocument({ run })
+      .then((workflow) =>
+        typeof workflow?.name === "string" && workflow.name.length > 0 ? workflow.name : undefined,
+      )
+      .catch(() => undefined);
+    this.workflowIdentityLookups.set(workflowPath, lookup);
+    return lookup;
   }
 
   private async workflowDocument(entry: any, signal?: AbortSignal): Promise<any> {
