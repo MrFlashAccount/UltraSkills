@@ -213,6 +213,12 @@ export const ActivationPeerSchema = z
 export const TraversalOccurrenceSchema = OccurrenceSummarySchema.extend({
   peers: z.array(ActivationPeerSchema).max(1000),
 }).strict();
+export const TraversalStepTransitionSchema = z
+  .object({
+    from: StepIdSchema,
+    to: StepIdSchema,
+  })
+  .strict();
 export const TraversalPageSchema = z
   .object({
     availability: OccurrenceAvailabilitySchema,
@@ -221,6 +227,10 @@ export const TraversalPageSchema = z
     nextCursor: PageCursorSchema.optional(),
     runId: RunIdSchema,
     schemaVersion: z.literal(DASHBOARD_SCHEMA_VERSION),
+    transitions: z
+      .array(TraversalStepTransitionSchema)
+      .max(DASHBOARD_RESOURCE_LIMITS.traversalOccurrences)
+      .optional(),
     truncated: z.boolean().optional(),
   })
   .strict();

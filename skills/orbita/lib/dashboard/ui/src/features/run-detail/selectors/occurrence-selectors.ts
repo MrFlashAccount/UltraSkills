@@ -3,18 +3,18 @@ import {
   type ActivityEventItem,
   type ActivityGroupItem,
   type OccurrenceItem,
+  type StepPathItem,
 } from "../run-detail-view-model";
 import { accumulatePages, mergeTraversalPages } from "./page-accumulation";
 
-/** Keep explicit selection stable; only choose current/last occurrence before a user selection exists. */
-export function selectOccurrence(
+/** Resolve the newest trustworthy occurrence behind a step-only UI selection. */
+export function selectOccurrenceForStep(
   occurrences: ReadonlyArray<OccurrenceItem>,
-  selectedRef?: string,
+  stepId?: string,
 ): OccurrenceItem | undefined {
-  if (selectedRef) {
-    return occurrences.find((occurrence) => occurrence.occurrenceRef === selectedRef);
-  }
-  return occurrences.find((occurrence) => occurrence.state === "current") ?? occurrences.at(-1);
+  return occurrences
+    .filter((occurrence) => occurrence.stepId === stepId)
+    .toSorted((left, right) => right.ordinal - left.ordinal)[0];
 }
 
 export function toOccurrenceItems(
@@ -26,6 +26,35 @@ export function toOccurrenceItems(
     state: occurrence.state,
     stepId: occurrence.stepId,
   }));
+}
+
+/** Collapse transition history to the unique active path; repeated visits never enter the UI. */
+export function toStepPathItems(
+  pages: ReadonlyArray<TraversalPageDTO> | undefined,
+  currentStepId?: string,
+): Array<StepPathItem> {
+  const path: Array<string> = [];
+  const transitions = (pages ?? []).toReversed().flatMap((page) => page.transitions ?? []);
+  for (const transition of transitions) {
+    alignPath(path, transition.from);
+    alignPath(path, transition.to);
+  }
+  if (currentStepId) {
+    alignPath(path, currentStepId);
+  }
+  return path.map((stepId) => ({
+    state: stepId === currentStepId ? "current" : "completed",
+    stepId,
+  }));
+}
+
+function alignPath(path: Array<string>, stepId: string): void {
+  const existing = path.lastIndexOf(stepId);
+  if (existing >= 0) {
+    path.splice(existing + 1);
+    return;
+  }
+  path.push(stepId);
 }
 
 type TraversalOccurrence = TraversalPageDTO["items"][number];

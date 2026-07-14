@@ -20,13 +20,13 @@ import {
 
 type ArtifactsPanelProps = {
   artifacts: ReadonlyArray<RunArtifactItem>;
-  occurrenceLabel: string;
   onLoadMore?: () => void;
   onRetry?: () => void;
   onRetryPaging?: () => void;
   pagination: PagingState;
   runArtifactCount: number;
   state: OccurrenceEvidenceState;
+  stepLabel: string;
 };
 
 export function ArtifactsPanel(props: ArtifactsPanelProps) {
@@ -37,7 +37,7 @@ export function ArtifactsPanel(props: ArtifactsPanelProps) {
     <section aria-labelledby="artifacts-title" className="occurrence-panel">
       <header className="occurrence-panel-heading">
         <div>
-          <h3 id="artifacts-title">Artifacts · {props.occurrenceLabel}</h3>
+          <h3 id="artifacts-title">Artifacts · {props.stepLabel}</h3>
           <p>
             Showing {props.artifacts.length} of {props.runArtifactCount} run artifacts
           </p>
@@ -45,24 +45,21 @@ export function ArtifactsPanel(props: ArtifactsPanelProps) {
         <Badge>
           {props.state === "legacy_unavailable"
             ? "Legacy provenance unavailable"
-            : "Produced by selected occurrence"}
+            : "Produced by selected step"}
         </Badge>
       </header>
       {props.state === "loading" ? (
-        <PanelLoading label={`Loading ${props.occurrenceLabel} artifacts…`} />
+        <PanelLoading label={`Loading ${props.stepLabel} artifacts…`} />
       ) : props.state === "missing_selection" || props.state === "traversal_pending" ? (
         <OccurrenceEvidenceUnavailable state={props.state} />
       ) : props.state === "error" ? (
-        <PanelError
-          message="Selected occurrence artifacts are unavailable."
-          onRetry={props.onRetry}
-        />
+        <PanelError message="Selected step artifacts are unavailable." onRetry={props.onRetry} />
       ) : props.state === "legacy_unavailable" ? (
-        <LegacyUnavailable occurrenceLabel={props.occurrenceLabel} />
+        <LegacyUnavailable stepLabel={props.stepLabel} />
       ) : props.artifacts.length === 0 ? (
         <PanelEmpty
-          detail="The run may still have artifacts produced by other occurrences."
-          title="No artifacts for this occurrence"
+          detail="The run may still have artifacts produced by other steps."
+          title="No artifacts for this step"
         />
       ) : (
         <>

@@ -1,48 +1,32 @@
-import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, Layers3 } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleCheck, Layers3 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { TooltipLabel } from "@/components/ui/tooltip";
-import {
-  occurrenceLabel,
-  type OccurrenceItem,
-  type OccurrenceStatus,
-  type PagingState,
-} from "./run-detail-view-model";
+import { type PagingState, type StepPathItem } from "./run-detail-view-model";
 import { PagingFailure } from "./states/PanelStates";
 
-const STATUS_LABELS: Record<OccurrenceStatus, string> = {
-  completed: "Completed",
-  current: "Current",
-  failed: "Failed",
-  pending: "Pending",
-  unavailable: "Unavailable",
-};
-
-type OccurrenceSelectorProps = {
-  occurrences: ReadonlyArray<OccurrenceItem>;
+type StepPathSelectorProps = {
   onRetryPaging: () => void;
-  onSelect: (occurrenceRef: string) => void;
+  onSelect: (stepId: string) => void;
   onShowEarlier: () => void;
   pagination: PagingState;
-  selectedRef?: string | undefined;
+  selectedStepId?: string | undefined;
+  steps: ReadonlyArray<StepPathItem>;
 };
 
-/** Ordered owner-occurrence selector; it never receives or mutates Workflow state. */
-export function OccurrenceSelector({
-  occurrences,
+/** Unique current workflow path. Occurrence identity remains an internal evidence locator. */
+export function StepPathSelector({
   onRetryPaging,
   onSelect,
   onShowEarlier,
   pagination,
-  selectedRef,
-}: OccurrenceSelectorProps) {
+  selectedStepId,
+  steps,
+}: StepPathSelectorProps) {
   const listRef = useRef<HTMLUListElement>(null);
-  const selectedIndex = occurrences.findIndex(
-    (occurrence) => occurrence.occurrenceRef === selectedRef,
-  );
+  const selectedIndex = steps.findIndex((step) => step.stepId === selectedStepId);
   const focusAt = (index: number) => {
-    const controls =
-      listRef.current?.querySelectorAll<HTMLButtonElement>("button[data-occurrence]");
+    const controls = listRef.current?.querySelectorAll<HTMLButtonElement>("button[data-step]");
     controls?.item(Math.max(0, Math.min(index, controls.length - 1))).focus();
   };
 
@@ -51,13 +35,13 @@ export function OccurrenceSelector({
       return;
     }
     listRef.current
-      ?.querySelectorAll<HTMLButtonElement>("button[data-occurrence]")
+      ?.querySelectorAll<HTMLButtonElement>("button[data-step]")
       .item(selectedIndex)
       .scrollIntoView?.({ behavior: "auto", block: "nearest", inline: "nearest" });
   }, [selectedIndex]);
 
   return (
-    <section aria-label="Step occurrences" className="occurrence-selector">
+    <section aria-label="Current workflow path" className="occurrence-selector">
       <div className="occurrence-scroll">
         {pagination === "more" || pagination === "loading" ? (
           <Button
@@ -67,30 +51,25 @@ export function OccurrenceSelector({
             variant="quiet"
           >
             <ChevronLeft aria-hidden="true" size={15} />
-            {pagination === "loading" ? "Loading…" : "Show earlier"}
+            {pagination === "loading" ? "Loading…" : "Show earlier steps"}
           </Button>
         ) : null}
         <ul ref={listRef}>
-          {occurrences.map((occurrence, index) => {
-            const label = occurrenceLabel(occurrence);
-            const selected = occurrence.occurrenceRef === selectedRef;
-            const StatusIcon =
-              occurrence.state === "completed"
-                ? CircleCheck
-                : occurrence.state === "failed"
-                  ? CircleAlert
-                  : Layers3;
+          {steps.map((step, index) => {
+            const selected = step.stepId === selectedStepId;
+            const StatusIcon = step.state === "current" ? Layers3 : CircleCheck;
+            const status = step.state === "current" ? "Current" : "Completed";
             return (
-              <li key={occurrence.occurrenceRef}>
-                <TooltipLabel label={`${label} — ${STATUS_LABELS[occurrence.state]}`}>
+              <li key={step.stepId}>
+                <TooltipLabel label={`${step.stepId} — ${status}`}>
                   <button
-                    aria-current={occurrence.state === "current" ? "step" : undefined}
+                    aria-current={step.state === "current" ? "step" : undefined}
                     aria-pressed={selected}
                     className="occurrence-item"
-                    data-occurrence=""
                     data-selected={selected}
-                    data-state={occurrence.state}
-                    onClick={() => onSelect(occurrence.occurrenceRef)}
+                    data-state={step.state}
+                    data-step=""
+                    onClick={() => onSelect(step.stepId)}
                     onKeyDown={(event) => {
                       if (event.key === "ArrowLeft") {
                         event.preventDefault();
@@ -103,15 +82,15 @@ export function OccurrenceSelector({
                         focusAt(0);
                       } else if (event.key === "End") {
                         event.preventDefault();
-                        focusAt(occurrences.length - 1);
+                        focusAt(steps.length - 1);
                       }
                     }}
                     type="button"
                   >
                     <StatusIcon aria-hidden="true" size={18} />
                     <span className="occurrence-copy">
-                      <strong>{label}</strong>
-                      <span>{STATUS_LABELS[occurrence.state]}</span>
+                      <strong>{step.stepId}</strong>
+                      <span>{status}</span>
                     </span>
                     <ChevronRight aria-hidden="true" className="occurrence-edge" size={14} />
                   </button>
@@ -124,7 +103,7 @@ export function OccurrenceSelector({
       {pagination === "error" || pagination === "stale" ? (
         <PagingFailure
           onRetry={onRetryPaging}
-          resource="Occurrences"
+          resource="Workflow path"
           stale={pagination === "stale"}
         />
       ) : null}

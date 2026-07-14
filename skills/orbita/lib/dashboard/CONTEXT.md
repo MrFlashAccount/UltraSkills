@@ -70,9 +70,12 @@ shared utility zone for this concrete observer.
   never scans old history, calls a seeded occurrence covered, or fabricates an
   ordinal.
 - Workflow projection preserves declaration order and stays independent of the
-  selected occurrence. A partial workflow page set is explicitly incomplete.
-  Selecting an occurrence changes only Activity, Logs, and the occurrence-scoped
-  Artifacts tab; Workflow step artifacts follow the graph's selected `stepId`.
+  selected path step. A partial workflow page set is explicitly incomplete. The
+  selector collapses transition history to unique steps on the active path;
+  repeated visits and ordinals remain hidden. Selecting a step resolves its
+  newest trustworthy occurrence internally and changes only Activity, Logs, and
+  the occurrence-scoped Artifacts tab. Workflow step artifacts follow the
+  graph's independently selected `stepId`.
 - Activity and Logs are distinct managed-history projections. Paging preserves
   complete entry boundaries and exposes truncation separately from completion.
   Logs construct positive Markdown from allowlisted structured v2 facts; raw
@@ -197,7 +200,7 @@ snapshot refresh. EventSource connectivity alone never proves Live.
 
 Request authority is split deliberately: process configuration owns the runs
 root; snapshot revision owns board/freshness; the exact `run` search value owns
-run selection; local run-detail state owns selected occurrence and tab; the
+run selection; local run-detail state owns selected path step and tab; the
 Workflow pane independently owns selected `stepId`. Each query key includes
 schema version, run id, resource, exact occurrence or workflow-step artifact
 scope, relevant ref, and cursor. Cancellation propagates to fetch aborts.

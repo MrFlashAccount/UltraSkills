@@ -197,6 +197,12 @@ export function resourcesFor(run: RunSummaryDTO) {
       ],
       runId,
       schemaVersion: "2",
+      transitions: [
+        { from: "research", to: "ui_intent" },
+        { from: "ui_intent", to: "architecture" },
+        { from: "architecture", to: "ui_intent" },
+        { from: "ui_intent", to: "architecture" },
+      ],
     },
     workflow: {
       complete: true,

@@ -5,11 +5,12 @@ import { type OccurrenceEvidenceState } from "../run-detail-view-model";
 import {
   accumulatePages,
   mergeTraversalPages,
-  selectOccurrence,
+  selectOccurrenceForStep,
   toActivityGroups,
   toManagedLogEntries,
   toOccurrenceItems,
   toRunArtifactItems,
+  toStepPathItems,
 } from "../selectors/page-selectors";
 import { resourceQueryKey } from "./query-client";
 import { type PagingQuery, usePagingRecovery } from "./use-paging-recovery";
@@ -29,10 +30,16 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
   const workflow = useWorkflowPages(runId);
   const traversal = useTraversalPages(runId);
   const occurrences = toOccurrenceItems(traversal.data?.pages);
-  const [selection, setSelection] = useState<{ ref: string; runId: string }>();
-  const explicitSelection = selection?.runId === runId ? selection.ref : undefined;
-  const stableSelection = explicitSelection ?? detail.currentOccurrence?.occurrenceRef;
-  const selected = selectOccurrence(occurrences, stableSelection);
+  const currentStepId = detail.currentOccurrence?.stepId ?? detail.run.currentStep;
+  const steps = toStepPathItems(traversal.data?.pages, currentStepId);
+  const [selection, setSelection] = useState<{ runId: string; stepId: string }>();
+  const explicitSelection = selection?.runId === runId ? selection.stepId : undefined;
+  const selectedStepId =
+    explicitSelection ??
+    currentStepId ??
+    steps.find((step) => step.state === "current")?.stepId ??
+    steps.at(-1)?.stepId;
+  const selected = selectOccurrenceForStep(occurrences, selectedStepId);
   const selectedRef = selected?.occurrenceRef;
   const activity = useActivityPages(runId, selectedRef);
   const logs = useLogPages(runId, selectedRef);
@@ -64,7 +71,7 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
 
   const reset = (resource: string, locator?: string) =>
     void client.resetQueries({ exact: true, queryKey: resourceQueryKey(runId, resource, locator) });
-  // Traversal paging belongs to the occurrence selector. Keeping it out of the
+  // Traversal paging belongs to the step-path selector. Keeping it out of the
   // workflow action prevents two recovery controls from competing for one stale cursor.
   return {
     activity: {
@@ -93,23 +100,23 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
       pagination: paging.state(logsKey, logs),
       state: panelState(occurrenceState, logs, logEntries.length > 0),
     },
-    occurrenceLabel: selected
-      ? `${selected.stepId} · ${selected.ordinal}`
+    stepLabel: selectedStepId
+      ? selectedStepId
       : occurrenceState === "legacy_unavailable"
         ? "legacy run"
         : occurrenceState === "traversal_pending"
-          ? "occurrence pending"
+          ? "step pending"
           : "selection unavailable",
     selector: {
-      isError: traversal.isError && occurrences.length === 0,
+      isError: traversal.isError && steps.length === 0,
       isPending: traversal.isPending,
-      occurrences,
+      steps,
       onRetry: () => reset("traversal"),
       onRetryPaging: () => paging.recover("traversal", traversal),
-      onSelect: (ref: string) => setSelection({ ref, runId }),
+      onSelect: (stepId: string) => setSelection({ runId, stepId }),
       onShowEarlier: () => paging.loadNext("traversal", traversal),
       pagination: paging.state("traversal", traversal),
-      selectedRef,
+      selectedStepId,
     },
     workflow: {
       definitionComplete: pageComplete(workflow, paging.state("workflow", workflow)),

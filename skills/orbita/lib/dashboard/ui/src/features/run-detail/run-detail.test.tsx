@@ -55,6 +55,7 @@ beforeEach(() => {
           ],
           runId: "run-1",
           schemaVersion: "2",
+          transitions: [{ from: "research", to: "step-1" }],
         });
       }
       if (url.includes("/activity")) {
@@ -143,7 +144,7 @@ describe("RunDetailSurface", () => {
     expect(await screen.findByRole("region", { name: "Workflow graph" })).toBeVisible();
     expect(screen.getByLabelText("step-1, Fanout, Current")).toBeInTheDocument();
     const graphBefore = screen.getByRole("region", { name: "Workflow graph" }).innerHTML;
-    fireEvent.click(screen.getByRole("button", { name: /research · 1/i }));
+    fireEvent.click(screen.getByRole("button", { name: /research/i }));
     expect(screen.getByRole("region", { name: "Workflow graph" }).innerHTML).toBe(graphBefore);
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Activity" }), { button: 0 });
     expect(await screen.findByText("Fanout activation started")).toBeVisible();
@@ -172,9 +173,9 @@ describe("RunDetailSurface", () => {
       />,
     );
     expect(await screen.findByRole("region", { name: "Workflow graph" })).toBeVisible();
-    expect(screen.getByText("Legacy occurrence unavailable")).toBeVisible();
+    expect(screen.getByRole("button", { name: /step-1.*current/i })).toBeVisible();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Activity" }), { button: 0 });
-    expect(screen.getByText(/legacy run predates occurrence provenance/i)).toBeVisible();
+    expect(screen.getByText(/step is known from workflow history/i)).toBeVisible();
   });
 
   it("preserves a missing selection instead of selecting a neighbor", () => {

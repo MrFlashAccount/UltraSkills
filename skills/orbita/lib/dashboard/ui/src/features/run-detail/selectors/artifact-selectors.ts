@@ -23,7 +23,7 @@ export function toRunArtifactItems(
       producerLabel:
         artifact.producerOccurrence === undefined
           ? `${artifact.producerStepId} · provenance unavailable`
-          : `${artifact.producerStepId} · ${artifact.producerOccurrence}`,
+          : artifact.producerStepId,
       producerStepId: artifact.producerStepId,
       summary: artifact.summary?.value,
     };

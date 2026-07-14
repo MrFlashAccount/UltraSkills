@@ -5,42 +5,36 @@ import { ActivityPanel } from "./ActivityPanel";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { useRunDetailModel } from "./hooks/use-run-detail-model";
 import { LogsPanel } from "./LogsPanel";
-import { OccurrenceSelector } from "./OccurrenceSelector";
 import { RunDetailOverview } from "./RunDetailOverview";
+import { StepPathSelector } from "./StepPathSelector";
 import { PanelEmpty, PanelError, PanelLoading } from "./states/PanelStates";
 
 const WorkflowGraph = lazy(() => import("./WorkflowGraph"));
 
-/** Run-detail orchestration shell. Occurrence selection never enters Workflow query state. */
+/** Run-detail orchestration shell. Step-path selection never enters Workflow query state. */
 export function RunDetailBody({ detail }: Readonly<{ detail: RunLightDetailDTO }>) {
   const model = useRunDetailModel(detail);
 
   return (
     <div className="detail-body">
       <RunDetailOverview detail={detail} />
-      {model.selector.isPending && !model.legacyUnavailable ? (
-        <PanelLoading label="Loading occurrences…" />
+      {model.selector.isPending && !model.selector.steps.length ? (
+        <PanelLoading label="Loading workflow path…" />
       ) : model.selector.isError ? (
-        <PanelError message="Occurrences are unavailable." onRetry={model.selector.onRetry} />
-      ) : model.selector.occurrences.length ? (
-        <OccurrenceSelector
-          occurrences={model.selector.occurrences}
+        <PanelError message="Workflow path is unavailable." onRetry={model.selector.onRetry} />
+      ) : model.selector.steps.length ? (
+        <StepPathSelector
           onRetryPaging={model.selector.onRetryPaging}
           onSelect={model.selector.onSelect}
           onShowEarlier={model.selector.onShowEarlier}
           pagination={model.selector.pagination}
-          selectedRef={model.selector.selectedRef}
+          selectedStepId={model.selector.selectedStepId}
+          steps={model.selector.steps}
         />
       ) : (
         <PanelEmpty
-          detail={
-            model.legacyUnavailable
-              ? "Occurrence identity is unavailable for this legacy run. Workflow remains inspectable."
-              : "No owner occurrence is currently available."
-          }
-          title={
-            model.legacyUnavailable ? "Legacy occurrence unavailable" : "No occurrence selected"
-          }
+          detail="No current or previous workflow step is available."
+          title="Workflow path unavailable"
         />
       )}
       <TabsRoot className="detail-tabs" defaultValue="workflow">
@@ -56,13 +50,13 @@ export function RunDetailBody({ detail }: Readonly<{ detail: RunLightDetailDTO }
           </Suspense>
         </TabsContent>
         <TabsContent className="detail-tab-panel" value="activity">
-          <ActivityPanel occurrenceLabel={model.occurrenceLabel} {...model.activity} />
+          <ActivityPanel stepLabel={model.stepLabel} {...model.activity} />
         </TabsContent>
         <TabsContent className="detail-tab-panel" value="logs">
-          <LogsPanel occurrenceLabel={model.occurrenceLabel} {...model.logs} />
+          <LogsPanel stepLabel={model.stepLabel} {...model.logs} />
         </TabsContent>
         <TabsContent className="detail-tab-panel" value="artifacts">
-          <ArtifactsPanel occurrenceLabel={model.occurrenceLabel} {...model.artifacts} />
+          <ArtifactsPanel stepLabel={model.stepLabel} {...model.artifacts} />
         </TabsContent>
       </TabsRoot>
     </div>

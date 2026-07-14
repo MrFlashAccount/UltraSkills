@@ -16,12 +16,12 @@ import {
 
 type ActivityPanelProps = {
   groups: ReadonlyArray<ActivityGroupItem>;
-  occurrenceLabel: string;
   onLoadMore?: () => void;
   onRetry?: () => void;
   onRetryPaging?: () => void;
   pagination: PagingState;
   state: OccurrenceEvidenceState;
+  stepLabel: string;
 };
 
 export function ActivityPanel(props: ActivityPanelProps) {
@@ -29,25 +29,22 @@ export function ActivityPanel(props: ActivityPanelProps) {
     <section aria-labelledby="activity-title" className="occurrence-panel">
       <header className="occurrence-panel-heading">
         <div>
-          <h3 id="activity-title">Activity · {props.occurrenceLabel}</h3>
+          <h3 id="activity-title">Activity · {props.stepLabel}</h3>
           <p>Selected-step lifecycle and nested work</p>
         </div>
       </header>
       {props.state === "loading" ? (
-        <PanelLoading label={`Loading ${props.occurrenceLabel} activity…`} />
+        <PanelLoading label={`Loading ${props.stepLabel} activity…`} />
       ) : props.state === "missing_selection" || props.state === "traversal_pending" ? (
         <OccurrenceEvidenceUnavailable state={props.state} />
       ) : props.state === "error" ? (
-        <PanelError
-          message="Selected occurrence activity is unavailable."
-          onRetry={props.onRetry}
-        />
+        <PanelError message="Selected step activity is unavailable." onRetry={props.onRetry} />
       ) : props.state === "legacy_unavailable" ? (
-        <LegacyUnavailable occurrenceLabel={props.occurrenceLabel} />
+        <LegacyUnavailable stepLabel={props.stepLabel} />
       ) : props.groups.length === 0 ? (
         <PanelEmpty
-          detail="No durable activity was recorded for this occurrence."
-          title="No occurrence activity"
+          detail="No durable activity was recorded for this step."
+          title="No step activity"
         />
       ) : (
         <div className="activity-groups">

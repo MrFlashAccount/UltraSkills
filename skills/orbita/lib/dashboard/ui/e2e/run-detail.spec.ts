@@ -4,7 +4,7 @@ import { detailFor, resourcesFor } from "./fixtures";
 
 const proofDir = "skills/orbita/lib/dashboard/ui/e2e/proof";
 
-test("Direction A preserves Workflow and scopes selected-occurrence evidence", async ({
+test("Direction A preserves Workflow and scopes selected-step evidence", async ({
   page,
 }, testInfo) => {
   await mockDashboard(page);
@@ -17,11 +17,11 @@ test("Direction A preserves Workflow and scopes selected-occurrence evidence", a
   const tabs = dialog.getByRole("tab");
   await expect(tabs).toHaveCount(4);
   expect(await tabs.allTextContents()).toEqual(["Workflow", "Activity", "Logs", "Artifacts"]);
-  const selector = dialog.getByRole("region", { name: "Step occurrences" });
-  await expect(selector.getByRole("button")).toHaveCount(5);
-  const selectedOccurrence = selector.getByRole("button", { name: /architecture · 2/i });
-  await expect(selectedOccurrence).toHaveAttribute("aria-pressed", "true");
-  await expectContained(selectedOccurrence, selector);
+  const selector = dialog.getByRole("region", { name: "Current workflow path" });
+  await expect(selector.locator("button[data-step]")).toHaveCount(3);
+  const selectedStep = selector.getByRole("button", { name: /architecture.*current/i });
+  await expect(selectedStep).toHaveAttribute("aria-pressed", "true");
+  await expectContained(selectedStep, selector);
   const tabList = dialog.getByRole("tablist");
   expect((await selector.boundingBox())!.y).toBeLessThan((await tabList.boundingBox())!.y);
   const workflowGraph = dialog.getByRole("region", { name: "Workflow graph" });
@@ -31,14 +31,14 @@ test("Direction A preserves Workflow and scopes selected-occurrence evidence", a
     "workflow-trail.png",
   );
   await page.screenshot({ path: `${proofDir}/v2-direction-a-${testInfo.project.name}.png` });
-  const researchOccurrence = dialog.getByRole("button", { name: /research · 1/i });
-  await researchOccurrence.click();
-  await expectContained(researchOccurrence, selector);
+  const researchStep = dialog.getByRole("button", { name: /research.*completed/i });
+  await researchStep.click();
+  await expectContained(researchStep, selector);
   await expect(selectedWorkflowStep).toHaveAttribute("data-id", "architecture");
   await dialog.getByRole("tab", { name: "Activity" }).click();
-  await expect(dialog.getByRole("heading", { name: "Activity · research · 1" })).toBeVisible();
-  await dialog.getByRole("button", { name: /architecture · 2/i }).click();
-  await expect(dialog.getByRole("heading", { name: "Activity · architecture · 2" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Activity · research" })).toBeVisible();
+  await dialog.getByRole("button", { name: /architecture.*current/i }).click();
+  await expect(dialog.getByRole("heading", { name: "Activity · architecture" })).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "Fanout activation 1" })).toBeVisible();
   if (testInfo.project.name === "mobile") {
     await expectContained(
@@ -205,24 +205,24 @@ test("stale traversal paging preserves evidence and restarts from the latest pag
   ).toBeVisible();
   await expectContained(page.getByText(/loaded · partial/u), page.getByRole("dialog"));
   await page.getByRole("tab", { name: "Activity" }).click();
-  await expect(page.getByRole("heading", { name: "Activity · architecture · 2" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Activity · architecture" })).toBeVisible();
   await page.getByRole("button", { name: "Show earlier" }).click();
-  await expect(page.getByText(/Occurrences changed while paging/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: /architecture · 2/i })).toBeVisible();
+  await expect(page.getByText(/Workflow path changed while paging/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /architecture.*current/i })).toBeVisible();
   await page.screenshot({ path: `${proofDir}/v2-stale-paging-${testInfo.project.name}.png` });
   await page
-    .getByRole("region", { name: "Step occurrences" })
+    .getByRole("region", { name: "Current workflow path" })
     .getByRole("button", { name: "Reload from latest" })
     .click();
   await replacementRequested;
-  await expect(page.getByRole("heading", { name: "Activity · architecture · 2" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Activity · architecture" })).toBeVisible();
   await expect(page.getByText("Fanout activation 1 started")).toBeVisible();
   releaseReplacement?.();
-  await expect(page.getByText("Selected occurrence unavailable")).toBeVisible();
+  await expect(page.getByText("Selected step unavailable")).toBeVisible();
   await page.screenshot({ path: `${proofDir}/v2-vanished-selection-${testInfo.project.name}.png` });
 });
 
-test("occurrence panels show traversal pending instead of successful emptiness", async ({
+test("step panels show traversal pending instead of successful emptiness", async ({
   page,
 }, testInfo) => {
   const snapshot = await mockDashboard(page);
@@ -239,11 +239,11 @@ test("occurrence panels show traversal pending instead of successful emptiness",
   await page.locator(".run-card").first().click();
   await page.getByRole("tab", { name: "Activity" }).click();
   await expect(
-    page.getByText("Waiting for occurrence traversal before loading selected evidence…"),
+    page.getByText("Waiting for workflow traversal before loading selected evidence…"),
   ).toBeVisible();
   await page.screenshot({ path: `${proofDir}/v2-traversal-pending-${testInfo.project.name}.png` });
   releaseTraversal?.();
-  await expect(page.getByRole("heading", { name: "Activity · architecture · 2" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Activity · architecture" })).toBeVisible();
 });
 
 test("workflow renders legacy descriptors without occurrence or content authority", async ({

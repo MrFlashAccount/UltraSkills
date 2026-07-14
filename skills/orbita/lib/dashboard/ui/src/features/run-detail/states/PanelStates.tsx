@@ -38,11 +38,11 @@ export function PanelEmpty({
   );
 }
 
-export function LegacyUnavailable({ occurrenceLabel }: Readonly<{ occurrenceLabel: string }>) {
+export function LegacyUnavailable({ stepLabel }: Readonly<{ stepLabel: string }>) {
   return (
     <PanelEmpty
-      detail="This legacy run predates occurrence provenance. No identity was inferred from ambiguous history."
-      title={`Evidence unavailable for ${occurrenceLabel}`}
+      detail="This step is known from workflow history, but exact step evidence was not recorded for this run."
+      title={`Evidence unavailable for ${stepLabel}`}
     />
   );
 }
@@ -51,11 +51,11 @@ export function OccurrenceEvidenceUnavailable({
   state,
 }: Readonly<{ state: "missing_selection" | "traversal_pending" }>) {
   return state === "traversal_pending" ? (
-    <PanelLoading label="Waiting for occurrence traversal before loading selected evidence…" />
+    <PanelLoading label="Waiting for workflow traversal before loading selected evidence…" />
   ) : (
     <PanelEmpty
-      detail="The selected occurrence is no longer present in the latest traversal. Choose another occurrence above."
-      title="Selected occurrence unavailable"
+      detail="The selected step is no longer present in the latest path. Choose another step above."
+      title="Selected step unavailable"
     />
   );
 }

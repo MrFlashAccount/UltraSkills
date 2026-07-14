@@ -1,14 +1,15 @@
-import { ArtifactPageSchema } from "@dashboard-contracts";
+import { ArtifactPageSchema, type TraversalPageDTO } from "@dashboard-contracts";
 import { describe, expect, it } from "vitest";
 import {
   accumulatePages,
   mergeTraversalPages,
-  selectOccurrence,
+  selectOccurrenceForStep,
   toActivityGroups,
   toRunArtifactItems,
+  toStepPathItems,
 } from "./page-selectors";
 
-const traversalPage = (peers: Array<Record<string, unknown>>) =>
+const traversalPage = (peers: Array<Record<string, unknown>>): TraversalPageDTO =>
   ({
     availability: "available",
     complete: false,
@@ -23,7 +24,7 @@ const traversalPage = (peers: Array<Record<string, unknown>>) =>
     ],
     runId: "run-1",
     schemaVersion: "2",
-  }) as never;
+  }) as TraversalPageDTO;
 
 describe("run detail page selectors", () => {
   it("preserves server order and ignores replayed page records", () => {
@@ -35,13 +36,50 @@ describe("run detail page selectors", () => {
     ).toEqual([{ id: "a" }, { id: "b" }, { id: "c" }]);
   });
 
-  it("never silently replaces a missing explicit occurrence selection", () => {
+  it("resolves the latest occurrence behind a step selection", () => {
     const occurrences = [
       { occurrenceRef: "a:1", ordinal: 1, state: "completed" as const, stepId: "a" },
       { occurrenceRef: "a:2", ordinal: 2, state: "current" as const, stepId: "a" },
     ];
-    expect(selectOccurrence(occurrences, "missing")).toBeUndefined();
-    expect(selectOccurrence(occurrences)?.occurrenceRef).toBe("a:2");
+    expect(selectOccurrenceForStep(occurrences, "a")?.occurrenceRef).toBe("a:2");
+    expect(selectOccurrenceForStep(occurrences, "missing")).toBeUndefined();
+  });
+
+  it("collapses repeated visits to one active step path", () => {
+    expect(
+      toStepPathItems(
+        [
+          {
+            ...traversalPage([]),
+            items: [
+              {
+                occurrenceRef: "a_ref_2",
+                ordinal: 2,
+                peers: [],
+                state: "completed",
+                stepId: "a",
+              },
+              {
+                occurrenceRef: "b_ref_2",
+                ordinal: 2,
+                peers: [],
+                state: "current",
+                stepId: "b",
+              },
+            ],
+            transitions: [
+              { from: "a", to: "b" },
+              { from: "b", to: "a" },
+              { from: "a", to: "b" },
+            ],
+          },
+        ] as never,
+        "b",
+      ),
+    ).toEqual([
+      { state: "completed", stepId: "a" },
+      { state: "current", stepId: "b" },
+    ]);
   });
 
   it("merges peer facts across replayed traversal pages while newer lifecycle state wins", () => {

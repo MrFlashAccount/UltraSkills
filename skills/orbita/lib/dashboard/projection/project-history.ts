@@ -33,6 +33,7 @@ export type ManagedHistoryEntry = {
   markdown: string;
   source?: string;
   timestamp?: string;
+  transition?: { from: string; to: string };
 };
 
 type TraversalOccurrenceProjection = {
@@ -57,6 +58,10 @@ export function parseManagedHistoryEntries(text: string): Array<ManagedHistoryEn
     const firstLine = markdown.split("\n", 1)[0] ?? "";
     const timestamp = firstLine.startsWith("## ") ? firstLine.slice(3).trim() : undefined;
     const source = /^- source: (.+)$/mu.exec(markdown)?.[1]?.trim();
+    const transitionMatch =
+      /^- (?:transition|pointer move edge): cursor=([A-Za-z0-9_.-]+) status=\S+ -> cursor=([A-Za-z0-9_.-]+) status=\S+$/mu.exec(
+        markdown,
+      );
     const facts = [...markdown.matchAll(/^- orbita-v2: (\{.*\})$/gmu)].flatMap((match) => {
       try {
         return [JSON.parse(match[1]!)];
@@ -70,6 +75,9 @@ export function parseManagedHistoryEntries(text: string): Array<ManagedHistoryEn
         markdown,
         ...(source ? { source } : {}),
         ...(timestamp ? { timestamp } : {}),
+        ...(transitionMatch?.[1] && transitionMatch[2]
+          ? { transition: { from: transitionMatch[1], to: transitionMatch[2] } }
+          : {}),
       },
     ];
   });
@@ -185,6 +193,14 @@ export function projectTraversalPage(input: {
           : ("completed" as const),
       occurrenceRef: input.encodeOccurrenceRef(item.stepId, item.ordinal),
     }));
+  const transitions = input.entries.flatMap((entry) => {
+    const routed = entry.facts.find(
+      (fact) => fact?.event === "route" && fact?.fromOwnerStepId && fact?.ownerStepId,
+    );
+    const from = exposeIdentifier("step_id", routed?.fromOwnerStepId ?? entry.transition?.from);
+    const to = exposeIdentifier("step_id", routed?.ownerStepId ?? entry.transition?.to);
+    return from && to ? [{ from, to }] : [];
+  });
   return TraversalPageSchema.parse({
     availability: input.availability,
     complete: input.complete,
@@ -192,6 +208,7 @@ export function projectTraversalPage(input: {
     ...(input.nextCursor ? { nextCursor: input.nextCursor } : {}),
     runId: input.runId,
     schemaVersion: "2",
+    transitions,
     truncated: input.truncated ?? !input.complete,
   });
 }

@@ -130,5 +130,33 @@ describe("managed history public projection", () => {
     expect(page.items.some((item) => item.stepId === "implementation" && item.ordinal === 1)).toBe(
       false,
     );
+    expect(page.transitions).toEqual([
+      { from: "implementation", to: "review" },
+      { from: "review", to: "implementation" },
+    ]);
+  });
+
+  test("projects legacy transition history without inventing occurrence identity", () => {
+    const entries = parseManagedHistoryEntries(`## 2026-07-14T00:00:00.000Z
+- source: workflow-runner-continue
+- transition: cursor=research status=running -> cursor=architecture status=running
+
+## 2026-07-14T00:00:01.000Z
+- source: workflow-runner-pointer
+- pointer move edge: cursor=architecture status=running -> cursor=research status=running
+`);
+    const page = projectTraversalPage({
+      availability: "legacy_unavailable",
+      complete: true,
+      encodeOccurrenceRef: () => "unused_occurrence_ref",
+      entries,
+      runId: "run-a",
+    });
+
+    expect(page.items).toEqual([]);
+    expect(page.transitions).toEqual([
+      { from: "research", to: "architecture" },
+      { from: "architecture", to: "research" },
+    ]);
   });
 });

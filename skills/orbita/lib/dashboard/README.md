@@ -120,9 +120,11 @@ boundaries for newly observed visits without moving coverage backward over the
 seed. Ambiguous panels show `legacy_unavailable`; the dashboard does not infer
 an ordinal from old history or relabel a seeded occurrence as covered.
 
-Workflow is run-scoped and independent of occurrence selection. Selecting an
-occurrence changes only Activity, Logs, and the occurrence-scoped Artifacts tab;
-the Workflow pane requests artifacts independently by selected `stepId`. The
+Workflow is run-scoped and independent of the path-step selector. The selector
+shows unique steps on the active transition path and hides occurrence ordinals.
+Selecting a step resolves its newest trustworthy occurrence internally and
+changes only Activity, Logs, and the occurrence-scoped Artifacts tab; the
+Workflow pane requests artifacts independently by selected `stepId`. The
 artifact resource requires exactly one scope and has no run-wide form. Aggregate
 artifact identity includes owner step, owner occurrence, producer request, and
 artifact id, so repeated owners cannot overwrite or merge one another.

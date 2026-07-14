@@ -6,17 +6,12 @@ import { ActivityPanel } from "./ActivityPanel";
 import { ArtifactPreviewBody } from "./ArtifactPreviewBody";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { LogsPanel } from "./LogsPanel";
-import { OccurrenceSelector } from "./OccurrenceSelector";
+import { StepPathSelector } from "./StepPathSelector";
 import { WorkflowStepArtifacts } from "./WorkflowStepArtifacts";
 
-const occurrences = [
-  { occurrenceRef: "research:1", ordinal: 1, state: "completed" as const, stepId: "research" },
-  {
-    occurrenceRef: "architecture:1",
-    ordinal: 1,
-    state: "current" as const,
-    stepId: "architecture",
-  },
+const steps = [
+  { state: "completed" as const, stepId: "research" },
+  { state: "current" as const, stepId: "architecture" },
 ];
 
 const renderFeature = (component: React.ReactNode) => {
@@ -29,26 +24,26 @@ const renderFeature = (component: React.ReactNode) => {
 };
 
 describe("run detail Direction A components", () => {
-  it("preserves explicit occurrence identity and supports arrow traversal", () => {
+  it("shows unique path steps and supports arrow traversal", () => {
     const onSelect = vi.fn();
     renderFeature(
-      <OccurrenceSelector
-        occurrences={occurrences}
+      <StepPathSelector
         onRetryPaging={() => {}}
         onSelect={onSelect}
         onShowEarlier={() => {}}
         pagination="more"
-        selectedRef="architecture:1"
+        selectedStepId="architecture"
+        steps={steps}
       />,
     );
-    const research = screen.getByRole("button", { name: /research · 1/i });
-    const architecture = screen.getByRole("button", { name: /architecture · 1/i });
+    const research = screen.getByRole("button", { name: /research/i });
+    const architecture = screen.getByRole("button", { name: /architecture/i });
     expect(architecture).toHaveAttribute("aria-pressed", "true");
     research.focus();
     fireEvent.keyDown(research, { key: "ArrowRight" });
     expect(architecture).toHaveFocus();
     fireEvent.click(architecture);
-    expect(onSelect).toHaveBeenCalledWith("architecture:1");
+    expect(onSelect).toHaveBeenCalledWith("architecture");
   });
 
   it("renders nested activity as a semantic table", () => {
@@ -70,12 +65,12 @@ describe("run detail Direction A components", () => {
             state: "current",
           },
         ]}
-        occurrenceLabel="architecture · 1"
         pagination="complete"
         state="ready"
+        stepLabel="architecture"
       />,
     );
-    expect(screen.getByRole("heading", { name: "Activity · architecture · 1" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Activity · architecture" })).toBeVisible();
     expect(screen.getByRole("table")).toHaveTextContent("spec_modeling");
     expect(screen.getByText("End of activity")).toBeVisible();
   });
@@ -91,9 +86,9 @@ describe("run detail Direction A components", () => {
             truncated: true,
           },
         ]}
-        occurrenceLabel="architecture · 1"
         pagination="more"
         state="ready"
+        stepLabel="architecture"
       />,
     );
     expect(screen.getByText("Done").tagName).toBe("STRONG");
@@ -119,14 +114,14 @@ describe("run detail Direction A components", () => {
             key: "artifact-1",
             mimeMismatch: false,
             preview: { kind: "image", state: "available", url: "/preview/artifact-1" },
-            producerLabel: "architecture · 1",
+            producerLabel: "architecture",
             producerStepId: "architecture",
           },
         ]}
-        occurrenceLabel="architecture · 1"
         pagination="complete"
         runArtifactCount={4}
         state="ready"
+        stepLabel="architecture"
       />,
     );
     const row = screen.getByRole("listitem");
@@ -154,14 +149,14 @@ describe("run detail Direction A components", () => {
             key: "artifact-active",
             mimeMismatch: false,
             preview: { kind: "active_frame", state: "available", url: "/preview/active" },
-            producerLabel: "architecture · 1",
+            producerLabel: "architecture",
             producerStepId: "architecture",
           },
         ]}
-        occurrenceLabel="architecture · 1"
         pagination="complete"
         runArtifactCount={1}
         state="ready"
+        stepLabel="architecture"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
@@ -186,14 +181,14 @@ describe("run detail Direction A components", () => {
             key: "artifact-markdown",
             mimeMismatch: false,
             preview: { kind: "markdown", state: "available", url: "/preview/markdown" },
-            producerLabel: "architecture · 1",
+            producerLabel: "architecture",
             producerStepId: "architecture",
           },
         ]}
-        occurrenceLabel="architecture · 1"
         pagination="complete"
         runArtifactCount={1}
         state="ready"
+        stepLabel="architecture"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
@@ -220,11 +215,11 @@ describe("run detail Direction A components", () => {
             producerStepId: "legacy-owner",
           },
         ]}
-        occurrenceLabel="architecture · 1"
         onRetryPaging={retry}
         pagination="stale"
         runArtifactCount={3}
         state="ready"
+        stepLabel="architecture"
       />,
     );
     expect(screen.getByText("legacy.txt")).toBeVisible();
@@ -238,31 +233,31 @@ describe("run detail Direction A components", () => {
       <>
         <ActivityPanel
           groups={[]}
-          occurrenceLabel="occurrence pending"
           pagination="complete"
           state="traversal_pending"
+          stepLabel="step pending"
         />
         <LogsPanel
           entries={[]}
-          occurrenceLabel="selection unavailable"
           pagination="complete"
           state="missing_selection"
+          stepLabel="selection unavailable"
         />
         <ArtifactsPanel
           artifacts={[]}
-          occurrenceLabel="selection unavailable"
           pagination="complete"
           runArtifactCount={4}
           state="missing_selection"
+          stepLabel="selection unavailable"
         />
       </>,
     );
     expect(
-      screen.getByText("Waiting for occurrence traversal before loading selected evidence…"),
+      screen.getByText("Waiting for workflow traversal before loading selected evidence…"),
     ).toBeVisible();
-    expect(screen.getAllByText("Selected occurrence unavailable")).toHaveLength(2);
+    expect(screen.getAllByText("Selected step unavailable")).toHaveLength(2);
     expect(screen.queryByText("No logs")).not.toBeInTheDocument();
-    expect(screen.queryByText("No artifacts for this occurrence")).not.toBeInTheDocument();
+    expect(screen.queryByText("No artifacts for this step")).not.toBeInTheDocument();
   });
 
   it("renders workflow-step legacy descriptors without inventing content authority", async () => {
@@ -309,7 +304,7 @@ describe("run detail Direction A components", () => {
           key: "audio",
           mimeMismatch: false,
           preview: { kind: "media", media: "audio", state: "available", url: "/audio" },
-          producerLabel: "architecture · 1",
+          producerLabel: "architecture",
           producerStepId: "architecture",
         }}
       />,
@@ -331,7 +326,7 @@ describe("run detail Direction A components", () => {
           key: "pdf",
           mimeMismatch: false,
           preview: { kind: "document", state: "available", url: "/document" },
-          producerLabel: "architecture · 1",
+          producerLabel: "architecture",
           producerStepId: "architecture",
         }}
       />,

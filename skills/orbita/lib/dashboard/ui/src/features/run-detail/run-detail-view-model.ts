@@ -8,6 +8,11 @@ export type OccurrenceItem = {
   stepId: string;
 };
 
+export type StepPathItem = {
+  state: "completed" | "current";
+  stepId: string;
+};
+
 export type ActivityEventItem = {
   event: string;
   id: string;
@@ -65,7 +70,3 @@ export type RunArtifactItem = {
   producerStepId: string;
   summary?: string | undefined;
 };
-
-export function occurrenceLabel(occurrence: OccurrenceItem): string {
-  return `${occurrence.stepId} · ${occurrence.ordinal}`;
-}
