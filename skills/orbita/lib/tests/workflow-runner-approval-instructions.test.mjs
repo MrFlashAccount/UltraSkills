@@ -11,7 +11,10 @@ import {
   resolveStop,
   writeOutput,
 } from './helpers/orbita-production-api.mjs';
-import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
+import {
+  artifactOutputDirForOccurrence,
+  resolveRunPaths,
+} from '../persistence/run-state/paths.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'workflow-runner-approval-instructions-'));
 afterAll(() => rmSync(tempDir, { recursive: true, force: true }));
@@ -91,7 +94,14 @@ async function prepareApproval(label) {
   const leaseToken = `${label}-lease-${process.pid}`;
   const paths = resolveRunPaths({ runId, workflowPath, runsRoot });
   await next({ runId, workflowPath, runsRoot, leaseToken });
-  const artifactPath = path.join(paths.runDir, 'prepare', 'artifacts', 'packet.md');
+  const artifactPath = path.join(
+    artifactOutputDirForOccurrence(paths, {
+      ownerStepId: 'prepare',
+      occurrence: 1,
+      producerRequestId: 'prepare',
+    }),
+    'packet.md',
+  );
   mkdirSync(path.dirname(artifactPath), { recursive: true });
   writeFileSync(artifactPath, '# Approval packet\n');
   await writeOutput({
