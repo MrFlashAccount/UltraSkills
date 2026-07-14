@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  artifactProducerBelongsToStep,
   parseManagedHistoryEntries,
   projectActivityPage,
   projectLogsPage,
@@ -14,10 +15,21 @@ const workflow = {
       branches: { backend: {}, frontend: {} },
     },
     review: { kind: "worker" },
+    shard_review: { kind: "shard" },
   },
 };
 
 describe("managed history public projection", () => {
+  test("scopes synthetic shard and fanout artifact producers to their owner step", () => {
+    expect(
+      artifactProducerBelongsToStep(workflow, "shard_review__shard__2__0", "shard_review"),
+    ).toBe(true);
+    expect(artifactProducerBelongsToStep(workflow, "backend", "implementation")).toBe(true);
+    expect(
+      artifactProducerBelongsToStep(workflow, "shard_review__shard__2__0", "implementation"),
+    ).toBe(false);
+  });
+
   test("projects the existing accepted-output debug summary as safe Markdown", () => {
     const entries = parseManagedHistoryEntries(`## 2026-07-14T00:00:00.000Z
 - source: workflow-runner-write-output

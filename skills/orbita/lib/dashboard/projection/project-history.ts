@@ -159,8 +159,7 @@ export function artifactProducerBelongsToStep(
   if (producerStepId === selectedStepId) {
     return true;
   }
-  const step = workflowDocument?.steps?.[selectedStepId];
-  return step?.kind === "fanout" && Object.hasOwn(step.branches ?? {}, producerStepId);
+  return ownerStepIdForRequest(workflowDocument, producerStepId) === selectedStepId;
 }
 
 function requestActivation(requestId: string):
