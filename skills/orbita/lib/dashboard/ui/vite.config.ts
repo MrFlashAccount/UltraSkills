@@ -10,6 +10,10 @@ import { defineConfig } from "vite";
 const uiRoot = path.resolve(import.meta.dirname);
 const reactCompiler = () => babel({ presets: [reactCompilerPreset()] });
 
+if (!process.env.VITEST && !globalThis.Bun?.TOML?.parse) {
+  throw new Error("Dashboard runtime requires Bun");
+}
+
 export default defineConfig({
   plugins: process.env.VITEST
     ? [tailwindcss(), react(), reactCompiler()]

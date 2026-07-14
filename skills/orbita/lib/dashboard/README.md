@@ -29,6 +29,8 @@ Run these from the repository root:
 - `bun run depcruise:check` — enforce contracts/projection/observer/server/
   browser dependency direction.
 
+The dashboard application runtime is Bun-only. Development, build, and production start commands must execute under Bun; workflow TOML parsing intentionally relies on `Bun.TOML`.
+
 The TypeScript project extends `@sergeigarin/hygene/tsconfig.json`. TanStack
 Router owns generated `routeTree.gen.ts`; handwritten-source format/lint gates
 do not treat it as a manually edited file.
