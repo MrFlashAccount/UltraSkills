@@ -109,6 +109,34 @@ describe("run inspection query lifecycle", () => {
     expect(urls.every((url) => /[?&]stepId=/u.test(url))).toBe(true);
   });
 
+  it("uses an independent query scope for each activity group", async () => {
+    const urls: Array<string> = [];
+    stubGlobal(
+      "fetch",
+      vi.fn(async (request: string | URL | Request) => {
+        const url = String(typeof request === "object" && "url" in request ? request.url : request);
+        urls.push(url);
+        const parsed = new URL(url, "http://dashboard.test");
+        return json({
+          complete: true,
+          groupId: parsed.searchParams.get("groupId"),
+          items: [],
+          runId: "run-1",
+          schemaVersion: "2",
+          stepId: parsed.searchParams.get("stepId"),
+        });
+      }),
+    );
+    const group = renderHook(
+      () => useActivityPages("run-1", "review", "activation:3:fanout_branch"),
+      { wrapper: wrapper() },
+    );
+    await waitFor(() => expect(group.result.current.isSuccess).toBe(true));
+    const url = new URL(urls[0]!, "http://dashboard.test");
+    expect(url.searchParams.get("stepId")).toBe("review");
+    expect(url.searchParams.get("groupId")).toBe("activation:3:fanout_branch");
+  });
+
   it("does not request scoped resources without a locator", () => {
     const fetch = vi.fn();
     stubGlobal("fetch", fetch);

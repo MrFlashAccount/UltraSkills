@@ -242,9 +242,17 @@ export const ActivityEventSchema = z
     state: z.enum(["pending", "accepted", "completed", "stopped"]).optional(),
   })
   .strict();
+export const ActivityGroupIdSchema = z.union([
+  z.literal("step"),
+  z
+    .string()
+    .regex(/^activation:\d+:(?:fanout_branch|shard)$/u)
+    .max(64),
+]);
 export const ActivityPageSchema = z
   .object({
     complete: z.boolean(),
+    groupId: ActivityGroupIdSchema,
     items: z.array(ActivityEventSchema).max(DASHBOARD_RESOURCE_LIMITS.activityEvents),
     nextCursor: PageCursorSchema.optional(),
     runId: RunIdSchema,
@@ -372,6 +380,7 @@ export type RunLightDetailDTO = z.infer<typeof RunLightDetailSchema>;
 export type WorkflowPageDTO = z.infer<typeof WorkflowPageSchema>;
 export type TraversalPageDTO = z.infer<typeof TraversalPageSchema>;
 export type ActivityPageDTO = z.infer<typeof ActivityPageSchema>;
+export type ActivityGroupId = z.infer<typeof ActivityGroupIdSchema>;
 export type LogsPageDTO = z.infer<typeof LogsPageSchema>;
 export type ArtifactPageDTO = z.infer<typeof ArtifactPageSchema>;
 export type ArtifactDescriptorDTO = z.infer<typeof ArtifactDescriptorSchema>;

@@ -25,6 +25,7 @@ type Reader = {
   getActivityPage?(
     runId: string,
     stepId: string,
+    groupId: string,
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<ActivityPageDTO | undefined>;
@@ -279,11 +280,12 @@ export class DashboardReadModel {
   async getActivityPage(
     runId: string,
     stepId: string,
+    groupId: string,
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<ActivityPageDTO | undefined> {
     await this.ensureSnapshot();
-    return this.reader.getActivityPage?.(runId, stepId, cursor, signal);
+    return this.reader.getActivityPage?.(runId, stepId, groupId, cursor, signal);
   }
 
   async getLogsPage(

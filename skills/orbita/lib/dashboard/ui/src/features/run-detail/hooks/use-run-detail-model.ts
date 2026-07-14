@@ -5,7 +5,7 @@ import { type StepEvidenceState } from "../run-detail-view-model";
 import {
   accumulatePages,
   mergeTraversalPages,
-  toActivityGroups,
+  toActivityGroupDescriptors,
   toManagedLogEntries,
   toRunArtifactItems,
   toStepPathItems,
@@ -13,7 +13,6 @@ import {
 import { resourceQueryKey } from "./query-client";
 import { type PagingQuery, usePagingRecovery } from "./use-paging-recovery";
 import {
-  useActivityPages,
   useLogPages,
   useTraversalPages,
   useWorkflowPages,
@@ -36,7 +35,6 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
     currentStepId ??
     steps.find((step) => step.state === "current")?.stepId ??
     steps.at(-1)?.stepId;
-  const activity = useActivityPages(runId, selectedStepId);
   const logs = useLogPages(runId, selectedStepId);
   const artifacts = useWorkflowStepArtifactPages(runId, selectedStepId);
   const traversalRecords = mergeTraversalPages(traversal.data?.pages);
@@ -47,14 +45,13 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
   );
   const workflowEdges = accumulateEdges(workflow.data?.pages);
   const selectedArtifactItems = toRunArtifactItems(runId, artifacts.data?.pages);
-  const activityGroups = toActivityGroups(activity.data?.pages, selectedRecord);
+  const activityGroups = toActivityGroupDescriptors(selectedRecord);
   const logEntries = toManagedLogEntries(logs.data?.pages);
   const evidenceState = stepEvidenceState(
     traversal.isPending,
     traversalRecords.length,
     Boolean(selectedStepId),
   );
-  const activityKey = `activity:${selectedStepId ?? "none"}`;
   const artifactsKey = `artifacts:${selectedStepId ?? "none"}`;
   const logsKey = `logs:${selectedStepId ?? "none"}`;
 
@@ -65,11 +62,10 @@ export function useRunDetailModel(detail: RunLightDetailDTO) {
   return {
     activity: {
       groups: activityGroups,
-      onLoadMore: () => paging.loadNext(activityKey, activity),
-      onRetry: () => paging.refetch(activityKey, activity),
-      onRetryPaging: () => paging.recover(activityKey, activity),
-      pagination: paging.state(activityKey, activity),
-      state: panelState(evidenceState, activity, activityGroups.length > 0),
+      runId,
+      state: evidenceState,
+      step: selectedRecord,
+      stepId: selectedStepId,
     },
     artifacts: {
       artifacts: selectedArtifactItems,

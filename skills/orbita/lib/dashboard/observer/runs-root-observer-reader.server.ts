@@ -377,6 +377,7 @@ export class RunsRootObserverReader {
   async getActivityPage(
     runId: string,
     stepId: string,
+    groupId: string,
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<ActivityPageDTO | undefined> {
@@ -388,10 +389,18 @@ export class RunsRootObserverReader {
     const workflowDocument = await this.workflowDocument(entry, signal);
     let historyCursor = cursor;
     for (let pageIndex = 0; pageIndex < 128; pageIndex += 1) {
-      const page = await this.historyPage(entry, runId, "activity", historyCursor, signal, stepId);
+      const page = await this.historyPage(
+        entry,
+        runId,
+        "activity",
+        historyCursor,
+        signal,
+        `${stepId}:${groupId}`,
+      );
       const projected = projectActivityPage({
         complete: page.nextCursor === undefined,
         entries: page.entries,
+        groupId,
         ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
         runId,
         stepId,

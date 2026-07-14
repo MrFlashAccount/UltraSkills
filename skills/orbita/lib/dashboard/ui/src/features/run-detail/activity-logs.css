@@ -59,6 +59,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.activity-group-empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--text-muted);
+}
+.activity-group-load-more {
+  width: calc(100% - 24px);
+  margin: 10px 12px;
+}
 .managed-logs > ol {
   display: grid;
   gap: var(--space-2);

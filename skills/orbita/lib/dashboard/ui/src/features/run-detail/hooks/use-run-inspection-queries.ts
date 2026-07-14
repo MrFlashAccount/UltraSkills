@@ -58,7 +58,7 @@ export function useTraversalPages(runId?: string) {
   });
 }
 
-export function useActivityPages(runId?: string, stepId?: string) {
+export function useActivityPages(runId?: string, stepId?: string, groupId?: string) {
   return useInfiniteQuery<
     ActivityPageDTO,
     Error,
@@ -66,16 +66,16 @@ export function useActivityPages(runId?: string, stepId?: string) {
     ReturnType<typeof resourceQueryKey>,
     string | undefined
   >({
-    enabled: scopedEnabled(runId, stepId),
+    enabled: scopedEnabled(runId, stepId) && Boolean(groupId),
     getNextPageParam: (page) => (page.complete ? undefined : page.nextCursor),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
       fetchDashboardResource<ActivityPageDTO>(
-        resourceUrl(runId!, "activity", { cursor: pageParam, stepId }),
+        resourceUrl(runId!, "activity", { cursor: pageParam, groupId, stepId }),
         ActivityPageSchema,
         signal,
       ),
-    queryKey: resourceQueryKey(runId, "activity", stepId),
+    queryKey: resourceQueryKey(runId, "activity", `${stepId ?? "none"}:${groupId ?? "none"}`),
   });
 }
 

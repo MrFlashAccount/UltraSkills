@@ -3,7 +3,8 @@ import { describe, expect, it } from "bun:test";
 import {
   accumulatePages,
   mergeTraversalPages,
-  toActivityGroups,
+  toActivityGroup,
+  toActivityGroupDescriptors,
   toRunArtifactItems,
   toStepPathItems,
 } from "./page-selectors";
@@ -100,10 +101,24 @@ describe("run detail page selectors", () => {
   });
 
   it("renders stopped then resumed peer lifecycle without losing either fact", () => {
-    const groups = toActivityGroups(
+    const step = mergeTraversalPages([
+      traversalPage([
+        {
+          activation: 1,
+          kind: "fanout_branch",
+          producerRequestId: "request-a",
+          state: "pending",
+          workItem: "spec",
+        },
+      ]),
+    ])[0];
+    const descriptor = toActivityGroupDescriptors(step)[0]!;
+    const group = toActivityGroup(
+      descriptor,
       [
         {
           complete: false,
+          groupId: "activation:1:fanout_branch",
           items: [
             {
               event: {
@@ -122,6 +137,7 @@ describe("run detail page selectors", () => {
         },
         {
           complete: true,
+          groupId: "activation:1:fanout_branch",
           items: [
             {
               event: {
@@ -139,19 +155,9 @@ describe("run detail page selectors", () => {
           stepId: "architecture",
         },
       ],
-      mergeTraversalPages([
-        traversalPage([
-          {
-            activation: 1,
-            kind: "fanout_branch",
-            producerRequestId: "request-a",
-            state: "pending",
-            workItem: "spec",
-          },
-        ]),
-      ])[0],
+      step,
     );
-    expect(groups[0]).toMatchObject({
+    expect(group).toMatchObject({
       events: [{ state: "pending" }, { state: "stopped" }],
       state: "pending",
     });

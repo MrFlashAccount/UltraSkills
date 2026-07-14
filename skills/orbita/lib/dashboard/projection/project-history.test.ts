@@ -107,6 +107,7 @@ describe("managed history public projection", () => {
     const activity = projectActivityPage({
       complete: true,
       entries,
+      groupId: "activation:1:fanout_branch",
       runId: "run-a",
       stepId: "implementation",
       workflowDocument: workflow,

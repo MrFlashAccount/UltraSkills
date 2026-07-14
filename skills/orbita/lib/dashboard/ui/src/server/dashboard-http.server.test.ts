@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 import { describe, expect, test } from "bun:test";
 import {
+  handleActivityRequest,
   handleArtifactContentRequest,
   handleArtifactsRequest,
   handleLightDetailRequest,
@@ -150,6 +151,41 @@ describe("dashboard v2 HTTP", () => {
       (
         await handleArtifactsRequest(
           request("/api/dashboard/v2/runs/run-1/artifacts"),
+          "run-1",
+          composition(model),
+        )
+      ).status,
+    ).toBe(400);
+  });
+
+  test("requires and dispatches one bounded activity group scope", async () => {
+    const calls: Array<Array<unknown>> = [];
+    const model = {
+      getActivityPage: async (...args: Array<unknown>) => {
+        calls.push(args);
+        return {
+          complete: true,
+          groupId: args[2],
+          items: [],
+          runId: "run-1",
+          schemaVersion: "2",
+          stepId: args[1],
+        };
+      },
+    };
+    const response = await handleActivityRequest(
+      request(
+        "/api/dashboard/v2/runs/run-1/activity?stepId=implementation&groupId=activation%3A3%3Afanout_branch",
+      ),
+      "run-1",
+      composition(model),
+    );
+    expect(response.status).toBe(200);
+    expect(calls[0]?.slice(1, 3)).toEqual(["implementation", "activation:3:fanout_branch"]);
+    expect(
+      (
+        await handleActivityRequest(
+          request("/api/dashboard/v2/runs/run-1/activity?stepId=implementation"),
           "run-1",
           composition(model),
         )

@@ -19,6 +19,8 @@ export type ActivityGroupItem = {
   state: string;
 };
 
+export type ActivityGroupDescriptor = Omit<ActivityGroupItem, "events">;
+
 export type PagingState = "complete" | "error" | "loading" | "more" | "stale";
 
 export type StepEvidenceState =

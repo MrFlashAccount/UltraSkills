@@ -1,6 +1,7 @@
 /** Framework-neutral HTTP v2 read handlers. Routes only validate/dispatch; projection and filesystem work stay behind the read model. */
 import { Readable } from "node:stream";
 import {
+  ActivityGroupIdSchema,
   ActivityPageSchema,
   ArtifactPageSchema,
   InvalidationEventSchema,
@@ -184,6 +185,7 @@ async function pageRequest(
   const allowedKeys = new Set([
     "cursor",
     ...(["activity", "logs", "artifacts"].includes(kind) ? ["stepId"] : []),
+    ...(kind === "activity" ? ["groupId"] : []),
   ]);
   if (
     [...url.searchParams.keys()].some((key) => !allowedKeys.has(key)) ||
@@ -204,6 +206,12 @@ async function pageRequest(
   if (["activity", "logs", "artifacts"].includes(kind) && !workflowStepId) {
     return publicError("invalid_request", "Invalid request", 400);
   }
+  const rawGroupId = url.searchParams.get("groupId");
+  const activityGroupId =
+    rawGroupId === null ? undefined : ActivityGroupIdSchema.safeParse(rawGroupId).data;
+  if (kind === "activity" && !activityGroupId) {
+    return publicError("invalid_request", "Invalid request", 400);
+  }
   try {
     const value =
       kind === "workflow"
@@ -211,7 +219,13 @@ async function pageRequest(
         : kind === "traversal"
           ? await context.readModel.getTraversalPage(id, cursor, request.signal)
           : kind === "activity"
-            ? await context.readModel.getActivityPage(id, workflowStepId!, cursor, request.signal)
+            ? await context.readModel.getActivityPage(
+                id,
+                workflowStepId!,
+                activityGroupId!,
+                cursor,
+                request.signal,
+              )
             : kind === "logs"
               ? await context.readModel.getLogsPage(id, workflowStepId!, cursor, request.signal)
               : await context.readModel.getArtifactPage(

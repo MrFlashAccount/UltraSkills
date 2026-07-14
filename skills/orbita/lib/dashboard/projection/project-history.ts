@@ -181,6 +181,11 @@ function requestActivation(requestId: string):
   return undefined;
 }
 
+function activityGroupId(requestId?: string): string {
+  const activation = requestId ? requestActivation(requestId) : undefined;
+  return activation ? `activation:${activation.activation}:${activation.kind}` : "step";
+}
+
 function requestState(entries: Array<ManagedHistoryEntry>, requestId: string) {
   if (entries.some((entry) => entry.acceptedStepId === requestId)) {
     return "accepted" as const;
@@ -254,6 +259,7 @@ function occurredAt(entry: ManagedHistoryEntry): string | undefined {
 export function projectActivityPage(input: {
   complete: boolean;
   entries: Array<ManagedHistoryEntry>;
+  groupId: string;
   nextCursor?: string;
   runId: string;
   stepId: string;
@@ -299,7 +305,10 @@ export function projectActivityPage(input: {
       }
       return events.flatMap((event) => {
         const label = exposePublicText("activity_label", event.event);
-        return label
+        const groupId = activityGroupId(
+          typeof event.producerRequestId === "string" ? event.producerRequestId : undefined,
+        );
+        return label && groupId === input.groupId
           ? [
               {
                 ...event,
@@ -314,6 +323,7 @@ export function projectActivityPage(input: {
     .reverse();
   return ActivityPageSchema.parse({
     complete: input.complete,
+    groupId: input.groupId,
     items,
     ...(input.nextCursor ? { nextCursor: input.nextCursor } : {}),
     runId: input.runId,

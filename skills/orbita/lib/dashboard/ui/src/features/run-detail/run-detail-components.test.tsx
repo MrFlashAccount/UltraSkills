@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "bun:test";
 import { AppProviders } from "@/app/AppProviders";
 import { stubGlobal } from "@/test/globals";
-import { ActivityPanel } from "./ActivityPanel";
+import { ActivityGroupView, ActivityPanel } from "./ActivityPanel";
 import { ArtifactPreviewBody } from "./ArtifactPreviewBody";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { LogsPanel } from "./LogsPanel";
@@ -49,31 +49,26 @@ describe("run detail Direction A components", () => {
 
   it("renders nested activity as a semantic table", () => {
     renderFeature(
-      <ActivityPanel
-        groups={[
-          {
-            events: [
-              {
-                event: "Branch started",
-                id: "event-1",
-                source: "spec_modeling",
-                state: "current",
-                time: "2m ago",
-              },
-            ],
-            id: "activation-1",
-            label: "Fanout activation 1 · fanout · branches phase",
-            state: "current",
-          },
-        ]}
+      <ActivityGroupView
+        group={{
+          events: [
+            {
+              event: "Branch started",
+              id: "event-1",
+              source: "spec_modeling",
+              state: "current",
+              time: "2m ago",
+            },
+          ],
+          id: "activation-1",
+          label: "Fanout activation 1 · fanout · branches phase",
+          state: "current",
+        }}
         pagination="complete"
-        state="ready"
-        stepLabel="architecture"
       />,
     );
-    expect(screen.getByRole("heading", { name: "Activity · architecture" })).toBeVisible();
     expect(screen.getByRole("table")).toHaveTextContent("spec_modeling");
-    expect(screen.getByText("End of activity")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
   });
 
   it("renders managed Markdown without raw HTML and discloses external links", () => {
@@ -198,8 +193,10 @@ describe("run detail Direction A components", () => {
       <>
         <ActivityPanel
           groups={[]}
-          pagination="complete"
+          runId="run-1"
           state="traversal_pending"
+          step={undefined}
+          stepId={undefined}
           stepLabel="step pending"
         />
         <LogsPanel

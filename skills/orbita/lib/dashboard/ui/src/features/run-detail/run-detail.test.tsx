@@ -56,8 +56,10 @@ beforeEach(() => {
         });
       }
       if (url.includes("/activity")) {
+        const groupId = new URL(url, "http://dashboard.test").searchParams.get("groupId");
         return json({
           complete: true,
+          groupId,
           items: [
             {
               event: publicText("Fanout activation started", "activity_label"),
