@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orbita run triage UI design proposal</title>
+  <style>
+    :root { color-scheme: dark; --bg: #0a0c10; --panel: #141820; --line: #303744; --text: #f4f6f8; --muted: #9aa4b2; --accent: #c9ff55; --ok: #62d9a2; --warn: #ffb86b; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--text); background: var(--bg); font: 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; }
+    button { color: inherit; font: inherit; }
+    header { display: flex; align-items: center; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+    header h1 { margin: 0; font-size: 18px; }
+    header p { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+    .status { margin-left: auto; color: var(--warn); font: 800 10px/1 ui-monospace, monospace; }
+    nav { position: sticky; top: 0; z-index: 10; display: grid; grid-template-columns: repeat(7, minmax(108px, 1fr)); gap: 6px; padding: 10px 18px; overflow-x: auto; border-bottom: 1px solid var(--line); background: rgba(10, 12, 16, .96); }
+    .tab { padding: 9px 10px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted); text-align: left; cursor: pointer; }
+    .tab[aria-selected="true"] { color: var(--text); border-color: var(--line); background: #1b202a; }
+    .tab b { display: block; color: var(--accent); font: 850 16px/1 ui-monospace, monospace; }
+    .tab span { display: block; margin-top: 5px; font-size: 10px; font-weight: 700; }
+    .view { display: none; min-height: calc(100vh - 130px); padding: 24px; }
+    .view.active { display: block; }
+    .view-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+    .view-head h2 { margin: 4px 0 0; font-size: clamp(27px, 4vw, 44px); line-height: 1; letter-spacing: -.04em; }
+    .kicker, .label { color: var(--accent); font: 800 9px/1 ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
+    .purpose { max-width: 460px; margin: 0; color: var(--muted); font-size: 11px; text-align: right; }
+    .grid { display: grid; gap: 12px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+    .card h3 { margin: 8px 0; }
+    .card p { color: var(--muted); }
+    ul { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+    li { padding-top: 8px; border-top: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 9px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 11px; }
+    th { color: var(--muted); font: 750 8px/1 ui-monospace, monospace; text-transform: uppercase; }
+    ui-mockup-set { display: block; min-width: 0; }
+    @media (max-width: 820px) { .grid.two, .grid.three { grid-template-columns: 1fr; } .purpose { display: none; } }
+  </style>
+</head>
+<body>
+  <header><div><h1>Orbita run triage</h1><p>Operator attention queue · Dev Harness UI gate · existing dashboard language</p></div><div class="status">PROPOSED · NEEDS APPROVAL</div></header>
+  <nav aria-label="REASONS sections">
+    <button class="tab" data-view="requirements" aria-selected="true"><b>R</b><span>Requirements</span></button><button class="tab" data-view="entities" aria-selected="false"><b>E</b><span>Entities</span></button><button class="tab" data-view="approach" aria-selected="false"><b>A</b><span>Approach</span></button><button class="tab" data-view="structure" aria-selected="false"><b>S</b><span>Structure</span></button><button class="tab" data-view="operations" aria-selected="false"><b>O</b><span>Operations</span></button><button class="tab" data-view="norms" aria-selected="false"><b>N</b><span>Norms</span></button><button class="tab" data-view="safeguards" aria-selected="false"><b>S</b><span>Safeguards</span></button>
+  </nav>
+  <main>
+    <section class="view active" id="requirements">
+      <div class="view-head"><div><div class="kicker">Solution-independent contract</div><h2>Make stuck work obvious and actionable.</h2></div><p class="purpose">An operator should understand what needs attention, why, and which safe action resumes the run within ten seconds.</p></div>
+      <div class="grid two">
+        <article class="card"><span class="label">Functional + interaction</span><ul><li><strong>Must:</strong> order runs by operator attention, not recency alone.</li><li><strong>Must:</strong> expose the active step, stop reason, and one safe next action without opening raw state.</li><li><strong>Must:</strong> preserve selection and focus when live events reorder the queue.</li><li><strong>Should:</strong> allow keyboard-only triage of consecutive runs.</li></ul></article>
+        <article class="card"><span class="label">Information + quality</span><ul><li><strong>Must:</strong> distinguish user decision, worker failure, approval wait, and environment stop without relying on color alone.</li><li><strong>Must:</strong> contain long run IDs, branch names, and stop summaries without horizontal page overflow.</li><li><strong>Must:</strong> keep destructive actions out of the first-read path.</li><li><strong>Should:</strong> show freshness without noisy continuous animation.</li></ul></article>
+        <article class="card"><span class="label">Scope + basis</span><p>Extends the current Orbita dashboard vocabulary: lane, run, step, artifact, and attention signal. It does not redesign workflow authoring, logs, or the approval protocol.</p></article>
+        <article class="card"><span class="label">User decisions</span><table><tr><th>Decision</th><th>Status</th><th>Impact</th></tr><tr><td>Primary surface is an attention queue, not a full board replacement.</td><td>Proposed</td><td>Keeps scope narrow and triage-first.</td></tr><tr><td>Resolve action opens bounded context before execution.</td><td>Proposed</td><td>Prevents accidental blind mutation.</td></tr></table></article>
+      </div>
+    </section>
+
+    <section class="view" id="entities">
+      <div class="view-head"><div><div class="kicker">Domain map</div><h2>Run owns progress; attention signal owns urgency.</h2></div><p class="purpose">The queue is a projection. It presents state but does not invent workflow status.</p></div>
+      <div class="grid two"><article class="card"><span class="label">Relationship map</span><h3>Operator → Attention queue → Workflow run</h3><p>Workflow run owns ordered steps and current cursor. A stop or approval produces an attention signal. Artifacts and results remain evidence attached to the producing step.</p><ul><li>One run has zero or one current attention signal.</li><li>One selected run exposes one bounded next action.</li><li>Queue order may change; selected run identity must not.</li></ul></article><article class="card"><span class="label">First-read contract</span><table><tr><th>Entity</th><th>Visible first</th><th>Deferred</th></tr><tr><td>Attention signal</td><td>Type, age, reason</td><td>Raw worker context</td></tr><tr><td>Workflow run</td><td>Name, active step, progress</td><td>Full baton state</td></tr><tr><td>Action</td><td>Verb, consequence</td><td>Runner command details</td></tr></table></article></div>
+    </section>
+
+    <section class="view" id="approach">
+      <div class="view-head"><div><div class="kicker">Controlled direction comparison</div><h2>Queue first, board second.</h2></div><p class="purpose">All directions show the same three runs and the same selected decision stop.</p></div>
+      <ui-mockup-set aria-label="Isolated direction mockups"><template shadowrootmode="open">
+        <style>
+          :host { all: initial; display: block; contain: layout paint style; color-scheme: light; color: #edf1f5; font: 12px/1.4 Inter, system-ui, sans-serif; --lime:#b7f34a; --ink:#17202c; --line:#303744; --panel:#141820; --muted:#9aa4b2; }
+          * { box-sizing: border-box; } button { font: inherit; cursor: pointer; } .directions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; } .direction { overflow:hidden; border:1px solid var(--line); border-radius:14px; background:var(--panel); } .direction.selected { border-color:var(--lime); } .copy { padding:13px; } .copy h3 { margin:0 0 6px; } .copy p { margin:5px 0; color:var(--muted); font-size:10px; }
+          .screen { min-height:360px; overflow:hidden; color:var(--ink); background:#f3f5f7; } .bar { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid #d7dde5; background:#fff; } .brand { font-weight:900; } .count { margin-left:auto; padding:4px 7px; border-radius:999px; color:#5c2b00; background:#ffe4bd; font-weight:800; } .body { padding:12px; } .queue { display:grid; gap:8px; } .run { padding:10px; border:1px solid #d4dae2; border-radius:9px; background:#fff; } .run.active { border-color:#769d2f; box-shadow:inset 3px 0 #8fbd37; } .run strong { display:block; } .run small { display:block; margin-top:3px; color:#6f7986; } .split { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr); gap:10px; } .detail { padding:12px; border:1px solid #d4dae2; border-radius:9px; background:#fff; } .detail h4 { margin:0 0 8px; } .action { padding:7px 9px; border:1px solid #283a0b; border-radius:7px; color:#182400; background:var(--lime); font-weight:800; } .lanes { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; } .lane { min-height:240px; padding:8px; border-radius:8px; background:#e8ecf0; } .lane b { display:block; margin-bottom:7px; }
+          @media(max-width:980px){.directions{grid-template-columns:1fr}}
+        </style>
+        <div class="directions">
+          <article class="direction"><div class="screen" data-ui-mock="board-first"><div class="bar"><span class="brand">Orbita</span><span class="count">3 need attention</span></div><div class="body lanes"><section class="lane"><b>Running</b><div class="run"><strong>Dashboard filters</strong><small>implementation · 4m</small></div></section><section class="lane"><b>Waiting</b><div class="run active"><strong>Approval routing</strong><small>research approval · 11m</small></div></section><section class="lane"><b>Failed</b><div class="run"><strong>Schema bundle</strong><small>validation · 2m</small></div></section></div></div><div class="copy"><h3>A · Board first</h3><p>Preserves global topology.</p><p><strong>Cost:</strong> attention reasons compete with lane scanning.</p></div></article>
+          <article class="direction selected"><div class="screen" data-ui-mock="queue-first"><div class="bar"><span class="brand">Attention</span><span class="count">3 unresolved</span></div><div class="body split"><div class="queue"><div class="run active"><strong>User decision · Approval routing</strong><small>research_draft → approve_research · 11m</small></div><div class="run"><strong>Worker failure · Schema bundle</strong><small>validate · 2m</small></div><div class="run"><strong>Slow step · Dashboard filters</strong><small>implementation · 4m</small></div></div><aside class="detail"><h4>Choose the UI route</h4><p>Research selected <strong>ui_intent_draft</strong>. Approval is waiting for your decision.</p><button class="action">Review proposal</button></aside></div></div><div class="copy"><h3>B · Queue + context</h3><p>Optimizes time-to-understanding and safe action.</p><p><strong>Trade-off:</strong> full workflow topology is secondary.</p></div></article>
+          <article class="direction"><div class="screen" data-ui-mock="run-first"><div class="bar"><span class="brand">Approval routing</span><span class="count">Waiting 11m</span></div><div class="body"><aside class="detail"><h4>research_draft completed</h4><p>Next step: <strong>ui_intent_draft</strong></p><button class="action">Review proposal</button></aside><div class="queue" style="margin-top:10px"><div class="run"><strong>research_attack</strong><small>passed · 14:42</small></div><div class="run active"><strong>approve_research</strong><small>waiting for user</small></div></div></div></div><div class="copy"><h3>C · Run first</h3><p>Best for deep inspection.</p><p><strong>Cost:</strong> poor consecutive triage across runs.</p></div></article>
+        </div>
+      </template></ui-mockup-set>
+    </section>
+
+    <section class="view" id="structure">
+      <div class="view-head"><div><div class="kicker">Selected composition</div><h2>Stable queue, contextual action panel.</h2></div><p class="purpose">Desktop keeps queue and detail visible; narrow view stacks detail after selection.</p></div>
+      <ui-mockup-set aria-label="Isolated selected compositions"><template shadowrootmode="open">
+        <style>
+          :host{all:initial;display:block;contain:layout paint style;color-scheme:light;color:#17202c;font:12px/1.4 Inter,system-ui,sans-serif;--lime:#b7f34a} *{box-sizing:border-box} button{font:inherit}.layout{display:grid;grid-template-columns:minmax(280px,.8fr) minmax(360px,1.2fr);gap:12px}.screen{overflow:hidden;border:1px solid #ccd3dc;border-radius:12px;background:#f3f5f7;box-shadow:0 12px 30px rgba(0,0,0,.2)}.bar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #d7dde5;background:#fff}.bar b{font-size:14px}.pill{margin-left:auto;padding:4px 7px;border-radius:999px;color:#5c2b00;background:#ffe4bd;font-weight:800}.body{padding:12px}.run{padding:11px;border:1px solid #d4dae2;border-radius:9px;background:#fff}.run+.run{margin-top:8px}.run.active{border-color:#769d2f;box-shadow:inset 3px 0 #8fbd37}.run strong,.run small{display:block}.run small{margin-top:4px;color:#6f7986}.detail{padding:14px;border:1px solid #d4dae2;border-radius:9px;background:#fff}.detail h3{margin:0 0 8px}.action{padding:8px 10px;border:1px solid #283a0b;border-radius:8px;color:#182400;background:var(--lime);font-weight:800}.narrow{width:min(390px,100%);margin:16px auto 0}.narrow .bar{align-items:flex-start}.narrow .detail{margin-top:10px}@media(max-width:850px){.layout{grid-template-columns:1fr}}
+        </style>
+        <div class="layout"><section class="screen" data-ui-mock="selected-desktop-queue"><div class="bar"><b>Attention queue</b><span class="pill">3 unresolved</span></div><div class="body"><article class="run active"><strong>User decision · Approval routing</strong><small>research_draft → approve_research · 11m</small></article><article class="run"><strong>Worker failure · Schema bundle</strong><small>validate · 2m</small></article><article class="run"><strong>Slow step · Dashboard filters</strong><small>implementation · 4m</small></article></div></section><section class="screen" data-ui-mock="selected-desktop-detail"><div class="bar"><b>Approval routing</b><span class="pill">User decision</span></div><div class="body"><article class="detail"><h3>Review the UI proposal</h3><p>Research found material interface work and selected <strong>ui_intent_draft</strong>.</p><p><strong>Next action:</strong> inspect the proposal before approving research.</p><button class="action">Open proposal</button></article></div></section></div>
+        <section class="screen narrow" data-ui-mock="selected-narrow"><div class="bar"><b>Attention · 3</b><span class="pill">Decision</span></div><div class="body"><article class="run active"><strong>Approval routing</strong><small>Waiting 11m · research approval</small></article><article class="detail"><h3>Review UI proposal</h3><p>Material UI work requires the design gate.</p><button class="action">Open proposal</button></article></div></section>
+      </template></ui-mockup-set>
+    </section>
+
+    <section class="view" id="operations">
+      <div class="view-head"><div><div class="kicker">Primary scenario</div><h2>Notice, inspect, act, confirm.</h2></div><p class="purpose">Selection remains stable while the queue updates around it.</p></div>
+      <ui-mockup-set aria-label="Isolated storyboard"><template shadowrootmode="open">
+        <style>
+          :host{all:initial;display:block;contain:layout paint style;color-scheme:light;color:#edf1f5;font:12px/1.4 Inter,system-ui,sans-serif;--lime:#b7f34a;--muted:#9aa4b2}*{box-sizing:border-box}.story{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.moment{min-width:0}.frame{min-height:230px;padding:11px;border:1px solid #ccd3dc;border-radius:12px;color:#17202c;background:#f3f5f7}.frame b{display:block;padding-bottom:8px;border-bottom:1px solid #d7dde5}.run,.detail{margin-top:9px;padding:10px;border:1px solid #d4dae2;border-radius:8px;background:#fff}.active{border-color:#769d2f;box-shadow:inset 3px 0 #8fbd37}.action{padding:7px 9px;border:1px solid #283a0b;border-radius:7px;color:#182400;background:var(--lime);font-weight:800}.moment h3{margin:8px 0 2px}.moment p{margin:0;color:var(--muted);font-size:10px}@media(max-width:900px){.story{grid-template-columns:repeat(2,1fr)}}@media(max-width:540px){.story{grid-template-columns:1fr}}
+        </style>
+        <div class="story"><article class="moment"><div class="frame" data-ui-mock="story-notice"><b>1 · Notice</b><div class="run active">User decision<br><small>Approval routing · 11m</small></div></div><h3>Queue prioritizes</h3><p>Live event → stable selected row</p></article><article class="moment"><div class="frame" data-ui-mock="story-inspect"><b>2 · Inspect</b><div class="detail">Research selected UI gate.<br><small>Reason and active step visible.</small></div></div><h3>Context appears</h3><p>Enter → detail heading receives focus</p></article><article class="moment"><div class="frame" data-ui-mock="story-act"><b>3 · Act</b><div class="detail"><button class="action">Open proposal</button></div></div><h3>Bounded action</h3><p>No raw command or destructive shortcut</p></article><article class="moment"><div class="frame" data-ui-mock="story-confirm"><b>4 · Confirm</b><div class="run">Proposal opened<br><small>Queue selection preserved</small></div></div><h3>Continuity</h3><p>Back → selected run remains anchored</p></article></div>
+      </template></ui-mockup-set>
+    </section>
+
+    <section class="view" id="norms">
+      <div class="view-head"><div><div class="kicker">Observable laws</div><h2>Attention without alarm fatigue.</h2></div><p class="purpose">Urgency changes order and labels before it changes color.</p></div>
+      <div class="grid three"><article class="card"><span class="label">N-01</span><h3>Type and rhythm</h3><p>Run name first, reason second, age last. IDs never become headings.</p></article><article class="card"><span class="label">N-02</span><h3>Emphasis</h3><p>Selection uses edge, weight, and background; urgency never relies on hue alone.</p></article><article class="card"><span class="label">N-03</span><h3>Containment</h3><p>Long identifiers truncate in queue and wrap only inside detail.</p></article><article class="card"><span class="label">N-04</span><h3>Focus</h3><p>Opening detail focuses its heading; closing returns to the selected run.</p></article><article class="card"><span class="label">N-05</span><h3>Motion</h3><p>Reorder uses position transition only when selection is unaffected; reduced motion updates instantly.</p></article><article class="card"><span class="label">N-06</span><h3>Action safety</h3><p>Primary action describes the next surface, not the underlying runner command.</p></article></div>
+    </section>
+
+    <section class="view" id="safeguards">
+      <div class="view-head"><div><div class="kicker">Stress proof</div><h2>Survive churn, failure, and pathological IDs.</h2></div><p class="purpose">The queue remains useful when evidence is delayed or incomplete.</p></div>
+      <ui-mockup-set aria-label="Isolated stress-state mockups"><template shadowrootmode="open">
+        <style>
+          :host{all:initial;display:block;contain:layout paint style;color-scheme:light;color:#edf1f5;font:12px/1.4 Inter,system-ui,sans-serif;--lime:#b7f34a;--muted:#9aa4b2;--line:#303744;--panel:#141820}*{box-sizing:border-box}.states{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.state{padding:13px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}.state h3{margin:0 0 8px}.frame{min-height:190px;padding:11px;overflow:hidden;border:1px solid #ccd3dc;border-radius:10px;color:#17202c;background:#f3f5f7}.run{padding:10px;border:1px solid #d4dae2;border-radius:8px;background:#fff}.run strong,.run small{display:block;min-width:0}.run strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.run small{margin-top:4px;color:#6f7986}.empty{display:grid;place-items:center;min-height:166px;text-align:center}.empty b{display:block}.skeleton{height:10px;margin:9px 0;border-radius:999px;background:#dfe4e9}.state p{margin:8px 0 0;color:var(--muted);font-size:10px}@media(max-width:900px){.states{grid-template-columns:1fr}}
+        </style>
+        <div class="states"><article class="state"><h3>Delayed evidence · PASS</h3><div class="frame" data-ui-mock="state-delayed-evidence"><div class="skeleton"></div><div class="skeleton" style="width:74%"></div><div class="run"><strong>Approval routing</strong><small>Reason loading · action unavailable</small></div></div><p>No jumping layout and no premature action.</p></article><article class="state"><h3>Empty queue · PASS</h3><div class="frame empty" data-ui-mock="state-empty"><div><b>No runs need attention</b><span>Running and completed work stays on the board.</span></div></div><p>One sentence; no fake productivity CTA.</p></article><article class="state"><h3>Pathological content · PASS</h3><div class="frame" data-ui-mock="state-pathological-content"><div class="run"><strong>agent/dev-harness-html-ui-proposals-with-an-extremely-long-branch-name-that-must-not-expand-the-page</strong><small>resolve_non_blocking_stop · 2h 14m · selected</small></div></div><p>Queue truncates; detail owns wrapping.</p></article></div>
+      </template></ui-mockup-set>
+      <article class="card" style="margin-top:12px"><span class="label">Implementation proof expected</span><p>Desktop attention queue, 390px narrow stack, live reorder with stable selection, delayed-evidence state, long branch/run identifiers, keyboard focus return, and reduced-motion reorder.</p></article>
+    </section>
+  </main>
+  <script>
+    document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach((candidate) => candidate.setAttribute('aria-selected', String(candidate === tab)));
+      document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === tab.dataset.view));
+    }));
+  </script>
+</body>
+</html>

@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>&lt;Project / issue&gt; UI design proposal</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #0b0d11;
+      --panel: #141820;
+      --panel-2: #1b202a;
+      --line: #303744;
+      --text: #f4f6f8;
+      --muted: #9aa4b2;
+      --accent: #c9ff55;
+      --accent-ink: #172000;
+      --ok: #62d9a2;
+      --warn: #ffb86b;
+      --danger: #ff7b76;
+      --radius: 14px;
+      --space: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--page); }
+    body { margin: 0; color: var(--text); background: var(--page); font: 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; }
+    button, input { color: inherit; font: inherit; }
+    button { cursor: pointer; }
+    .proposal-header { display: flex; align-items: center; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+    .proposal-header h1 { margin: 0; font-size: 18px; }
+    .proposal-header p { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+    .status { margin-left: auto; color: var(--warn); font: 800 10px/1 ui-monospace, monospace; }
+    .tabs { position: sticky; top: 0; z-index: 10; display: grid; grid-template-columns: repeat(7, minmax(110px, 1fr)); gap: 6px; padding: 10px 18px; overflow-x: auto; border-bottom: 1px solid var(--line); background: rgba(11, 13, 17, .96); }
+    .tab { padding: 9px 10px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted); text-align: left; }
+    .tab[aria-selected="true"] { color: var(--text); border-color: var(--line); background: var(--panel-2); }
+    .tab b { display: block; color: var(--accent); font: 850 16px/1 ui-monospace, monospace; }
+    .tab span { display: block; margin-top: 5px; font-size: 10px; font-weight: 700; }
+    .view { display: none; min-height: calc(100vh - 130px); padding: 24px; }
+    .view.active { display: block; }
+    .view-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+    .view-head h2 { margin: 4px 0 0; font-size: clamp(27px, 4vw, 44px); line-height: 1; letter-spacing: -.04em; }
+    .kicker, .label { color: var(--accent); font: 800 9px/1 ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
+    .purpose { max-width: 460px; margin: 0; color: var(--muted); font-size: 11px; text-align: right; }
+    .grid { display: grid; gap: var(--space); }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card, .spec { padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+    .card h3 { margin: 8px 0; font-size: 14px; }
+    .card p { margin: 6px 0; color: var(--muted); font-size: 11px; }
+    ul.clean { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+    ul.clean li { padding-top: 8px; border-top: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 9px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 11px; }
+    th { color: var(--muted); font: 750 8px/1 ui-monospace, monospace; text-transform: uppercase; }
+    .must { color: var(--ok); }
+    .risk { color: var(--warn); }
+    .danger { color: var(--danger); }
+
+    ui-mockup-set { display: block; min-width: 0; }
+
+    @media (max-width: 980px) {
+      .grid.two, .grid.three { grid-template-columns: 1fr; }
+      .purpose { display: none; }
+    }
+    @media (max-width: 620px) {
+      .view { padding: 16px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+  </style>
+</head>
+<body>
+  <!-- Keep this artifact self-contained. Proposed screens must be semantic HTML/CSS, never generated images or external assets. -->
+  <header class="proposal-header">
+    <div><h1>&lt;Surface&gt; UI design proposal</h1><p>&lt;Task · user · approved design basis&gt;</p></div>
+    <div class="status">PROPOSED · NEEDS APPROVAL</div>
+  </header>
+
+  <nav class="tabs" aria-label="REASONS sections">
+    <button class="tab" data-view="requirements" aria-selected="true"><b>R</b><span>Requirements</span></button>
+    <button class="tab" data-view="entities" aria-selected="false"><b>E</b><span>Entities</span></button>
+    <button class="tab" data-view="approach" aria-selected="false"><b>A</b><span>Approach</span></button>
+    <button class="tab" data-view="structure" aria-selected="false"><b>S</b><span>Structure</span></button>
+    <button class="tab" data-view="operations" aria-selected="false"><b>O</b><span>Operations</span></button>
+    <button class="tab" data-view="norms" aria-selected="false"><b>N</b><span>Norms</span></button>
+    <button class="tab" data-view="safeguards" aria-selected="false"><b>S</b><span>Safeguards</span></button>
+  </nav>
+
+  <main>
+    <section class="view active" id="requirements">
+      <div class="view-head"><div><div class="kicker">Solution-independent contract</div><h2>What must the interface make true?</h2></div><p class="purpose">Keep this section text-first. Approve the observable contract before judging visual directions.</p></div>
+      <div class="grid two">
+        <article class="card"><span class="label">Functional + interaction</span><ul class="clean"><li><strong class="must">MUST</strong> &lt;user capability and primary action&gt;</li><li><strong class="must">MUST</strong> &lt;selection, focus, recovery, or continuity behavior&gt;</li><li><strong>SHOULD</strong> &lt;valuable behavior that may yield to a constraint&gt;</li></ul></article>
+        <article class="card"><span class="label">Information + quality</span><ul class="clean"><li><strong class="must">MUST</strong> &lt;first-read facts and hierarchy&gt;</li><li><strong class="must">MUST</strong> &lt;responsive, accessibility, and pathological-data constraint&gt;</li><li><strong>SHOULD</strong> &lt;density, latency, or progressive disclosure expectation&gt;</li></ul></article>
+        <article class="card"><span class="label">Scope + basis</span><p>&lt;Product surface route, design law/current UI/reference evidence, out-of-scope boundaries, and what must not be inferred.&gt;</p></article>
+        <article class="card"><span class="label">User questions / decisions</span><table><tr><th>Decision</th><th>Status</th><th>Impact</th></tr><tr><td>&lt;Concrete product question&gt;</td><td>Answered | Assumed | Needs approval</td><td>&lt;layout/action/risk consequence&gt;</td></tr></table></article>
+      </div>
+    </section>
+
+    <section class="view" id="entities">
+      <div class="view-head"><div><div class="kicker">Domain map</div><h2>What exists, and what owns what?</h2></div><p class="purpose">Map user-visible entities and state without promoting them into code components.</p></div>
+      <div class="grid two">
+        <article class="card"><span class="label">Relationship map</span><h3>&lt;Actor&gt; → &lt;work surface&gt; → &lt;core entity&gt;</h3><p>&lt;Core entity&gt; owns &lt;state&gt;; &lt;related entity&gt; supplies &lt;facts&gt;; &lt;presentation surface&gt; presents but does not own.</p><ul class="clean"><li>&lt;cardinality / selection relationship&gt;</li><li>&lt;loading / empty / error relationship&gt;</li><li>&lt;detail or metadata containment&gt;</li></ul></article>
+        <article class="card"><span class="label">Entity contract</span><table><tr><th>Entity</th><th>User question</th><th>First-read facts</th><th>Deferred facts</th></tr><tr><td>&lt;Entity&gt;</td><td>&lt;What user needs&gt;</td><td>&lt;Visible&gt;</td><td>&lt;On demand&gt;</td></tr></table></article>
+      </div>
+    </section>
+
+    <section class="view" id="approach">
+      <div class="view-head"><div><div class="kicker">Controlled direction comparison</div><h2>Which composition wins?</h2></div><p class="purpose">Use the same scenario, content, state, and viewport. Change only the structural direction.</p></div>
+      <!-- Keep three or four product-relevant directions only when a real choice exists. Each frame must contain actual semantic product markup. -->
+      <ui-mockup-set aria-label="Isolated direction mockups">
+        <template shadowrootmode="open">
+          <style>
+            :host { all: initial; display: block; contain: layout paint style; color-scheme: light; color: #f4f6f8; font: 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif; --accent: #c9ff55; --line: #303744; --panel: #141820; --muted: #9aa4b2; }
+            *, *::before, *::after { box-sizing: border-box; }
+            button { color: inherit; font: inherit; cursor: pointer; }
+            .directions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+            .direction { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+            .direction.recommended { border-color: var(--accent); }
+            .copy { padding: 13px; }
+            .copy h3 { margin: 0 0 7px; font-size: 13px; }
+            .copy p { margin: 5px 0; color: var(--muted); font-size: 10px; }
+            .frame { min-width: 0; min-height: 360px; overflow: hidden; border-bottom: 1px solid var(--line); color: #17202c; background: #f4f6f8; }
+            .topbar { display: flex; align-items: center; gap: 9px; min-height: 46px; padding: 9px 12px; border-bottom: 1px solid #dce1e7; background: #fff; }
+            .brand { font-weight: 850; letter-spacing: -.03em; }
+            .search { flex: 1; max-width: 340px; padding: 7px 9px; border: 1px solid #ccd3dc; border-radius: 8px; color: #667180; background: #f6f8fa; }
+            .button { padding: 7px 10px; border: 1px solid #b9c2cd; border-radius: 8px; color: #1c2633; background: #fff; font-weight: 750; }
+            .button.primary { border-color: #263708; color: #172000; background: var(--accent); }
+            .layout { display: grid; grid-template-columns: 150px minmax(0, 1fr); min-height: 310px; }
+            .sidebar { padding: 12px; border-right: 1px solid #dce1e7; background: #eef1f4; }
+            .sidebar button { display: block; width: 100%; margin-bottom: 5px; padding: 8px; border: 0; border-radius: 7px; color: #465160; background: transparent; text-align: left; }
+            .sidebar button[aria-current="page"] { color: #17202c; background: #fff; font-weight: 800; }
+            .main { min-width: 0; padding: 14px; }
+            .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+            .head h4 { margin: 0; font-size: 18px; letter-spacing: -.03em; }
+            .list { display: grid; gap: 8px; }
+            .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 11px; border: 1px solid #d8dee6; border-radius: 9px; background: #fff; }
+            .row.selected { border-color: #6c8d27; box-shadow: inset 3px 0 #8dbd2c; }
+            .row strong, .row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .row small { display: block; margin-top: 4px; color: #6d7785; }
+            .pill { align-self: start; padding: 4px 7px; border-radius: 999px; color: #38540a; background: #e4f4c2; font-size: 10px; font-weight: 800; }
+            .state { display: grid; place-items: center; min-height: 180px; padding: 18px; border: 1px dashed #b7c0cc; border-radius: 9px; color: #566171; background: #f8fafb; text-align: center; }
+            .state strong { display: block; color: #17202c; font-size: 15px; }
+            .state p { max-width: 260px; margin: 5px 0 10px; }
+            .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+            .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+            @media (max-width: 980px) { .directions { grid-template-columns: 1fr; } }
+          </style>
+          <div class="directions">
+            <article class="direction" data-direction="A"><div class="frame" data-ui-mock="direction-a"><div class="topbar"><span class="brand">&lt;Product&gt;</span><span class="search">&lt;Search or context&gt;</span><button class="button primary">&lt;Primary action&gt;</button></div><div class="layout"><nav class="sidebar"><button aria-current="page">&lt;Section&gt;</button><button>&lt;Section&gt;</button></nav><section class="main"><div class="head"><h4>&lt;Surface title&gt;</h4><span class="pill">&lt;Status&gt;</span></div><div class="list"><article class="row selected"><div><strong>&lt;Primary object&gt;</strong><small>&lt;Relevant secondary fact&gt;</small></div><span>&lt;Value&gt;</span></article><article class="row"><div><strong>&lt;Another object&gt;</strong><small>&lt;Secondary fact&gt;</small></div><span>&lt;Value&gt;</span></article></div></section></div></div><div class="copy"><h3>A — &lt;name&gt;</h3><p><strong>Optimizes:</strong> &lt;hypothesis&gt;</p><p><strong>Trade-off:</strong> &lt;cost&gt;</p><p><strong>Visible evidence:</strong> &lt;what frame proves&gt;</p></div></article>
+            <article class="direction recommended" data-direction="B"><div class="frame" data-ui-mock="direction-b"><div class="topbar"><span class="brand">&lt;Product&gt;</span><button class="button">&lt;Secondary&gt;</button><button class="button primary">&lt;Primary&gt;</button></div><section class="main"><div class="head"><h4>&lt;Selected direction title&gt;</h4><span class="pill">Recommended</span></div><div class="two"><div class="list"><article class="row selected"><div><strong>&lt;Object&gt;</strong><small>&lt;Context&gt;</small></div><span>&lt;Value&gt;</span></article><article class="row"><div><strong>&lt;Object&gt;</strong><small>&lt;Context&gt;</small></div><span>&lt;Value&gt;</span></article></div><div class="state"><div><strong>&lt;Detail / work surface&gt;</strong><p>&lt;Selected object details or primary workflow&gt;</p><button class="button primary">&lt;Action&gt;</button></div></div></div></section></div><div class="copy"><h3>B — &lt;name&gt;</h3><p><strong>Optimizes:</strong> &lt;hypothesis&gt;</p><p><strong>Trade-off:</strong> &lt;cost&gt;</p><p><strong>Visible evidence:</strong> &lt;what frame proves&gt;</p></div></article>
+            <article class="direction" data-direction="C"><div class="frame" data-ui-mock="direction-c"><div class="topbar"><span class="brand">&lt;Product&gt;</span><span class="search">&lt;Context&gt;</span></div><section class="main"><div class="head"><h4>&lt;Alternative surface&gt;</h4><button class="button primary">&lt;Primary&gt;</button></div><div class="three"><article class="state"><div><strong>&lt;Zone A&gt;</strong><p>&lt;Purpose&gt;</p></div></article><article class="state"><div><strong>&lt;Zone B&gt;</strong><p>&lt;Purpose&gt;</p></div></article><article class="state"><div><strong>&lt;Zone C&gt;</strong><p>&lt;Purpose&gt;</p></div></article></div></section></div><div class="copy"><h3>C — &lt;name&gt;</h3><p><strong>Optimizes:</strong> &lt;hypothesis&gt;</p><p><strong>Trade-off:</strong> &lt;cost&gt;</p><p><strong>Visible evidence:</strong> &lt;what frame proves&gt;</p></div></article>
+          </div>
+        </template>
+      </ui-mockup-set>
+    </section>
+
+    <section class="view" id="structure">
+      <div class="view-head"><div><div class="kicker">Selected surface anatomy</div><h2>Where does each responsibility live?</h2></div><p class="purpose">Show desktop and narrow compositions with reading order, containment, selected patterns, and responsive morph.</p></div>
+      <ui-mockup-set aria-label="Isolated selected desktop and narrow mockups">
+        <template shadowrootmode="open">
+          <style>
+            :host { all: initial; display: block; contain: layout paint style; color-scheme: light; color: #f4f6f8; font: 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif; --accent: #c9ff55; --line: #303744; --panel: #141820; --muted: #9aa4b2; }
+            *, *::before, *::after { box-sizing: border-box; }
+            button { color: inherit; font: inherit; cursor: pointer; }
+            .anatomy { display: grid; grid-template-columns: 1.5fr .72fr; gap: 12px; }
+            .frame { min-width: 0; min-height: 420px; overflow: hidden; border: 1px solid #cfd5de; border-radius: 12px; color: #17202c; background: #f4f6f8; box-shadow: 0 12px 34px rgba(0,0,0,.22); }
+            .frame.narrow { width: min(390px, 100%); min-height: 520px; margin: 14px auto 0; }
+            .topbar { display: flex; align-items: center; gap: 9px; min-height: 46px; padding: 9px 12px; border-bottom: 1px solid #dce1e7; background: #fff; }
+            .brand { font-weight: 850; letter-spacing: -.03em; }
+            .search { flex: 1; max-width: 340px; padding: 7px 9px; border: 1px solid #ccd3dc; border-radius: 8px; color: #667180; background: #f6f8fa; }
+            .button { padding: 7px 10px; border: 1px solid #b9c2cd; border-radius: 8px; color: #1c2633; background: #fff; font-weight: 750; }
+            .button.primary { border-color: #263708; color: #172000; background: var(--accent); }
+            .layout { display: grid; grid-template-columns: 170px minmax(0, 1fr); min-height: 370px; }
+            .sidebar { padding: 12px; border-right: 1px solid #dce1e7; background: #eef1f4; }
+            .sidebar button { display: block; width: 100%; margin-bottom: 5px; padding: 8px; border: 0; border-radius: 7px; color: #465160; background: transparent; text-align: left; }
+            .sidebar button[aria-current="page"] { color: #17202c; background: #fff; font-weight: 800; }
+            .main { min-width: 0; padding: 14px; }
+            .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+            .head h4 { margin: 0; font-size: 18px; letter-spacing: -.03em; }
+            .list { display: grid; gap: 8px; }
+            .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 11px; border: 1px solid #d8dee6; border-radius: 9px; background: #fff; }
+            .row.selected { border-color: #6c8d27; box-shadow: inset 3px 0 #8dbd2c; }
+            .row strong, .row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .row small { display: block; margin-top: 4px; color: #6d7785; }
+            .pill { align-self: start; padding: 4px 7px; border-radius: 999px; color: #38540a; background: #e4f4c2; font-size: 10px; font-weight: 800; }
+            .caption { padding: 9px 11px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 12px 12px; color: var(--muted); background: var(--panel); font-size: 10px; }
+            .notes { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+            .label { color: var(--accent); font: 800 9px/1 ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
+            ul { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+            li { padding-top: 8px; border-top: 1px solid var(--line); }
+            .narrow .layout { display: block; }
+            .narrow .sidebar { display: flex; gap: 5px; overflow-x: auto; border-right: 0; border-bottom: 1px solid #dce1e7; }
+            .narrow .sidebar button { width: auto; white-space: nowrap; }
+            .narrow .search { display: none; }
+            .narrow .head { align-items: start; flex-direction: column; }
+            @media (max-width: 980px) { .anatomy { grid-template-columns: 1fr; } }
+          </style>
+          <div class="anatomy">
+            <div><div class="frame" data-ui-mock="selected-desktop"><div class="topbar"><span class="brand">1 · &lt;Context&gt;</span><span class="search">2 · &lt;Find / filter&gt;</span><button class="button primary">3 · &lt;Primary action&gt;</button></div><div class="layout"><nav class="sidebar"><button aria-current="page">4 · &lt;Navigation&gt;</button></nav><section class="main"><div class="head"><h4>5 · &lt;First read&gt;</h4><span class="pill">&lt;Status&gt;</span></div><div class="list"><article class="row selected"><div><strong>6 · &lt;Work object&gt;</strong><small>&lt;Secondary context&gt;</small></div><span>&lt;Value&gt;</span></article></div></section></div></div><div class="caption">Selected desktop composition · replace every numbered placeholder with product content.</div></div>
+            <aside class="notes"><span class="label">Anatomy + containment</span><ul><li><strong>1–2</strong> &lt;context and discovery responsibility&gt;</li><li><strong>3</strong> &lt;primary action priority and danger&gt;</li><li><strong>4–5</strong> &lt;navigation and first-read hierarchy&gt;</li><li><strong>6</strong> &lt;selected object, detail, focus return&gt;</li></ul><div class="frame narrow" data-ui-mock="selected-narrow"><div class="topbar"><span class="brand">&lt;Product&gt;</span><button class="button primary">&lt;Action&gt;</button></div><div class="layout"><nav class="sidebar"><button aria-current="page">&lt;Section&gt;</button><button>&lt;Other&gt;</button></nav><section class="main"><div class="head"><h4>&lt;Narrow first read&gt;</h4><span class="pill">&lt;Status&gt;</span></div><div class="list"><article class="row selected"><div><strong>&lt;Object&gt;</strong><small>&lt;Contained long fact&gt;</small></div></article></div></section></div></div></aside>
+          </div>
+        </template>
+      </ui-mockup-set>
+    </section>
+
+    <section class="view" id="operations">
+      <div class="view-head"><div><div class="kicker">Primary scenario storyboard</div><h2>How does the experience unfold?</h2></div><p class="purpose">Each HTML frame names its trigger, visible change, focus result, and recovery path.</p></div>
+      <ui-mockup-set aria-label="Isolated storyboard mockups">
+        <template shadowrootmode="open">
+          <style>
+            :host { all: initial; display: block; contain: layout paint style; color-scheme: light; color: #f4f6f8; font: 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif; --accent: #c9ff55; --muted: #9aa4b2; }
+            *, *::before, *::after { box-sizing: border-box; }
+            button { color: inherit; font: inherit; cursor: pointer; }
+            .storyboard { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+            .moment { min-width: 0; }
+            .moment h3 { margin: 9px 0 3px; font-size: 12px; }
+            .moment > p { margin: 0; color: var(--muted); font-size: 10px; }
+            .frame { min-width: 0; min-height: 250px; overflow: hidden; border: 1px solid #cfd5de; border-radius: 12px; color: #17202c; background: #f4f6f8; box-shadow: 0 10px 28px rgba(0,0,0,.2); }
+            .topbar { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 8px 10px; border-bottom: 1px solid #dce1e7; background: #fff; }
+            .brand { font-weight: 850; letter-spacing: -.03em; }
+            .button { padding: 7px 10px; border: 1px solid #b9c2cd; border-radius: 8px; color: #1c2633; background: #fff; font-weight: 750; }
+            .button.primary { border-color: #263708; color: #172000; background: var(--accent); }
+            .main { min-width: 0; padding: 12px; }
+            .state { display: grid; place-items: center; min-height: 170px; padding: 14px; border: 1px dashed #b7c0cc; border-radius: 9px; color: #566171; background: #f8fafb; text-align: center; }
+            .state strong { display: block; color: #17202c; font-size: 14px; }
+            .state p { margin: 5px 0 10px; }
+            .list { display: grid; gap: 8px; }
+            .row { padding: 11px; border: 1px solid #d8dee6; border-radius: 9px; background: #fff; }
+            .row.selected { border-color: #6c8d27; box-shadow: inset 3px 0 #8dbd2c; }
+            .row small { display: block; margin-top: 4px; color: #6d7785; }
+            .pill { margin-left: auto; padding: 4px 7px; border-radius: 999px; color: #38540a; background: #e4f4c2; font-size: 10px; font-weight: 800; }
+            @media (max-width: 980px) { .storyboard { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+            @media (max-width: 620px) { .storyboard { grid-template-columns: 1fr; } }
+          </style>
+          <div class="storyboard">
+            <article class="moment"><div class="frame" data-ui-mock="flow-1"><div class="topbar"><span class="brand">&lt;Start&gt;</span></div><section class="main"><div class="state"><div><strong>&lt;User sees&gt;</strong><p>&lt;Starting context&gt;</p></div></div></section></div><h3>1 · Discover</h3><p>Trigger: &lt;input&gt; · Result: &lt;visible outcome&gt;</p></article>
+            <article class="moment"><div class="frame" data-ui-mock="flow-2"><div class="topbar"><span class="brand">&lt;Invoke&gt;</span><button class="button primary">&lt;Action&gt;</button></div><section class="main"><div class="list"><article class="row selected"><div><strong>&lt;Selected object&gt;</strong><small>&lt;Focus target&gt;</small></div></article></div></section></div><h3>2 · Invoke</h3><p>Trigger: &lt;action&gt; · Focus: &lt;target&gt;</p></article>
+            <article class="moment"><div class="frame" data-ui-mock="flow-3"><div class="topbar"><span class="brand">&lt;Work&gt;</span></div><section class="main"><div class="state"><div><strong>&lt;Edit / inspect&gt;</strong><p>&lt;Changed or selected state&gt;</p><button class="button primary">&lt;Continue&gt;</button></div></div></section></div><h3>3 · Understand / change</h3><p>State: &lt;selected/loading/editing&gt;</p></article>
+            <article class="moment"><div class="frame" data-ui-mock="flow-4"><div class="topbar"><span class="brand">&lt;Result&gt;</span><span class="pill">Done</span></div><section class="main"><div class="state"><div><strong>&lt;Success / recovery&gt;</strong><p>&lt;Confirmation and next action&gt;</p></div></div></section></div><h3>4 · Complete / recover</h3><p>Result: &lt;signal&gt; · Escape: &lt;path&gt;</p></article>
+          </div>
+        </template>
+      </ui-mockup-set>
+    </section>
+
+    <section class="view" id="norms">
+      <div class="view-head"><div><div class="kicker">Observable interface laws</div><h2>Which rules must remain consistent?</h2></div><p class="purpose">Every norm must be visible in at least one HTML composition or state.</p></div>
+      <div class="grid three"><article class="card"><span class="label">N-01</span><h3>Typography / rhythm</h3><p>&lt;Roles, measure, weights, line height, long-content behavior&gt;</p></article><article class="card"><span class="label">N-02</span><h3>Spacing / composition</h3><p>&lt;Grid, alignment, density, containment&gt;</p></article><article class="card"><span class="label">N-03</span><h3>Color / emphasis / contrast</h3><p>&lt;Surface roles, semantic states, non-color cues&gt;</p></article><article class="card"><span class="label">N-04</span><h3>Focus / target affordance</h3><p>&lt;Keyboard path, focus-visible, hover/press, target floor&gt;</p></article><article class="card"><span class="label">N-05</span><h3>Motion / reduced motion</h3><p>&lt;Purpose, timing, properties, equivalent behavior&gt;</p></article><article class="card"><span class="label">N-06</span><h3>Content hierarchy</h3><p>&lt;Labels, statuses, wrapping, truncation, deferred metadata&gt;</p></article></div>
+    </section>
+
+    <section class="view" id="safeguards">
+      <div class="view-head"><div><div class="kicker">Rendered stress proof</div><h2>Where must the proposal survive?</h2></div><p class="purpose">Use HTML states, not prose claims, for loading, empty, error, pathological content, and narrow behavior.</p></div>
+      <ui-mockup-set aria-label="Isolated stress-state mockups">
+        <template shadowrootmode="open">
+          <style>
+            :host { all: initial; display: block; contain: layout paint style; color-scheme: light; color: #f4f6f8; font: 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif; --accent: #c9ff55; --line: #303744; --panel: #141820; --muted: #9aa4b2; --ok: #62d9a2; --warn: #ffb86b; }
+            *, *::before, *::after { box-sizing: border-box; }
+            button { color: inherit; font: inherit; cursor: pointer; }
+            .stress-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+            .stress { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+            .stress header { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 9px; font-weight: 750; }
+            .stress > p { margin: 8px 0 0; color: var(--muted); font-size: 10px; }
+            .pass { color: var(--ok); }
+            .risk { color: var(--warn); }
+            .frame { min-width: 0; min-height: 230px; overflow: hidden; border: 1px solid #cfd5de; border-radius: 12px; color: #17202c; background: #f4f6f8; }
+            .frame.narrow { width: min(390px, 100%); min-height: 420px; margin-inline: auto; }
+            .topbar { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 8px 10px; border-bottom: 1px solid #dce1e7; background: #fff; }
+            .brand { font-weight: 850; letter-spacing: -.03em; }
+            .button { padding: 7px 10px; border: 1px solid #b9c2cd; border-radius: 8px; color: #1c2633; background: #fff; font-weight: 750; }
+            .button.primary { border-color: #263708; color: #172000; background: var(--accent); }
+            .main { min-width: 0; padding: 12px; }
+            .state { display: grid; place-items: center; min-height: 180px; padding: 14px; border: 1px dashed #b7c0cc; border-radius: 9px; color: #566171; background: #f8fafb; text-align: center; }
+            .state strong { display: block; color: #17202c; font-size: 14px; }
+            .state p { max-width: 260px; margin: 5px 0 10px; }
+            .skeleton { height: 10px; margin: 8px 0; border-radius: 999px; background: linear-gradient(90deg, #e2e6eb, #f3f5f7, #e2e6eb); }
+            .list { display: grid; gap: 8px; }
+            .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 11px; border: 1px solid #d8dee6; border-radius: 9px; background: #fff; }
+            .row.selected { border-color: #6c8d27; box-shadow: inset 3px 0 #8dbd2c; }
+            .row strong, .row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .row small { display: block; margin-top: 4px; color: #6d7785; }
+            .pill { align-self: start; padding: 4px 7px; border-radius: 999px; color: #38540a; background: #e4f4c2; font-size: 10px; font-weight: 800; }
+            @media (max-width: 980px) { .stress-grid { grid-template-columns: 1fr; } }
+          </style>
+          <div class="stress-grid">
+            <article class="stress"><header><span>Loading / pending</span><span class="pass">PASS | RISK</span></header><div class="frame" data-ui-mock="state-loading"><section class="main"><div class="skeleton"></div><div class="skeleton" style="width:72%"></div><div class="skeleton" style="width:88%"></div></section></div><p>&lt;Stable rhythm and available actions&gt;</p></article>
+            <article class="stress"><header><span>Empty / first use</span><span class="pass">PASS | RISK</span></header><div class="frame" data-ui-mock="state-empty"><section class="main"><div class="state"><div><strong>&lt;Nothing here yet&gt;</strong><p>&lt;Why and one clear next action&gt;</p><button class="button primary">&lt;Create&gt;</button></div></div></section></div><p>&lt;No dead end&gt;</p></article>
+            <article class="stress"><header><span>Error / degraded</span><span class="risk">PASS | RISK</span></header><div class="frame" data-ui-mock="state-error"><section class="main"><div class="state"><div><strong>&lt;Could not load&gt;</strong><p>&lt;Identity, explanation, preserved work&gt;</p><button class="button">Retry</button></div></div></section></div><p>&lt;Recovery contract&gt;</p></article>
+            <article class="stress"><header><span>Pathological content</span><span class="risk">PASS | RISK</span></header><div class="frame" data-ui-mock="state-pathological"><section class="main"><div class="list"><article class="row selected"><div><strong>A-very-long-product-relevant-identifier-that-must-not-break-containment</strong><small>&lt;Long secondary content and truncation rule&gt;</small></div><span class="pill">&lt;Status&gt;</span></article></div></section></div><p>&lt;Wrapping / truncation / containment verdict&gt;</p></article>
+            <article class="stress"><header><span>Narrow / touch</span><span class="pass">PASS | RISK</span></header><div class="frame narrow" data-ui-mock="state-narrow"><div class="topbar"><span class="brand">&lt;Product&gt;</span><button class="button primary">&lt;Action&gt;</button></div><section class="main"><div class="list"><article class="row"><div><strong>&lt;Touch target + content&gt;</strong><small>&lt;Reflow without hover dependency&gt;</small></div></article></div></section></div><p>&lt;Reflow, targets, safe area&gt;</p></article>
+            <article class="stress"><header><span>Keyboard / reduced motion</span><span class="pass">PASS | RISK</span></header><div class="frame" data-ui-mock="state-keyboard"><section class="main"><div class="state"><div><strong>&lt;Visible focus path&gt;</strong><p>&lt;Reading order, focus return, reduced-motion equivalent&gt;</p><button class="button primary" autofocus>&lt;Focused action&gt;</button></div></div></section></div><p>&lt;Equivalent behavior verdict&gt;</p></article>
+          </div>
+        </template>
+      </ui-mockup-set>
+      <article class="spec" style="margin-top:12px"><span class="label">Implementation proof expected</span><p>&lt;Name the actual-product desktop, narrow, state, interaction, pathological-data, and fidelity captures that implementation and review must produce.&gt;</p></article>
+    </section>
+  </main>
+
+  <script>
+    document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach((candidate) => candidate.setAttribute('aria-selected', String(candidate === tab)));
+      document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === tab.dataset.view));
+    }));
+  </script>
+</body>
+</html>
