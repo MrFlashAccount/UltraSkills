@@ -45,7 +45,7 @@
     <button class="tab" data-view="requirements" aria-selected="true"><b>R</b><span>Requirements</span></button><button class="tab" data-view="entities" aria-selected="false"><b>E</b><span>Entities</span></button><button class="tab" data-view="approach" aria-selected="false"><b>A</b><span>Approach</span></button><button class="tab" data-view="structure" aria-selected="false"><b>S</b><span>Structure</span></button><button class="tab" data-view="operations" aria-selected="false"><b>O</b><span>Operations</span></button><button class="tab" data-view="norms" aria-selected="false"><b>N</b><span>Norms</span></button><button class="tab" data-view="safeguards" aria-selected="false"><b>S</b><span>Safeguards</span></button>
   </nav>
   <main>
-    <section class="view active" id="requirements">
+    <section class="view active" id="requirements" data-ui-proposal-capture="requirements">
       <div class="view-head"><div><div class="kicker">Solution-independent contract</div><h2>Make stuck work obvious and actionable.</h2></div><p class="purpose">An operator should understand what needs attention, why, and which safe action resumes the run within ten seconds.</p></div>
       <div class="grid two">
         <article class="card"><span class="label">Functional + interaction</span><ul><li><strong>Must:</strong> order runs by operator attention, not recency alone.</li><li><strong>Must:</strong> expose the active step, stop reason, and one safe next action without opening raw state.</li><li><strong>Must:</strong> preserve selection and focus when live events reorder the queue.</li><li><strong>Should:</strong> allow keyboard-only triage of consecutive runs.</li></ul></article>
@@ -55,12 +55,12 @@
       </div>
     </section>
 
-    <section class="view" id="entities">
+    <section class="view" id="entities" data-ui-proposal-capture="entities">
       <div class="view-head"><div><div class="kicker">Domain map</div><h2>Run owns progress; attention signal owns urgency.</h2></div><p class="purpose">The queue is a projection. It presents state but does not invent workflow status.</p></div>
       <div class="grid two"><article class="card"><span class="label">Relationship map</span><h3>Operator → Attention queue → Workflow run</h3><p>Workflow run owns ordered steps and current cursor. A stop or approval produces an attention signal. Artifacts and results remain evidence attached to the producing step.</p><ul><li>One run has zero or one current attention signal.</li><li>One selected run exposes one bounded next action.</li><li>Queue order may change; selected run identity must not.</li></ul></article><article class="card"><span class="label">First-read contract</span><table><tr><th>Entity</th><th>Visible first</th><th>Deferred</th></tr><tr><td>Attention signal</td><td>Type, age, reason</td><td>Raw worker context</td></tr><tr><td>Workflow run</td><td>Name, active step, progress</td><td>Full baton state</td></tr><tr><td>Action</td><td>Verb, consequence</td><td>Runner command details</td></tr></table></article></div>
     </section>
 
-    <section class="view" id="approach">
+    <section class="view" id="approach" data-ui-proposal-capture="approach">
       <div class="view-head"><div><div class="kicker">Controlled direction comparison</div><h2>Queue first, board second.</h2></div><p class="purpose">All directions show the same three runs and the same selected decision stop.</p></div>
       <ui-mockup-set aria-label="Isolated direction mockups"><template shadowrootmode="open">
         <style>
@@ -77,7 +77,7 @@
       </template></ui-mockup-set>
     </section>
 
-    <section class="view" id="structure">
+    <section class="view" id="structure" data-ui-proposal-capture="structure">
       <div class="view-head"><div><div class="kicker">Selected composition</div><h2>Stable queue, contextual action panel.</h2></div><p class="purpose">Desktop keeps queue and detail visible; narrow view stacks detail after selection.</p></div>
       <ui-mockup-set aria-label="Isolated selected compositions"><template shadowrootmode="open">
         <style>
@@ -88,7 +88,7 @@
       </template></ui-mockup-set>
     </section>
 
-    <section class="view" id="operations">
+    <section class="view" id="operations" data-ui-proposal-capture="operations">
       <div class="view-head"><div><div class="kicker">Primary scenario</div><h2>Notice, inspect, act, confirm.</h2></div><p class="purpose">Selection remains stable while the queue updates around it.</p></div>
       <ui-mockup-set aria-label="Isolated storyboard"><template shadowrootmode="open">
         <style>
@@ -98,12 +98,12 @@
       </template></ui-mockup-set>
     </section>
 
-    <section class="view" id="norms">
+    <section class="view" id="norms" data-ui-proposal-capture="norms">
       <div class="view-head"><div><div class="kicker">Observable laws</div><h2>Attention without alarm fatigue.</h2></div><p class="purpose">Urgency changes order and labels before it changes color.</p></div>
       <div class="grid three"><article class="card"><span class="label">N-01</span><h3>Type and rhythm</h3><p>Run name first, reason second, age last. IDs never become headings.</p></article><article class="card"><span class="label">N-02</span><h3>Emphasis</h3><p>Selection uses edge, weight, and background; urgency never relies on hue alone.</p></article><article class="card"><span class="label">N-03</span><h3>Containment</h3><p>Long identifiers truncate in queue and wrap only inside detail.</p></article><article class="card"><span class="label">N-04</span><h3>Focus</h3><p>Opening detail focuses its heading; closing returns to the selected run.</p></article><article class="card"><span class="label">N-05</span><h3>Motion</h3><p>Reorder uses position transition only when selection is unaffected; reduced motion updates instantly.</p></article><article class="card"><span class="label">N-06</span><h3>Action safety</h3><p>Primary action describes the next surface, not the underlying runner command.</p></article></div>
     </section>
 
-    <section class="view" id="safeguards">
+    <section class="view" id="safeguards" data-ui-proposal-capture="safeguards">
       <div class="view-head"><div><div class="kicker">Stress proof</div><h2>Survive churn, failure, and pathological IDs.</h2></div><p class="purpose">The queue remains useful when evidence is delayed or incomplete.</p></div>
       <ui-mockup-set aria-label="Isolated stress-state mockups"><template shadowrootmode="open">
         <style>
@@ -115,10 +115,20 @@
     </section>
   </main>
   <script>
-    document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach((candidate) => candidate.setAttribute('aria-selected', String(candidate === tab)));
-      document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === tab.dataset.view));
-    }));
+    const proposalViews = new Set(Array.from(document.querySelectorAll('.view'), (view) => view.id));
+
+    function activateProposalView(requestedView, updateHash = false) {
+      const viewName = proposalViews.has(requestedView) ? requestedView : 'requirements';
+      document.querySelectorAll('.tab').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.view === viewName)));
+      document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === viewName));
+      document.documentElement.dataset.uiProposalView = viewName;
+      if (updateHash && location.hash !== `#${viewName}`) history.replaceState(null, '', `#${viewName}`);
+    }
+
+    document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => activateProposalView(tab.dataset.view, true)));
+    window.addEventListener('hashchange', () => activateProposalView(location.hash.slice(1)));
+    activateProposalView(location.hash.slice(1));
+    document.documentElement.dataset.uiProposalReady = 'true';
   </script>
 </body>
 </html>

@@ -22,30 +22,85 @@
     },
     "artifacts": {
       "type": "array",
-      "items": {
-        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
-      },
-      "description": "Producer must emit exactly one artifact: the required immutable, self-contained ui-design-proposal HTML artifact.",
-      "x-usage": "For both ready_for_attack and ready_for_approval, emit only ui-design-proposal with content_type text/html. Put every proposed surface, direction, responsive composition, storyboard moment, and stress state directly in its HTML/CSS; do not emit image artifacts.",
-      "minItems": 1,
-      "maxItems": 1,
-      "contains": {
-        "type": "object",
-        "required": [
-          "id",
-          "content_type"
-        ],
-        "properties": {
-          "id": {
-            "const": "ui-design-proposal"
-          },
-          "content_type": {
-            "const": "text/html"
+      "description": "Producer must emit the required immutable, self-contained ui-design-proposal HTML artifact plus one derived PNG reference capture for each REASONS view.",
+      "x-usage": "For both ready_for_attack and ready_for_approval, emit ui-design-proposal with content_type text/html first, followed by the seven stable image/png capture ids in REASONS order. Build every proposed surface in HTML/CSS first; the PNGs must be deterministic browser screenshots of that final HTML, never independently generated designs.",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        {
+          "type": "object",
+          "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact",
+          "required": ["id", "content_type"],
+          "properties": {
+            "id": { "const": "ui-design-proposal" },
+            "content_type": { "const": "text/html" }
+          }
+        },
+        {
+          "type": "object",
+          "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact",
+          "required": ["id", "content_type"],
+          "properties": {
+            "id": { "const": "ui-design-proposal-requirements" },
+            "content_type": { "const": "image/png" }
+          }
+        },
+        {
+          "type": "object",
+          "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact",
+          "required": ["id", "content_type"],
+          "properties": {
+            "id": { "const": "ui-design-proposal-entities" },
+            "content_type": { "const": "image/png" }
+          }
+        },
+        {
+          "type": "object",
+          "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact",
+          "required": ["id", "content_type"],
+          "properties": {
+            "id": { "const": "ui-design-proposal-approach" },
+            "content_type": { "const": "image/png" }
+          }
+        },
+        {
+          "type": "object",
+          "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact",
+          "required": ["id", "content_type"],
+          "properties": {
+            "id": { "const": "ui-design-proposal-structure" },
+            "content_type": { "const": "image/png" }
+          }
+        },
+        {
+          "type": "object",
+          "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact",
+          "required": ["id", "content_type"],
+          "properties": {
+            "id": { "const": "ui-design-proposal-operations" },
+            "content_type": { "const": "image/png" }
+          }
+        },
+        {
+          "type": "object",
+          "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact",
+          "required": ["id", "content_type"],
+          "properties": {
+            "id": { "const": "ui-design-proposal-norms" },
+            "content_type": { "const": "image/png" }
+          }
+        },
+        {
+          "type": "object",
+          "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact",
+          "required": ["id", "content_type"],
+          "properties": {
+            "id": { "const": "ui-design-proposal-safeguards" },
+            "content_type": { "const": "image/png" }
           }
         }
-      },
-      "minContains": 1,
-      "maxContains": 1
+      ],
+      "items": false
     },
     "results": {
       "type": "array",
