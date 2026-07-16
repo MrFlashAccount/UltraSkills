@@ -70,7 +70,7 @@
   </style>
 </head>
 <body>
-  <!-- Keep this artifact self-contained. Proposed screens must be semantic HTML/CSS, never generated images or external assets. -->
+  <!-- Keep this artifact self-contained. Proposed screens must be semantic HTML/CSS, never generated images or external assets. Keep the capture hooks and hash-addressable REASONS views intact. -->
   <header class="proposal-header">
     <div><h1>&lt;Surface&gt; UI design proposal</h1><p>&lt;Task · user · approved design basis&gt;</p></div>
     <div class="status">PROPOSED · NEEDS APPROVAL</div>
@@ -87,7 +87,7 @@
   </nav>
 
   <main>
-    <section class="view active" id="requirements">
+    <section class="view active" id="requirements" data-ui-proposal-capture="requirements">
       <div class="view-head"><div><div class="kicker">Solution-independent contract</div><h2>What must the interface make true?</h2></div><p class="purpose">Keep this section text-first. Approve the observable contract before judging visual directions.</p></div>
       <div class="grid two">
         <article class="card"><span class="label">Functional + interaction</span><ul class="clean"><li><strong class="must">MUST</strong> &lt;user capability and primary action&gt;</li><li><strong class="must">MUST</strong> &lt;selection, focus, recovery, or continuity behavior&gt;</li><li><strong>SHOULD</strong> &lt;valuable behavior that may yield to a constraint&gt;</li></ul></article>
@@ -97,7 +97,7 @@
       </div>
     </section>
 
-    <section class="view" id="entities">
+    <section class="view" id="entities" data-ui-proposal-capture="entities">
       <div class="view-head"><div><div class="kicker">Domain map</div><h2>What exists, and what owns what?</h2></div><p class="purpose">Map user-visible entities and state without promoting them into code components.</p></div>
       <div class="grid two">
         <article class="card"><span class="label">Relationship map</span><h3>&lt;Actor&gt; → &lt;work surface&gt; → &lt;core entity&gt;</h3><p>&lt;Core entity&gt; owns &lt;state&gt;; &lt;related entity&gt; supplies &lt;facts&gt;; &lt;presentation surface&gt; presents but does not own.</p><ul class="clean"><li>&lt;cardinality / selection relationship&gt;</li><li>&lt;loading / empty / error relationship&gt;</li><li>&lt;detail or metadata containment&gt;</li></ul></article>
@@ -105,7 +105,7 @@
       </div>
     </section>
 
-    <section class="view" id="approach">
+    <section class="view" id="approach" data-ui-proposal-capture="approach">
       <div class="view-head"><div><div class="kicker">Controlled direction comparison</div><h2>Which composition wins?</h2></div><p class="purpose">Use the same scenario, content, state, and viewport. Change only the structural direction.</p></div>
       <!-- Keep three or four product-relevant directions only when a real choice exists. Each frame must contain actual semantic product markup. -->
       <ui-mockup-set aria-label="Isolated direction mockups">
@@ -155,7 +155,7 @@
       </ui-mockup-set>
     </section>
 
-    <section class="view" id="structure">
+    <section class="view" id="structure" data-ui-proposal-capture="structure">
       <div class="view-head"><div><div class="kicker">Selected surface anatomy</div><h2>Where does each responsibility live?</h2></div><p class="purpose">Show desktop and narrow compositions with reading order, containment, selected patterns, and responsive morph.</p></div>
       <ui-mockup-set aria-label="Isolated selected desktop and narrow mockups">
         <template shadowrootmode="open">
@@ -204,7 +204,7 @@
       </ui-mockup-set>
     </section>
 
-    <section class="view" id="operations">
+    <section class="view" id="operations" data-ui-proposal-capture="operations">
       <div class="view-head"><div><div class="kicker">Primary scenario storyboard</div><h2>How does the experience unfold?</h2></div><p class="purpose">Each HTML frame names its trigger, visible change, focus result, and recovery path.</p></div>
       <ui-mockup-set aria-label="Isolated storyboard mockups">
         <template shadowrootmode="open">
@@ -243,12 +243,12 @@
       </ui-mockup-set>
     </section>
 
-    <section class="view" id="norms">
+    <section class="view" id="norms" data-ui-proposal-capture="norms">
       <div class="view-head"><div><div class="kicker">Observable interface laws</div><h2>Which rules must remain consistent?</h2></div><p class="purpose">Every norm must be visible in at least one HTML composition or state.</p></div>
       <div class="grid three"><article class="card"><span class="label">N-01</span><h3>Typography / rhythm</h3><p>&lt;Roles, measure, weights, line height, long-content behavior&gt;</p></article><article class="card"><span class="label">N-02</span><h3>Spacing / composition</h3><p>&lt;Grid, alignment, density, containment&gt;</p></article><article class="card"><span class="label">N-03</span><h3>Color / emphasis / contrast</h3><p>&lt;Surface roles, semantic states, non-color cues&gt;</p></article><article class="card"><span class="label">N-04</span><h3>Focus / target affordance</h3><p>&lt;Keyboard path, focus-visible, hover/press, target floor&gt;</p></article><article class="card"><span class="label">N-05</span><h3>Motion / reduced motion</h3><p>&lt;Purpose, timing, properties, equivalent behavior&gt;</p></article><article class="card"><span class="label">N-06</span><h3>Content hierarchy</h3><p>&lt;Labels, statuses, wrapping, truncation, deferred metadata&gt;</p></article></div>
     </section>
 
-    <section class="view" id="safeguards">
+    <section class="view" id="safeguards" data-ui-proposal-capture="safeguards">
       <div class="view-head"><div><div class="kicker">Rendered stress proof</div><h2>Where must the proposal survive?</h2></div><p class="purpose">Use HTML states, not prose claims, for loading, empty, error, pathological content, and narrow behavior.</p></div>
       <ui-mockup-set aria-label="Isolated stress-state mockups">
         <template shadowrootmode="open">
@@ -296,10 +296,20 @@
   </main>
 
   <script>
-    document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach((candidate) => candidate.setAttribute('aria-selected', String(candidate === tab)));
-      document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === tab.dataset.view));
-    }));
+    const proposalViews = new Set(Array.from(document.querySelectorAll('.view'), (view) => view.id));
+
+    function activateProposalView(requestedView, updateHash = false) {
+      const viewName = proposalViews.has(requestedView) ? requestedView : 'requirements';
+      document.querySelectorAll('.tab').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.view === viewName)));
+      document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === viewName));
+      document.documentElement.dataset.uiProposalView = viewName;
+      if (updateHash && location.hash !== `#${viewName}`) history.replaceState(null, '', `#${viewName}`);
+    }
+
+    document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => activateProposalView(tab.dataset.view, true)));
+    window.addEventListener('hashchange', () => activateProposalView(location.hash.slice(1)));
+    activateProposalView(location.hash.slice(1));
+    document.documentElement.dataset.uiProposalReady = 'true';
   </script>
 </body>
 </html>
