@@ -2,7 +2,7 @@
 
 Use this file when creating, rewriting, auditing, or materially restructuring a skill from source material such as a PDF, SOP, workflow, prompt pack, notes, or an existing skill folder.
 
-This workflow is approval-gated even for audit-only passes.
+The triggering user request authorizes the requested mode; no separate opening approval gate is required.
 If the target mode or scope is still fuzzy, route first-pass discovery through `grill-me`, then come back here.
 
 ## Stage map
@@ -26,34 +26,27 @@ Choose one of these explicitly:
 - `proposal`
   - shape the intended skill or rewrite
   - may inspect and plan, but does not edit files
-  - stops for approval before edits
+  - stops before edits unless the user also requested implementation
 
 - `implement`
   - create or revise the skill files
   - includes critic/fix loop
   - must end with post-implementation review before completion
 
-If the task started as `audit` and now wants edits, stop and get explicit approval for the write phase.
+If the task started as `audit` and now needs edits, require a direct user request to expand into implementation. Ordinary language is sufficient; do not require `APPROVED` or `LGTM`.
 
-## 1. Approval gate
+## 1. Request authority
 
-Before any substantive work:
-- confirm the mode
-- confirm the target skill/folder/source material
-- wait for explicit `APPROVED` or `LGTM`
+Treat the request that triggered the skill as authorization to begin substantive work in the requested mode.
 
-Do not start:
-- audit findings generation
-- restructure planning execution
-- file drafting
-- fix loops
-- review loops
-before that approval.
+- Infer and state the mode when it is not already explicit.
+- Confirm the target skill/folder/source material from available context.
+- Start immediately when mode, target, and scope are clear.
+- Keep `audit` and `proposal` read-only unless implementation was also requested.
+- If scope expands into a new mode later, require a direct user request for that expansion, without magic approval words.
+- Keep independent safety, privacy, destructive-action, publishing, commit, and push confirmations intact.
 
-Allowed before approval:
-- one blocking clarification at a time
-- repo/source inspection only when needed to answer that blocking clarification
-- narrowing whether the task is `audit`, `proposal`, or `implement`
+When a critical detail is genuinely missing, ask one blocking clarification at a time. Otherwise inspect the repo/source and proceed.
 
 ## 2. Source-audit stage
 
@@ -103,8 +96,9 @@ For metadata-only or structure-only work:
 - still state the intended change, stop condition, and review plan
 
 After proposal:
-- if edits are required, stop and wait for explicit approval before implementation
-- do not smuggle implementation through the proposal stage
+- if the user requested proposal only, stop before implementation
+- if the user requested implementation, continue without an extra approval round
+- do not smuggle implementation into a read-only request
 
 ## 4. Implement stage
 
@@ -145,7 +139,7 @@ Run a third review/fix round when:
 Critic focus:
 - trigger quality in frontmatter
 - mode clarity
-- approval semantics
+- request-authority and mode-boundary semantics
 - workflow coherence
 - branch closure
 - claimed-vs-shipped capability alignment
@@ -157,10 +151,10 @@ Critic focus:
 
 Do not stop at “edits done”.
 
-Review the implemented result against the approved proposal:
+Review the implemented result against the requested scope and resulting proposal:
 - did it change the right thing?
 - did it change it the right way?
-- does it match the approved scope?
+- does it match the requested scope?
 - do representative asks route correctly?
 - did adjacent out-of-scope asks stay quiet?
 - is claimed capability still aligned with shipped files/scripts?
@@ -191,8 +185,8 @@ Check:
 ## 9. Finalize
 
 Stop only when:
-- the approved mode was completed cleanly
-- any required write phase had explicit approval
+- the requested mode was completed cleanly
+- any expansion into a write phase was directly requested by the user
 - post-implementation review is clean enough
 - the skill folder is internally consistent
 - referenced files actually exist
