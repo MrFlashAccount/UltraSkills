@@ -1,6 +1,6 @@
 ---
 name: create-skill
-description: Create, rewrite, audit, or materially restructure a Claude/OpenClaw skill folder from source material or an existing skill. Use when the task is to build a skill from a PDF, SOP, workflow, prompt pack, or notes; review an existing skill; tighten trigger metadata/frontmatter; or refactor what belongs in `SKILL.md` vs `references/`/`scripts/`/`assets/`. This skill is for approved skill work, including approved audit-only passes and approved implementation/rewrite passes.
+description: Create, rewrite, audit, or materially restructure a Claude/OpenClaw skill folder from source material or an existing skill. Use when the task is to build a skill from a PDF, SOP, workflow, prompt pack, or notes; review an existing skill; tighten trigger metadata/frontmatter; or refactor what belongs in `SKILL.md` vs `references/`/`scripts/`/`assets/`.
 ---
 
 Turn source material or an existing skill into a clean source-first skill workflow.
@@ -13,12 +13,11 @@ Choose one mode up front:
    - review an existing skill
    - no file edits
    - output findings, gaps, and recommended changes
-   - still requires explicit user approval before starting
 
 2. `proposal`
    - shape the skill or rewrite plan
    - define structure, trigger surface, success criteria, and branch handling
-   - stop and wait for explicit approval before file edits
+   - do not edit files unless the user also asks for implementation
 
 3. `implement`
    - create or rewrite the skill files
@@ -29,14 +28,14 @@ If the target shape is still fuzzy, use `grill-me` first.
 If the answer can be recovered from the repo or source material, inspect that instead of asking.
 Ask one blocking question at a time.
 
-## Approval gate
+## Request authority
 
-This skill is approval-gated for all substantive modes, including audit.
+The user request that triggers this skill authorizes work in the requested mode. Do not require a separate `APPROVED` or `LGTM` message before starting.
 
-- Do not start an audit pass, proposal execution pass, file drafting, restructuring, or fix loop until the user explicitly says `APPROVED` or `LGTM`.
-- Pre-approval discussion may only clarify scope/mode or recover missing context.
-- Approval for audit does not automatically approve implementation.
-- If the task moves from audit/proposal into edits, stop and get explicit approval for the write phase.
+- Infer `audit`, `proposal`, or `implement` from the request and begin immediately when the scope is clear.
+- An `audit` or `proposal` request remains read-only unless the user also asks for edits.
+- If the task later expands from audit/proposal into implementation, require a direct user request for that expansion; ordinary language is sufficient.
+- Keep independent safety, privacy, destructive-action, publishing, commit, and push confirmations intact.
 
 ## Default stage model
 
@@ -60,10 +59,10 @@ For non-trivial skill work, use this sequence:
 
 4. `post-implement review`
    - verify trigger quality, workflow coherence, and claimed-vs-shipped alignment
-   - confirm the edits match the approved proposal
+   - confirm the edits match the requested scope and resulting proposal
    - do not call the skill done until the reviewed result is clean enough
 
-For small approved fixes such as metadata-only or structure-only edits, compress the amount of ceremony but keep the same stage boundaries.
+For small requested fixes such as metadata-only or structure-only edits, compress the amount of ceremony but keep the same stage boundaries.
 
 ## Core rules
 

@@ -1,11 +1,11 @@
 # Create-Skill Checklist
 
-## Mode and approval
+## Mode and request authority
 - the working mode is explicit: `audit`, `proposal`, or `implement`
 - the target skill/folder/source material is explicit
-- the user explicitly approved the current substantive phase with `APPROVED` or `LGTM`
-- audit approval is not being treated as automatic implementation approval
-- if the task moved from audit/proposal into edits, a fresh explicit approval was obtained for the write phase
+- the triggering request is treated as authority to begin the requested mode without a separate opening approval gate
+- audit/proposal scope is not being treated as automatic authority for implementation
+- if the task moved from audit/proposal into edits, the user directly requested that expansion; no magic approval wording is required
 
 ## Scope handoff
 - initial discovery/scoping is already done, or was explicitly routed through `grill-me`
@@ -36,7 +36,7 @@
 - instructions are imperative and operational
 - routing guidance is explicit
 - mode handling is explicit
-- approval semantics are explicit
+- request-authority and mode-boundary semantics are explicit
 - anti-patterns or boundaries are named when they matter
 - duplicate content between `SKILL.md` and references has been reduced
 - the always-loaded file is concise relative to the task
@@ -77,7 +77,7 @@
 - for iterative review loops, leakage between unfinished and finished states was tested explicitly
 
 ## Finalization
-- the finished result matches the approved mode
+- the finished result matches the requested mode
 - if edits were made, the post-implementation review gate was run
 - skill folder is complete and internally consistent
 - all referenced files/scripts/assets actually exist
