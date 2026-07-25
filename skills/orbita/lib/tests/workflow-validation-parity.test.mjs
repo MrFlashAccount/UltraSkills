@@ -382,7 +382,7 @@ test('approval selector producers must be guaranteed to execute before the gate 
   }
 });
 
-test('conditional approval verdict topology rejects effective on-limit critic bypasses at validation and startup seams', async () => {
+test('conditional approval verdict topology permits bounded critic exits and rejects indirect critic bypasses', async () => {
   const workflowRoot = path.join(tempDir, 'conditional-verdict-on-limit-parity');
   const workflowPath = path.join(workflowRoot, 'workflow.json');
   const runsRoot = path.join(tempDir, 'conditional-verdict-on-limit-runs');
@@ -444,11 +444,19 @@ test('conditional approval verdict topology rejects effective on-limit critic by
     }), error);
   };
 
-  const criticBypass = workflowDoc();
-  criticBypass.loopPolicies = {
+  const boundedCriticExit = workflowDoc();
+  boundedCriticExit.loopPolicies = {
     critique: { steps: ['producer', 'critic'], entry: 'producer', boundary: 'critic', maxIterations: 1, onLimit: 'approve' },
   };
-  await assertStartupRejects(criticBypass, 'critic-bypass', /onLimit to route critic 'critic' non-success to the approval gate/);
+  writeJson(workflowPath, boundedCriticExit);
+  assert.equal(validateWorkflowFile(workflowPath).ok, true);
+  const boundedResponse = await runnerNext({
+    runId: `workflow-validation-parity-${process.pid}-bounded-critic-exit`,
+    workflowPath,
+    runsRoot,
+    leaseToken: `workflow-validation-parity-bounded-critic-exit-${process.pid}`,
+  });
+  assert.equal(boundedResponse.requests[0].stepId, 'producer');
 
   const nonSuccessRetarget = workflowDoc();
   nonSuccessRetarget.steps.critic.next.cases.needs_revision = 'revision';

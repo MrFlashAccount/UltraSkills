@@ -38,72 +38,20 @@ function adjacencyFromEdges(workflow, edges) {
   return adjacency;
 }
 
-function stronglyConnectedComponents(workflow, edges) {
-  const adjacency = adjacencyFromEdges(workflow, edges);
-  const indexByNode = new Map();
-  const lowLinkByNode = new Map();
-  const stack = [];
-  const onStack = new Set();
-  const components = [];
-  let index = 0;
-
-  function visit(node) {
-    indexByNode.set(node, index);
-    lowLinkByNode.set(node, index);
-    index += 1;
-    stack.push(node);
-    onStack.add(node);
-
-    for (const target of adjacency.get(node) ?? []) {
-      if (!indexByNode.has(target)) {
-        visit(target);
-        lowLinkByNode.set(node, Math.min(lowLinkByNode.get(node), lowLinkByNode.get(target)));
-      } else if (onStack.has(target)) {
-        lowLinkByNode.set(node, Math.min(lowLinkByNode.get(node), indexByNode.get(target)));
-      }
-    }
-
-    if (lowLinkByNode.get(node) !== indexByNode.get(node)) return;
-    const component = [];
-    let current;
-    do {
-      current = stack.pop();
-      onStack.delete(current);
-      component.push(current);
-    } while (current !== node);
-    components.push(component.sort());
-  }
-
-  for (const stepId of Object.keys(workflow.steps)) if (!indexByNode.has(stepId)) visit(stepId);
-  return components;
-}
-
-function cyclicRegions(workflow, edges) {
-  const selfLoops = new Set(edges.filter((edge) => edge.from === edge.to).map((edge) => edge.from));
-  return stronglyConnectedComponents(workflow, edges)
-    .filter((component) => component.length > 1 || selfLoops.has(component[0]))
-    .map((component) => component.sort());
-}
-
-function sameMembers(left, right) {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
 function sortedUnique(values) {
   return [...new Set(values)].sort();
 }
 
-function reachesAny(adjacency, start, targets) {
+function reachableSteps(adjacency, start) {
   const visited = new Set();
   const queue = [start];
   while (queue.length > 0) {
     const stepId = queue.shift();
     if (visited.has(stepId)) continue;
     visited.add(stepId);
-    if (targets.has(stepId)) return true;
     for (const target of adjacency.get(stepId) ?? []) queue.push(target);
   }
-  return false;
+  return visited;
 }
 
 function resolveOnLimitTransition(policy, transition, resolver) {
@@ -138,8 +86,6 @@ export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow
   if (policies === undefined) return;
   if (!policies || typeof policies !== 'object' || Array.isArray(policies)) fail('loopPolicies must be an object keyed by policy id');
 
-  const regions = cyclicRegions(workflow, edges);
-  const adjacency = adjacencyFromEdges(workflow, edges);
   const claimedSteps = new Map();
   for (const [policyId, policy] of Object.entries(policies)) {
     if (isDangerousObjectKey(policyId)) fail(`loopPolicy id '${policyId}' is unsafe as a JavaScript object key`);
@@ -150,15 +96,22 @@ export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow
       claimedSteps.set(stepId, policyId);
     }
 
-    const matches = regions.filter((region) => sameMembers(region, steps));
-    if (matches.length !== 1) {
-      fail(`loopPolicy '${policyId}' steps must exactly match one unambiguous SCC or self-loop region`);
-    }
-    const region = new Set(matches[0]);
+    const region = new Set(steps);
     if (!region.has(policy.entry)) fail(`loopPolicy '${policyId}' entry '${policy.entry}' is not in the loop region`);
     if (!region.has(policy.boundary)) fail(`loopPolicy '${policyId}' boundary '${policy.boundary}' is not in the loop region`);
 
     const { incoming, internal, external } = policyEdges(edges, region);
+    const internalAdjacency = adjacencyFromEdges(workflow, internal);
+    const reverseInternalAdjacency = adjacencyFromEdges(
+      workflow,
+      internal.map((edge) => ({ ...edge, from: edge.to, to: edge.from })),
+    );
+    const reachableFromEntry = reachableSteps(internalAdjacency, policy.entry);
+    const canReachEntry = reachableSteps(reverseInternalAdjacency, policy.entry);
+    const disconnected = steps.find((stepId) => !reachableFromEntry.has(stepId) || !canReachEntry.has(stepId));
+    if (disconnected) {
+      fail(`loopPolicy '${policyId}' steps must describe one declared cycle`);
+    }
     if (region.has(workflow.start) && workflow.start !== policy.entry) {
       fail(`loopPolicy '${policyId}' workflow start '${workflow.start}' must equal entry '${policy.entry}'`);
     }
@@ -190,9 +143,6 @@ export function assertLoopPolicies(workflow, edges = collectStaticEdges(workflow
       if (workflow.steps[policy.boundary]?.kind !== 'approval'
         && !external.some((edge) => edge.from === policy.boundary && edge.to === limitEdge.to)) {
         fail(`loopPolicy '${policyId}' onLimit target '${limitEdge.to}' must be a declared external target of boundary '${policy.boundary}'`);
-      }
-      if (reachesAny(adjacency, limitEdge.to, region)) {
-        fail(`loopPolicy '${policyId}' onLimit target '${limitEdge.to}' routes back into the exhausted loop region`);
       }
     }
 

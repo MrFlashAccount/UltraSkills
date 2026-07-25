@@ -35,15 +35,18 @@ equivalent discriminated branches. A dynamic route that is not enumerable can
 remain valid for ordinary routing, but any `loopPolicy` depending on that route
 must fail validation.
 
-Cycle detection is structural. Validation detects SCCs and self-loops in the
-expanded graph. A policy-selected step set must normalize to exactly one
-detected SCC or one valid self-loop. Partial regions, multi-SCC selections,
-overlapping policies, and regions with no internal route event fail validation.
+Cycle identity is declarative. `steps` defines the policy-owned cycle; validation
+checks the graph induced by those declared members and proves that every member
+is reachable from `entry` and can return to it. A declared cycle may sit inside
+a larger graph cycle created by external exits and later returns without those
+external steps becoming policy members. Linear or disconnected selections,
+overlapping policies, and selections with no boundary-to-entry repeat fail
+validation.
 
 MVP policy identity and fields:
 
 - the object key under `loopPolicies`: unique policy id inside the workflow;
-- `steps`: member steps used to select one detected cyclic region;
+- `steps`: explicit member steps that define the cycle;
 - `entry`: the single step through which each iteration enters the region;
 - `boundary`: the single step that completes an iteration and owns repeat/exit
   routing (`entry` and `boundary` are the same step for a self-loop);
@@ -57,16 +60,15 @@ MVP policy identity and fields:
 Validation must reject ambiguous fanout participation, branch-local dynamic
 routing before a join, cross-branch cycles, non-convergent fanout, entries that
 bypass the declared entry, ambiguous boundary repeats, `onLimit` targets absent
-from the boundary's declared external routes, targets that route back into the
-exhausted region, and policy definitions that try to use
-`cycleId`, manual scopes, runtime history, or prompt behavior as the primary
-loop mechanism.
+from the boundary's declared external routes, and policy definitions that try
+to use per-transition `cycleId`, runtime-inferred membership, runtime history,
+or prompt behavior as the primary loop mechanism.
 
 Consecutive pass/success early exit is deferred. Do not accept success-streak or
 `onSuccess` policy fields in the MVP unless a newer approved architecture
 contract defines reset, precedence, and target semantics.
 
 The compiled validation result may provide runtime metadata such as policy key,
-computed region, internal iteration edges, progress key, max iteration limit,
+declared region, internal iteration edges, progress key, max iteration limit,
 and `onLimit` target. That metadata is derived from the workflow document; it is
 not an alternate policy source.

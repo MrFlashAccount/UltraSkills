@@ -6,6 +6,17 @@ Implementation and review are first-class fanout owner steps. Each activation ru
 
 Keep workflow mechanics in `workflow.toml` and schemas in `schemas/*.json`. Use this README for human workflow intent and EA-agent operating rules, not for runtime routing.
 
+## Hostile review cycle limits
+
+Research, UI design, architecture, and implementation-planning hostile reviews
+run at most twice. If the second review still requests revision, the workflow
+exits that hostile-review cycle to the corresponding human approval gate.
+
+Implementation code review runs at most three times. If the third review still
+requests changes, the workflow exits to `done` with the unresolved verdict and
+must not report the review as passed. A separate human code-review approval gate
+is not modeled yet.
+
 ## Approval summaries and artifacts
 
 Every draft step that feeds a human approval gate must emit a compact `summary` as the human-facing proposal state and a file-backed artifact for the proposal body.

@@ -98,7 +98,7 @@ function syntheticWorkflow(overrides) {
   return overrides?.(doc) ?? doc;
 }
 
-test('workflow loopPolicies validate against exactly one SCC or self-loop region', () => {
+test('workflow loopPolicies validate declared cycles independently of larger graph cycles', () => {
   const valid = syntheticWorkflow((doc) => {
     doc.steps.producer.next = { match: '${{ output.outcome }}', cases: { ready: 'consumer', limit_reached: 'done' } };
     doc.steps.consumer.next = { match: '${{ output.outcome }}', cases: { ready: 'producer', limit_reached: 'limit_reached' } };
@@ -117,6 +117,35 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
     return doc;
   });
   assert.deepEqual(validate(valid), { ok: true, workflow: 'loop-policy-validation-fixture', steps: Object.keys(valid.steps).length });
+
+  const cycleInsideLargerGraphCycle = syntheticWorkflow((doc) => {
+    doc.steps.producer.next = 'consumer';
+    doc.steps.consumer.next = {
+      match: '${{ output.outcome }}',
+      cases: { ready: 'producer', limit_reached: 'approval_gate' },
+    };
+    doc.steps.approval_gate = {
+      name: 'Approval Gate',
+      kind: 'approval',
+      input: { summary: '${{ input.producer.outcome }}' },
+      next: { match: '${{ output.approval }}', cases: { approved: 'done', rejected: 'producer' } },
+    };
+    doc.loopPolicies = {
+      producer_consumer: {
+        steps: ['producer', 'consumer'],
+        entry: 'producer',
+        boundary: 'consumer',
+        maxIterations: 2,
+        onLimit: 'approval_gate',
+      },
+    };
+    return doc;
+  });
+  assert.deepEqual(validate(cycleInsideLargerGraphCycle), {
+    ok: true,
+    workflow: 'loop-policy-validation-fixture',
+    steps: Object.keys(cycleInsideLargerGraphCycle.steps).length,
+  });
 
   const schemaLessApprovalRoute = syntheticWorkflow((doc) => {
     doc.start = 'approval_source';
@@ -148,7 +177,16 @@ test('workflow loopPolicies validate against exactly one SCC or self-loop region
       partial: { steps: ['producer'], entry: 'producer', boundary: 'producer', maxIterations: 2, onLimit: 'limit_reached' },
     };
     return doc;
-  }), /loopPolicy 'partial' steps must exactly match one unambiguous SCC or self-loop region/);
+  }), /loopPolicy 'partial' boundary 'producer' must declare the repeat target 'producer'/);
+
+  assertSemanticFailure(syntheticWorkflow((doc) => {
+    doc.steps.producer.next = 'consumer';
+    doc.steps.consumer.next = { match: '${{ output.outcome }}', cases: { ready: 'done', limit_reached: 'limit_reached' } };
+    doc.loopPolicies = {
+      line: { steps: ['producer', 'consumer'], entry: 'producer', boundary: 'consumer', maxIterations: 2, onLimit: 'limit_reached' },
+    };
+    return doc;
+  }), /loopPolicy 'line' steps must describe one declared cycle/);
 
   assertSemanticFailure(syntheticWorkflow((doc) => {
     doc.steps.producer.next = 'consumer';
