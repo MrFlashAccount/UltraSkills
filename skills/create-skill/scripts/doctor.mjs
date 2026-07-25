@@ -140,8 +140,16 @@ const parseFrontmatter = (content, skillRoot) => {
   return { metadata, errors };
 };
 
+const markdownLinkTitlePattern =
+  /\s+(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\((?:\\.|[^)\\])*\))\s*$/;
+
 const cleanReferenceTarget = (value) =>
-  value.trim().replace(/^<|>$/g, "").split("#", 1)[0].split("?", 1)[0];
+  value
+    .trim()
+    .replace(markdownLinkTitlePattern, "")
+    .replace(/^<|>$/g, "")
+    .split("#", 1)[0]
+    .split("?", 1)[0];
 
 const isLocalReference = (value) =>
   value !== "" &&
@@ -177,7 +185,9 @@ const collectDirectReferences = (content, skillRoot) => {
   };
 
   for (const [index, line] of lines.entries()) {
-    for (const match of line.matchAll(/\[[^\]]*]\(([^)]+)\)/g)) add(match[1], line, index + 1);
+    for (const match of line.matchAll(/\[[^\]]*]\(((?:[^()]|\([^()]*\))+)\)/g)) {
+      add(match[1], line, index + 1);
+    }
     for (const match of line.matchAll(
       /`((?:\.{1,2}\/|references\/|scripts\/|assets\/)[^`\s]+)`/g,
     )) {

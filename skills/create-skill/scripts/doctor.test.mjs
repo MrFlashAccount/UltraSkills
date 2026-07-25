@@ -107,6 +107,43 @@ test("doctor fails structural errors but does not invent semantic verdicts", () 
     assert.equal(report.references.unconditional_loads.length, 1);
   }));
 
+test("doctor accepts Markdown link titles without treating them as part of the path", () =>
+  withTempDir((root) => {
+    const skillRoot = path.join(root, "example-skill");
+    mkdirSync(path.join(skillRoot, "references"), { recursive: true });
+    for (const filename of ["double.md", "single.md", "parenthesized.md", "spaced guide.md"]) {
+      writeFileSync(path.join(skillRoot, "references", filename), "# Guide\n");
+    }
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      [
+        "---",
+        "name: example-skill",
+        "description: Example skill used for doctor tests.",
+        "---",
+        "",
+        '[Double](references/double.md "Detailed guide")',
+        "[Single](references/single.md 'Detailed guide')",
+        "[Parenthesized](references/parenthesized.md (Detailed guide))",
+        '[Spaced](<references/spaced guide.md> "Detailed guide")',
+        "",
+      ].join("\n"),
+    );
+
+    const report = inspectSkill(skillRoot);
+
+    assert.equal(report.ok, true);
+    assert.deepEqual(
+      report.references.direct.map(({ target }) => target),
+      [
+        "references/double.md",
+        "references/single.md",
+        "references/parenthesized.md",
+        "references/spaced guide.md",
+      ],
+    );
+  }));
+
 test("eval validation reports invalid and duplicate cases", () =>
   withTempDir((root) => {
     const evalPath = path.join(root, "cases.jsonl");
