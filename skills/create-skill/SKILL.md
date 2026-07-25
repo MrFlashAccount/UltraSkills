@@ -1,85 +1,43 @@
 ---
 name: create-skill
-description: Create, rewrite, audit, or materially restructure a Claude/OpenClaw skill folder from source material or an existing skill. Use when the task is to build a skill from a PDF, SOP, workflow, prompt pack, or notes; review an existing skill; tighten trigger metadata/frontmatter; or refactor what belongs in `SKILL.md` vs `references/`/`scripts/`/`assets/`.
+description: Create, rewrite, audit, simplify, or restructure a Claude/OpenClaw skill folder. Use when building a skill from source material, reviewing an existing skill, tuning trigger metadata, removing unnecessary instructions, designing progressive disclosure, adding deterministic scripts, or comparing a skill against a thinner or no-skill baseline.
 ---
 
-Turn source material or an existing skill into a clean source-first skill workflow.
-
-## Mode selection
-
-Choose one mode up front:
-
-1. `audit`
-   - review an existing skill
-   - no file edits
-   - output findings, gaps, and recommended changes
-
-2. `proposal`
-   - shape the skill or rewrite plan
-   - define structure, trigger surface, success criteria, and branch handling
-   - do not edit files unless the user also asks for implementation
-
-3. `implement`
-   - create or rewrite the skill files
-   - run critic/fix iterations
-   - follow with post-implementation review before calling it done
-
-If the target shape is still fuzzy, use `grill-me` first.
-If the answer can be recovered from the repo or source material, inspect that instead of asking.
-Ask one blocking question at a time.
+Build the smallest skill that adds durable value beyond the model, repo, tools, and user request.
 
 ## Request authority
 
-The user request that triggers this skill authorizes work in the requested mode. Do not require a separate `APPROVED` or `LGTM` message before starting.
+The request that triggers this skill authorizes the requested mode. Start when target and scope are clear.
 
-- Infer `audit`, `proposal`, or `implement` from the request and begin immediately when the scope is clear.
-- An `audit` or `proposal` request remains read-only unless the user also asks for edits.
-- If the task later expands from audit/proposal into implementation, require a direct user request for that expansion; ordinary language is sufficient.
-- Keep independent safety, privacy, destructive-action, publishing, commit, and push confirmations intact.
+- Keep audit and proposal requests read-only unless the user also requests edits.
+- Ask only for a missing decision that would materially change the result.
+- Preserve independent safety, privacy, destructive-action, publishing, commit, and push boundaries.
 
-## Default stage model
+## Default path
 
-For non-trivial skill work, use this sequence:
+1. Inspect the real source, current skill, runtime, and representative usage.
+2. Separate non-obvious knowledge and fragile invariants from instructions the model can infer.
+3. Choose the smallest useful `SKILL.md`, references, scripts, and assets.
+4. Validate trigger behavior and task quality on enough real cases to cover material risks.
+5. Compare against the current and no-skill baseline when the change is substantial.
+6. Remove context that has no demonstrated value; restore only what evidence shows is needed.
 
-1. `source-audit`
-   - inspect the source material or existing skill
-   - reduce it to representative asks
-   - identify mode, scope, risks, and missing branches
-
-2. `proposal`
-   - define success criteria
-   - define target folder/file shape
-   - decide what belongs in `SKILL.md` vs `references/` vs `scripts/` vs `assets/`
-   - decide whether a state-machine shape is needed
-
-3. `implement`
-   - create or revise the skill files
-   - keep `SKILL.md` lean
-   - keep claimed capabilities aligned with shipped files/scripts
-
-4. `post-implement review`
-   - verify trigger quality, workflow coherence, and claimed-vs-shipped alignment
-   - confirm the edits match the requested scope and resulting proposal
-   - do not call the skill done until the reviewed result is clean enough
-
-For small requested fixes such as metadata-only or structure-only edits, compress the amount of ceremony but keep the same stage boundaries.
+Scale the process to the risk. Do not force a proposal, fixed number of examples, critic loop, or state machine when a direct edit plus verification is enough.
 
 ## Core rules
 
-- Work from concrete usage, not abstract summaries.
-- Reduce the task into 3-5 representative asks unless the scope is truly tiny.
-- Keep `SKILL.md` focused on trigger metadata, default flow, and hard rules.
-- Move bulky or variant-specific detail into `references/`.
-- Add `scripts/` only for deterministic repeated work.
-- Add `assets/` only for output resources.
-- If the skill is a sensitive surface, keep repo-visible content redacted/local-safe and run privacy/data-safety review before calling it done.
-- If the workflow has repeated staged handoffs or unfinished-vs-finished leakage risk, read `references/state-machine-case-study.md` and consider an explicit state machine.
-- After the main edit pass, run critic/fix review loops and then one post-implementation review gate before finalizing. Critic/reviewer prompts must start from a hostile prior: assume the skill is wrong, incomplete, overcomplicated, or under-evidenced until it proves otherwise; PASS only after serious attack finds no evidence-backed blocker or important finding.
-- If wording is still bloated after the main review/fix loop, run a late-stage compression pass through `forthright` for AI-only skill material, then sanity-check that no trigger boundary or safety rule was weakened.
+- Encode opinions, product knowledge, local gotchas, and procedures that are specific to the user, team, product, or runtime.
+- Prefer expressive interfaces, schemas, scripts, tests, code, and source artifacts over prose that teaches the model how to reason.
+- Match instruction strength to fragility: allow judgment for flexible work; use hard constraints for safety, destructive actions, exact protocols, and repeatedly observed failures.
+- Check for conflicts and repetition across the user request, repo instructions, roles, tools, the target skill, and its references.
+- Keep the common path in `SKILL.md`; load detailed or variant-specific material only when the task needs it.
+- Add scripts for deterministic or repeated work and assets only for output resources.
+- Keep claimed capabilities aligned with the files, tools, and paths that actually ship.
+- For sensitive surfaces, keep repo-visible content local-safe and run the relevant privacy/data-safety review.
 
-## Read next
+## Read only when needed
 
-- Read `references/workflow.md` for the full stage model and branch handling.
-- Read `references/checklist.md` before final review and after each review pass.
-- Read `references/testing-and-troubleshooting.md` when checking trigger quality, frontmatter failure modes, or test coverage.
-- Read `references/state-machine-case-study.md` when the skill includes iterative review loops, multi-stage handoffs, or leakage risk between unfinished and finished output.
+- Read `references/authoring.md` when creating or restructuring skill files.
+- Read `references/evaluation.md` before a substantial rewrite, trigger tuning, or evidence-based simplification.
+- Read `references/state-machines.md` only when unfinished output or invalid transitions can escape into user-visible or external state.
+- Run `scripts/doctor.mjs` with Bun and `<skill-folder> [--eval <cases.jsonl>] [--json]` when auditing context shape, direct references, repeated rules, or eval-corpus structure.

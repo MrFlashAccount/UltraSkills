@@ -33,7 +33,6 @@ DELEGATION_DOCS = (
     "skills/code-review-orchestrator/references/role-prompts.md",
     "skills/create-architecture/references/workflow.md",
     "skills/create-design/references/workflow.md",
-    "skills/create-skill/references/workflow.md",
     "skills/implementation-harness/SKILL.md",
     "skills/implementation-harness/references/roles/implementers.md",
     "skills/implementation-harness/references/workflow.md",

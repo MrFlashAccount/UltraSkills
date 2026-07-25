@@ -214,9 +214,9 @@ Fresh clones can use the committed schema-validation library dist artifact direc
 ### Planning, review, and implementation flow
 
 - `skills/create-skill`
-  - What it is: execution harness for building or rewriting a skill folder.
-  - Use when: a skill shape is already scoped and should be implemented cleanly.
-  - Do not use when: scope is still fuzzy.
+  - What it is: evidence-driven workflow for creating, auditing, simplifying, or restructuring a skill folder.
+  - Use when: skill work needs source grounding, context reduction, trigger tuning, progressive disclosure, or eval-backed implementation.
+  - Do not use when: the request is ordinary domain work rather than authoring or evaluating a skill.
 
 - `skills/orbita`
   - What it is: workflow-runner host adapter skill for following runner-returned `next`/`continue --only-instructions` directives.
