@@ -812,13 +812,16 @@ declare `loopPolicies` to bound valid semantic cycles such as review -> fix ->
 review or approval -> revision -> approval. Workflows without `loopPolicies`
 must validate and run with unchanged behavior.
 
-The intended shape is static-graph first:
+The intended shape is policy-metadata first:
 
 - the workflow document owns policy definitions;
 - validation expands a finite route graph from literal `next`, `match/cases`,
   approval/user routes, and schema-enumerable dynamic `next` expressions;
-- validation detects cyclic regions with SCC/self-loop analysis;
-- each policy must select exactly one unambiguous detected region;
+- each policy explicitly declares its cycle members in `steps`; validation
+  proves that the induced declared-step graph is cyclic instead of expanding
+  the policy to a maximal SCC from the full workflow graph;
+- external routes may place the declared cycle inside a larger graph cycle
+  without changing the policy's declared members;
 - each policy declares one iteration `entry` and one `boundary`; validation
   proves all entries, repeats, and exits respect those boundaries;
 - runtime increments progress once when a complete entry-to-boundary traversal
@@ -844,7 +847,7 @@ loop policy progress must use a distinct namespace.
 Rejected primary models:
 
 - per-transition `cycleId` labels;
-- arbitrary named step scopes that create cycles manually;
+- runtime-inferred loop membership that overrides the workflow policy;
 - runtime history, repeated cursor, backward-jump, or graph traversal heuristics;
 - prompt-only loop limits.
 
@@ -875,8 +878,8 @@ Allowed:
   redaction, runner approval contract, and command builders
 - `persistence -> DTOs/records/file contracts`
 - Workflow loop policy validation may depend on workflow contracts, output
-  schema target enumerability, route graph expansion, and SCC/self-loop
-  detection; it must not depend on baton history or host adapter state.
+  schema target enumerability, route graph expansion, and declared-cycle
+  connectivity; it must not depend on baton history or host adapter state.
 - Runtime loop policy enforcement may depend on compiled validation metadata,
   the selected valid route event, and baton progress counters; it must not own
   workflow policy definitions.

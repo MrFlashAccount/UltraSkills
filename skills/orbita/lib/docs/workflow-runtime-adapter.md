@@ -26,18 +26,20 @@ Workflow loop limits are interpreter-owned. When a workflow declares validated
 succeeded and after the selected route target has been resolved, but before the
 cursor is advanced.
 
-Each policy declares one `entry` and one `boundary` inside its validated
-SCC/self-loop region. `maxIterations` counts completed traversals from that
-entry to that boundary, not individual internal edges. It does not count
-malformed output.schema retry attempts. When the boundary selects the repeat
-target after the configured number of traversals has completed, the runner
-resolves `onLimit` as an independent transition descriptor using the same
-literal, dynamic-expression, or `match/cases` forms and boundary output/input
-context as `next`. It is evaluated only after the boundary's normal `next`
-selected the repeat and that repeat reached the limit; it need not use the same
-selector or cases as `boundary.next`. Every possible result must be an external
-target already declared by the boundary's `next`, so runtime never manufactures
-an edge outside that graph. Any step in the loop may still
+Each policy explicitly declares its cycle members in `steps` plus one `entry`
+and one `boundary`. Validation proves that the declared-step graph is cyclic;
+external workflow routes may form a larger graph cycle without changing policy
+membership. `maxIterations` counts completed traversals from that entry to that
+boundary, not individual internal edges. It does not count malformed
+output.schema retry attempts. When the boundary selects the repeat target after
+the configured number of traversals has completed, the runner resolves
+`onLimit` as an independent transition descriptor using the same literal,
+dynamic-expression, or `match/cases` forms and boundary output/input context as
+`next`. It is evaluated only after the boundary's normal `next` selected the
+repeat and that repeat reached the limit; it need not use the same selector or
+cases as `boundary.next`. Every possible result must be an external target
+already declared by the boundary's `next`, so runtime never manufactures an
+edge outside that graph. Any step in the loop may still
 select one of its declared external targets for a normal early exit; an
 incomplete traversal does not advance the counter.
 
@@ -49,8 +51,8 @@ loop-specific namespace distinct from output.schema retry attempt keys such as
 The host adapter does not enforce loop limits, choose `onLimit`, reset counters,
 or infer cycles from history. It only observes the runner's next public
 directive after accepted output is applied. Runtime history, repeated cursors,
-backward jumps, per-transition `cycleId`, manual scopes, and prompt-only limits
-are not supported loop policy mechanisms.
+backward jumps, per-transition `cycleId`, runtime-inferred loop membership, and
+prompt-only limits are not supported loop policy mechanisms.
 
 Consecutive pass/success early exit is not part of the current public runtime
 contract. Hosts and workflow authors must not rely on success streak or

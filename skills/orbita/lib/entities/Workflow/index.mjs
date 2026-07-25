@@ -706,7 +706,9 @@ function assertApprovalVerdictTopology({ workflow, routeEdges, stepId, verdict, 
   const criticNonSuccessEdges = conditionalEdges.filter((edge) => edge.from === criticStepId
     && edge.matchValue !== 'approved' && !edge.onLimitPolicyId);
   if (criticNonSuccessEdges.some((edge) => onLimitEdges.some((limitEdge) => (
-    edgeCanTriggerOnLimit(edge, limitEdge) && reachesGateWithoutCritic(limitEdge.to)
+    edgeCanTriggerOnLimit(edge, limitEdge)
+      && reachesGateWithoutCritic(limitEdge.to)
+      && !(limitEdge.from === criticStepId && limitEdge.to === stepId)
   )))) {
     fail(`step '${stepId}' verdict topology permits loopPolicies.onLimit to route critic '${criticStepId}' non-success to the approval gate`);
   }

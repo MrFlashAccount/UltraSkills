@@ -647,7 +647,7 @@
           }
         },
         "loopPolicies": {
-          "description": "Optional loop policies keyed by policy id. Each policy must cover exactly one semantic validation-proven SCC or self-loop region with a single declared entry and boundary. Runtime counts completed entry-to-boundary traversals and uses the boundary's declared onLimit exit when another repeat would exceed maxIterations.",
+          "description": "Optional loop policies keyed by policy id. Each policy explicitly declares one validation-proven cycle with a single entry and boundary; external routes may place it inside a larger workflow graph cycle without changing its members. Runtime counts completed entry-to-boundary traversals and uses the boundary's declared onLimit exit when another repeat would exceed maxIterations.",
           "type": "object",
           "minProperties": 1,
           "additionalProperties": {

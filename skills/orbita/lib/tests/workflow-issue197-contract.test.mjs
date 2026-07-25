@@ -40,6 +40,50 @@ test('dev-harness uses implementation and review as the only fanout owners', () 
   }
 });
 
+test('dev-harness caps planning hostile reviews at two cycles and code review at three', () => {
+  assert.deepEqual(workflowDoc.loopPolicies, {
+    research_hostile_review: {
+      steps: ['research_draft', 'research_attack'],
+      entry: 'research_draft',
+      boundary: 'research_attack',
+      maxIterations: 2,
+      onLimit: 'approve_research',
+    },
+    ui_design_hostile_review: {
+      steps: ['ui_intent_draft', 'ui_intent_attack'],
+      entry: 'ui_intent_draft',
+      boundary: 'ui_intent_attack',
+      maxIterations: 2,
+      onLimit: 'approve_ui_intent',
+    },
+    architecture_hostile_review: {
+      steps: ['architecture_draft', 'architecture_attack'],
+      entry: 'architecture_draft',
+      boundary: 'architecture_attack',
+      maxIterations: 2,
+      onLimit: 'approve_architecture',
+    },
+    planning_hostile_review: {
+      steps: ['planning_draft', 'planning_attack'],
+      entry: 'planning_draft',
+      boundary: 'planning_attack',
+      maxIterations: 2,
+      onLimit: 'approve_plan',
+    },
+    code_review: {
+      steps: ['implementation', 'review'],
+      entry: 'implementation',
+      boundary: 'review',
+      maxIterations: 3,
+      onLimit: 'done',
+    },
+  });
+
+  const donePrompt = promptText(workflowDoc.steps.done);
+  assert.match(donePrompt, /three-cycle code-review limit with unresolved findings/);
+  assert.match(donePrompt, /Do not claim that review passed/);
+});
+
 test('dev-harness implementation branches consume only their owner-written rework handoff', () => {
   const handoffByBranch = {
     backend_implementation: 'input.review.implementer_handoffs.backend_implementation',

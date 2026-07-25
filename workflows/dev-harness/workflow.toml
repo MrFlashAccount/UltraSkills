@@ -4,6 +4,41 @@ description = "End-to-end planning and execution workflow for non-trivial code w
 start = "research_draft"
 done = "done"
 
+[loopPolicies.research_hostile_review]
+steps = ["research_draft", "research_attack"]
+entry = "research_draft"
+boundary = "research_attack"
+maxIterations = 2
+onLimit = "approve_research"
+
+[loopPolicies.ui_design_hostile_review]
+steps = ["ui_intent_draft", "ui_intent_attack"]
+entry = "ui_intent_draft"
+boundary = "ui_intent_attack"
+maxIterations = 2
+onLimit = "approve_ui_intent"
+
+[loopPolicies.architecture_hostile_review]
+steps = ["architecture_draft", "architecture_attack"]
+entry = "architecture_draft"
+boundary = "architecture_attack"
+maxIterations = 2
+onLimit = "approve_architecture"
+
+[loopPolicies.planning_hostile_review]
+steps = ["planning_draft", "planning_attack"]
+entry = "planning_draft"
+boundary = "planning_attack"
+maxIterations = 2
+onLimit = "approve_plan"
+
+[loopPolicies.code_review]
+steps = ["implementation", "review"]
+entry = "implementation"
+boundary = "review"
+maxIterations = 3
+onLimit = "done"
+
 [steps.research_draft]
 name = "Research draft"
 kind = "worker"
@@ -788,8 +823,10 @@ kind = "done"
 [steps.done.input]
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Workflow completed.
-Project review.verdict as the final result; do not summarize artifacts/results globals.
+Project review.verdict and review.outcome as the final result; do not summarize artifacts/results globals.
+If review.outcome is needs_changes, state that the workflow exited after the configured three-cycle code-review limit with unresolved findings. Do not claim that review passed or that the requested rework was implemented.
 
 Input context:
+- Final review outcome: ${{ input.review.outcome }}
 - Final review verdict: ${{ input.review.verdict }}
-- Final next target: ${{ input.review.next }}'''
+'''
