@@ -209,7 +209,9 @@ export function renderApprovalInstructions({
         '',
         `- Outcome: ${verdict.outcome}`,
         `- Summary: ${verdict.summary || 'No concise summary provided.'}`,
-        ...(verdict.findings.length > 0 ? ['- Findings:', ...verdict.findings.map((finding) => `  - ${finding}`)] : ['- Findings: none.']),
+        ...(verdict.findings.length > 0
+          ? ['- Remaining reviewer findings (user discretion):', ...verdict.findings.map((finding) => `  - ${finding}`)]
+          : ['- Findings: none.']),
       ]
     : [];
   const recovery = resolvedStopSection(nonBlockingStop);
@@ -229,7 +231,7 @@ export function renderApprovalInstructions({
     '',
     '## Decision required',
     '',
-    'Ask the user for an explicit decision. Submit exactly `{ "approval": "approved" }` or `{ "approval": "rejected", "feedback": "..." }`. Feedback is optional, but when present it must be non-blank and at most 4000 characters.',
+    'Present the current summary and every approval attachment as the normal approval gate. Reviewer findings are context, not a separate blocker. If any remain, call them out and state that the user may approve as-is or reject with feedback requesting changes. Ask the user for an explicit decision. Submit exactly `{ "approval": "approved" }` or `{ "approval": "rejected", "feedback": "..." }`. Feedback is optional, but when present it must be non-blank and at most 4000 characters.',
     '',
     'Write the normalized decision with:',
     '',
