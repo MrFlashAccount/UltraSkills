@@ -590,8 +590,34 @@ test('dev-harness research approval stays within the compact stdout budget', () 
   assert.match(response.orchestratorInstruction, /\{ "approval": "approved" \}/);
   assert.match(response.orchestratorInstruction, /## Current critic verdict/);
   assert.match(response.orchestratorInstruction, /The proposal is evidence-backed/);
+  assert.match(response.orchestratorInstruction, /Present the current summary and every approval attachment as the normal approval gate/);
   assert.doesNotMatch(response.orchestratorInstruction, /evidence_checked|Current workflow and dashboard contracts/);
   assert.doesNotMatch(response.orchestratorInstruction, /Schema-derived artifact field notes|Artifact output directory for this step|"\$schema"|compiledPrompt|outputSchema/);
+
+  const limitReachedBaton = structuredClone(batonDoc);
+  limitReachedBaton.state.$loopProgress = { research_hostile_review: 2 };
+  limitReachedBaton.state.research_attack = {
+    outcome: 'needs_revision',
+    verdict: {
+      summary: ['Two review cycles completed with one unresolved concern.'],
+      evidence_checked: ['Current workflow and dashboard contracts'],
+      findings: ['Keep the rollback decision explicit.'],
+    },
+  };
+  const limitReached = toHostResponse(
+    { baton: limitReachedBaton, steps: [{ id: stepId, action: 'wait_for_approval', step }] },
+    { runId, workflow, workflowPath, repositoryRoot: root, runsRoot, leaseToken, includeInlineInstructions: true, resources },
+  );
+  assert.match(limitReached.orchestratorInstruction, /## Current summary/);
+  assert.match(limitReached.orchestratorInstruction, /\[reasons-canvas-research\]\(<.*reasons-canvas-research\.md>\)/);
+  assert.match(limitReached.orchestratorInstruction, /\[research-evidence\]\(<.*research-evidence\.md>\)/);
+  assert.equal(limitReached.orchestratorInstruction.split(artifactPath).length - 1, 1);
+  assert.equal(limitReached.orchestratorInstruction.split(evidencePath).length - 1, 1);
+  assert.match(limitReached.orchestratorInstruction, /Present the current summary and every approval attachment as the normal approval gate/);
+  assert.match(limitReached.orchestratorInstruction, /Remaining reviewer findings \(user discretion\)/);
+  assert.match(limitReached.orchestratorInstruction, /Keep the rollback decision explicit/);
+  assert.match(limitReached.orchestratorInstruction, /Reviewer findings are context, not a separate blocker/);
+  assert.match(limitReached.orchestratorInstruction, /user may approve as-is or reject with feedback requesting changes/);
 
   const correctedBaton = structuredClone(batonDoc);
   correctedBaton.state.research_draft.outcome = 'ready_for_approval';
