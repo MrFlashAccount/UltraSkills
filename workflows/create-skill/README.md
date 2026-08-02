@@ -1,6 +1,6 @@
 # create-skill workflow
 
-Orbita form of the deliberately thin `skills/create-skill` process.
+The deliberately thin skill-authoring workflow, replacing the former skill package.
 
 The triggering request authorizes its requested mode. Audit and proposal stay
 read-only unless edits were requested, and the workflow adds no approval gate.

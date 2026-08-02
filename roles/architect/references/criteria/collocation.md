@@ -13,7 +13,7 @@ Move things outward only when there is a stronger shared constraint than local o
 ## Sources
 
 1. Repo canon: `roles/architect/ROLE.md`, `roles/architect/RUBRIC.md`
-2. Repo canon: `skills/create-architecture/references/language.md`
+2. Repo canon: `workflows/create-architecture/references/language.md`
 
 ## Final role evidence
 

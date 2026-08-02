@@ -1,6 +1,6 @@
 # Code review orchestrator workflow
 
-Read-only Orbita translation of `skills/code-review-orchestrator`.
+Read-only multi-role review workflow replacing the former skill package.
 
 `review_intake` resolves the repository/path/ref/PR and base comparison, reads
 the target guidance and evidence, runs the sensitive-surface scanner when
@@ -23,6 +23,4 @@ Validate with:
 
 ```sh
 bun run workflow:validate
-bun test skills/orbita/lib/tests/workflow-code-review-orchestrator-contract.test.mjs
-bun test skills/orbita/lib/tests/workflow-code-review-orchestrator-smoke.test.mjs
 ```

@@ -34,7 +34,7 @@ Good fits:
 
 ## `implement`
 
-Use when the write phase is explicitly approved and the skill should create or revise files. The `Frontend-Taste` proposer/design architect creates or edits `DESIGN.md`; a separate `Frontend-Taste` attacker/critic attacks it before completion.
+Use when the write phase is explicitly approved and the workflow should create or revise files. The `Frontend-Taste` proposer/design architect creates or edits `DESIGN.md`; a separate `Frontend-Taste` attacker/critic attacks it before completion.
 
 You must declare one subtype:
 - `create` -> build a new design-memory system

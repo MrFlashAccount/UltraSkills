@@ -1,6 +1,6 @@
 # create-architecture workflow
 
-Orbita workflow form of `skills/create-architecture`.
+Architecture decision workflow replacing the former skill package.
 
 It preserves the skill's modes and stage boundaries: source audit, context
 recovery, option narrowing, proposal, Architect review, Critic pressure,

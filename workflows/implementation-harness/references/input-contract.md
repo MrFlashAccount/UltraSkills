@@ -41,7 +41,7 @@ Input assumptions:
 - Plain user action verbs like `fix`, `do`, `сделай`, or `исправь` do not count as permission for direct parent-session implementation; only an explicit request for direct in-session execution overrides the orchestrator default.
 - If required implementer delegation is unavailable, fails to start, or cannot be used, this stage reports a `NON_BLOCKING_STOP` and requests help instead of falling back to manual parent-session implementation. Resume the same stage after resolution.
 - This skill owns development plus verification handoff, not the independent post-implementation review gate.
-- Transport layer may have come from GitHub, linear, docs, or chat; this skill stays transport-agnostic.
+- Transport layer may have come from GitHub, linear, docs, or chat; this workflow stays transport-agnostic.
 
 If approval status is unclear, the execution-plan packet is missing, file ownership is still ambiguous, or an implementation-critical fact is still missing, report a `NON_BLOCKING_STOP` with the smallest concrete help request. Do not return a completed implementation result; resume the same stage after resolution.
 

@@ -24,17 +24,17 @@ Use this when validating or revising `research-critic`.
 
 ## Smoke checks
 
-- `SKILL.md` stays GitHub-agnostic.
-- Every file referenced from `SKILL.md` exists.
+- `workflow.toml` stays GitHub-agnostic.
+- Every file referenced from `workflow.toml` exists.
 - The output contract keeps `reasons-canvas-research` distinct from wrapper-level critic findings.
 - The output contract defines a top-level `unresolved_blockers` field distinct from `missing_evidence`.
 - When context is unresolved, the workflow requires a separate scannable unresolved/blocking section.
 - The workflow does not promise persistence, orchestration, or transport-layer behavior.
 
-## With-skill vs without-skill comparison
+## With-workflow vs without-workflow comparison
 
 Compare one real task description:
-- without the skill: does the agent drift into GitHub mechanics or implementation details?
-- with the skill: does it return a reusable structured Research Canvas, wrapper-level attack findings, and a clearly surfaced unresolved/blocking section when needed?
+- without the workflow: does the agent drift into GitHub mechanics or implementation details?
+- with the workflow: does it return a reusable structured Research Canvas, wrapper-level attack findings, and a clearly surfaced unresolved/blocking section when needed?
 
-The skill is better only if the Canvas can be reused by multiple adapters without rethinking the content.
+The workflow is better only if the Canvas can be reused by multiple adapters without rethinking the content.

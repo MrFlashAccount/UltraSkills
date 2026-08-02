@@ -1,6 +1,6 @@
 # create-design workflow
 
-Orbita workflow form of `skills/create-design` for design-memory systems.
+Design-memory workflow replacing the former skill package.
 
 It preserves the `review`, `proposal`, and `implement` modes and treats
 `implement` as either `create` or `edit`. A read-only intake may inspect enough

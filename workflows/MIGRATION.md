@@ -1,7 +1,7 @@
 # Workflow skill migration
 
-This records the direct skill-to-workflow migration. Each source skill remains
-available, while its multi-stage process is represented as one self-contained
+This records the direct skill-to-workflow migration. Each replaced source skill
+was removed after its process and runtime sub-files moved into one self-contained
 `workflows/<skill-name>/` package. `workflows/dev-harness/workflow.toml` is the
 structural reference for worker steps, approvals where the source requires
 them, bounded loops, non-blocking stops, typed outputs, and terminal projection.
@@ -17,8 +17,8 @@ A migration is complete only when the workflow:
   loops where the skill permits revision, and an intentional terminal output;
 - has a catalog-quality name and description plus a package README;
 - passes `bun run workflow:validate` and focused workflow tests or smoke checks;
-- keeps the original skill available until callers have an intentional routing
-  path to the workflow.
+- carries every runtime-required reference, script, template, schema, and asset
+  formerly owned by the replaced skill.
 
 ## Queue
 

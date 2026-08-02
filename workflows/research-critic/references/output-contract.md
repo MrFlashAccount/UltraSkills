@@ -1,6 +1,6 @@
 # Output Contract
 
-Paths in this output contract are resolved relative to the `research-critic` skill root (`skills/research-critic/`), not relative to this reference file.
+Paths in this output contract are resolved relative to the `research-critic` workflow root (`workflows/research-critic/`), not relative to this reference file.
 
 Return one structured wrapper result for the approved `reasons-canvas-research` artifact. Do not create or persist a separate legacy research artifact. Keep the Research Canvas distinct from transient wrapper-level findings and verdict.
 

@@ -157,7 +157,7 @@ Decide:
 Minimum proposal checks:
 - `DESIGN.md` can stay operational rather than bloated
 - supporting docs are justified rather than ceremonial
-- claimed output matches what the skill will actually produce
+- claimed output matches what the workflow will actually produce
 - downstream usage is clear enough for later review or implementation
 
 After proposal:
@@ -319,6 +319,6 @@ Stop only when:
 - the approved mode was completed cleanly
 - any required write phase had explicit approval
 - post-implementation review is clean enough
-- the skill folder is internally consistent
+- the workflow package is internally consistent
 - referenced files actually exist
 - claimed capabilities match the shipped shape

@@ -8,7 +8,7 @@ These rules define the local workflow, not universal design theory:
 
 - `DESIGN.md` is repo-local design law and the entrypoint for downstream design judgment
 - supporting docs exist only when they remove real ambiguity or bloat
-- approval gates, proposal mode, implementation mode, and branch handling are process canon from this skill
+- approval gates, proposal mode, implementation mode, and branch handling are process canon from this workflow
 - product-class routing, density labels, and anti-slop heuristics are local routing aids; they are not a universal taxonomy
 
 Use this canon to structure artifacts and precedence. Do not cite it as external evidence.

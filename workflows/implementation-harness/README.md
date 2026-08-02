@@ -1,6 +1,6 @@
 # Implementation harness workflow
 
-This package is the Orbita translation of `skills/implementation-harness`: the post-approval development stage for an approved task, approved research, and an approved execution plan.
+This package is the post-approval development workflow for an approved task, approved research, and an approved execution plan. It replaces the former skill package.
 
 The workflow keeps the source skill's three boundaries:
 

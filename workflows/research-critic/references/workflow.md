@@ -1,6 +1,6 @@
 # Workflow
 
-Paths in this workflow reference are resolved relative to the `research-critic` skill root (`skills/research-critic/`), not relative to this reference file.
+Paths in this workflow reference are resolved relative to the `research-critic` workflow root (`workflows/research-critic/`), not relative to this reference file.
 
 This skill is the reusable `research` stage wrapper:
 
@@ -61,7 +61,7 @@ Research wrapper readiness is decided here; human handoff approval is not.
 - `Researcher A` builds `reasons-canvas-research`.
 - `Researcher B attack` pressure-tests the Canvas using the same role contract.
 - The wrapper may return transient `critic_findings`, `missing_evidence`, `unresolved_blockers`, `verdict`, and `readiness_note`; those fields must not create or persist a separate research artifact.
-- Architect is downstream of this skill and should not redo generic research.
+- Architect is downstream of this workflow and should not redo generic research.
 
 ## Research-closure rules
 
@@ -75,7 +75,7 @@ Research wrapper readiness is decided here; human handoff approval is not.
 
 Do not:
 
-- mention GitHub statuses or issue-comment mechanics as if they belong to this skill
+- mention GitHub statuses or issue-comment mechanics as if they belong to this workflow
 - output final structural contracts, implementation entity maps, code blocks, pseudocode, algorithms, edit recipes, exact signatures, command sequences, or patch plans
 - bury blockers in narrative
 - treat blocking questions as ordinary follow-ups

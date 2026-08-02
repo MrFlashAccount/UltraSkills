@@ -39,4 +39,4 @@ For non-trivial code work, make the loop explicit in execution notes and handoff
 ## Handoff rule
 
 This skill returns a development packet for the next stage.
-Another layer or skill may open/update PRs, post issue comments, store artifacts, or run the explicit post-implementation review gate. Keep those actions out of this skill.
+Another layer or workflow may open/update PRs, post issue comments, store artifacts, or run the explicit post-implementation review gate. Keep those actions out of this workflow.

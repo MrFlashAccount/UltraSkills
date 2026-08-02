@@ -1,6 +1,6 @@
 # Generic Loop Protocol
 
-This reference is the copyable protocol for `skills/loop`. It is intentionally agent-agnostic: replace "executor" with the current runtime's worker, subagent, script, or human-assisted pass.
+This reference is the copyable protocol for `workflows/loop`. It is intentionally agent-agnostic: replace "executor" with the current runtime's worker, subagent, script, or human-assisted pass.
 
 ## Iteration Baton
 

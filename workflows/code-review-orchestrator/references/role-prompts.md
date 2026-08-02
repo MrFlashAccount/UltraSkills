@@ -1,6 +1,6 @@
 # Role prompts
 
-Paths in this compact role/focus guidance are resolved relative to the `code-review-orchestrator` skill root (`skills/code-review-orchestrator/`), not relative to this reference file.
+Paths in this compact role/focus guidance are resolved relative to the `code-review-orchestrator` workflow root (`workflows/code-review-orchestrator/`), not relative to this reference file.
 
 Use these as compact per-role focus blocks when spawning reviewers. Parent prompts must combine the shared delegated role task template from [../../../shared/delegate/delegated-role-task-template.md](../../../shared/delegate/delegated-role-task-template.md) with the selected role material path, the compact focus block below, and the concrete review task/scope/verification expectations. These blocks may name only canonical role `ROLE.md` and `RUBRIC.md` files directly; any role-internal references or learnings must be discovered by following instructions inside the loaded role files. Do not inline full reviewer role rulebooks into the parent prompt.
 
@@ -43,7 +43,7 @@ Load `../../roles/backend/ROLE.md` and `../../roles/backend/RUBRIC.md` first. Th
 Load `../../roles/frontend/ROLE.md` and `../../roles/frontend/RUBRIC.md` first. Then follow the loaded role files for any additional frontend references before applying this frozen-scope frontend review overlay: check frontend/client correctness, contract consumption, state/data flow, loading/error/empty/pending states, routing/hydration, async behavior, and maintainability.
 
 ## Frontend taste
-Read repo `DESIGN.md` first when it exists, then load `../../roles/frontend-taste/ROLE.md` and `../../roles/frontend-taste/RUBRIC.md`. Follow the loaded role files for any additional design-memory or learning references; do not hardcode routed role-internal files in this overlay. Repo design law overrides portable taste canon on conflicts. In this skill, use this as a rendered-surface review overlay: check hierarchy, spacing, typography, color, composition, motion, density, and polish. Stay out of client correctness unless the issue is visibly manifested.
+Read repo `DESIGN.md` first when it exists, then load `../../roles/frontend-taste/ROLE.md` and `../../roles/frontend-taste/RUBRIC.md`. Follow the loaded role files for any additional design-memory or learning references; do not hardcode routed role-internal files in this overlay. Repo design law overrides portable taste canon on conflicts. In this workflow, use this as a rendered-surface review overlay: check hierarchy, spacing, typography, color, composition, motion, density, and polish. Stay out of client correctness unless the issue is visibly manifested.
 
 ## Security
 Load `../../roles/security/ROLE.md` and `../../roles/security/RUBRIC.md` first. Then follow the loaded role files for any additional references before applying this reviewer-only overlay for exploitability and trust-boundary risk in the approved slice; the role owns its own workflow details.

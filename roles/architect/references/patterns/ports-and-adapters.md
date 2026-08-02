@@ -203,7 +203,7 @@ When this pattern is chosen, docs must preserve:
 ## Sources
 
 1. Alistair Cockburn, “Hexagonal architecture the original 2005 article” — https://alistair.cockburn.us/hexagonal-architecture
-2. Repo canon: `roles/architect/ROLE.md`, `roles/architect/RUBRIC.md`, `skills/create-architecture/references/language.md`
+2. Repo canon: `roles/architect/ROLE.md`, `roles/architect/RUBRIC.md`, `workflows/create-architecture/references/language.md`
 
 ## Final role evidence
 
