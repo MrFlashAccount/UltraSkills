@@ -1,0 +1,241 @@
+name = "create-design"
+version = 1
+description = "Create, review, or materially restructure a repository design-memory system through explicit mode selection, approval, Frontend-Taste proposal and attack, optional implementation, and post-implementation review. Use for DESIGN.md, design artifact contracts, supporting design-memory docs, theme/tokens/spacing/composition rules, do/don't guidance, and anti-patterns. Do not use for frontend implementation, Figma production, or ad-hoc styling changes."
+start = "mode_intake"
+done = "done"
+
+[loopPolicies.proposal_review]
+steps = ["design_proposal", "proposal_attack"]
+entry = "design_proposal"
+boundary = "proposal_attack"
+maxIterations = 2
+onLimit = "done"
+
+[loopPolicies.implementation_review]
+steps = ["design_implementation", "post_implementation_review"]
+entry = "design_implementation"
+boundary = "post_implementation_review"
+maxIterations = 3
+onLimit = "done"
+
+[steps.mode_intake]
+name = "Design-memory intake"
+kind = "worker"
+agent = "frontend-taste"
+
+[steps.mode_intake.input]
+role = "frontend-taste"
+prompt = '''Inspect only enough brief, existing design docs, references, repo guidance, and product context read-only to identify the requested design-memory surface and choose exactly one mode: review, proposal, or implement. For implement, also classify create vs edit; otherwise use not_applicable. Reduce non-trivial scope to 3-5 representative asks and identify current artifact shape, design-law/direction status, risks, missing branches, and what must not be touched.
+
+This is pre-approval scope inspection only. Do not produce full review findings, a complete proposal, draft files, restructure files, run fix/review loops, or edit anything. If target, mode, or scope is materially unclear and cannot be recovered from the repository, report a non-blocking stop with one precise question and resume this step after resolution. Return the selected mode as both outcome and mode with a concise approval summary suitable for the opening user gate.'''
+
+[steps.mode_intake.output]
+template = "templates/design-memory-intake-template.md"
+schema = "schemas/mode-output.json"
+
+[steps.mode_intake.next]
+match = "${{ output.outcome }}"
+
+[steps.mode_intake.next.cases]
+review = "approve_review"
+proposal = "approve_proposal"
+implement = "approve_implementation"
+
+[steps.approve_review]
+name = "Approve design-memory review"
+kind = "approval"
+
+[steps.approve_review.input]
+summary = "${{ input.mode_intake.summary }}"
+artifacts = ["${{ input.mode_intake.artifacts }}"]
+
+[steps.approve_review.next]
+match = "${{ output.approval }}"
+
+[steps.approve_review.next.cases]
+approved = "design_review"
+rejected = "mode_intake"
+
+[steps.approve_proposal]
+name = "Approve design-memory proposal"
+kind = "approval"
+
+[steps.approve_proposal.input]
+summary = "${{ input.mode_intake.summary }}"
+artifacts = ["${{ input.mode_intake.artifacts }}"]
+
+[steps.approve_proposal.next]
+match = "${{ output.approval }}"
+
+[steps.approve_proposal.next.cases]
+approved = "design_proposal"
+rejected = "mode_intake"
+
+[steps.approve_implementation]
+name = "Approve design-memory implementation"
+kind = "approval"
+
+[steps.approve_implementation.input]
+summary = "${{ input.mode_intake.summary }}"
+artifacts = ["${{ input.mode_intake.artifacts }}"]
+
+[steps.approve_implementation.next]
+match = "${{ output.approval }}"
+
+[steps.approve_implementation.next.cases]
+approved = "design_proposal"
+rejected = "mode_intake"
+
+[steps.design_review]
+name = "Review design memory"
+kind = "worker"
+agent = "frontend-taste"
+
+[steps.design_review.input]
+role = "frontend-taste"
+prompt = '''Run the approved review-only pass over the existing design-memory system without edits. Load and apply the Frontend-Taste role material. Start from a hostile prior and work from concrete product/design surfaces and repository evidence. Check product basis; operational design law; artifact routing and precedence; palette/type/layout/density/shape/motion/state rules; do/don't guidance and anti-pattern pressure; critical states; accessibility floor; reference provenance and copy risk; downstream usability; contradictions, bloat, missing branches, and claimed-vs-shipped alignment. Any blocking finding must be evidence-backed and precisely located.
+
+Return mode review and outcome review_complete with findings, gaps, recommended changes, and a recommendation to stop, revise a proposal, or seek separate implementation approval. Do not draft files, edit files, or silently move into proposal or implementation. If the request changes to edits during this pass, report a non-blocking stop requiring a new implement approval instead of treating review approval as write authority.
+
+Approved intake:
+${{ input.mode_intake }}'''
+
+[steps.design_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/design-review-output.json"
+
+[steps.design_review.next]
+match = "${{ output.outcome }}"
+
+[steps.design_review.next.cases]
+review_complete = "done"
+
+[steps.design_proposal]
+name = "Design-memory proposal"
+kind = "worker"
+agent = "frontend-taste"
+
+[steps.design_proposal.input]
+role = "frontend-taste"
+prompt = '''Act as the Frontend-Taste proposer/design architect and load the Frontend-Taste role material. Work only within the approved proposal or implement mode; this step plans design memory and never edits product UI. Close or explicitly mark unanswered the product basis before proposing durable law: product type and audience, key surfaces and primary action/reading path, requirements/non-goals, trust posture, density, tone, platform constraints, content provenance, assets/screenshots/product context/references, hard-nos, and visually critical states.
+
+Reduce the task to the smallest operational artifact shape. DESIGN.md is the entrypoint and source of truth; supporting docs are allowed only when they remove real ambiguity or bloat, must have explicit boundaries, and must be linked from DESIGN.md. Define success criteria, downstream usage and precedence, checks, and explicit non-changes. References support doctrine and must use source -> observed principle -> product fit -> rejected parts -> copy-risk -> adopted local rule; they never replace doctrine.
+
+For implement/create, or any design-law repair whose visual direction is absent, incoherent, or based on unstated taste, complete reference refinement before returning ready_for_attack. A direction bypasses this loop only when palette, typography, layout, density, shape/radius, motion, and hard-nos are specified or explicitly accepted as gaps. Labels such as premium dark launcher, clean SaaS, or Apple-like are insufficient.
+
+Each refinement round must present exactly 3 meaningfully distinct options, varying at least 2-3 relevant axes and using multiple palette hypotheses. For each option include a distinct thesis, palette hypothesis, layout model, type/density/shape/motion axes, what to borrow, and what not to copy. Report a non-blocking stop so Sergey can choose one, mix options, reject all, or request another round; record liked, rejected, direction constraints, and hard-nos after every response. Run at most 3 rounds, make each new round reflect prior feedback, and after the third require an explicit decision instead of auto-synthesizing.
+
+Before canonical DESIGN.md can be written or updated, record a direction synthesis covering chosen and rejected directions, palette, typography, layout, density, shape/radius, motion, critical hard-nos, accepted gaps, and open risks. Direction choice approves direction only; it does not grant file-edit authority unless implement mode was already approved. Proposal mode remains read-only. If proposal mode changes to edits, report a non-blocking stop requiring a new implement approval instead of continuing. Return ready_for_attack only after any required direction decision and synthesis are complete; otherwise use a non-blocking stop and resume this same step. Emit one design-memory-proposal artifact. When revising, address every bounded attacker finding without widening scope.
+
+Approved intake:
+${{ input.mode_intake }}
+
+Previous attack:
+${{ input.proposal_attack.verdict.findings | default: "No previous findings." }}'''
+
+[steps.design_proposal.output]
+template = "templates/design-memory-proposal-template.md"
+schema = "schemas/proposal-output.json"
+
+[steps.design_proposal.next]
+match = "${{ output.outcome }}"
+
+[steps.design_proposal.next.cases]
+ready_for_attack = "proposal_attack"
+
+[steps.proposal_attack]
+name = "Frontend-Taste proposal attack"
+kind = "worker"
+agent = "design_critic"
+
+[steps.proposal_attack.input]
+role = "frontend-taste"
+prompt = '''Start from a hostile prior. As a separate Frontend-Taste attacker, independently load the Frontend-Taste role material and attack the latest proposal. Check product/audience/constraint fit and unresolved-context honesty; operational design law; source-of-truth priority and artifact boundaries; unsupported taste guesses; unnecessary docs; reference provenance and copy risk; accessibility floor; downstream usability; and claimed-vs-shipped alignment.
+
+When direction refinement was required, reject a missing product basis, any round without exactly 3 meaningfully different options and multiple palette hypotheses, a vague label treated as direction, missing explicit Sergey decision or feedback record, more than 3 rounds, and missing pre-DESIGN.md synthesis across palette/type/layout/density/shape/motion/hard-nos/gaps/risks. Do not implement or edit files. Return mode plus needs_revision for any evidence-backed must-fix. Otherwise return proposal_complete for proposal mode, or ready_for_implementation for implement mode.
+
+Mode: ${{ input.mode_intake.mode }}
+Proposal: ${{ input.design_proposal }}'''
+
+[steps.proposal_attack.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/proposal-attack-output.json"
+
+[steps.proposal_attack.next]
+match = "${{ output.outcome }}"
+
+[steps.proposal_attack.next.cases]
+needs_revision = "design_proposal"
+proposal_complete = "done"
+ready_for_implementation = "design_implementation"
+
+[steps.design_implementation]
+name = "Implement design memory"
+kind = "worker"
+agent = "frontend-taste"
+
+[steps.design_implementation.input]
+role = "frontend-taste"
+prompt = '''Implement only the approved design-memory proposal as the Frontend-Taste proposer/design architect. Create or revise DESIGN.md and only the supporting design-memory docs justified by the proposal. Keep DESIGN.md operational, concise, linked to every shipped support artifact, aligned with actual capabilities, and grounded in the approved product basis and visual-direction synthesis. Do not invent missing direction, let references carry doctrine, or promise files that do not exist.
+
+Do not implement or modify product UI, application code, Figma files, components, or styling. Keep repo-visible content local-safe; when the surface is sensitive, require privacy/data-safety review evidence before returning completed output. For wording-only or contract-only fixes, compress ceremony but preserve approval, artifact, and direction boundaries. If implementation needs a scope, mode, or direction change beyond the approved proposal, report a non-blocking stop and require the corresponding new approval instead of redesigning silently. Inspect the resulting files and run only relevant design-memory/document checks. Return mode implement, the create/edit operation, and ready_for_review with changed design-memory artifact references and check evidence.
+
+Proposal:
+${{ input.design_proposal }}
+
+Attack verdict:
+${{ input.proposal_attack }}
+
+Previous post-review findings:
+${{ input.post_implementation_review.verdict.findings | default: "No previous findings." }}'''
+
+[steps.design_implementation.output]
+template = "templates/design-memory-implementation-template.md"
+schema = "schemas/implementation-output.json"
+
+[steps.design_implementation.next]
+match = "${{ output.outcome }}"
+
+[steps.design_implementation.next.cases]
+ready_for_review = "post_implementation_review"
+
+[steps.post_implementation_review]
+name = "Post-implementation design review"
+kind = "worker"
+agent = "design_critic"
+
+[steps.post_implementation_review.input]
+role = "frontend-taste"
+prompt = '''Start from a hostile prior. As the independent Frontend-Taste attacker, load the Frontend-Taste role material and inspect the changed design-memory files and relevant repository diff, not only the implementer summary. Compare them to the approved proposal and any required direction synthesis. Check that the right files changed in the right way; product-basis and direction fidelity; operational usefulness; artifact map, boundaries, links, and precedence; accessibility floor; reference provenance/copy risk; anti-pattern pressure; claimed-vs-shipped alignment; unnecessary docs; and privacy safety when applicable. Confirm that no product UI, application code, Figma, component, or styling implementation slipped into scope.
+
+Return mode implement and approved only when serious attack finds no evidence-backed must-fix or important current-scope finding; otherwise return needs_revision with bounded, precisely evidenced findings for the next edit pass. When wording is bloated, require a late compression pass only if it can preserve approval, direction, trigger, artifact, and workflow boundaries.
+
+Proposal:
+${{ input.design_proposal }}
+
+Implementation:
+${{ input.design_implementation }}'''
+
+[steps.post_implementation_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/post-review-output.json"
+
+[steps.post_implementation_review.next]
+match = "${{ output.outcome }}"
+
+[steps.post_implementation_review.next.cases]
+approved = "done"
+needs_revision = "design_implementation"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project only the result actually reached for the selected mode.
+
+- review: report the evidence-backed findings and recommendations, state that no files were edited, and do not imply proposal or implementation approval.
+- proposal: report the attacked design-memory proposal, direction/refinement state, and remaining findings; state that no files were edited and implementation is not approved or started.
+- implement: only when design_implementation exists, report the create/edit operation, changed design-memory artifacts, checks, and latest independent Frontend-Taste verdict. Never claim product UI implementation. If implementation was not reached because proposal review exhausted, say no files were edited. If post-review exhausted with findings, say edits exist but the package is not clean/complete.
+
+For every mode, preserve unresolved findings and loop-limit state. Never turn an exhausted loop, absent implementation output, or non-approved final review into a clean-pass claim.'''

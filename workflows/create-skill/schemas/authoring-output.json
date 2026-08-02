@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-skill/authoring-output",
+  "title": "Create Skill Authoring Output",
+  "type": "object",
+  "required": [
+    "outcome",
+    "mode",
+    "edits_requested",
+    "summary",
+    "files_edited",
+    "evidence_checked",
+    "trigger_evidence",
+    "task_evidence",
+    "remaining_risks"
+  ],
+  "properties": {
+    "outcome": {
+      "enum": ["complete", "needs_evaluation"]
+    },
+    "mode": {
+      "enum": ["audit", "proposal", "implement"]
+    },
+    "edits_requested": {
+      "type": "boolean"
+    },
+    "summary": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "files_edited": {
+      "type": "boolean"
+    },
+    "changed_files": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "evidence_checked": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "trigger_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "task_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "doctor": {
+      "type": "object",
+      "required": ["status", "evidence"],
+      "properties": {
+        "status": {
+          "enum": ["passed", "failed"]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "additionalProperties": false
+    },
+    "remaining_risks": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "edits_requested": {"const": false}
+        },
+        "required": ["edits_requested"]
+      },
+      "then": {
+        "properties": {
+          "files_edited": {"const": false},
+          "changed_files": {"type": "array", "maxItems": 0}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "files_edited": {"const": true}
+        },
+        "required": ["files_edited"]
+      },
+      "then": {
+        "required": ["changed_files"],
+        "properties": {
+          "changed_files": {"type": "array", "minItems": 1}
+        }
+      }
+    }
+  ]
+}

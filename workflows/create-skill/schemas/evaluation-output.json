@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-skill/evaluation-output",
+  "title": "Create Skill Evaluation Output",
+  "type": "object",
+  "required": [
+    "outcome",
+    "verdict",
+    "comparison",
+    "trigger_evidence",
+    "task_evidence"
+  ],
+  "properties": {
+    "outcome": {
+      "enum": ["approved", "needs_revision"]
+    },
+    "verdict": {
+      "type": "object",
+      "required": ["summary", "evidence_checked", "findings"],
+      "properties": {
+        "summary": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "evidence_checked": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["severity", "finding", "evidence", "required_action"],
+            "properties": {
+              "severity": {
+                "enum": ["must_fix", "should_fix", "can_delay"]
+              },
+              "finding": {"type": "string", "minLength": 1},
+              "evidence": {"type": "string", "minLength": 1},
+              "required_action": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "comparison": {
+      "type": "object",
+      "required": ["no_skill", "current_skill", "candidate_skill", "conclusion"],
+      "properties": {
+        "no_skill": {"$ref": "#/$defs/baseline"},
+        "current_skill": {"$ref": "#/$defs/baseline"},
+        "candidate_skill": {"$ref": "#/$defs/baseline"},
+        "conclusion": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "trigger_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "task_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "baseline": {
+      "type": "object",
+      "required": ["summary", "evidence"],
+      "properties": {
+        "summary": {"type": "string", "minLength": 1},
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {"const": "approved"}
+        },
+        "required": ["outcome"]
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "type": "object",
+            "properties": {
+              "findings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "severity": {"const": "can_delay"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

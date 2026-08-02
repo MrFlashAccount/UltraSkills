@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-architecture/context-output",
+  "title": "Create Architecture Context Recovery Output",
+  "type": "object",
+  "required": ["outcome", "summary", "recovered_context", "open_questions"],
+  "properties": {
+    "outcome": {"const": "ready_for_options"},
+    "summary": {"type": "string", "minLength": 1},
+    "recovered_context": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "results": {
+      "type": "array",
+      "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}
+    }
+  },
+  "additionalProperties": false
+}

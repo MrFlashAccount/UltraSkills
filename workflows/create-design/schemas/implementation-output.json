@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-design/implementation-output",
+  "type": "object",
+  "required": ["outcome", "mode", "operation", "summary", "artifacts"],
+  "properties": {
+    "outcome": {"const": "ready_for_review"},
+    "mode": {"const": "implement"},
+    "operation": {"enum": ["create", "edit"]},
+    "summary": {"type": "string", "minLength": 1},
+    "artifacts": {"type": "array", "minItems": 1, "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"}},
+    "results": {"type": "array", "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}}
+  },
+  "additionalProperties": false
+}

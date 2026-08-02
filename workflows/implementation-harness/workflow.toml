@@ -1,0 +1,111 @@
+name = "implementation-harness"
+version = 1
+description = "Post-approval development workflow for an already approved task, research result, and execution plan. Route the frozen implementation slice to delegated backend and/or frontend implementers, require meaningful verification, and return a ready-for-review packet without running independent review. Do not use for discovery, planning, approval seeking, code review, or transport."
+start = "implementation_intake"
+done = "done"
+
+[steps.implementation_intake]
+name = "Implementation intake"
+kind = "worker"
+next = "implementation"
+
+[steps.implementation_intake.input]
+prompt = '''Normalize the supplied implementation input without editing files or running verification.
+
+This workflow starts only after approval. Require:
+- approved task context with goal, non-goals, acceptance criteria, repository identity or path, and issue URL or an explicit empty value;
+- approved `reasons-canvas-research` context with the closed proposal or direction, facts, evidence, risks, unresolved-blocker status, and design-test need when relevant;
+- an approved execution-plan packet with file zones or feature slices, backend/frontend owners, reviewer plan, rollback point, docs to update, and any relevant design-test, sensitive-surface, request-path, or contract touchpoints.
+
+Treat the supplied research and execution plan as closed implementation input. Do not reopen discovery, infer approval, rewrite the proposal, redesign the solution, or add requirements.
+
+Use only canonical implementer labels `backend` and `frontend`. Select `backend_implementation`, `frontend_implementation`, or both from the approved owner map. Select both only when their approved file zones are disjoint. One implementer owns each file zone; if approved zones overlap, collapse them to one implementer only when the approved plan already establishes that owner. Otherwise report a non-blocking stop with source_step_id `implementation_intake` and request the smallest routing or scope decision needed.
+
+If approval status is unclear, the execution-plan packet is missing, ownership is ambiguous, or an implementation-critical fact is missing, report a non-blocking stop with source_step_id `implementation_intake`, ask only for the smallest concrete help needed, and resume this same intake after resolution.
+
+If Architect ran for an architecture-sensitive slice, require every triggered Architect-owned handoff field named by the source contract: domain_source_proof_map, source_layout_owner_map, runtime_path_map, schema_domain_ownership_map, compatibility_surface_plan, deletion_migration_plan, forbidden_placements_imports, verification_surfaces, and reviewer_gates. Allow omitted or reasoned not-applicable fields only when they were not triggered. Do not infer or recreate missing Architect decisions here.
+
+Return `ready_for_implementation` with the normalized approved inputs, owner-to-zone map, and exactly the selected implementation step ids. Do not add contract machinery or enforcement requirements that are absent from the approved source inputs.'''
+
+[steps.implementation_intake.output]
+template = "../../shared/templates/implementer-handoff-template.md"
+schema = "schemas/implementation-intake-output.json"
+
+[steps.implementation]
+name = "Implementation"
+kind = "fanout"
+max_parallel = 2
+next = "done"
+
+[steps.implementation.input]
+branches = "${{ input.implementation_intake.selected_implementation_steps }}"
+prompt = '''This is the implementation fanout owner. Do not edit implementation files yourself. Aggregate only the backend/frontend branches selected by `implementation_intake`.
+
+Require every selected delegated implementer to complete its approved, disjoint file zones and return meaningful verification. Treat implementer completion notes as non-authoritative until the reported checks pass. Confirm that each selected owner stayed within its approved zone, satisfied the loaded role material's additional/output requirements, and reported any verification gaps factually. Do not invent requirements absent from the approved task, research, and execution plan.
+
+If a selected branch is missing, incomplete, overlaps another owner's zone, changes the approved direction, or lacks meaningful verification, report a non-blocking stop with source_step_id `implementation` and request the smallest concrete help needed. Resume this same owner request after resolution. A verification failure caused by an in-scope implementation change is work to fix and re-run, not a stop by itself.
+
+When all selected implementation and verification are complete, return the implementation-harness output packet with `outcome` and `status` set to `ready_for_review`. Populate the source packet fields: summary, repo, issue_url, implementer_owners, execution_contract_basis, branch_name, pr_url, change_summary, verification_results, review_handoff, warnings, next_action, and issue_comment. In `review_handoff`, preserve the approved reviewer plan, list hotspots and contract gaps, and include the architecture proof/deviation/compatibility/negative-check fields required by the source output contract.
+
+Set `review_handoff.prior` to `hostile_prior` and `review_handoff.review_status` to `not_run`. This workflow does not run or imply independent post-implementation review. The next action must hand the verified slice to that separate review stage.
+
+Input context:
+- Normalized approved input: ${{ input.implementation_intake }}
+- Backend implementation: ${{ input.backend_implementation | default: "backend_implementation was not selected." }}
+- Frontend implementation: ${{ input.frontend_implementation | default: "frontend_implementation was not selected." }}'''
+
+[steps.implementation.output]
+template = "../../shared/templates/implementer-handoff-template.md"
+schema = "schemas/implementation-fanout-output.json"
+
+[steps.implementation.branches.backend_implementation]
+name = "Backend implementation"
+agent = "backend"
+
+[steps.implementation.branches.backend_implementation.input]
+role = "backend"
+prompt = '''Implement only the approved backend zones from `implementation_intake`.
+
+Before editing, load the shared delegated task contract from `shared/delegate/delegated-role-task-template.md`, the compact backend section in `workflows/implementation-harness/references/roles/implementers.md`, and the backend role material starting at `roles/backend/ROLE.md` and `roles/backend/RUBRIC.md`; follow any additional material those role files require. Treat the normalized approved task, research, execution plan, backend zones, non-goals, and verification expectations as the concrete delegated task packet. Do not broaden discovery, change the approved direction, perform independent review, publish, commit, push, or edit frontend-owned zones.
+
+Follow `IMPLEMENT -> VALIDATE -> HANDOFF FOR REVIEW`. Run the smallest meaningful checks for the backend slice. Fix in-scope failures and re-run them before completion. Return `implemented` only with a concise change summary, repository-relative changed files, non-empty verification results, role-material evidence, and warnings.
+
+If required role material or delegation capability cannot be used, an approved backend zone is missing or ambiguous, implementation requires scope growth or redesign, the approved contract is contradictory, or required verification cannot safely run because external help is needed, report a non-blocking stop with source_step_id `backend_implementation`, ask for the smallest concrete help needed, and resume this same task after resolution. Do not fall back to parent-session implementation.
+
+Input context:
+- Normalized approved input: ${{ input.implementation_intake }}'''
+
+[steps.implementation.branches.backend_implementation.output]
+template = "../../shared/templates/implementer-handoff-template.md"
+schema = "schemas/implementation-output.json"
+
+[steps.implementation.branches.frontend_implementation]
+name = "Frontend implementation"
+agent = "frontend"
+
+[steps.implementation.branches.frontend_implementation.input]
+role = "frontend"
+prompt = '''Implement only the approved frontend zones from `implementation_intake`.
+
+Before editing, load the shared delegated task contract from `shared/delegate/delegated-role-task-template.md`, the compact frontend section in `workflows/implementation-harness/references/roles/implementers.md`, and the frontend role material starting at `roles/frontend/ROLE.md` and `roles/frontend/RUBRIC.md`; follow any additional role, UI, design, or project material those role files require. Treat the normalized approved task, research, execution plan, frontend zones, non-goals, and verification expectations as the concrete delegated task packet. Do not broaden discovery, change the approved direction, perform independent review, publish, commit, push, or edit backend-owned zones.
+
+Follow `IMPLEMENT -> VALIDATE -> HANDOFF FOR REVIEW`. Run the smallest meaningful checks for the frontend slice, including the approved design-test scope when relevant. Fix in-scope failures and re-run them before completion. Return `implemented` only with a concise change summary, repository-relative changed files, non-empty verification results, role-material evidence, and warnings.
+
+If required role material or delegation capability cannot be used, an approved frontend zone is missing or ambiguous, implementation requires scope growth or redesign, the approved contract is contradictory, or required verification cannot safely run because external help is needed, report a non-blocking stop with source_step_id `frontend_implementation`, ask for the smallest concrete help needed, and resume this same task after resolution. Do not fall back to parent-session implementation.
+
+Input context:
+- Normalized approved input: ${{ input.implementation_intake }}'''
+
+[steps.implementation.branches.frontend_implementation.output]
+template = "../../shared/templates/implementer-handoff-template.md"
+schema = "schemas/implementation-output.json"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Implementation and meaningful verification are complete against the approved input. The development packet is `ready_for_review`. Independent hostile-prior review is the next stage and has not run; never claim that review passed.
+
+Input context:
+- Development packet: ${{ input.implementation }}'''

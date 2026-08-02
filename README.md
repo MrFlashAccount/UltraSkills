@@ -4,7 +4,7 @@
 
 # Ultra Skills
 
-Editable source repo for OpenClaw skills, reusable roles, shared reference packages, and conventions.
+Editable source repo for OpenClaw skills, runnable workflow packages, reusable roles, shared reference packages, and conventions.
 
 Use this repo when you want to:
 - find the right skill for a task
@@ -32,6 +32,7 @@ Local OpenClaw reads skills directly from this repo's `SKILL.md` files, so packa
 
 If you need...
 - a runnable skill -> go to [`skills/`](#skill-index)
+- a runnable multi-stage workflow -> go to [`workflows/`](workflows/)
 - reusable reference material that is not a runnable skill -> go to [`shared/`](#shared-reference-packages)
 - a reusable reviewer/writer/specialist role -> go to [`roles/`](#role-index)
 - a repo-level shared rule or memory convention -> go to [`conventions/`](#conventions)
@@ -39,28 +40,33 @@ If you need...
 
 ## How this repo works
 
-Think of the repo in four layers:
+Think of the repo in six layers:
 
 1. `skills/` — executable skill source
    - each skill lives in its own folder
    - runtime entrypoint is `skills/<name>/SKILL.md`
    - references, scripts, and assets live beside it
 
-2. `roles/` — reusable role contracts
+2. `workflows/` — runnable multi-stage process packages
+   - each migrated workflow lives in `workflows/<skill-name>/`
+   - `workflow.toml` is the runtime graph
+   - schemas, templates, and other runtime sub-files live beside it
+
+3. `roles/` — reusable role contracts
    - these are not runnable skills
    - they hold canonical specialist identity, rubric, and learnings
    - skills should load and adapt them instead of re-owning the same role prose
 
-3. `agents/` — generated Codex custom-agent files
+4. `agents/` — generated Codex custom-agent files
    - these are generated from `roles/`
    - they let Codex spawn the same specialist roles as subagents
    - do not edit them by hand; regenerate them after role changes
 
-4. `conventions/` — repo-level defaults
+5. `conventions/` — repo-level defaults
    - shared conventions that multiple roles or skills may reference
    - use these when the rule is broader than one skill but narrower than general repo docs
 
-5. `shared/` — reusable reference packages
+6. `shared/` — reusable reference packages
    - these are not runnable skills
    - use them for cross-skill contracts, snippets, or authoring references that should stay out of the active skill catalog
 
@@ -68,6 +74,7 @@ Think of the repo in four layers:
 
 ```text
 skills/         runnable skill folders
+workflows/      runnable multi-stage workflow packages
 roles/          reusable role contracts
 agents/         generated Codex custom-agent TOML files
 shared/         reusable reference packages, not runtime skills
@@ -124,8 +131,13 @@ When a canonical label and folder path differ, the folder path is the source of 
 - market-facing copy, copy refreshes, content planning, launch planning, pricing/packaging, sales collateral, competitor dossiers, customer research, cold outreach, or lifecycle email -> `roles/marketing` (start at `roles/marketing/ROLE.md` and follow the role's own task-type routing table)
 - create or refactor a skill -> `skills/create-skill`
 - workflow-runner orchestration through CLI-returned instructions -> `skills/orbita`
-- multi-role review -> `skills/code-review-orchestrator`
-- pre-implementation Researcher -> Critic research verdict -> `skills/research-critic`
+- multi-role read-only review -> `workflows/code-review-orchestrator`
+- pre-implementation Researcher -> Critic research verdict -> `workflows/research-critic`
+- approved closed contract -> backend/frontend implementation + verification handoff -> `workflows/implementation-harness`
+- architecture audit/proposal/approval/implementation -> `workflows/create-architecture`
+- design-memory review/proposal/implementation -> `workflows/create-design`
+- create, audit, simplify, or restructure a skill -> `workflows/create-skill`
+- bounded repeated execution with explicit controller decisions -> `workflows/loop`
 - small UI design -> implementation -> review -> PR smoke tests -> `workflows/frontend-ui-pr-smoke`
 
 ### Reuse a role

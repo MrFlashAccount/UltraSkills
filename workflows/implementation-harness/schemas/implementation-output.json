@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/implementation-harness/implementation-output",
+  "title": "Implementation Harness Delegated Implementer Output",
+  "description": "Completed backend or frontend implementation slice with meaningful verification and role-material evidence.",
+  "type": "object",
+  "required": [
+    "outcome",
+    "implementer_owner",
+    "summary",
+    "change_summary",
+    "changed_files",
+    "verification_results",
+    "role_material",
+    "warnings"
+  ],
+  "properties": {
+    "outcome": {
+      "const": "implemented"
+    },
+    "implementer_owner": {
+      "enum": ["backend", "frontend"]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "change_summary": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "changed_files": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "verification_results": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/verificationResult" }
+    },
+    "role_material": {
+      "type": "object",
+      "required": ["role", "loaded", "requirements_satisfied"],
+      "properties": {
+        "role": { "enum": ["backend", "frontend"] },
+        "loaded": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "requirements_satisfied": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "verificationResult": {
+      "type": "object",
+      "required": ["check", "result", "evidence"],
+      "properties": {
+        "check": { "type": "string", "minLength": 1 },
+        "result": { "const": "passed" },
+        "evidence": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

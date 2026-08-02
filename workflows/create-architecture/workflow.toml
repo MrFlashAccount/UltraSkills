@@ -1,0 +1,328 @@
+name = "create-architecture"
+version = 1
+description = "Create, improve, align, or audit an architecture decision package through source audit, context recovery, option narrowing, proposal, Architect review, Critic pressure, explicit approval, implementation, and post-implementation review. Use for ARCHITECTURE.md, C4/DDD/ports-and-adapters decisions, module/interface/seam improvement, local CONTEXT.md ownership rules, and reviewable architecture migrations. Do not use for tiny local changes with no architecture decision or artifact impact."
+start = "source_audit"
+done = "done"
+
+[loopPolicies.proposal_review]
+steps = ["architecture_proposal", "architect_review", "critic_pressure"]
+entry = "architecture_proposal"
+boundary = "critic_pressure"
+maxIterations = 2
+onLimit = "approve_architecture"
+
+[loopPolicies.post_implementation_review]
+steps = ["architecture_implementation", "post_architect_review", "post_critic_review", "final_architect_review"]
+entry = "architecture_implementation"
+boundary = "final_architect_review"
+maxIterations = 2
+onLimit = "done"
+
+[steps.source_audit]
+name = "Source audit"
+kind = "worker"
+agent = "architect"
+
+[steps.source_audit.input]
+role = "architect"
+prompt = '''This is a pre-approval, read-only source-audit phase. Work from the real repository, constraints, existing architecture docs and ADRs, local CONTEXT.md files, runtime/deployment shape when relevant, domain language, known pain, goals, and planned change surface. For improve work, also inspect module/interface/seam shape, adapter reality, module depth and locality, context-doc coverage, collocation, and whether source layout reveals the intended architecture. Use the deletion test for shallow modules, treat the interface as the test surface, and distinguish one hypothetical adapter from a seam proved by real variation. Reduce the task to 3-5 representative asks unless the scope is truly tiny. Decide whether the request needs an architecture/design change or only a local change.
+
+Select exactly one mode: audit, scaffold, or improve. Use align only as the default improve subtype when the need is reconciliation of code, docs, ownership, and seams rather than structural redesign. Record implementation_scope as implement only when the triggering request explicitly asks to create or revise canonical architecture artifacts; otherwise record proposal_only.
+
+For audit mode, return audit_complete with evidence-backed current-shape findings, missing artifacts, friction points, option pressure, and a recommendation to stop, scaffold next, or improve next. Make no edits. Otherwise return ready_for_context with the current shape, constraints, missing evidence, pressure points, selected mode/subtype, requested implementation scope, and whether an evolution/refactor slice is needed before feature work. Do not write canonical ADRs, C4, DDD, ports/adapters, ARCHITECTURE.md, or CONTEXT.md artifacts before option choice and approval. If material scope or done criteria remain ambiguous after repository inspection, report a non-blocking stop with one exact user-facing question in non_blocking_stop.needed and source_step_id source_audit.'''
+
+[steps.source_audit.output]
+template = "templates/stage-output-template.md"
+schema = "schemas/source-audit-output.json"
+
+[steps.source_audit.next]
+match = "${{ output.outcome }}"
+
+[steps.source_audit.next.cases]
+audit_complete = "done"
+ready_for_context = "context_recovery"
+
+[steps.context_recovery]
+name = "Context recovery"
+kind = "worker"
+agent = "architect"
+
+[steps.context_recovery.input]
+role = "architect"
+prompt = '''This remains a pre-approval, read-only phase. Recover only architecture-relevant facts the repository cannot answer: business/domain pressure, team ownership and decision rights, scale/latency/reliability/operational constraints, integration boundaries, testing pain, deployment/release shape, migration appetite, frozen areas, and sequencing constraints. Preserve unknowns instead of guessing. Ask only one blocking question at a time by reporting a non-blocking stop with the exact user-facing question in non_blocking_stop.needed and source_step_id context_recovery. Return ready_for_options only when option narrowing has a stable basis.
+
+Source audit:
+${{ input.source_audit }}'''
+
+[steps.context_recovery.output]
+template = "templates/stage-output-template.md"
+schema = "schemas/context-output.json"
+
+[steps.context_recovery.next]
+match = "${{ output.outcome }}"
+
+[steps.context_recovery.next.cases]
+ready_for_options = "option_narrowing"
+
+[steps.option_narrowing]
+name = "Option narrowing"
+kind = "worker"
+agent = "architect"
+
+[steps.option_narrowing.input]
+role = "architect"
+prompt = '''This remains a pre-approval, read-only phase. Narrow the evidence-backed space to 2-3 serious options unless the repository genuinely has more equally credible directions. Consider only pressure-supported candidates from layered, Clean Architecture, hexagonal/ports-and-adapters, strategic or selective tactical DDD, context-first modular monolith, vertical slice, event-driven modular monolith, service-oriented/microservices, plugin/extension, and pipeline/job-worker shapes. For each serious option, state why it fits, what pain it addresses, what seams it makes explicit, what it forces the team to do differently, what complexity and likely failure mode it introduces, what it deliberately does not solve, and which artifacts it requires. Always recommend one and say why the other shortlisted options lost; reject obvious bad fits rather than leaving an unbounded menu.
+
+When source layout/module ownership, entities/records/schemas, ports/adapters/integrations, workflow state/gates/artifacts, compatibility wrappers/deprecated exports, or architecture docs/context maps are affected, add the skill's conditional proof sequence: domain/source classification and ownership, source/runtime/schema alignment, then adversarial pressure on fake modules, naming honesty, compatibility/deletion surfaces, and green-test false confidence. Do not turn that conditional sequence into a whole-repository DDD inventory. Return ready_for_proposal without presenting the recommendation as approved.
+
+Source audit:
+${{ input.source_audit }}
+
+Recovered context:
+${{ input.context_recovery }}'''
+
+[steps.option_narrowing.output]
+template = "templates/stage-output-template.md"
+schema = "schemas/options-output.json"
+
+[steps.option_narrowing.next]
+match = "${{ output.outcome }}"
+
+[steps.option_narrowing.next.cases]
+ready_for_proposal = "architecture_proposal"
+
+[steps.architecture_proposal]
+name = "Architecture proposal"
+kind = "worker"
+agent = "architect"
+
+[steps.architecture_proposal.input]
+role = "architect"
+prompt = '''This is a pre-approval proposal phase. Inspect the repository read-only and write exactly one first-class Markdown artifact named architecture-proposal inside the step artifact output directory; do not edit canonical repository artifacts.
+
+Produce the approval-ready proposal required by the create-architecture skill: problem and representative asks; mode/subtype; shortlisted options and recommended direction; trade-offs and rejected alternatives; target artifact map; target architecture; what changes and does not change; structural entity delta; affected modules/relationships, ownership, boundaries, source-layout expectations, dependency/import-export direction and binding must_not_import rules when relevant; reviewable migration/PR slices and structural checks; and material open questions. When dependency direction matters, include inbound and outbound ports, real adapters, composition root/DI shape, and the dependency rule. Treat collocation as a hard architecture principle unless a strong contrary constraint is evidenced. Require screaming source layout only when the selected direction uses bounded contexts, ports/adapters, Clean Architecture, or equivalent responsibility zones.
+
+Only when architecture-sensitive triggers are present, include domain_source_proof_map, source/runtime/schema alignment evidence, compatibility_surface_plan, fake-module/deletion proof, naming-honesty risks, reviewer gates, and negative checks. Keep ARCHITECTURE.md as the future selected product contract and routing layer, not an option catalog or generic architecture encyclopedia. Mark the artifact explicitly non-canonical and unapproved.
+
+Carry implementation_scope from source_audit unchanged. Set next_step to architecture_implementation only for implement scope; otherwise set it to done. Return ready_for_review with a compact summary that states the recommended direction, artifact scope, and implementation scope.
+
+Source audit:
+${{ input.source_audit }}
+
+Recovered context:
+${{ input.context_recovery }}
+
+Options:
+${{ input.option_narrowing }}
+
+Previous Architect findings:
+${{ input.architect_review.verdict.findings | default: "No previous Architect findings." }}
+
+Previous review findings:
+${{ input.critic_pressure.verdict.findings | default: "No previous findings." }}
+
+Human approval feedback:
+${{ input.approve_architecture.feedback | default: "No prior approval rejection feedback." }}'''
+
+[steps.architecture_proposal.output]
+template = "templates/architecture-proposal-template.md"
+schema = "schemas/proposal-output.json"
+
+[steps.architecture_proposal.next]
+match = "${{ output.outcome }}"
+
+[steps.architecture_proposal.next.cases]
+ready_for_review = "architect_review"
+
+[steps.architect_review]
+name = "Architect review"
+kind = "worker"
+agent = "architecture_reviewer"
+
+[steps.architect_review.input]
+role = "architect"
+prompt = '''Start from a hostile prior. Review the latest architecture-proposal artifact against the actual repo evidence and chosen option. Check structural concreteness, ownership, boundaries, dependency direction, source-layout honesty, artifact map, migration slicing, compatibility/deletion plan, and proof obligations. Do not edit files or redesign the task. Return outcome reviewed with verdict.status pass only when no actionable finding remains, otherwise fail; include exact evidence for the Critic pressure step.
+
+Proposal:
+${{ input.architecture_proposal }}
+
+Source audit:
+${{ input.source_audit }}
+
+Recovered context:
+${{ input.context_recovery }}
+
+Option narrowing:
+${{ input.option_narrowing }}'''
+
+[steps.architect_review.output]
+template = "templates/review-output-template.md"
+schema = "schemas/reviewed-output.json"
+
+[steps.architect_review.next]
+match = "${{ output.outcome }}"
+
+[steps.architect_review.next.cases]
+reviewed = "critic_pressure"
+
+[steps.critic_pressure]
+name = "Critic pressure"
+kind = "worker"
+agent = "architecture_critic"
+
+[steps.critic_pressure.input]
+role = "critic"
+prompt = '''Start from a hostile prior. Pressure-test the proposal and Architect review for avoidable complexity, hidden fragility, unearned abstraction, over-broad migration shape, missing no-action/simpler alternatives, and documentation burden. Treat any unresolved actionable Architect finding as a proposal failure. Return approved only when no evidence-backed must-fix or should-fix remains; otherwise return needs_revision with bounded findings. Also return gate_summary as a concise human-facing approval summary that preserves the recommended direction, intended artifact set, implementation scope, Critic verdict, and any unresolved findings. Do not edit canonical architecture files.
+
+Proposal:
+${{ input.architecture_proposal }}
+
+Architect review:
+${{ input.architect_review }}'''
+
+[steps.critic_pressure.output]
+template = "templates/review-output-template.md"
+schema = "schemas/review-output.json"
+
+[steps.critic_pressure.next]
+match = "${{ output.outcome }}"
+
+[steps.critic_pressure.next.cases]
+approved = "approve_architecture"
+needs_revision = "architecture_proposal"
+
+[steps.approve_architecture]
+name = "Approve architecture package"
+kind = "approval"
+next = "${{ input.architecture_proposal.next_step }}"
+onReject = "architecture_proposal"
+
+[steps.approve_architecture.input]
+summary = "${{ input.critic_pressure.gate_summary }}"
+artifacts = ["${{ input.architecture_proposal.artifacts }}"]
+
+[steps.architecture_implementation]
+name = "Architecture implementation"
+kind = "worker"
+agent = "architect"
+
+[steps.architecture_implementation.input]
+role = "architect"
+prompt = '''Implement only the explicitly approved architecture package and scope. Preserve the proposal's concrete structural change contract: target architecture; what changes and does not change; entity delta; affected modules and relationships; owning source zones; boundaries; source-layout expectations; import/export and dependency direction; binding must_not_import rules; doc deltas; PR slicing constraints; checks; and any triggered proof/compatibility obligations.
+
+Create or revise the required Architecture Decision; C4 Context, Container, and Component/Module views; strategic DDD when domain or ownership boundaries matter; tactical DDD only where it clarifies real mechanics; ports/adapters view with inbound/outbound ports, real adapters, composition root/DI shape, dependency rule, and import/export map when relevant; lean ARCHITECTURE.md selected-contract entrypoint; local colocated CONTEXT.md ownership contracts for important folders/contexts; and reviewable migration plan. Each CONTEXT.md must state purpose, owner/context, language, what belongs and does not belong, allowed relationships, forbidden dependencies, and migration notes when mid-transition. Keep central docs navigable and local rules local, prefer Mermaid when practical, do not freeze imaginary structure, and tie every artifact to the approved option. Run the approved structural checks. Return ready_for_post_review with changed files, verification evidence, and an implementation-handoff artifact. If implementation reality contradicts the approved proposal, report a non-blocking stop with source_step_id architecture_implementation instead of redesigning silently.
+
+Approved proposal:
+${{ input.architecture_proposal }}
+
+Approval:
+${{ input.approve_architecture }}
+
+Previous post-review findings:
+${{ input.post_critic_review.verdict.findings | default: "No previous findings." }}
+
+Previous post-implementation Architect findings:
+${{ input.post_architect_review.verdict.findings | default: "No previous Architect findings." }}
+
+Previous final Architect findings:
+${{ input.final_architect_review.verdict.findings | default: "No previous final Architect findings." }}'''
+
+[steps.architecture_implementation.output]
+template = "templates/architecture-implementation-template.md"
+schema = "schemas/implementation-output.json"
+
+[steps.architecture_implementation.next]
+match = "${{ output.outcome }}"
+
+[steps.architecture_implementation.next.cases]
+ready_for_post_review = "post_architect_review"
+
+[steps.post_architect_review]
+name = "Post-implementation Architect review"
+kind = "worker"
+agent = "architecture_reviewer"
+
+[steps.post_architect_review.input]
+role = "architect"
+prompt = '''Start from a hostile prior. Compare implemented source, tests/checks, architecture docs, local CONTEXT.md records, state-machine/workflow docs, schemas/contracts, and artifact maps against the approved proposal. Check the selected direction, required C4/DDD/dependency artifacts, inbound/outbound ports and composition root when relevant, module depth and real adapter variation for improve work, ownership, forbidden dependencies, collocation, source-layout honesty, compatibility/deletion state, migration slicing, naming honesty, proof maps and negative checks when triggered, and source/runtime/schema alignment. Return outcome reviewed with verdict.status pass only when no actionable finding remains, otherwise fail; include exact evidence for final Critic review. Do not edit.
+
+Approved proposal:
+${{ input.architecture_proposal }}
+
+Implementation:
+${{ input.architecture_implementation }}'''
+
+[steps.post_architect_review.output]
+template = "templates/review-output-template.md"
+schema = "schemas/reviewed-output.json"
+
+[steps.post_architect_review.next]
+match = "${{ output.outcome }}"
+
+[steps.post_architect_review.next.cases]
+reviewed = "post_critic_review"
+
+[steps.post_critic_review]
+name = "Post-implementation Critic review"
+kind = "worker"
+agent = "architecture_critic"
+
+[steps.post_critic_review.input]
+role = "critic"
+prompt = '''Start from a hostile prior. Attack the implemented architecture package and the Architect review for drift, missing required artifacts, fake modules, centralization, overengineering, weak checks, or a non-sliceable migration. Treat any unresolved actionable Architect finding as an implementation failure. Return approved only when no evidence-backed must-fix or should-fix remains; otherwise return needs_revision with bounded findings. Return gate_summary as a concise final-review state including any unresolved findings.
+
+Implementation:
+${{ input.architecture_implementation }}
+
+Architect review:
+${{ input.post_architect_review }}'''
+
+[steps.post_critic_review.output]
+template = "templates/review-output-template.md"
+schema = "schemas/review-output.json"
+
+[steps.post_critic_review.next]
+match = "${{ output.outcome }}"
+
+[steps.post_critic_review.next.cases]
+approved = "final_architect_review"
+needs_revision = "final_architect_review"
+
+[steps.final_architect_review]
+name = "Final post-implementation Architect review"
+kind = "worker"
+agent = "architecture_reviewer"
+
+[steps.final_architect_review.input]
+role = "architect"
+prompt = '''Start from a hostile prior. Perform the final Architect gate after the implementation review and Critic pressure. Compare implemented source, tests/checks, canonical architecture docs, local CONTEXT.md files, state/workflow docs, schemas/contracts, artifact maps, and migration slices against the approved proposal. Treat every unresolved actionable Critic or earlier Architect finding as needs_revision. Return approved only when the implemented package and every changed contract-bearing surface agree; otherwise return needs_revision with exact evidence and the required correction. Return gate_summary as the concise final Architect state including any unresolved findings. Do not edit.
+
+Approved proposal:
+${{ input.architecture_proposal }}
+
+Implementation:
+${{ input.architecture_implementation }}
+
+Post-implementation Architect review:
+${{ input.post_architect_review }}
+
+Critic pressure:
+${{ input.post_critic_review }}'''
+
+[steps.final_architect_review.output]
+template = "templates/review-output-template.md"
+schema = "schemas/review-output.json"
+
+[steps.final_architect_review.next]
+match = "${{ output.outcome }}"
+
+[steps.final_architect_review.next.cases]
+approved = "done"
+needs_revision = "architecture_implementation"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project the architecture result for the selected mode and approved scope. For audit, report evidence-backed findings and confirm no edits. For proposal-only scaffold/improve, report the approved proposal and explicitly say canonical architecture implementation was not authorized or started. For implemented scaffold/improve, report the approved option, changed architecture artifacts, structural checks, migration slices, Critic verdict, and final Architect verdict. If either review loop reached its limit, preserve unresolved findings and do not claim a clean pass.'''

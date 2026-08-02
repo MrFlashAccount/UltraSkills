@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-architecture/implementation-output",
+  "title": "Create Architecture Implementation Output",
+  "type": "object",
+  "required": ["outcome", "summary", "changed_files", "verification", "artifacts"],
+  "properties": {
+    "outcome": {"const": "ready_for_post_review"},
+    "summary": {"type": "string", "minLength": 1},
+    "changed_files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "verification": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "prefixItems": [
+        {
+          "allOf": [
+            {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"},
+            {
+              "type": "object",
+              "properties": {
+                "id": {"const": "architecture-implementation-handoff"},
+                "content_type": {"const": "text/markdown"}
+              },
+              "required": ["id", "content_type"]
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "results": {
+      "type": "array",
+      "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}
+    }
+  },
+  "additionalProperties": false
+}

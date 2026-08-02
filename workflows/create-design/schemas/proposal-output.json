@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-design/proposal-output",
+  "type": "object",
+  "required": ["outcome", "mode", "operation", "direction_status", "reference_rounds", "summary", "artifacts"],
+  "properties": {
+    "outcome": {"const": "ready_for_attack"},
+    "mode": {"enum": ["proposal", "implement"]},
+    "operation": {"enum": ["create", "edit", "not_applicable"]},
+    "direction_status": {"enum": ["explicit", "synthesized", "not_required"]},
+    "reference_rounds": {"type": "integer", "minimum": 0, "maximum": 3},
+    "summary": {"type": "string", "minLength": 1},
+    "artifacts": {"type": "array", "minItems": 1, "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"}},
+    "results": {"type": "array", "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "mode": {"const": "proposal"},
+        "operation": {"const": "not_applicable"}
+      }
+    },
+    {
+      "properties": {
+        "mode": {"const": "implement"},
+        "operation": {"enum": ["create", "edit"]}
+      }
+    }
+  ],
+  "additionalProperties": false
+}

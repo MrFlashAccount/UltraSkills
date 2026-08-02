@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-design/mode-output",
+  "type": "object",
+  "required": ["outcome", "mode", "operation", "summary", "artifacts"],
+  "properties": {
+    "outcome": {"enum": ["review", "proposal", "implement"]},
+    "mode": {"enum": ["review", "proposal", "implement"]},
+    "summary": {"type": "string", "minLength": 1},
+    "operation": {"enum": ["create", "edit", "not_applicable"]},
+    "artifacts": {"type": "array", "minItems": 1, "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"}},
+    "results": {"type": "array", "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "outcome": {"const": "review"},
+        "mode": {"const": "review"},
+        "operation": {"const": "not_applicable"}
+      }
+    },
+    {
+      "properties": {
+        "outcome": {"const": "proposal"},
+        "mode": {"const": "proposal"},
+        "operation": {"const": "not_applicable"}
+      }
+    },
+    {
+      "properties": {
+        "outcome": {"const": "implement"},
+        "mode": {"const": "implement"},
+        "operation": {"enum": ["create", "edit"]}
+      }
+    }
+  ],
+  "additionalProperties": false
+}

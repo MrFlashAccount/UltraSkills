@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-architecture/reviewed-output",
+  "title": "Create Architecture Architect Review Output",
+  "type": "object",
+  "required": ["outcome", "verdict"],
+  "properties": {
+    "outcome": {"const": "reviewed"},
+    "verdict": {
+      "type": "object",
+      "required": ["status", "summary", "evidence_checked", "findings"],
+      "properties": {
+        "status": {"enum": ["pass", "fail"]},
+        "summary": {"type": "string", "minLength": 1},
+        "evidence_checked": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}}
+      },
+      "additionalProperties": false
+    },
+    "results": {
+      "type": "array",
+      "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"verdict": {"type": "object", "properties": {"status": {"const": "pass"}}, "required": ["status"]}}, "required": ["verdict"]},
+      "then": {
+        "properties": {
+          "verdict": {
+            "type": "object",
+            "properties": {
+              "findings": {
+                "type": "array",
+                "not": {"type": "array", "contains": {"type": "object", "properties": {"severity": {"enum": ["must_fix", "should_fix"]}}, "required": ["severity"]}}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"verdict": {"type": "object", "properties": {"status": {"const": "fail"}}, "required": ["status"]}}, "required": ["verdict"]},
+      "then": {
+        "properties": {
+          "verdict": {
+            "type": "object",
+            "properties": {
+              "findings": {
+                "type": "array",
+                "minItems": 1,
+                "contains": {"type": "object", "properties": {"severity": {"enum": ["must_fix", "should_fix"]}}, "required": ["severity"]}
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": ["severity", "finding", "evidence", "required_next_action"],
+      "properties": {
+        "severity": {"enum": ["must_fix", "should_fix", "can_delay"]},
+        "finding": {"type": "string", "minLength": 1},
+        "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "required_next_action": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  }
+}
