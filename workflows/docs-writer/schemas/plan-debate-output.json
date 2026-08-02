@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/docs-writer/plan-debate-output",
+  "title": "Docs Writer Plan Debate Output",
+  "type": "object",
+  "required": ["outcome", "critic_challenges", "surviving_plan", "drafting_decisions", "unresolved_risks", "evidence_checked"],
+  "properties": {
+    "outcome": {"const": "ready_for_draft"},
+    "critic_challenges": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "surviving_plan": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "drafting_decisions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "unresolved_risks": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "evidence_checked": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "results": {"type": "array", "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}}
+  },
+  "additionalProperties": false
+}

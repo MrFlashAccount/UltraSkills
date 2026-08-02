@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/docs-writer/docs-work-output",
+  "title": "Docs Writer Work Output",
+  "type": "object",
+  "required": ["outcome", "summary", "changed_files", "evidence_checked", "source_checks", "remaining_risks"],
+  "properties": {
+    "outcome": {"enum": ["ready_for_review", "ready_for_final_review"]},
+    "summary": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "changed_files": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "evidence_checked": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "source_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["check", "status", "evidence"],
+        "properties": {
+          "check": {"type": "string", "minLength": 1},
+          "status": {"enum": ["passed", "failed", "not_run"]},
+          "evidence": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "remaining_risks": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "findings_resolved": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "artifacts": {"type": "array", "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"}},
+    "results": {"type": "array", "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}}
+  },
+  "additionalProperties": false
+}

@@ -2,7 +2,7 @@
 
 Use this only for repository `readme` work.
 
-This file owns the process. Use `../../roles/dev-rel/ROLE.md` and `../../roles/dev-rel/RUBRIC.md` for the general DevRel quality bar. Do not deep-link from this skill into DevRel learnings or role-internal reference files.
+This file owns the process. Use `../../roles/dev-rel/ROLE.md` and `../../roles/dev-rel/RUBRIC.md` for the general DevRel quality bar. Do not deep-link from this workflow into DevRel learnings or role-internal reference files.
 
 ## Flow
 

@@ -126,8 +126,8 @@ When a canonical label and folder path differ, the folder path is the source of 
 
 ### Find the right skill
 
-- developer-facing README intros, technical launch framing, developer-facing product positioning -> `skills/devrel-copywriter`
-- docs, setup, usage, onboarding, API explanation -> `skills/docs-writer`
+- developer-facing README intros, technical launch framing, developer-facing product positioning -> `workflows/devrel-copywriter`
+- docs, setup, usage, onboarding, API explanation -> `workflows/docs-writer`
 - market-facing copy, copy refreshes, content planning, launch planning, pricing/packaging, sales collateral, competitor dossiers, customer research, cold outreach, or lifecycle email -> `roles/marketing` (start at `roles/marketing/ROLE.md` and follow the role's own task-type routing table)
 - create or refactor a skill -> `workflows/create-skill`
 - workflow-runner orchestration through CLI-returned instructions -> `skills/orbita`
@@ -184,12 +184,12 @@ Fresh clones can use the committed schema-validation library dist artifact direc
 
 ### Writing and docs
 
-- `skills/devrel-copywriter`
+- `workflows/devrel-copywriter`
   - What it is: developer-facing framing, positioning, launch copy, README intros, and messaging polish.
   - Use when: the main job is message hierarchy, payoff, tone, and believable product framing.
   - Do not use when: the main job is teaching setup, usage, onboarding, migration, or API behavior.
 
-- `skills/docs-writer`
+- `workflows/docs-writer`
   - What it is: documentation writing and rewriting for usage, setup, onboarding, migration, and API/reference clarity.
   - Use when: the main job is reader success through clear explanation and structure.
   - Do not use when: the main job is framing, positioning, or README opening copy.
@@ -220,7 +220,7 @@ Fresh clones can use the committed schema-validation library dist artifact direc
   - What it is: the self-contained Marketing role for market-facing work.
   - Start at: `roles/marketing/ROLE.md`
   - Use when: the task is copywriting, copy editing, content strategy, launch planning, pricing/packaging, sales collateral, competitor profiling, customer research, cold outreach, or lifecycle email.
-  - Do not use when: the main job is developer-facing README/docs/adoption/trust work; keep that in `skills/devrel-copywriter` or `skills/docs-writer`.
+  - Do not use when: the main job is developer-facing README/docs/adoption/trust work; keep that in `workflows/devrel-copywriter` or `workflows/docs-writer`.
   - Routing: follow the Marketing role's own task-type routing table.
 
 ### Planning, review, and implementation flow

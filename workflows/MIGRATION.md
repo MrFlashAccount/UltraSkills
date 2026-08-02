@@ -31,13 +31,15 @@ A migration is complete only when the workflow:
 | 5 | `create-design` | migrated | Review/proposal/implement routing, opening approval, Frontend-Taste proposal/attack, and post-edit review. |
 | 6 | `create-skill` | migrated | Thin request-authorized authoring path with optional bounded comparative evaluation and no added approval gate. |
 | 7 | `loop` | migrated | Generic bounded executor/controller cycle with durable state, explicit exits, and non-blocking-stop recovery. |
+| 8 | `devrel-copywriter` | migrated | Tiny/full-cycle repository README routing, framing proposal pressure, drafting, hostile review, synthesis, humanizer passes, and final quality checks. |
+| 9 | `docs-writer` | migrated | Tiny/full-cycle documentation routing, doc-mode contract, teaching-plan critique, drafting, and two review checkpoints. |
 
 ## Not migration targets
 
 - `orbita` is the host adapter and runtime entrypoint, not a task workflow.
 - `improve-codebase-architecture` is a legacy donor/reference skill routed to
   `create-architecture`.
-- `grill-me`, `hat`, `caveman`, `forthright`, `humanizer`, the writing skills,
-  and `obsidian` are atomic conversational/domain tools without a multi-role
+- `grill-me`, `hat`, `caveman`, `forthright`, `humanizer`, and `obsidian` are
+  atomic conversational/domain tools without a multi-role
   workflow contract. They should stay skills unless their contracts gain real
   runner-owned stages, gates, or durable outputs.
