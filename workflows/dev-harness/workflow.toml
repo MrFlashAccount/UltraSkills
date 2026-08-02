@@ -43,7 +43,6 @@ onLimit = "done"
 name = "Research draft"
 kind = "worker"
 agent = "researcher"
-agent_runtime.codex = { model = "gpt-5.6-luna", thinking_level = "xhigh" }
 
 [steps.research_draft.input]
 role = "researcher"
@@ -89,7 +88,6 @@ ready_for_approval = "approve_research"
 name = "Research attack"
 kind = "worker"
 agent = "research_critic"
-agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.research_attack.input]
 role = "researcher"
@@ -180,7 +178,6 @@ ready_for_approval = "approve_ui_intent"
 name = "UI design proposal attack"
 kind = "worker"
 agent = "ui_intent_critic"
-agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.ui_intent_attack.input]
 role = "frontend-taste"
@@ -235,7 +232,6 @@ rejected = "ui_intent_draft"
 name = "Architecture draft"
 kind = "worker"
 agent = "architect"
-agent_runtime.codex = { model = "gpt-5.6-luna", thinking_level = "xhigh" }
 
 [steps.architecture_draft.input]
 role = "architect"
@@ -282,7 +278,6 @@ ready_for_approval = "approve_architecture"
 name = "Architecture attack"
 kind = "worker"
 agent = "architecture_critic"
-agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.architecture_attack.input]
 role = "architect"
@@ -334,7 +329,6 @@ rejected = "architecture_draft"
 name = "Planning contract draft"
 kind = "worker"
 agent = "architect"
-agent_runtime.codex = { model = "gpt-5.6-luna", thinking_level = "xhigh" }
 
 [steps.planning_draft.input]
 role = "architect"
@@ -379,7 +373,6 @@ ready_for_approval = "approve_plan"
 name = "Planning attack"
 kind = "worker"
 agent = "planning_critic"
-agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.planning_attack.input]
 role = "critic"
@@ -439,7 +432,6 @@ rejected = "planning_draft"
 name = "Implementation"
 kind = "fanout"
 agent = "implementation"
-agent_runtime.codex = { model = "gpt-5.6-luna", thinking_level = "high" }
 max_parallel = 3
 next = "review"
 
@@ -469,7 +461,6 @@ schema = "schemas/implementation-fanout-output.json"
 [steps.implementation.branches.backend_implementation]
 name = "Backend implementation"
 agent = "backend"
-agent_runtime.codex = { model = "gpt-5.6-terra", thinking_level = "high" }
 
 [steps.implementation.branches.backend_implementation.input]
 role = "backend"
@@ -505,7 +496,6 @@ schema = "schemas/implementation-output.json"
 [steps.implementation.branches.frontend_implementation]
 name = "Frontend implementation"
 agent = "frontend"
-agent_runtime.codex = { model = "gpt-5.6-terra", thinking_level = "high" }
 
 [steps.implementation.branches.frontend_implementation.input]
 role = "frontend"
@@ -553,7 +543,6 @@ schema = "schemas/implementation-output.json"
 [steps.implementation.branches.architecture_artifact_update]
 name = "Architecture artifact update"
 agent = "architect"
-agent_runtime.codex = { model = "gpt-5.6-luna", thinking_level = "xhigh" }
 
 [steps.implementation.branches.architecture_artifact_update.input]
 role = "architect"
@@ -586,7 +575,6 @@ schema = "schemas/implementation-output.json"
 name = "Review"
 kind = "fanout"
 agent = "review"
-agent_runtime.codex = { model = "gpt-5.6-luna", thinking_level = "high" }
 max_parallel = 7
 next = "${{ output.next }}"
 
@@ -617,7 +605,6 @@ schema = "schemas/review-fanout-output.json"
 [steps.review.branches.architect_review]
 name = "Architect review"
 agent = "architecture_critic"
-agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.review.branches.architect_review.input]
 role = "architect"
@@ -649,7 +636,6 @@ schema = "schemas/gate-review-verdict-output.json"
 [steps.review.branches.backend_review]
 name = "Backend review"
 agent = "backend_critic"
-agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.review.branches.backend_review.input]
 role = "backend"
@@ -676,7 +662,6 @@ schema = "schemas/gate-review-verdict-output.json"
 [steps.review.branches.frontend_review]
 name = "Frontend review"
 agent = "frontend_critic"
-agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.review.branches.frontend_review.input]
 role = "frontend"
@@ -707,7 +692,6 @@ schema = "schemas/gate-review-verdict-output.json"
 [steps.review.branches.frontend_taste_review]
 name = "Frontend taste review"
 agent = "frontend_taste_critic"
-agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.review.branches.frontend_taste_review.input]
 role = "frontend-taste"
@@ -738,7 +722,6 @@ schema = "schemas/gate-review-verdict-output.json"
 [steps.review.branches.security_review]
 name = "Security review"
 agent = "security_critic"
-agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.review.branches.security_review.input]
 role = "security"
@@ -765,7 +748,6 @@ schema = "schemas/gate-review-verdict-output.json"
 [steps.review.branches.privacy_review]
 name = "Privacy review"
 agent = "privacy_critic"
-agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.review.branches.privacy_review.input]
 role = "privacy-data-safety"
@@ -792,7 +774,6 @@ schema = "schemas/gate-review-verdict-output.json"
 [steps.review.branches.qa_review]
 name = "QA review"
 agent = "qa_critic"
-agent_runtime.codex = { model = "gpt-5.6-sol", thinking_level = "high" }
 
 [steps.review.branches.qa_review.input]
 role = "qa-reliability"
