@@ -64,9 +64,10 @@ agent = "backend"
 
 [steps.implementation.branches.backend_implementation.input]
 role = "backend"
+template = "templates/implementation-branch-instructions.md"
 prompt = '''Implement only the approved backend zones from `implementation_intake`.
 
-Before editing, load the shared delegated task contract from `shared/delegate/delegated-role-task-template.md`, the compact backend section in `workflows/implementation-harness/references/roles/implementers.md`, and the backend role material starting at `roles/backend/ROLE.md` and `roles/backend/RUBRIC.md`; follow any additional material those role files require. Treat the normalized approved task, research, execution plan, backend zones, non-goals, and verification expectations as the concrete delegated task packet. Do not broaden discovery, change the approved direction, perform independent review, publish, commit, push, or edit frontend-owned zones.
+Apply the delegated-role contract and common implementer contract already embedded by this step's input template. The runner also supplies the backend role material as absolute required reads; follow any additional material those role files require. Treat the normalized approved task, research, execution plan, backend zones, non-goals, and verification expectations as the concrete delegated task packet. Do not broaden discovery, change the approved direction, perform independent review, publish, commit, push, or edit frontend-owned zones.
 
 Follow `IMPLEMENT -> VALIDATE -> HANDOFF FOR REVIEW`. Run the smallest meaningful checks for the backend slice. Fix in-scope failures and re-run them before completion. Return `implemented` only with a concise change summary, repository-relative changed files, non-empty verification results, role-material evidence, and warnings.
 
@@ -85,9 +86,10 @@ agent = "frontend"
 
 [steps.implementation.branches.frontend_implementation.input]
 role = "frontend"
+template = "templates/implementation-branch-instructions.md"
 prompt = '''Implement only the approved frontend zones from `implementation_intake`.
 
-Before editing, load the shared delegated task contract from `shared/delegate/delegated-role-task-template.md`, the compact frontend section in `workflows/implementation-harness/references/roles/implementers.md`, and the frontend role material starting at `roles/frontend/ROLE.md` and `roles/frontend/RUBRIC.md`; follow any additional role, UI, design, or project material those role files require. Treat the normalized approved task, research, execution plan, frontend zones, non-goals, and verification expectations as the concrete delegated task packet. Do not broaden discovery, change the approved direction, perform independent review, publish, commit, push, or edit backend-owned zones.
+Apply the delegated-role contract and common implementer contract already embedded by this step's input template. The runner also supplies the frontend role material as absolute required reads; follow any additional role, UI, design, or project material those role files require. Treat the normalized approved task, research, execution plan, frontend zones, non-goals, and verification expectations as the concrete delegated task packet. Do not broaden discovery, change the approved direction, perform independent review, publish, commit, push, or edit backend-owned zones.
 
 Follow `IMPLEMENT -> VALIDATE -> HANDOFF FOR REVIEW`. Run the smallest meaningful checks for the frontend slice, including the approved design-test scope when relevant. Fix in-scope failures and re-run them before completion. Return `implemented` only with a concise change summary, repository-relative changed files, non-empty verification results, role-material evidence, and warnings.
 

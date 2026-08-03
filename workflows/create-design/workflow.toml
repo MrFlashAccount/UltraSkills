@@ -27,7 +27,12 @@ agent = "frontend-taste"
 role = "frontend-taste"
 prompt = '''Inspect only enough brief, existing design docs, references, repo guidance, and product context read-only to identify the requested design-memory surface and choose exactly one mode: review, proposal, or implement. For implement, also classify create vs edit; otherwise use not_applicable. Reduce non-trivial scope to 3-5 representative asks and identify current artifact shape, design-law/direction status, risks, missing branches, and what must not be touched.
 
-This is pre-approval scope inspection only. Do not produce full review findings, a complete proposal, draft files, restructure files, run fix/review loops, or edit anything. If target, mode, or scope is materially unclear and cannot be recovered from the repository, report a non-blocking stop with one precise question and resume this step after resolution. Return the selected mode as both outcome and mode with a concise approval summary suitable for the opening user gate.'''
+This is pre-approval scope inspection only. Do not produce full review findings, a complete proposal, draft files, restructure files, run fix/review loops, or edit anything. If target, mode, or scope is materially unclear and cannot be recovered from the repository, report a non-blocking stop with one precise question and resume this step after resolution. Return the selected mode as both outcome and mode with a concise approval summary suitable for the opening user gate.
+
+When revising after an approval rejection, consume the feedback from the rejected gate, change the intake packet accordingly, and do not regenerate the same packet unchanged:
+- Review approval feedback: ${{ input.approve_review.feedback | default: "No prior review approval feedback." }}
+- Proposal approval feedback: ${{ input.approve_proposal.feedback | default: "No prior proposal approval feedback." }}
+- Implementation approval feedback: ${{ input.approve_implementation.feedback | default: "No prior implementation approval feedback." }}'''
 
 [steps.mode_intake.output]
 template = "templates/design-memory-intake-template.md"

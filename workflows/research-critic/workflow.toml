@@ -47,7 +47,7 @@ ready_for_attack = "research_attack"
 [steps.research_attack]
 name = "Research attack"
 kind = "worker"
-agent = "researcher"
+agent = "research_critic"
 
 [steps.research_attack.input]
 role = "researcher"

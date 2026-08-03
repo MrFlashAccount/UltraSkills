@@ -9,7 +9,7 @@ steps = ["architecture_proposal", "architect_review", "critic_pressure"]
 entry = "architecture_proposal"
 boundary = "critic_pressure"
 maxIterations = 2
-onLimit = "approve_architecture"
+onLimit = "proposal_review_exit"
 
 [loopPolicies.post_implementation_review]
 steps = ["architecture_implementation", "post_architect_review", "post_critic_review", "final_architect_review"]
@@ -188,8 +188,32 @@ schema = "schemas/review-output.json"
 match = "${{ output.outcome }}"
 
 [steps.critic_pressure.next.cases]
-approved = "approve_architecture"
+approved = "proposal_review_exit"
 needs_revision = "architecture_proposal"
+
+[steps.proposal_review_exit]
+name = "Proposal review exit"
+kind = "worker"
+agent = "architecture_review_router"
+
+[steps.proposal_review_exit.input]
+prompt = '''Project the latest Critic pressure result without changing, reviewing, or softening it.
+
+When critic_pressure.outcome is approved, return outcome ready_for_approval with an empty unresolved_findings array. When critic_pressure.outcome is needs_revision, this step was reached because the bounded proposal-review loop exhausted; return outcome exhausted, preserve every latest verdict finding in unresolved_findings, and state that architecture approval and implementation were not reached. Do not turn bounded findings into approval, invent a new verdict, edit files, or rerun review.
+
+Latest Critic pressure:
+${{ input.critic_pressure }}'''
+
+[steps.proposal_review_exit.output]
+template = "templates/proposal-review-exit-template.md"
+schema = "schemas/proposal-review-exit-output.json"
+
+[steps.proposal_review_exit.next]
+match = "${{ output.outcome }}"
+
+[steps.proposal_review_exit.next.cases]
+ready_for_approval = "approve_architecture"
+exhausted = "done"
 
 [steps.approve_architecture]
 name = "Approve architecture package"
@@ -325,4 +349,7 @@ name = "Done"
 kind = "done"
 
 [steps.done.input]
-prompt = '''Project the architecture result for the selected mode and approved scope. For audit, report evidence-backed findings and confirm no edits. For proposal-only scaffold/improve, report the approved proposal and explicitly say canonical architecture implementation was not authorized or started. For implemented scaffold/improve, report the approved option, changed architecture artifacts, structural checks, migration slices, Critic verdict, and final Architect verdict. If either review loop reached its limit, preserve unresolved findings and do not claim a clean pass.'''
+prompt = '''Project the architecture result for the selected mode and approved scope. For audit, report evidence-backed findings and confirm no edits. For proposal-only scaffold/improve, report the approved proposal and explicitly say canonical architecture implementation was not authorized or started. For implemented scaffold/improve, report the approved option, changed architecture artifacts, structural checks, migration slices, Critic verdict, and final Architect verdict. If either review loop reached its limit, preserve unresolved findings and do not claim a clean pass.
+
+Proposal review exit:
+${{ input.proposal_review_exit | default: "The proposal review exit was not used." }}'''
