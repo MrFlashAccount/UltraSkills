@@ -1,12 +1,20 @@
 # Lightweight engineering workflows proposal
 
-Status: proposal only. This document defines two target workflow packages; it
+Status: proposal only. This document defines five target workflow packages; it
 does not add runnable workflow graphs, prompts, or schemas.
 
 Proposed packages:
 
 - `workflows/test-driven-change/`
 - `workflows/parallel-pair-change/`
+- `workflows/address-findings/`
+- `workflows/profile-guided-change/`
+- `workflows/hypothesis-driven-bugfix/`
+
+`Lightweight` means narrower and less ceremonial than `dev-harness`, not that
+every route is cheap. `profile-guided-change` and
+`hypothesis-driven-bugfix` are intentionally specialized evidence workflows
+for tasks where direct execution would otherwise become guesswork.
 
 ## Why these workflows
 
@@ -14,18 +22,23 @@ The repository has strong paths for research, architecture, approved execution,
 multi-role review, and repeated work. It does not have a small, proof-oriented
 path between a direct edit and those heavier workflows.
 
-That gap matters for bounded bug fixes and small behavior changes. A direct edit
-is cheap but has no reusable execution contract. `implementation-harness`
-expects approved task, research, and execution-plan input. `dev-harness` owns a
-larger research-to-review lifecycle. `loop` is for repeated cycles rather than a
-single change.
+That gap matters for bounded bug fixes, small behavior changes, concrete review
+follow-up, measured optimization, and difficult diagnosis. A direct edit is
+cheap but has no reusable execution contract. `implementation-harness` expects
+approved task, research, and execution-plan input. `dev-harness` owns a larger
+research-to-review lifecycle. `loop` repeats generic cycles without owning the
+evidence contract for any of these task types.
 
 The proposed workflows add only the missing middle:
 
 1. a single-writer test-driven cycle for changes that can be proved with a
    focused test;
 2. a parallel driver/navigator cycle for small changes where an independent
-   second track is likely to catch a meaningful miss.
+   second track is likely to catch a meaningful miss;
+3. a findings-to-proof cycle for concrete review or CI feedback;
+4. a measurement-first cycle for performance work;
+5. a convergent hypothesis loop for difficult bugs whose cause cannot be
+   established from local code inspection alone.
 
 They must remain cheaper than the failure or rework they prevent. They are not
 default ceremony for every code edit.
@@ -36,13 +49,18 @@ default ceremony for every code edit.
 | --- | --- | --- |
 | Direct execution | The edit is mechanical, obvious, and cheaply verified: wording, formatting, a local config value, or an equally narrow change. | Behavior must be reproduced, a regression test is valuable, or an independent second perspective is justified. |
 | `test-driven-change` | One bounded behavior or invariant can be demonstrated by a focused automated test and changed by one implementation owner. | The test boundary is unavailable or disproportionately expensive, or the work contains an unresolved product or architecture decision. |
-| `parallel-pair-change` | The change is still bounded, but ambiguity, edge cases, or regression risk make independent parallel investigation or test design worth the extra worker. | The change is trivial, file ownership cannot be made safe, or integration is more expensive than the likely second-track value. |
+| `parallel-pair-change` | The change is still bounded and locally observable, but edge cases or regression risk make independent parallel investigation or test design worth the extra worker. | The bug needs repeated external reproduction and runtime evidence, file ownership cannot be made safe, or integration is more expensive than the likely second-track value. |
+| `address-findings` | Review comments, CI findings, or other concrete findings already identify a bounded correction surface. | The root cause is still unknown, the finding requires product or architecture decisions, or the task is open-ended review. |
+| `profile-guided-change` | Performance is the primary acceptance target and a stable workload, baseline, and metric can be established. | The optimization is speculative, measurement is too noisy, or performance is only an optional concern inside a correctness change. |
+| `hypothesis-driven-bugfix` | The symptom is real but the root cause is uncertain, local reproduction is insufficient, or user/remote reproduction plus diagnostic logs are required. | The cause is already concrete enough for `test-driven-change`, the input is an existing finding, or the task is a live incident requiring domain-specific operational control. |
 | `implementation-harness` | The task already has approved, closed task/research/plan input and disjoint implementation ownership. | Discovery, architecture, or product decisions are still open. |
 | `dev-harness` | The work needs staged research, architecture or UI direction, approval, broad implementation, or multi-role review. | The work is a small, closed change that one of the lighter routes can prove directly. |
 
-A lightweight change has one primary behavior or invariant, a bounded file
-zone, a clear implementation owner, and no unresolved user-owned decision. File
-count alone is not a routing rule.
+A focused route has one primary behavior, finding set, metric, or symptom; clear
+ownership; and no unresolved product or architecture decision. TDD and pair work
+normally keep a bounded file zone. Performance and difficult-bug work may cross
+several diagnostic surfaces while still preserving one measured target or
+causal question. File count alone is not a routing rule.
 
 ## Workflow 1: `test-driven-change`
 
@@ -168,41 +186,341 @@ solution is already sufficient.
 ### Applicability limits
 
 Use this workflow only when the second track has a concrete expected job, such
-as uncertain root cause, meaningful boundary cases, concurrency or state
-transitions, compatibility behavior, or a risky regression surface.
+as meaningful boundary cases, concurrency or state transitions, compatibility
+behavior, or a risky regression surface that both agents can inspect in the
+same local evidence cycle.
 
 Route a deterministic one-file fix to direct execution or
-`test-driven-change`. Escalate broad ownership, unresolved design, unsafe
-integration, or cross-system changes to a heavier workflow.
+`test-driven-change`. Route repeated user/remote reproduction and unknown root
+cause to `hypothesis-driven-bugfix`. Escalate broad ownership, unresolved
+design, unsafe integration, or cross-system changes to a heavier workflow.
+
+## Workflow 3: `address-findings`
+
+### Purpose
+
+Turn concrete review comments, CI findings, or other bounded findings into an
+evidence-backed disposition without assuming that every finding is correct.
+
+### Target topology
+
+```text
+findings_intake -> finding_triage -> fix_cycle -> independent_recheck -> done
+                                      ^                 |
+                                      |-----------------|
+                                         one rework pass
+```
+
+### Findings contract
+
+1. **Findings intake** records a stable id, source, exact claim, affected
+   surface, available evidence, requested outcome, and authority boundary for
+   every finding.
+2. **Finding triage** assigns exactly one disposition:
+   `accepted`, `rejected_with_evidence`, `needs_input`, `duplicate`, or
+   `out_of_scope`. Reviewer prose is input evidence, not automatic truth.
+3. **Fix cycle** changes only accepted findings, preserves unrelated work, and
+   records focused verification for each finding id. Disjoint findings may fan
+   out only with explicit non-overlapping ownership.
+4. **Independent recheck** verifies the original claim against the current
+   diff and evidence rather than trusting the implementer's summary.
+
+The terminal packet maps every finding to disposition, changed files,
+verification, remaining disagreement, and any external action still needed.
+
+### Applicability limits
+
+This workflow starts from already concrete findings. Unknown root cause routes
+to `hypothesis-driven-bugfix`; open-ended discovery routes to research or
+review. Broad redesign, new product decisions, and architecture changes are
+escalations rather than findings that can be silently accepted.
+
+GitHub, Arcanum, CI, or other provider transport stays outside this workflow.
+It may prepare replies and evidence, but must not comment, resolve, push, rerun,
+or approve without authority from the outer request.
+
+## Workflow 4: `profile-guided-change`
+
+### Purpose
+
+Improve an explicit performance target through reproducible measurement rather
+than intuition or incidental micro-optimization.
+
+### Target topology
+
+```text
+metric_intake -> baseline -> profile_hypothesis -> implement -> compare -> review -> done
+                                  ^                              |
+                                  |------------------------------|
+                                        one bounded rework pass
+```
+
+### Measurement contract
+
+1. **Metric intake** fixes the workload, metric, acceptance threshold,
+   correctness guard, environment, warm-up policy, and known sources of noise.
+2. **Baseline** runs the same representative workload enough times to establish
+   a usable comparison. An unstable baseline stops optimization rather than
+   legitimizing a convenient number.
+3. **Profile hypothesis** identifies a measured hot path or resource mechanism
+   and predicts which metric should change. It must not start from code that
+   merely looks slow.
+4. **Implementation** changes one measured mechanism at a time through the
+   appropriate backend or frontend owner.
+5. **Comparison** repeats the baseline method and reports the before/after
+   delta, variance, correctness result, and any shifted cost.
+6. **Review** checks measurement fidelity, correctness, resource trade-offs,
+   and whether the claimed improvement exceeds noise.
+
+Use this workflow only when performance is the task's primary outcome. Keep
+`FAST` inside `test-driven-change` when performance is only a conditional final
+checkpoint. Do not claim success from a one-off timing, a changed workload, or
+an improvement that breaks correctness or moves cost outside the measured
+window.
+
+## Workflow 5: `hypothesis-driven-bugfix`
+
+### Purpose
+
+Converge from a confirmed symptom to a minimal causal mechanism and a proven
+fix when code inspection alone cannot establish the root cause. The workflow's
+unit of progress is reduced uncertainty, not edits, logs, or hypothesis count.
+
+The root cause may be one defect or a minimal causal chain. It must still be
+specific enough to predict the symptom and explain why the fix breaks that
+chain.
+
+### Target topology
+
+```text
+bug_intake -> static_diagnosis
+                    | exact cause
+                    v
+                fix_and_verify -> final_review -> done
+
+static_diagnosis -> diagnostic_cycle
+                        |
+                        +-> hypothesis -> instrumentation -> local_or_user_repro
+                                                               |
+                                                               v
+                                                        evidence_judgment
+                                                          |     |      |
+                                                     confirm  continue  stall
+                                                          |     |      |
+                                                          v     +------+
+                                                   fix_and_verify      |
+                                                                       v
+                                                               hostile_reset
+                                                                /          \
+                                                         critic_attack  external_search
+                                                                \          /
+                                                                    reframe
+                                                                       |
+                                                               diagnostic_cycle
+```
+
+### Intake and fast path
+
+**Bug intake** records expected and observed behavior, environment/build/version,
+reproduction state, available logs, affected users or surfaces, privacy limits,
+and the exact signal that would prove the symptom occurred.
+
+**Static diagnosis** inspects the executing code path and existing evidence
+before adding instrumentation. It may take the fast path only when it can:
+
+- explain the complete `input -> mechanism -> symptom` chain;
+- identify the exact faulty boundary without an implementation-critical guess;
+- define a reproduction or regression proof that fails before the fix;
+- predict why the proposed change will break the causal chain.
+
+If any link is speculative, the workflow enters research-style diagnosis. It
+must not turn a plausible reading of the code into an unearned root-cause claim.
+
+### Falsifiable hypothesis contract
+
+Every diagnostic experiment starts with one hypothesis record:
+
+```text
+hypothesis_id
+claim
+component_or_boundary
+mechanism
+observable
+edit_surface
+evidence_for
+evidence_against
+if_true_signal
+if_false_signal
+minimal_experiment
+instrumentation_risk
+```
+
+The experiment must distinguish at least two remaining explanations. Adding
+logs without stating the positive and negative prediction first is invalid.
+Instrumentation is minimal, reversible, linked to the hypothesis id, and
+designed not to expose credentials, user payloads, private paths, or other
+sensitive data.
+
+The controller treats `(component_or_boundary, mechanism, observable,
+edit_surface)` as the attempt fingerprint. Rewording a claim without changing
+that fingerprint is the same attempt and cannot consume another round unless
+new evidence changes its prediction.
+
+When local reproduction is unavailable, the active worker reports a
+runner-owned non-blocking stop and resumes the same request after the user
+reproduces the bug. The request must state the exact build or instrumentation,
+actions, time window, expected marker, and bounded sanitized evidence needed;
+`try it again` is not an acceptable reproduction request.
+
+### Independent evidence judgment
+
+A logically independent evidence judge evaluates each result without proposing
+the next fix. It returns exactly one outcome:
+
+- `confirmed`: the predicted causal signal was observed and material
+  alternatives were excluded;
+- `rejected`: the negative prediction or contradictory evidence rules the
+  hypothesis out;
+- `inconclusive`: the experiment did not distinguish the remaining causes;
+- `stalled`: the process is repeating work or no longer reducing uncertainty.
+
+After every experiment the workflow records a progress certificate:
+
+```text
+new_evidence
+confirmed_or_eliminated_hypotheses
+remaining_uncertainty
+next_discriminating_experiment
+information_gain: yes | no
+```
+
+New logs, edits, confidence prose, or additional hypotheses are not progress by
+themselves. A round may continue only when it confirms or eliminates a
+hypothesis, narrows the causal frontier, exposes a new discriminating
+observable, or identifies the precise missing evidence.
+
+The diagnostic worker cannot award its own `information_gain`. The independent
+evidence judgment and controller own that decision and the next transition.
+
+Keep at most three active hypotheses. A new hypothesis must replace an
+eliminated one, split an existing one using new evidence, or enter because a
+new observation exposed a genuinely different mechanism. Paraphrases of a
+rejected hypothesis are rejected by the controller.
+
+### Convergence and hostile reset
+
+The normal diagnostic path has these default limits:
+
+- one round without information gain forces a redesigned experiment;
+- two consecutive rounds without information gain trigger hostile reset;
+- three diagnostic rounds without a confirmed cause trigger hostile reset
+  regardless of the active agent's confidence;
+- the same hypothesis, observable, or edited surface cannot be repeated without
+  new discriminating evidence;
+- hostile reset runs at most once;
+- after reset, at most two new experiments may run before the workflow exits
+  `unresolved_with_evidence`.
+
+An experiment counter advances only after evidence judgment. Waiting for user
+reproduction or resolving a missing-capability stop does not consume a round.
+The future runtime graph must preserve explicit pre-reset and post-reset budgets;
+resume, retry, or hostile reset must not silently clear loop progress.
+
+Hostile reset freezes further edits and fans out two fresh, independent logical
+agents:
+
+1. **Critic attack** assumes the current mental model is wrong, identifies
+   contradictions, circular reasoning, ignored alternatives, instrumentation
+   effects, and why the previous experiments failed to converge.
+2. **External evidence search** uses the exact symptom, version, platform,
+   dependency, and environment to search authoritative documentation, upstream
+   issues, release notes, and comparable mechanisms. If search capability is
+   unavailable, it performs a cold codebase/history investigation and records
+   the missing external-evidence capability.
+
+Search results generate local falsifiable hypotheses; they do not prove the
+local root cause. Superficially similar error text is not enough.
+
+A fresh synthesis owner receives the compact debugging ledger rather than the
+full reasoning transcript. It must record discarded assumptions, explain the
+lack of convergence, replace or narrow the hypothesis frontier, and select
+exactly one highest-information experiment. If it cannot do so, the workflow
+exits instead of returning control to blind iteration.
+
+### Debugging ledger
+
+The durable baton contains:
+
+- symptom, environment, build/version, and reproduction status;
+- active and retired hypothesis records with stable ids;
+- experiments, predictions, evidence, and evidence-judge outcomes;
+- remaining causal frontier and progress certificates;
+- instrumentation paths, markers, risk, and cleanup state;
+- external evidence with applicability limits;
+- discarded assumptions, hostile-reset count, and next experiment;
+- user reproduction requests and returned evidence.
+
+Fresh reviewers consume this ledger, not a persuasive narrative written by the
+same agent that formed the hypothesis.
+
+### Fix and terminal truth
+
+`fixed` requires all of the following:
+
+1. the original scenario or an evidence-equivalent reproduction confirmed the
+   bug before the fix;
+2. predicted evidence confirmed the root cause or minimal causal chain;
+3. the change removed that mechanism;
+4. the same reproduction no longer produces the bug;
+5. a regression guard fails before the fix and passes after it when an
+   executable guard is feasible;
+6. temporary instrumentation is removed and its absence verified;
+7. an independent final review checks that the change did not merely mask the
+   symptom, alter timing into a Heisenbug, or cargo-cult an external solution.
+
+If the symptom disappears but the mechanism remains unproven, return
+`mitigated_not_explained`. If the final user reproduction is still required,
+return `locally_verified_pending_user_repro`. Other honest terminal states are
+`not_reproduced` and `unresolved_with_evidence`; none may be projected as
+`fixed`. Missing input, permission, or capability uses the runner's
+non-blocking-stop contract and resumes the same request rather than becoming a
+terminal bugfix result.
 
 ## Shared safeguards
 
 - Preserve pre-existing user changes and record the baseline before editing.
 - Keep one final integration owner even when workers run in parallel.
+- Give independent authors, evidence judges, critics, and external investigators
+  distinct logical agent ids so runtime worker reuse does not collapse the
+  intended independence.
 - Treat focused verification as proof of the claimed behavior, not proof that
   unrelated repository state is healthy.
 - Fix and re-run failures caused by the change. Preserve and report unrelated
   baseline failures.
 - Use a runner-owned non-blocking stop for missing capability, permission, or
   user input; do not misreport it as successful completion.
-- Do not let either workflow seek approval, publish, push, merge, or perform
+- Remove or roll back temporary instrumentation on every terminal exit and
+  verify the cleanup. Retain it only when the outer request explicitly asks for
+  a diagnostic handoff, and record the remaining paths and risk.
+- Do not let any workflow seek approval, publish, push, merge, or perform
   destructive actions unless the outer request already grants that authority.
 - Cap review-driven rework at one pass. A second unresolved review result exits
   with evidence and a recommendation to escalate.
 
 ## Non-goals
 
-- building a general catalogue of XP ceremonies;
+- building a general catalogue of XP ceremonies or debugging rituals;
 - making pair work mandatory for ordinary implementation;
 - replacing `dev-harness`, `implementation-harness`, or independent code review;
 - treating `make it fast` as mandatory optimization without a benchmark;
+- treating more hypotheses, logging, or internet search as diagnostic progress;
 - turning every checkpoint into a separate worker or approval gate;
 - claiming success from generated artifacts without executing the relevant
   behavioral path.
 
 ## Promotion plan
 
-If this proposal is accepted, implement the two packages in a later PR. Each
+If this proposal is accepted, implement the five packages in later PRs. Each
 package must include its runtime graph, worker schemas, prompts/references,
 package README, focused tests, catalog entry, semantic workflow validation, and
 an executable smoke path.
@@ -215,12 +533,21 @@ tasks and compared with direct execution. Record:
 - whether `RED` failed for the intended reason;
 - whether the Navigator found a material issue or merely duplicated the Driver;
 - ownership conflicts and integration cost.
+- findings closed, rejected, or reopened after `address-findings`;
+- benchmark stability and measured improvement relative to noise;
+- hypothesis rounds, information-gain failures, hostile resets, user
+  reproduction count, and final bugfix truth state.
 
 Promote `test-driven-change` when its proof contract prevents meaningful
 regressions without turning small work into a heavy process. Promote
 `parallel-pair-change` when its independent track catches material misses often
 enough to repay fanout and integration cost. Otherwise keep direct execution as
-the cheaper baseline.
+the cheaper baseline. Promote `address-findings` when it closes concrete
+feedback with less reviewer churn. Promote `profile-guided-change` only when
+measured improvements survive identical reruns. Promote
+`hypothesis-driven-bugfix` when its convergence controller resolves difficult
+bugs with fewer repeated experiments and never projects mitigation or stalled
+investigation as a fix.
 
 ## Recommended defaults for implementation
 
@@ -228,7 +555,10 @@ the cheaper baseline.
 - one bounded review/rework pass;
 - shared-zone/read-only Navigator unless isolation or disjoint paths are
   explicit;
-- no human approval gate inside either workflow;
+- no human approval gate inside the ordinary path of any workflow;
 - `REFACTOR` and `FAST` are conditional checkpoints, not mandatory work;
+- no performance claim without a stable before/after method;
+- no difficult-bug continuation without an information-gain certificate;
+- one hostile reset per debugging run, followed by an honest bounded exit;
 - escalation narrows or changes the route; it does not silently grow the
   lightweight workflow into a second `dev-harness`.
