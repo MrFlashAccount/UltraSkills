@@ -4,6 +4,7 @@ import {
   heartbeatWorkflowRunAtRoot,
   listWorkflowRunsAtRoot,
   registerWorkflowRunAtRoot,
+  releaseWorkflowRunAtRoot,
   summarizeWorkflowRuns as summarizeWorkflowRunsAtRoot,
 } from '../persistence/run-state/workflow-runs.mjs';
 import { defaultWorkflowPath } from '../persistence/run-state/paths.mjs';
@@ -24,6 +25,7 @@ const workflowRuns = createWorkflowRuns({
   heartbeatWorkflowRunAtRoot,
   listWorkflowRunsAtRoot,
   registerWorkflowRunAtRoot,
+  releaseWorkflowRunAtRoot,
   summarizeWorkflowRuns: summarizeWorkflowRunsAtRoot,
   publicErrorMessage,
   defaultWorkflowPath,
@@ -37,5 +39,6 @@ export const {
   heartbeatWorkflowRun,
   listWorkflowRuns,
   registerWorkflowRun,
+  releaseWorkflowRun,
   summarizeWorkflowRuns,
 } = workflowRuns;

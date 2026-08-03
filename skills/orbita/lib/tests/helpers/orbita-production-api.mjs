@@ -28,7 +28,7 @@ import { createRunIndexEntry, upsertRunIndexEntry } from '../../persistence/run-
 import { readRunAuthorityWithLegacyFallback, runAuthorityFromIndexEntry, writeRunAuthority } from '../../persistence/run-state/run-authority.mjs';
 import { durableFileSignature } from '../../persistence/run-state/file-signature.mjs';
 import { withRunStateLock } from '../../persistence/run-state/lock.mjs';
-import { claimWorkflowRunAtRoot, deleteWorkflowRunAtRoot, heartbeatWorkflowRunAtRoot, listWorkflowRunsAtRoot, registerWorkflowRunAtRoot, summarizeWorkflowRuns as summarizeWorkflowRunsAtRoot } from '../../persistence/run-state/workflow-runs.mjs';
+import { claimWorkflowRunAtRoot, deleteWorkflowRunAtRoot, heartbeatWorkflowRunAtRoot, listWorkflowRunsAtRoot, registerWorkflowRunAtRoot, releaseWorkflowRunAtRoot, summarizeWorkflowRuns as summarizeWorkflowRunsAtRoot } from '../../persistence/run-state/workflow-runs.mjs';
 import { publicErrorMessage } from '../../public-error.mjs';
 import { assertAbsoluteWorkflowPath, resolveAbsoluteWorkflowPath } from '../../workflow-path-boundary.mjs';
 import { publicNonBlockingStopDetails, publicStopResolutionDetails } from '../../runtime/non-blocking-stop.mjs';
@@ -112,6 +112,7 @@ const workflowRuns = createWorkflowRuns({
   heartbeatWorkflowRunAtRoot,
   listWorkflowRunsAtRoot,
   registerWorkflowRunAtRoot,
+  releaseWorkflowRunAtRoot,
   summarizeWorkflowRuns: summarizeWorkflowRunsAtRoot,
   publicErrorMessage,
   defaultWorkflowPath,
@@ -136,5 +137,6 @@ export const {
   heartbeatWorkflowRun,
   listWorkflowRuns,
   registerWorkflowRun,
+  releaseWorkflowRun,
   summarizeWorkflowRuns,
 } = workflowRuns;

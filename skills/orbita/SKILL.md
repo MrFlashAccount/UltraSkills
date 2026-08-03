@@ -66,7 +66,13 @@ approval.
 After approval, preserve the newly issued token because takeover invalidates
 the previous holder's token.
 
-Preserve exact `runId` and `lease_token`; never invent, shorten, expose, or retype them from memory. Missing token means claim again or report missing authority.
+Preserve exact `runId` and `lease_token`; never expose or retype them. Missing token means claim again or report missing authority.
+
+Only on explicit release, and never while a worker owns work:
+
+```bash
+bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" release --run-id <run-id> --lease-token "$lease_token"
+```
 
 Start new:
 

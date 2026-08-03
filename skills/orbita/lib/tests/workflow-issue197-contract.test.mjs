@@ -148,6 +148,12 @@ test('Orbita skill stops on lease conflicts and offers only an approved forced t
   assert.match(skillText, /takeover invalidates\s+the previous holder's token/);
 });
 
+test('Orbita skill releases a lease only through the explicit matching-token command', () => {
+  const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
+  assert.match(skillText, /Only on explicit release, and never while a worker owns work/);
+  assert.match(skillText, /workflow-runs\.mjs" release --run-id <run-id> --lease-token "\$lease_token"/);
+});
+
 test('Orbita skill explains direct rollback to state-bearing workflow predecessors', () => {
   const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
   assert.match(skillText, /every valid predecessor present in `baton\.state`/);

@@ -33,6 +33,9 @@ Binding rules:
   the per-run record atomically. Matching-token renewal preserves `tokenEpoch`;
   an explicit tokenless takeover of a stale or occupied lease increments it
   while rotating the token hash.
+- Explicit release requires the matching token even for a stale lease, then
+  clears lease authority and private claim context under the per-run lock. It
+  must not mutate workflow state, lifecycle status, or task metadata.
 - `runs.json` is a discovery and list/dashboard projection. Once a valid per-run
   authority file exists, runner binding, claim context, lease checks, status,
   and task metadata must not trust a conflicting catalog copy. Warm runner

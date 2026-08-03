@@ -4,9 +4,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { afterAll, beforeEach, test } from 'bun:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { listWorkflowRuns, summarizeWorkflowRuns } from './helpers/orbita-production-api.mjs';
+import { listWorkflowRuns, releaseWorkflowRun, summarizeWorkflowRuns } from './helpers/orbita-production-api.mjs';
 import { publicErrorMessage } from '../public-error.mjs';
-import { claimWorkflowRunAtRoot, deleteWorkflowRunAtRoot, heartbeatWorkflowRunAtRoot, listWorkflowRunsAtRoot, registerWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
+import { claimWorkflowRunAtRoot, deleteWorkflowRunAtRoot, heartbeatWorkflowRunAtRoot, listWorkflowRunsAtRoot, registerWorkflowRunAtRoot, releaseWorkflowRunAtRoot } from '../persistence/run-state/workflow-runs.mjs';
 import { buildTokenLease, formatLeaseTokenEntropy } from '../persistence/run-state/lease-authority.mjs';
 import { createRunIndexEntry, readRunsIndex, runsIndexPathsForRoot } from '../persistence/run-state/run-index.mjs';
 import { resolveRunPaths, workflowRunsRoot } from '../persistence/run-state/paths.mjs';
@@ -613,6 +613,89 @@ test('workflow runs API renews stale matching-token claims without rotating auth
   assert.equal(after.leaseExpiresAt, '2026-06-01T10:01:02.000Z');
 });
 
+test('workflow runs API releases a matching lease without changing durable run state', async () => {
+  const runId = `${runPrefix}release-api`;
+  const claim = await registerWorkflowRunAtRoot({
+    runsRoot,
+    runId,
+    title: 'Release me',
+    status: 'needs_host_actions',
+    claim: true,
+    harness: 'portable',
+    leaseMs: 60_000,
+    now: new Date('2026-06-01T10:00:00.000Z'),
+  });
+  const paths = resolveRunPaths({ runId, runsRoot });
+  const batonText = '{"cursor":"prepare"}\n';
+  const historyText = '# Existing history\n';
+  writeFileSync(paths.batonPath, batonText, { mode: 0o600 });
+  writeFileSync(paths.historyPath, historyText, { mode: 0o600 });
+
+  const response = await releaseWorkflowRun({
+    runsRoot,
+    runId,
+    leaseToken: claim.leaseToken,
+    now: new Date('2026-06-01T10:00:10.000Z'),
+  });
+
+  assert.equal(response.ok, true);
+  assert.equal(response.released, true);
+  assert.equal(response.run.status, 'needs_host_actions');
+  assert.equal(response.run.occupancy.state, 'unclaimed');
+  assert.equal(readFileSync(paths.batonPath, 'utf8'), batonText);
+  assert.equal(readFileSync(paths.historyPath, 'utf8'), historyText);
+  const authority = await readRunAuthority(paths);
+  assert.equal(authority.workerLease, null);
+  assert.equal('claimContext' in authority, false);
+  const indexed = (await readRunsIndex(runsIndexPathsForRoot(runsRoot))).runs[runId];
+  assert.equal(indexed.workerLease, null);
+  assert.equal('claimContext' in indexed, false);
+
+  const oldHolder = await heartbeatWorkflowRunAtRoot({ runsRoot, runId, leaseToken: claim.leaseToken });
+  assert.equal(oldHolder.ok, false);
+  assert.equal(oldHolder.reason, 'occupied');
+  const reclaimed = await claimWorkflowRunAtRoot({ runsRoot, runId, harness: 'codex' });
+  assert.equal(reclaimed.ok, true);
+  assert.equal(reclaimed.run.occupancy.state, 'occupied');
+  assert.notEqual(reclaimed.leaseToken, claim.leaseToken);
+});
+
+test('workflow runs API release requires the matching token and preserves another holder lease', async () => {
+  const runId = `${runPrefix}release-wrong-token`;
+  const claim = await registerWorkflowRunAtRoot({ runsRoot, runId, claim: true, harness: 'portable', leaseMs: 60_000 });
+
+  await assert.rejects(
+    () => releaseWorkflowRunAtRoot({ runsRoot, runId, leaseToken: 'wrong-token' }),
+    /workflow run is occupied/,
+  );
+
+  const authority = await readRunAuthority(resolveRunPaths({ runId, runsRoot }));
+  assert.notEqual(authority.workerLease, null);
+  assert.deepEqual(authority.claimContext, { harness: 'portable' });
+  const heartbeat = await heartbeatWorkflowRunAtRoot({ runsRoot, runId, leaseToken: claim.leaseToken });
+  assert.equal(heartbeat.ok, true);
+});
+
+test('workflow runs API can clear a stale lease when its token still matches', async () => {
+  const runId = `${runPrefix}release-stale`;
+  const claim = await registerWorkflowRunAtRoot({
+    runsRoot,
+    runId,
+    claim: true,
+    leaseMs: 1_000,
+    now: new Date('2026-06-01T10:00:00.000Z'),
+  });
+
+  const response = await releaseWorkflowRunAtRoot({
+    runsRoot,
+    runId,
+    leaseToken: claim.leaseToken,
+    now: new Date('2026-06-01T10:00:02.000Z'),
+  });
+
+  assert.equal(response.run.occupancy.state, 'unclaimed');
+});
+
 test('workflow-runs CLI ignores stale WORKFLOW_RUN_TOKEN env when reclaiming stale lease', async () => {
   const { spawnSync } = await import('node:child_process');
   const helperPath = path.join(root, 'skills/orbita/lib/entrypoints/cli/workflow-runs.mjs');
@@ -655,6 +738,54 @@ test('workflow-runs CLI claim keeps JSON default and supports token-only stdout'
   assert.equal(missingTokenResult.status, 1);
   assert.equal(missingTokenResult.stdout, '');
   assert.match(missingTokenResult.stderr, /workflow-runs: claim did not return a lease token/);
+});
+
+test('workflow-runs CLI release clears only the matching lease', async () => {
+  const helperPath = path.join(root, 'skills/orbita/lib/entrypoints/cli/workflow-runs.mjs');
+  const runId = `${runPrefix}cli-release`;
+  removeDefaultRunsForTestPrefix();
+  const claim = await registerWorkflowRunAtRoot({
+    runsRoot: cliRunsRoot,
+    runId,
+    title: 'CLI release me',
+    claim: true,
+    harness: 'codex',
+    leaseMs: 60_000,
+  });
+
+  const result = spawnSync(process.execPath, [
+    helperPath,
+    'release',
+    '--run-id',
+    runId,
+    `--lease-token=${claim.leaseToken}`,
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, WORKFLOW_RUNS_ROOT: cliRunsRoot, WORKFLOW_RUN_TOKEN: 'wrong-env-token-must-be-ignored' },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const response = JSON.parse(result.stdout);
+  assert.equal(response.ok, true);
+  assert.equal(response.released, true);
+  assert.equal(response.run.occupancy.state, 'unclaimed');
+  const authority = await readRunAuthority(resolveRunPaths({ runId, runsRoot: cliRunsRoot }));
+  assert.equal(authority.workerLease, null);
+  assert.equal('claimContext' in authority, false);
+});
+
+test('workflow-runs CLI release requires an explicit token', async () => {
+  const helperPath = path.join(root, 'skills/orbita/lib/entrypoints/cli/workflow-runs.mjs');
+
+  const result = spawnSync(process.execPath, [helperPath, 'release', '--run-id', `${runPrefix}missing-release-token`], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, WORKFLOW_RUNS_ROOT: cliRunsRoot, WORKFLOW_RUN_TOKEN: 'must-not-be-used' },
+  });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /release --run-id <id>.*--lease-token <token>/);
 });
 
 test('workflow runs API delete removes index entry and run directory', async () => {
@@ -832,7 +963,7 @@ test('workflow-runs CLI list exposes occupancy JSON and human-readable display',
   assert.match(humanResult.stdout, new RegExp(`${runPrefix}cli-occupied: running, occupied`));
 });
 
-test('workflow-runs CLI usage documents heartbeat', async () => {
+test('workflow-runs CLI usage documents heartbeat and release', async () => {
   const { spawnSync } = await import('node:child_process');
   const helperPath = path.join(root, 'skills/orbita/lib/entrypoints/cli/workflow-runs.mjs');
 
@@ -840,6 +971,7 @@ test('workflow-runs CLI usage documents heartbeat', async () => {
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /heartbeat --run-id <id>/);
+  assert.match(result.stderr, /release --run-id <id>.*--lease-token <token>/);
 });
 
 test('workflow-runs CLI public errors do not leak internal runs index path', () => {
