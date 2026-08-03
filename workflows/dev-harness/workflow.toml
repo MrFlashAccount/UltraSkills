@@ -1,6 +1,6 @@
 name = "dev-harness"
 version = 1
-description = "End-to-end planning and execution workflow for non-trivial code work: research attack, optional UI design proposal gate, architecture gate, implementation plan, approval, implementation fanout, and review fanout. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
+description = "End-to-end architecture and execution workflow for non-trivial code work: research attack, optional UI design proposal gate, one execution-ready architecture Canvas and approval, implementation fanout, and review fanout. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
 start = "research_draft"
 done = "done"
 
@@ -24,13 +24,6 @@ entry = "architecture_draft"
 boundary = "architecture_attack"
 maxIterations = 2
 onLimit = "approve_architecture"
-
-[loopPolicies.planning_hostile_review]
-steps = ["planning_draft", "planning_attack"]
-entry = "planning_draft"
-boundary = "planning_attack"
-maxIterations = 2
-onLimit = "approve_plan"
 
 [loopPolicies.code_review]
 steps = ["implementation", "review"]
@@ -238,12 +231,17 @@ role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read the approved/current `reasons-canvas-research` artifact from `research_draft` as the research source of truth and strictly follow it.
 Honor research_draft.next_step and the matching `UI design needed: yes | no` decision in the approved research artifact. When next_step is ui_intent_draft, read the approved/current `ui-design-proposal` artifact from `ui_intent_draft` as the UI/product-surface source of truth. Preserve its user task, product/surface route, screen/zones, first-read/action hierarchy, required states, interaction expectations, design-law basis, visual evidence/proof asset constraints, and open UI tensions. When next_step is architecture_draft, proceed directly without a UI artifact or UI approval and carry the research artifact's no-design rationale into the architecture artifact; do not invent a UI proposal or treat its absence as missing evidence. Do not rewrite visual hierarchy or UI taste in architecture; translate only the code/system implications needed to preserve an applicable approved UI design proposal.
-Produce the minimal architecture decision or structural contract required by the approved research in the `reasons-canvas-architecture` artifact and a compact output.summary as the human-facing architecture proposal state for approval gates. Do not embed the architecture artifact body in JSON.
+Produce the minimal architecture decision and execution-ready structural contract required by the approved research in the `reasons-canvas-architecture` artifact and a compact output.summary as the human-facing architecture proposal state for approval gates. This REASONS Canvas is the only human-facing architecture/execution artifact; do not create a second planning artifact or embed the Canvas body in JSON.
 Before finalizing output.summary or `reasons-canvas-architecture`, explicitly identify the public contract and API surfaces affected by the task: exported APIs, CLI/user-facing commands, schemas, workflow interfaces, integration boundaries, compatibility promises, and observable behavior. If code, docs, or existing contracts answer a question, inspect them instead of asking the user.
 When user-owned choices remain about public contract shape, API compatibility, naming, migration behavior, or accepted breakage, report a non-blocking stop with non_blocking_stop.source_step_id = architecture_draft and the smallest focused non_blocking_stop.needed question for the orchestrator to resolve through the non-blocking stop flow; include your recommended answer in non_blocking_stop.summary or non_blocking_stop.needed.
 For any user-answerable architecture non-blocking stop, non_blocking_stop.needed must be the exact user-facing question to ask; the orchestrator must route it to the user as a question, not answer it from inference or convert it into a summary.
 After the orchestrator resolves the recoverable non-blocking stop, continue the same architecture step from the resolved public contract/API decision and proceed only when the needed decisions are resolved or evidence shows no such discussion is needed.
-When `reasons-canvas-research` exists, derive one new immutable human-facing workflow artifact named `reasons-canvas-architecture`. Copy forward research-owned Requirements and observed domain Entities as frozen input unless new evidence proves a conflict; record any correction in the new architecture artifact instead of editing the research artifact. Own the architecture-depth sections: structural Entities, Approach, Structure, Operations at planning depth, Norms, Safeguards, and remaining open tensions.
+When `reasons-canvas-research` exists, derive one new immutable human-facing workflow artifact named `reasons-canvas-architecture`. Copy forward research-owned Requirements and observed domain Entities as frozen input unless new evidence proves a conflict; record any correction in the new architecture artifact instead of editing the research artifact. Own the architecture-depth sections: structural Entities, Approach, Structure, execution-ready Operations, Norms, Safeguards, and remaining open tensions.
+Make Operations directly executable without a second planning artifact: organize the work into ordered workstreams, give each workstream one owner role and non-overlapping file/module zones, name the planned additions/changes and dependencies, and define observable completion and verification evidence. Put compatibility limits, rollback triggers and the smallest safe rollback path in Safeguards. Keep this at planning depth: do not emit code, diffs, shell command sequences, or patch recipes.
+When frontend_implementation is selected for non-trivial user-facing UI, include the frontend composition contract in Structure and Operations: page/screen containers, feature and layout components, primitives/UI-kit usage, overlays/composites, state surfaces, hooks/selectors/adapters, file zones, state ownership, and responsibility boundaries. Preserve the approved `ui-design-proposal` by reference; do not duplicate or rewrite its visual/product contract in the Canvas. If the frontend slice is non-UI, trivial, or intentionally preserves an existing component shape, record that reason instead of inventing components.
+Emit selected_implementation_steps as the exact unique implementation fan-out target using only backend_implementation, frontend_implementation, and architecture_artifact_update. Collapse overlapping same-role work into one canonical branch; if ownership cannot be made disjoint, report a non-blocking stop instead of approving an ambiguous contract.
+Emit selected_review_steps, review_plan, skipped_review_steps when applicable, and review_escalation when more than three reviewers are selected. Select only reviewers that must actually run: default to one independent reviewer, use two for two independent material risk classes, three for structural/runtime plus verification-heavy work, and exceed three only with evidence-backed escalation. Keep review_plan.reviewers aligned with selected_review_steps. For applicable non-trivial UI, always select both frontend_review and frontend_taste_review.
+Include the selected implementation route, selected reviewers, main risks, verification shape, and rollback shape in output.summary without embedding the Canvas body.
 Do not create arbitrary temp/export files for handoff; the artifact metadata/path accepted into baton is the source of truth.
 If architecture work is minimal, record the explicit minimal/no-structural-change decision in `reasons-canvas-architecture` and output.summary.
 Return ready_for_attack for the initial draft or an architecture_attack-requested revision as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = architecture_draft.
@@ -283,12 +281,20 @@ agent = "architecture_critic"
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Start from a hostile prior: assume the change, proposal, draft, or packet is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed must-fix finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
-Attack the required `reasons-canvas-architecture` artifact for ownership seams, dependency direction, contract surfaces, frozen research carry-forward, architecture-owned decisions, operations clarity, and compatibility risk. Treat a missing `reasons-canvas-architecture` artifact as a blocking architecture failure.
+Attack the required `reasons-canvas-architecture` artifact for ownership seams, dependency direction, contract surfaces, frozen research carry-forward, architecture-owned decisions, execution-ready Operations, one-owner-per-file-zone, ordered workstreams, verification and rollback coverage, frontend composition when applicable, and compatibility risk. Treat a missing `reasons-canvas-architecture` artifact as a blocking architecture failure.
+Attack selected_implementation_steps, selected_review_steps, review_plan, skipped_review_steps, and review_escalation for faithful routing from the Canvas: unique canonical branches, no overlapping same-role work, no optional or absence-confirmation reviewers in the active fan-out, no missing mandatory reviewer, no recomputed downstream selection, and no more than three reviewers without independent material risk classes. For applicable non-trivial UI, require both frontend_review and frontend_taste_review and a concrete frontend composition contract in the Canvas. Treat any missing execution or review routing field as an architecture failure.
 Return approved or needs_revision as completed output; otherwise report a non-blocking stop.
 When reporting it, set non_blocking_stop.source_step_id = architecture_attack.
 
 Input context:
-- Architecture artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}'''
+- Architecture artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}
+- Selected implementation steps: ${{ input.architecture_draft.selected_implementation_steps }}
+- Selected review steps: ${{ input.architecture_draft.selected_review_steps }}
+- Review plan: ${{ input.architecture_draft.review_plan }}
+- Skipped review steps: ${{ input.architecture_draft.skipped_review_steps | default: "No skipped reviewers recorded." }}
+- Review escalation: ${{ input.architecture_draft.review_escalation | default: "No review escalation recorded." }}
+- Approved UI design proposal artifacts when applicable: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available." }}
+- UI design proposal approval when applicable: ${{ input.approve_ui_intent | default: "No UI design proposal approval is available." }}'''
 
 [steps.architecture_attack.output]
 template = "../../shared/templates/review-verdict-template.md"
@@ -322,111 +328,8 @@ equals = "ready_for_attack"
 match = "${{ output.approval }}"
 
 [steps.approve_architecture.next.cases]
-approved = "planning_draft"
-rejected = "architecture_draft"
-
-[steps.planning_draft]
-name = "Planning contract draft"
-kind = "worker"
-agent = "architect"
-
-[steps.planning_draft.input]
-role = "architect"
-prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Produce the implementation plan contract for approval from the approved `reasons-canvas-architecture` artifact and the approved `ui-design-proposal` artifact when applicable. Treat `reasons-canvas-architecture` and `ui-design-proposal` as immutable source contracts: do not edit them, complete missing sections, or read earlier research artifacts separately. Convert the approved architecture and UI design proposal artifacts into workstreams, owners, verification, rollback, and reviewer selection in one file-backed artifact.
-Create exactly one first-class human-facing implementation plan artifact named `implementation-plan` and emit its artifact metadata in artifacts[]. Do not embed the readable plan/proposal body in JSON; keep JSON close to research/architecture draft outputs: outcome, compact summary, artifact metadata, routing fields, and selected reviewer fields only.
-When a `ui-design-proposal` exists, the `implementation-plan` artifact must include a `UI Design Proposal` section that carries forward its user/task, product/surface route, primary actions, first-read hierarchy, screen/zones, product-level data hierarchy, selected pattern contracts, animation/reduced-motion behavior, responsive containment, required states, interaction expectations, density/tone, design-law or existing-UI basis, and visual evidence/proof asset expectations. Include card/list anatomy and selection rules only when a card/list pattern is selected. Include drawer/sidebar/bottom-sheet placement and state rules only when a detail-overlay pattern is selected. When research routed directly to architecture, carry forward the approved architecture artifact's no-design rationale instead of inventing a UI proposal.
-When selected_implementation_steps includes frontend_implementation for non-trivial user-facing UI, the `implementation-plan` artifact must include a `Frontend composition plan` section naming page/screen containers, feature components, layout components, primitives/UI-kit usage, overlays/composites, state surfaces, hooks/selectors/adapters, file zones, and responsibility boundaries. If the frontend slice is non-UI, trivial, or intentionally preserves an existing component shape, record that reason in the section. Treat a missing required frontend composition plan as a planning failure, not an implementation detail to improvise later.
-Emit a compact output.summary as the human-facing plan proposal state for approval gates. Summarize the artifact's current plan state, selected implementation route, selected reviewers, main risks, and verification/rollback shape without embedding the full plan body.
-The step id remains planning_draft for compatibility, but once approve_plan approves this output, downstream steps must treat it as the final approved plan contract. selected_implementation_steps must contain only unique canonical implementation branch ids needed for the plan: backend_implementation, frontend_implementation, architecture_artifact_update.
-Collapse overlapping same-role work into one canonical task; do not create duplicate backend/frontend/architecture workers.
-If duplicate same-role work cannot be safely collapsed, report a non-blocking stop with non_blocking_stop.source_step_id = planning_draft. selected_review_steps must explicitly contain the unique reviewers that must run after implementation; implementation must not invent or recompute reviewers.
-Keep review_plan.reviewers aligned with selected_review_steps.
-When frontend_implementation is selected for applicable non-trivial user-facing UI, selected_review_steps must include both frontend_review and frontend_taste_review as one mandatory pair. Do not prune either half of this engineering-plus-visible-quality gate or treat one as optional/skipped coverage.
-Reviewer fan-out budget: default to one independent reviewer, use two when two independent material risk classes are touched, use three for structural/runtime plus verification-heavy work, and select more than three only with review_escalation explaining the independent risk classes. selected_review_steps means "run these reviewers"; do not include optional, informational, or absence-confirmation reviewers. Record considered-but-skipped reviewers in skipped_review_steps with an evidence-backed reason instead.
-Return ready_for_attack for the initial plan or a planning_attack-requested revision as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = planning_draft.
-When revising after planning_attack feedback or approve_plan rejection, read feedback from input.planning_attack and input.approve_plan and address it explicitly while preserving the approved architecture constraints. If the latest approve_plan output is rejected, return ready_for_approval after the correction; do not send that user-requested revision through planning_attack again.
-Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
-If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = planning_draft and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
-
-Input context:
-- Architecture artifacts, including `reasons-canvas-architecture` when present: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}
-- Architecture attack verdict: ${{ input.architecture_attack.verdict }}
-- UI design proposal artifacts, including `ui-design-proposal` when present: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}
-- UI design proposal approval: ${{ input.approve_ui_intent | default: "No UI design proposal approval is available." }}
-- Previous implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No previous planning_draft implementation artifacts in input context." }}
-- Planning attack feedback to address: ${{ input.planning_attack.verdict | default: "No prior planning_attack feedback." }}
-- Human plan gate feedback to address: ${{ input.approve_plan.feedback | default: "No prior approve_plan feedback." }}'''
-
-[steps.planning_draft.output]
-template = "../../shared/templates/implementation-plan-template.md"
-schema = "schemas/planning-draft-output.json"
-
-[steps.planning_draft.next]
-match = "${{ output.outcome }}"
-
-[steps.planning_draft.next.cases]
-ready_for_attack = "planning_attack"
-ready_for_approval = "approve_plan"
-
-[steps.planning_attack]
-name = "Planning attack"
-kind = "worker"
-agent = "planning_critic"
-
-[steps.planning_attack.input]
-role = "critic"
-prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Read artifact `implementation-plan` from `planning_draft` and challenge it plus selected_implementation_steps, selected_review_steps, review_plan, skipped_review_steps, and review_escalation for faithful conversion from approved architecture artifacts and immutable `reasons-canvas-architecture` when present into workstreams, unique canonical task selection, explicit final reviewer selection, no duplicate same-role workers, entity coverage, one-owner-per-file-zone, project baseline, architecture artifact manifest, verification/rollback surfaces, sensitive surfaces, request-path/contract touchpoints, and max-detail leaks. Treat a missing `implementation-plan` artifact as a blocking planning failure.
-When a `ui-design-proposal` is applicable, challenge the implementation-plan for faithful carry-forward of the UI design proposal: user/task, product/surface route, primary actions, first-read hierarchy, screen/zones, product-level data hierarchy, selected pattern contracts, animation/reduced-motion behavior, responsive containment, required states, interaction expectations, density/tone, design-law/existing-UI basis, and visual evidence/proof asset expectations. Require card/list or drawer/sidebar details only when those patterns are selected. If the plan ignores, rewrites, or invents UI design proposal instead of carrying it forward, return needs_revision or report a non-blocking stop as appropriate.
-When frontend_implementation is selected for non-trivial user-facing UI, challenge the implementation-plan for a concrete `Frontend composition plan`: page/screen containers, feature components, layout components, primitives/UI-kit usage, overlays/composites, state surfaces, hooks/selectors/adapters, file zones, responsibility boundaries, state ownership, and UI-kit/token evidence. If the plan omits this, treats it as cosmetic, leaves component architecture for implementation to invent, or lacks review criteria for component decomposition, return needs_revision or report a non-blocking stop as appropriate.
-When frontend_implementation is selected for applicable non-trivial user-facing UI, require both frontend_review and frontend_taste_review in selected_review_steps and review_plan. Missing either mandatory half is a planning failure.
-Return approved or needs_revision as completed output; otherwise report a non-blocking stop.
-If selected tasks contain duplicate/overlapping same-role work that cannot collapse to one canonical step, if selected_review_steps includes reviewers only to confirm absence of a surface, if optional reviewers are selected instead of recorded in skipped_review_steps, if selected_review_steps has more than three entries without strong review_escalation, or if reviewers are missing/recomputed outside planning, report a non-blocking stop with non_blocking_stop.source_step_id = planning_attack.
-
-Input context:
-- Implementation plan artifacts under review: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- UI design proposal artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}
-- Selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
-- Selected review steps: ${{ input.planning_draft.selected_review_steps }}
-- Review plan: ${{ input.planning_draft.review_plan }}
-- Skipped review steps: ${{ input.planning_draft.skipped_review_steps | default: "No skipped reviewers recorded." }}
-- Review escalation: ${{ input.planning_draft.review_escalation | default: "No review escalation recorded." }}'''
-
-[steps.planning_attack.output]
-template = "../../shared/templates/review-verdict-template.md"
-schema = "schemas/gate-attack-verdict-output.json"
-
-[steps.planning_attack.next]
-match = "${{ output.outcome }}"
-
-[steps.planning_attack.next.cases]
-approved = "approve_plan"
-needs_revision = "planning_draft"
-
-[steps.approve_plan]
-name = "Approve implementation plan"
-kind = "approval"
-
-[steps.approve_plan.input]
-summary = "${{ input.planning_draft.summary }}"
-artifacts = ["${{ input.planning_draft.artifacts }}"]
-
-[steps.approve_plan.input.verdict]
-outcome = "${{ input.planning_attack.outcome }}"
-summary = "${{ input.planning_attack.verdict.summary }}"
-findings = "${{ input.planning_attack.verdict.findings }}"
-
-[steps.approve_plan.input.verdict.include_when]
-selector = "${{ input.planning_draft.outcome }}"
-equals = "ready_for_attack"
-
-[steps.approve_plan.next]
-match = "${{ output.approval }}"
-
-[steps.approve_plan.next.cases]
 approved = "implementation"
-rejected = "planning_draft"
+rejected = "architecture_draft"
 
 [steps.implementation]
 name = "Implementation"
@@ -436,19 +339,19 @@ max_parallel = 3
 next = "review"
 
 [steps.implementation.input]
-branches = { first_of = ["${{ input.review.implementation_branches }}", "${{ input.planning_draft.selected_implementation_steps }}"] }
+branches = { first_of = ["${{ input.review.implementation_branches }}", "${{ input.architecture_draft.selected_implementation_steps }}"] }
 prompt = '''This is the implementation fanout owner phase. Inspect only outputs from implementation branches selected for the current activation.
-Use the `implementation-plan` artifact from `planning_draft` as the approved execution contract.
+Use the `reasons-canvas-architecture` artifact from `architecture_draft` as the approved execution contract.
 Confirm every selected branch completed, supplied verification evidence, and stayed within scope.
-On the first pass, planning_draft.selected_review_steps is the mandatory review baseline. After rework, review.review_branches is the mandatory re-review baseline.
+On the first pass, architecture_draft.selected_review_steps is the mandatory review baseline. After rework, review.review_branches is the mandatory re-review baseline.
 You may widen that baseline when actual changed files or touched surfaces require another planned or previously skipped reviewer. Never remove a mandatory reviewer.
 Return outcome ready_for_review with review_branches as the exact next review fanout and one reviewer_handoffs.<review_branch_id> entry per selected reviewer.
 If incomplete, report a non-blocking stop with non_blocking_stop.source_step_id = implementation.
 
 Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Initial implementation branches: ${{ input.planning_draft.selected_implementation_steps }}
-- Initial review baseline: ${{ input.planning_draft.selected_review_steps }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
+- Initial implementation branches: ${{ input.architecture_draft.selected_implementation_steps }}
+- Initial review baseline: ${{ input.architecture_draft.selected_review_steps }}
 - Mandatory re-review baseline: ${{ input.review.review_branches | default: "No prior re-review baseline." }}
 - Backend implementation: ${{ input.backend_implementation | default: "backend_implementation was not selected in this activation." }}
 - Frontend implementation: ${{ input.frontend_implementation | default: "frontend_implementation was not selected in this activation." }}
@@ -464,16 +367,16 @@ agent = "backend"
 
 [steps.implementation.branches.backend_implementation.input]
 role = "backend"
-prompt = '''Implement only the backend slice selected in the approved plan contract planning_draft.selected_implementation_steps.
-Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this implementation slice. Treat a missing `implementation-plan` artifact as a non-blocking stop.
-This workflow supports at most one backend_implementation worker; handle all backend work for the approved plan here and do not spawn duplicate backend workers.
+prompt = '''Implement only the backend slice selected in the approved architecture Canvas contract through architecture_draft.selected_implementation_steps.
+Read artifact `reasons-canvas-architecture` from `architecture_draft` as the approved executable contract for this implementation slice. Treat a missing `reasons-canvas-architecture` artifact as a non-blocking stop.
+This workflow supports at most one backend_implementation worker; handle all backend work for the approved Canvas here and do not spawn duplicate backend workers.
 Read prior step outputs from input.<step_id> fields only; do not rely on artifacts/results globals.
-Preserve frozen research, architecture, execution plan, and user constraints.
-Treat the approved proposal, plan, and source-contract rows assigned to backend_implementation as mandatory hard gates. Do not approximate, rename, or improvise around them without an approved mapping in the input context.
+Preserve frozen research, the approved architecture Canvas, applicable UI proposal, and user constraints.
+Treat the approved Canvas Operations, Safeguards, and source-contract rows assigned to backend_implementation as mandatory hard gates. Do not approximate, rename, or improvise around them without an approved mapping in the input context.
 Treat red tests, lint failures, typecheck failures, or other verification failures caused by this worker's own in-scope backend changes as implementation work to fix and rerun, not as blockers by themselves.
-Report a non-blocking stop only when fixing the failure requires missing external input, permission, an approved-contract change, a redesign/plan decision, or when repo/environment state makes continued work unsafe.
+Report a non-blocking stop only when fixing the failure requires missing external input, permission, an approved-contract change, a redesign/architecture decision, or when repo/environment state makes continued work unsafe.
 If a required source row cannot be satisfied in the assigned backend scope, or if implementation requires a deviation or exposes a contradiction in the approved contract, report a non-blocking stop with the smallest concrete approval question instead of redesigning silently.
-Treat the approved implementation plan as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the plan, report a non-blocking stop or request an approved plan revision.
+Treat the approved architecture Canvas as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the Canvas, report a non-blocking stop or request an approved architecture revision.
 Return implemented as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = backend_implementation.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
 When rerun from review needs_changes, consume only input.review.implementer_handoffs.backend_implementation as actionable rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
@@ -481,13 +384,13 @@ Loop continuity across workflow loop iterations is prompt based: rely only on wo
 If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = backend_implementation and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
 Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
+- Approved selected implementation steps: ${{ input.architecture_draft.selected_implementation_steps }}
+- Approved selected review steps: ${{ input.architecture_draft.selected_review_steps }}
 - Previous backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "No previous backend_implementation artifacts in input context." }}
 - Branch-specific review rework handoff: ${{ input.review.implementer_handoffs.backend_implementation | default: "No backend rework handoff; this is the first implementation pass." }}
 - Aggregate review verdict: ${{ input.review.verdict | default: "No aggregate review verdict; this is the first implementation pass." }}
-- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved planning baseline." }}'''
+- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved architecture baseline." }}'''
 
 [steps.implementation.branches.backend_implementation.output]
 template = "../../shared/templates/implementer-handoff-template.md"
@@ -499,25 +402,25 @@ agent = "frontend"
 
 [steps.implementation.branches.frontend_implementation.input]
 role = "frontend"
-prompt = '''Implement only the frontend slice selected in the approved plan contract planning_draft.selected_implementation_steps.
-Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this implementation slice. Treat a missing `implementation-plan` artifact as a non-blocking stop.
-Read the approved self-contained `ui-design-proposal` HTML artifact and its seven derived PNG reference captures from `ui_intent_draft` directly when they are applicable, together with the explicit `approve_ui_intent` approval evidence. Treat the PNG captures as the portable visual references and the HTML as their semantic source; neither the implementation-plan translation nor filenames alone are a visual substitute. Inspect every capture visually, then use the HTML for annotations, selected pattern contracts, proof expectations, and responsive behavior before editing. Treat a missing applicable `ui-design-proposal`, missing or wrong capture artifact id/content type, external dependency, or missing explicit approval evidence as a non-blocking stop.
-This workflow supports at most one frontend_implementation worker; handle all frontend work for the approved plan here and do not spawn duplicate frontend workers.
+prompt = '''Implement only the frontend slice selected in the approved architecture Canvas contract through architecture_draft.selected_implementation_steps.
+Read artifact `reasons-canvas-architecture` from `architecture_draft` as the approved executable contract for this implementation slice. Treat a missing `reasons-canvas-architecture` artifact as a non-blocking stop.
+Read the approved self-contained `ui-design-proposal` HTML artifact and its seven derived PNG reference captures from `ui_intent_draft` directly when they are applicable, together with the explicit `approve_ui_intent` approval evidence. Treat the PNG captures as the portable visual references and the HTML as their semantic source; neither Canvas prose nor filenames alone are a visual substitute. Inspect every capture visually, then use the HTML for annotations, selected pattern contracts, proof expectations, and responsive behavior before editing. Treat a missing applicable `ui-design-proposal`, missing or wrong capture artifact id/content type, external dependency, or missing explicit approval evidence as a non-blocking stop.
+This workflow supports at most one frontend_implementation worker; handle all frontend work for the approved Canvas here and do not spawn duplicate frontend workers.
 Read prior step outputs from input.<step_id> fields only; do not rely on artifacts/results globals.
-Preserve frozen research, architecture, execution plan, and user constraints.
-Treat the approved proposal, plan, and source-contract rows assigned to frontend_implementation as mandatory hard gates. Do not approximate, rename, or improvise around them without an approved mapping in the input context.
+Preserve frozen research, the approved architecture Canvas, applicable UI proposal, and user constraints.
+Treat the approved Canvas Operations, Safeguards, UI proposal, and source-contract rows assigned to frontend_implementation as mandatory hard gates. Do not approximate, rename, or improvise around them without an approved mapping in the input context.
 Before implementing named frontend frameworks, routers, UI kits, accessibility primitive libraries, or build/runtime integrations, inspect relevant current docs or repo-local package examples and record the docs/examples used in the implementer handoff. If the needed documentation cannot be accessed and the behavior is contract-significant, report a non-blocking stop instead of guessing.
 For applicable non-trivial UI, capture rendered proof required by the approved HTML artifact and compare it visually against the approved PNG references for fidelity. Record proof locations and the comparison result in the implementer handoff. Text-only self-report is insufficient when the surface can be rendered locally; if rendering cannot proceed, report a non-blocking stop with non_blocking_stop.source_step_id = frontend_implementation and the concrete environment need.
-For user-facing UI, decompose the slice into named, reviewable components/hooks/selectors; do not leave page composition, lists/cards, overlays/drawers/dialogs, detail sections, loading/error surfaces, and focus/interaction policy in one large component unless the approved plan grants an explicit exception.
-For non-trivial user-facing UI, read the approved plan's `Frontend composition plan` before editing. If it is missing, too vague to name concrete components/file zones, or contradicts repo conventions, report a non-blocking stop with non_blocking_stop.source_step_id = frontend_implementation and the smallest concrete approval question instead of inventing the component architecture during implementation. Implement against that component map unless implementation reality exposes a contradiction that requires an approved plan revision.
+For user-facing UI, decompose the slice into named, reviewable components/hooks/selectors; do not leave page composition, lists/cards, overlays/drawers/dialogs, detail sections, loading/error surfaces, and focus/interaction policy in one large component unless the approved Canvas grants an explicit exception.
+For non-trivial user-facing UI, read the approved Canvas's frontend composition contract in Structure and Operations before editing. If it is missing, too vague to name concrete components/file zones, or contradicts repo conventions, report a non-blocking stop with non_blocking_stop.source_step_id = frontend_implementation and the smallest concrete approval question instead of inventing the component architecture during implementation. Implement against that component map unless implementation reality exposes a contradiction that requires an approved architecture revision.
 Follow component colocation by default: keep component implementation, component-local types, styles, tests/stories/fixtures when present, and component-specific helpers near that component. Use shared contracts/types only for genuinely shared DTOs or cross-component APIs.
 Identify the repo's UI kit/design-system primitives, tokens, and component conventions before creating controls or layout primitives. Use them by default; if none exists or none fits, record that evidence and use the approved primitive library or semantic native element.
 Name every reusable component introduced or materially changed in the implementer handoff with its purpose, boundary, expected inputs/outputs, and intended reuse scope.
 Do not finish with repeated className/token clusters, repeated control markup, repeated overlay/list/form scaffolds, or repeated status-state branches when an existing primitive/composite or named local component/helper would remove the duplication within scope.
 Treat red tests, lint failures, typecheck failures, or other verification failures caused by this worker's own in-scope frontend changes as implementation work to fix and rerun, not as blockers by themselves.
-Report a non-blocking stop only when fixing the failure requires missing external input, permission, an approved-contract change, a redesign/plan decision, or when repo/environment state makes continued work unsafe.
+Report a non-blocking stop only when fixing the failure requires missing external input, permission, an approved-contract change, a redesign/architecture decision, or when repo/environment state makes continued work unsafe.
 If a required source row cannot be satisfied in the assigned frontend scope, or if implementation requires a deviation or exposes a contradiction in the approved contract, report a non-blocking stop with the smallest concrete approval question instead of redesigning silently.
-Treat the approved implementation plan as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the plan, report a non-blocking stop or request an approved plan revision.
+Treat the approved architecture Canvas as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the Canvas, report a non-blocking stop or request an approved architecture revision.
 Return implemented as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = frontend_implementation.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
 When rerun from review needs_changes, consume only input.review.implementer_handoffs.frontend_implementation as actionable rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
@@ -526,15 +429,15 @@ Loop continuity across workflow loop iterations is prompt based: rely only on wo
 If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = frontend_implementation and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
 Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
 - Approved UI design proposal artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}
 - Explicit UI design proposal approval evidence: ${{ input.approve_ui_intent | default: "No UI design proposal approval is available." }}
-- Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
+- Approved selected implementation steps: ${{ input.architecture_draft.selected_implementation_steps }}
+- Approved selected review steps: ${{ input.architecture_draft.selected_review_steps }}
 - Previous frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "No previous frontend_implementation artifacts in input context." }}
 - Branch-specific review rework handoff: ${{ input.review.implementer_handoffs.frontend_implementation | default: "No frontend rework handoff; this is the first implementation pass." }}
 - Aggregate review verdict: ${{ input.review.verdict | default: "No aggregate review verdict; this is the first implementation pass." }}
-- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved planning baseline." }}'''
+- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved architecture baseline." }}'''
 
 [steps.implementation.branches.frontend_implementation.output]
 template = "../../shared/templates/implementer-handoff-template.md"
@@ -546,11 +449,11 @@ agent = "architect"
 
 [steps.implementation.branches.architecture_artifact_update.input]
 role = "architect"
-prompt = '''Update only approved architecture artifacts selected in the approved plan contract planning_draft.selected_implementation_steps.
-Read artifact `implementation-plan` from `planning_draft` as the approved executable plan contract for this architecture artifact update slice. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+prompt = '''Update only approved architecture artifacts selected in the approved architecture Canvas contract through architecture_draft.selected_implementation_steps.
+Read artifact `reasons-canvas-architecture` from `architecture_draft` as the approved executable contract for this architecture artifact update slice. Treat a missing `reasons-canvas-architecture` artifact as a non-blocking stop.
 This workflow supports at most one architecture_artifact_update worker; collapse all approved architecture artifact work into this step.
 Do not redesign.
-Do not edit, complete, or reinterpret REASONS artifacts unless the approved implementation plan explicitly selects an architecture artifact update for that exact artifact; otherwise treat them as immutable inputs.
+Do not edit, complete, or reinterpret REASONS artifacts unless the approved architecture Canvas explicitly selects an architecture artifact update for that exact artifact; otherwise treat them as immutable inputs.
 Read prior step outputs from input.<step_id> fields only.
 Return implemented as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = architecture_artifact_update.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
@@ -559,13 +462,13 @@ Loop continuity across workflow loop iterations is prompt based: rely only on wo
 If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = architecture_artifact_update and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
 Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected implementation steps: ${{ input.planning_draft.selected_implementation_steps }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
+- Approved selected implementation steps: ${{ input.architecture_draft.selected_implementation_steps }}
+- Approved selected review steps: ${{ input.architecture_draft.selected_review_steps }}
 - Previous architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "No previous architecture_artifact_update artifacts in input context." }}
 - Branch-specific review rework handoff: ${{ input.review.implementer_handoffs.architecture_artifact_update | default: "No architecture artifact rework handoff; this is the first implementation pass." }}
 - Aggregate review verdict: ${{ input.review.verdict | default: "No aggregate review verdict; this is the first implementation pass." }}
-- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved planning baseline." }}'''
+- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved architecture baseline." }}'''
 
 [steps.implementation.branches.architecture_artifact_update.output]
 template = "../../shared/templates/implementer-handoff-template.md"
@@ -581,14 +484,14 @@ next = "${{ output.next }}"
 [steps.review.input]
 branches = "${{ input.implementation.review_branches }}"
 prompt = '''This is the review fanout owner phase. Aggregate only review branches selected for the current activation.
-Use the `implementation-plan` artifact from `planning_draft` and reviewer outputs as the approved review evidence.
+Use the `reasons-canvas-architecture` artifact from `architecture_draft` and reviewer outputs as the approved review evidence.
 If every selected reviewer passed with no actionable current-scope must-fix or should-fix findings, return outcome passed and next done.
 If changes are required, return outcome needs_changes, next implementation, exact implementation_branches, one implementer_handoffs.<implementation_branch_id> per branch, and review_branches as the mandatory re-review baseline.
 The re-review baseline must include failed reviewers and reviewers whose owned surfaces must be touched by the prescribed rework. The next implementation owner may widen this baseline after actual changes but may not narrow it.
 If review cannot finish safely, report a non-blocking stop with non_blocking_stop.source_step_id = review and omit next.
 
 Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
 - Current review branches: ${{ input.implementation.review_branches }}
 - Architect review: ${{ input.architect_review | default: "architect_review was not selected in this activation." }}
 - Backend review: ${{ input.backend_review | default: "backend_review was not selected in this activation." }}
@@ -610,7 +513,7 @@ agent = "architecture_critic"
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review implementation against approved architecture decision, ownership seams, dependency direction, compatibility surfaces, and artifact obligations.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Read artifact `reasons-canvas-architecture` from `architecture_draft` as the approved architecture Canvas under review. Treat a missing `reasons-canvas-architecture` artifact as a non-blocking stop.
 Do not approve unapproved semantic substitutions for named architecture/runtime/framework decisions. If the approved contract names a specific framework/runtime/build architecture, implementation must use that architecture directly or carry explicit human-approved mapping in the input context.
 Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = architect_review.
 Read architecture_draft, architecture_attack, and approve_architecture when present; fail on drift between the approved architecture artifact and implementation/review evidence.
@@ -619,8 +522,8 @@ Input context:
 - Approved architecture artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture artifacts are available in input context." }}
 - Architecture attack verdict: ${{ input.architecture_attack.verdict }}
 - Human architecture approval: ${{ input.approve_architecture }}
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
+- Approved selected review steps: ${{ input.architecture_draft.selected_review_steps }}
 - Architect reviewer handoff: ${{ input.implementation.reviewer_handoffs.architect_review | default: "No architect-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
@@ -640,13 +543,13 @@ agent = "backend_critic"
 [steps.review.branches.backend_review.input]
 role = "backend"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Review backend correctness, contracts, data flow, validation, failure handling, permissions, rollout safety, observability, and tests for the slice selected by the approved plan contract.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Review backend correctness, contracts, data flow, validation, failure handling, permissions, rollout safety, observability, and tests for the slice selected by the approved architecture Canvas contract.
+Read artifact `reasons-canvas-architecture` from `architecture_draft` as the approved architecture Canvas under review. Treat a missing `reasons-canvas-architecture` artifact as a non-blocking stop.
 Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = backend_review.
 
 Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
+- Approved selected review steps: ${{ input.architecture_draft.selected_review_steps }}
 - Backend reviewer handoff: ${{ input.implementation.reviewer_handoffs.backend_review | default: "No backend-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
@@ -666,17 +569,17 @@ agent = "frontend_critic"
 [steps.review.branches.frontend_review.input]
 role = "frontend"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Review frontend correctness, data flow, state handling, accessibility-relevant behavior, and tests for the slice selected by the approved plan contract.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Review frontend correctness, data flow, state handling, accessibility-relevant behavior, and tests for the slice selected by the approved architecture Canvas contract.
+Read artifact `reasons-canvas-architecture` from `architecture_draft` as the approved architecture Canvas under review. Treat a missing `reasons-canvas-architecture` artifact as a non-blocking stop.
 For named frontend frameworks, routers, UI kits, accessibility primitive libraries, or build/runtime integrations, verify that relevant current docs or repo-local examples were inspected and that implementation follows the documented integration shape rather than a close-sounding substitution.
 For user-facing UI, review component decomposition, reusable-component handoff notes, colocation of component code/types/styles/tests where practical, and use of existing UI kit/design-system primitives before local hand-rolled primitives.
-For non-trivial user-facing UI, verify that the approved plan or implementation handoff includes a concrete frontend component map and that the implementation follows it. Treat a missing or cosmetic-only component map, page/route blobs that own controls/lists/overlays/state surfaces together, repeated className/token/control scaffolds, or hand-rolled equivalents of existing primitives as actionable current-scope component-architecture findings.
+For non-trivial user-facing UI, verify that the approved Canvas or implementation handoff includes a concrete frontend component map and that the implementation follows it. Treat a missing or cosmetic-only component map, page/route blobs that own controls/lists/overlays/state surfaces together, repeated className/token/control scaffolds, or hand-rolled equivalents of existing primitives as actionable current-scope component-architecture findings.
 Return passed only when there are no actionable current-scope `must_fix` or `should_fix` findings. Return needs_changes with required_implementation_steps for any actionable current-scope issue, including component architecture, documentation/best-practice evidence, colocation, UI-kit primitive usage, accessibility-relevant interaction behavior, or maintainability debt introduced or left in touched frontend zones. Use can-delay notes only for explicit future cleanup outside the approved slice.
 Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = frontend_review.
 
 Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
+- Approved selected review steps: ${{ input.architecture_draft.selected_review_steps }}
 - Frontend reviewer handoff: ${{ input.implementation.reviewer_handoffs.frontend_review | default: "No frontend-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
@@ -697,16 +600,16 @@ agent = "frontend_taste_critic"
 role = "frontend-taste"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Review visual/product taste, copy fit, interaction polish, and user-facing coherence for frontend-relevant changes.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
-Read the approved self-contained `ui-design-proposal` HTML artifact and its seven derived PNG reference captures from `ui_intent_draft` directly together with `approve_ui_intent` approval evidence. For applicable UI, inspect every PNG visually and compare rendered implementation proof against those references; use the HTML for hierarchy annotations, states, responsive behavior, design basis, selected pattern contracts, and proof expectations. Do not pass from implementation-plan prose or filenames alone. Missing applicable HTML, a required PNG reference, external proposal dependencies, explicit approval evidence, or locally obtainable rendered implementation proof is an actionable finding or non-blocking stop as appropriate.
+Read artifact `reasons-canvas-architecture` from `architecture_draft` as the approved architecture Canvas under review. Treat a missing `reasons-canvas-architecture` artifact as a non-blocking stop.
+Read the approved self-contained `ui-design-proposal` HTML artifact and its seven derived PNG reference captures from `ui_intent_draft` directly together with `approve_ui_intent` approval evidence. For applicable UI, inspect every PNG visually and compare rendered implementation proof against those references; use the HTML for hierarchy annotations, states, responsive behavior, design basis, selected pattern contracts, and proof expectations. Do not pass from reasons-canvas-architecture prose or filenames alone. Missing applicable HTML, a required PNG reference, external proposal dependencies, explicit approval evidence, or locally obtainable rendered implementation proof is an actionable finding or non-blocking stop as appropriate.
 Attack hierarchy, typography/rhythm, spacing/composition, color/emphasis/contrast, focus-visible and target affordance, responsive containment, motion/reduced-motion, visual fidelity, and generic UI slop. Apply card/list and drawer/sidebar criteria only when those patterns were approved. Do not invent `DESIGN.md` or create design law from its absence.
 Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = frontend_taste_review.
 
 Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
 - Approved UI design proposal artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI design proposal artifacts are available in input context." }}
 - Explicit UI design proposal approval evidence: ${{ input.approve_ui_intent | default: "No UI design proposal approval is available." }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
+- Approved selected review steps: ${{ input.architecture_draft.selected_review_steps }}
 - Frontend taste reviewer handoff: ${{ input.implementation.reviewer_handoffs.frontend_taste_review | default: "No frontend-taste-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
@@ -726,13 +629,13 @@ agent = "security_critic"
 [steps.review.branches.security_review.input]
 role = "security"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Review trust boundaries, injection surfaces, secret handling, permission assumptions, and unsafe automation paths for the slice selected by the approved plan contract.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Review trust boundaries, injection surfaces, secret handling, permission assumptions, and unsafe automation paths for the slice selected by the approved architecture Canvas contract.
+Read artifact `reasons-canvas-architecture` from `architecture_draft` as the approved architecture Canvas under review. Treat a missing `reasons-canvas-architecture` artifact as a non-blocking stop.
 Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = security_review.
 
 Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
+- Approved selected review steps: ${{ input.architecture_draft.selected_review_steps }}
 - Security reviewer handoff: ${{ input.implementation.reviewer_handoffs.security_review | default: "No security-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
@@ -752,13 +655,13 @@ agent = "privacy_critic"
 [steps.review.branches.privacy_review.input]
 role = "privacy-data-safety"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Review data minimization, sensitive content exposure, durable memory/logging risk, and user-context handling for the slice selected by the approved plan contract.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Review data minimization, sensitive content exposure, durable memory/logging risk, and user-context handling for the slice selected by the approved architecture Canvas contract.
+Read artifact `reasons-canvas-architecture` from `architecture_draft` as the approved architecture Canvas under review. Treat a missing `reasons-canvas-architecture` artifact as a non-blocking stop.
 Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = privacy_review.
 
 Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
+- Approved selected review steps: ${{ input.architecture_draft.selected_review_steps }}
 - Privacy reviewer handoff: ${{ input.implementation.reviewer_handoffs.privacy_review | default: "No privacy-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}
@@ -778,13 +681,13 @@ agent = "qa_critic"
 [steps.review.branches.qa_review.input]
 role = "qa-reliability"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Review verification depth, regression risk, edge cases, deterministic runtime behavior, and handoff quality for the slice selected by the approved plan contract.
-Read artifact `implementation-plan` from `planning_draft` as the approved implementation plan under review. Treat a missing `implementation-plan` artifact as a non-blocking stop.
+Review verification depth, regression risk, edge cases, deterministic runtime behavior, and handoff quality for the slice selected by the approved architecture Canvas contract.
+Read artifact `reasons-canvas-architecture` from `architecture_draft` as the approved architecture Canvas under review. Treat a missing `reasons-canvas-architecture` artifact as a non-blocking stop.
 Return passed, needs_changes with required_implementation_steps as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = qa_review.
 
 Input context:
-- Approved implementation plan artifacts: ${{ input.planning_draft.artifacts | default: "No planning_draft artifacts are available in input context." }}
-- Approved selected review steps: ${{ input.planning_draft.selected_review_steps }}
+- Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
+- Approved selected review steps: ${{ input.architecture_draft.selected_review_steps }}
 - QA reviewer handoff: ${{ input.implementation.reviewer_handoffs.qa_review | default: "No QA-specific reviewer handoff was produced." }}
 - Backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "backend_implementation artifacts are not available in input context." }}
 - Backend changed files: ${{ input.backend_implementation.changed_files | default: "backend_implementation changed files are not available in input context." }}

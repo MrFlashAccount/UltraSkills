@@ -1,14 +1,14 @@
 # Dev harness workflow
 
-This workflow is the heavy path for non-trivial implementation work. Use it when the task needs staged research, architecture review, implementation planning, explicit approval, selective implementation, and review before completion.
+This workflow is the heavy path for non-trivial implementation work. Use it when the task needs staged research, an execution-ready architecture review and approval, selective implementation, and review before completion.
 
-Implementation and review are first-class fanout owner steps. Each activation runs the selected branch workers, returns to the same owner cursor, and then runs the owner worker to choose the next fanout branch set. There are no dispatch or join workers. Rework selection uses the review owner's output first and falls back to the approved plan only when review has not requested a narrower pass.
+Implementation and review are first-class fanout owner steps. Each activation runs the selected branch workers, returns to the same owner cursor, and then runs the owner worker to choose the next fanout branch set. There are no dispatch or join workers. Rework selection uses the review owner's output first and falls back to the approved architecture routing only when review has not requested a narrower pass.
 
 Keep workflow mechanics in `workflow.toml` and schemas in `schemas/*.json`. Use this README for human workflow intent and EA-agent operating rules, not for runtime routing.
 
 ## Hostile review cycle limits
 
-Research, UI design, architecture, and implementation-planning hostile reviews
+Research, UI design, and architecture hostile reviews
 run at most twice. If the second review still requests revision, the workflow
 exits that hostile-review cycle to the corresponding human approval gate.
 
@@ -23,9 +23,13 @@ Every draft step that feeds a human approval gate must emit a compact `summary` 
 
 Approval gates present the draft-produced `summary`, attach the referenced artifact without opening it, include the attack verdict, and wait for explicit approval. The orchestrator must not read the artifact body merely to prepare the gate or invent a fresh approval summary; it may open the attachment later only when the user explicitly asks a content question.
 
-Attack, review, implementation, and planning workers should continue to consume the artifact or structured contract fields they need. Do not replace their evidence context with the approval summary. Frontend implementation and frontend-taste review consume the approved self-contained `ui-design-proposal` HTML, its seven derived PNG reference captures, and explicit approval evidence directly; the implementation-plan translation is not a visual substitute.
+Attack, review, and implementation workers continue to consume the artifact or structured contract fields they need. Do not replace their evidence context with the approval summary. Frontend implementation and frontend-taste review consume the approved self-contained `ui-design-proposal` HTML, its seven derived PNG reference captures, and explicit approval evidence directly; Canvas prose is not a visual substitute.
 
-The implementation plan body is artifact-only. `planning_draft` JSON must not inline the readable plan/proposal body; it should contain only compact routing and reviewer-selection fields needed by the runner plus `summary` and `artifacts`.
+## Single execution-ready architecture Canvas
+
+`reasons-canvas-architecture` is the only human-facing architecture/execution artifact. Its `Operations` section owns ordered workstreams, owner roles, non-overlapping file or module zones, dependencies, completion signals, and verification. Its `Safeguards` section owns compatibility limits, rollback triggers, and the smallest safe rollback path. Applicable non-trivial UI records its frontend composition contract in `Structure` and `Operations` while preserving the separately approved `ui-design-proposal` by reference.
+
+`architecture_draft` JSON keeps only compact runner state beside the Canvas: `outcome`, `summary`, artifact metadata, selected implementation branches, selected review branches, reviewer rationale, skipped reviewers, and evidence-backed escalation when more than three reviewers are required. The architecture hostile review checks both the Canvas and this routing contract before the single architecture approval gate. No separate implementation-planning draft, attack, approval, or artifact exists.
 
 ## Research solution discussion
 
