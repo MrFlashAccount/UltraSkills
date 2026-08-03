@@ -233,6 +233,37 @@ export async function heartbeatWorkflowRunAtRoot({ leaseToken, ...options } = {}
   return claimWorkflowRunAtRootInternal({ ...options, leaseToken }, { preserveClaimContext: true });
 }
 
+export async function releaseWorkflowRunAtRoot({ runId, workflowPath, runsRoot = workflowRunsRoot, leaseToken, now = new Date() } = {}) {
+  await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
+  const safeRunId = assertSafeRunId(runId);
+  const paths = resolveRunPaths({ runId: safeRunId, workflowPath: workflowPathForCreate(workflowPath), runsRoot });
+  return withRunStateLock(paths, async () => {
+    const existing = await readRunAuthorityWithLegacyFallback(paths);
+    if (!existing) throw new Error(`unknown workflow run: ${safeRunId}`);
+    assertExistingWorkflowBinding(existing, paths, { requestedWorkflowPath: workflowPath });
+    assertMatchingTokenAuthority(existing.workerLease, leaseToken, { runId: safeRunId });
+    const next = {
+      ...existing,
+      updatedAt: now.toISOString(),
+      workerLease: null,
+    };
+    delete next.claimContext;
+    const entry = await upsertRunIndexEntry(paths, indexProjectionPatch(next));
+    try {
+      await writeRunAuthority(paths, next);
+    } catch (error) {
+      await upsertRunIndexEntry(paths, indexProjectionPatch(existing));
+      throw error;
+    }
+    return {
+      ok: true,
+      released: true,
+      runId: safeRunId,
+      run: publicRun(mergeRunAuthorityIntoIndexEntry(entry, next), { now }),
+    };
+  });
+}
+
 async function renameRunDirForDeletion(paths) {
   const tombstonePath = `${paths.runDir}.deleting-${process.pid}-${Date.now()}-${randomUUID()}`;
   try {

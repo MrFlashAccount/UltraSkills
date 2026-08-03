@@ -4,6 +4,7 @@ export function createWorkflowRuns({
   heartbeatWorkflowRunAtRoot,
   listWorkflowRunsAtRoot,
   registerWorkflowRunAtRoot,
+  releaseWorkflowRunAtRoot,
   summarizeWorkflowRuns,
   publicErrorMessage,
   defaultWorkflowPath,
@@ -60,6 +61,10 @@ export function createWorkflowRuns({
     return publicApiCall(() => heartbeatWorkflowRunAtRoot(options), { runsRoot: options.runsRoot });
   }
 
+  async function releaseWorkflowRun({ runId, workflowPath, runsRoot, leaseToken, now = new Date() } = {}) {
+    return publicApiCall(() => releaseWorkflowRunAtRoot({ runId, workflowPath, runsRoot, leaseToken, now }), { runsRoot });
+  }
+
   async function deleteWorkflowRun({ runId, runsRoot } = {}) {
     return publicApiCall(() => deleteWorkflowRunAtRoot({ runId, runsRoot }), { runsRoot });
   }
@@ -70,6 +75,7 @@ export function createWorkflowRuns({
     heartbeatWorkflowRun,
     listWorkflowRuns,
     registerWorkflowRun,
+    releaseWorkflowRun,
     summarizeWorkflowRuns,
   };
 }

@@ -424,13 +424,16 @@ Every runner command still validates authority once before taking the per-run
 lock and again from a fresh record while holding that lock. Matching-token
 renewal preserves the token epoch; an explicit tokenless takeover of a stale or
 occupied lease rotates the hash and increments the epoch. Raw lease tokens are
-never persisted.
+never persisted. Explicit release requires the matching token, clears the lease
+and private claim context under the per-run lock, and leaves workflow state and
+lifecycle metadata untouched.
 
 `runs.json` is the global discovery/catalog projection, not an authority source
 once a per-run record exists. Warm `next`, `instructions`, `write-output`,
 `continue`, and pointer mutation read and atomically renew only the small per-run
 record; they do not parse, lock, or rewrite the global catalog. Registration,
-explicit claim/heartbeat, and deletion may synchronize the catalog projection.
+explicit claim/heartbeat/release, and deletion may synchronize the catalog
+projection.
 List and dashboard readers start from catalog ids and overlay canonical per-run
 records with bounded IO concurrency. A legacy run without `authority.json` may
 fall back to its validated v1 catalog entry; its first successful mutating

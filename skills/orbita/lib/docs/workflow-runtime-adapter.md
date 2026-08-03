@@ -58,6 +58,16 @@ Consecutive pass/success early exit is not part of the current public runtime
 contract. Hosts and workflow authors must not rely on success streak or
 `onSuccess` behavior unless a later workflow contract explicitly adds it.
 
+## Lease control
+
+`workflow-runs release --run-id <run-id> --lease-token <token>` explicitly
+releases the caller's current lease without deleting or mutating the run's
+baton, history, workflow binding, lifecycle status, or task metadata. Release
+requires the matching token even for a stale lease, clears the private claim
+context together with lease authority, and makes the run immediately
+`unclaimed`. A missing or mismatched token fails closed. Release is an operator
+action; the runner does not release automatically on `done` or host exit.
+
 ## Runner commands
 
 ```bash
