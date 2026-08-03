@@ -17,7 +17,7 @@ test('dev-harness uses implementation and review as the only fanout owners', () 
   assert.equal(workflowDoc.steps.implementation.kind, 'fanout');
   assert.deepEqual(workflowDoc.steps.implementation.input.branches.first_of, [
     '${{ input.review.implementation_branches }}',
-    '${{ input.architecture_draft.selected_implementation_steps }}',
+    '${{ input.planning_draft.selected_implementation_steps }}',
   ]);
   assert.deepEqual(Object.keys(workflowDoc.steps.implementation.branches), [
     'backend_implementation',
@@ -40,7 +40,7 @@ test('dev-harness uses implementation and review as the only fanout owners', () 
   }
 });
 
-test('dev-harness uses one execution-ready architecture gate and caps code review at three cycles', () => {
+test('dev-harness caps planning hostile reviews at two cycles and code review at three', () => {
   assert.deepEqual(workflowDoc.loopPolicies, {
     research_hostile_review: {
       steps: ['research_draft', 'research_attack'],
@@ -63,6 +63,13 @@ test('dev-harness uses one execution-ready architecture gate and caps code revie
       maxIterations: 2,
       onLimit: 'approve_architecture',
     },
+    planning_hostile_review: {
+      steps: ['planning_draft', 'planning_attack'],
+      entry: 'planning_draft',
+      boundary: 'planning_attack',
+      maxIterations: 2,
+      onLimit: 'approve_plan',
+    },
     code_review: {
       steps: ['implementation', 'review'],
       entry: 'implementation',
@@ -71,36 +78,6 @@ test('dev-harness uses one execution-ready architecture gate and caps code revie
       onLimit: 'done',
     },
   });
-
-  assert.equal(workflowDoc.steps.approve_architecture.next.cases.approved, 'implementation');
-  for (const retiredStepId of ['planning_draft', 'planning_attack', 'approve_plan']) {
-    assert.equal(Object.hasOwn(workflowDoc.steps, retiredStepId), false);
-  }
-
-  const architecturePrompt = promptText(workflowDoc.steps.architecture_draft);
-  const architectureAttackPrompt = promptText(workflowDoc.steps.architecture_attack);
-  assert.match(architecturePrompt, /only human-facing architecture\/execution artifact/);
-  assert.match(architecturePrompt, /ordered workstreams/);
-  assert.match(architecturePrompt, /selected_implementation_steps/);
-  assert.match(architecturePrompt, /selected_review_steps/);
-  assert.match(architectureAttackPrompt, /one-owner-per-file-zone/);
-  assert.match(architectureAttackPrompt, /input\.architecture_draft\.selected_implementation_steps/);
-  assert.match(architectureAttackPrompt, /input\.architecture_draft\.selected_review_steps/);
-  assert.doesNotMatch(architecturePrompt, /implementation-plan/);
-
-  const architectureSchema = JSON.parse(
-    readFileSync(path.join(REPO_ROOT, 'workflows/dev-harness/schemas/architecture-draft-output.json'), 'utf8'),
-  );
-  assert.deepEqual(architectureSchema.properties.selected_implementation_steps.items.enum, [
-    'backend_implementation',
-    'frontend_implementation',
-    'architecture_artifact_update',
-  ]);
-  assert.equal(
-    architectureSchema.properties.artifacts.contains.properties.id.const,
-    'reasons-canvas-architecture',
-  );
-  assert.doesNotMatch(JSON.stringify(architectureSchema), /implementation-plan/);
 
   const donePrompt = promptText(workflowDoc.steps.done);
   assert.match(donePrompt, /three-cycle code-review limit with unresolved findings/);
@@ -128,7 +105,7 @@ test('issue 197: dev-harness implementation instructions and schema align on sel
     const text = promptText(workflowDoc.steps.implementation.branches[stepId]);
     assert.match(text, /red tests, lint failures, typecheck failures/);
     assert.match(text, /own in-scope .* changes as implementation work to fix and rerun, not as blockers by themselves/);
-    assert.match(text, /missing external input, permission, an approved-contract change, a redesign\/architecture decision/);
+    assert.match(text, /missing external input, permission, an approved-contract change, a redesign\/plan decision/);
   }
 
   const schemaText = readFileSync(path.join(REPO_ROOT, 'workflows/dev-harness/schemas/implementation-output.json'), 'utf8');
