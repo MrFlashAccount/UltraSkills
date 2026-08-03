@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/devrel-copywriter/intake-output",
+  "title": "DevRel Copywriter Intake Output",
+  "type": "object",
+  "required": ["outcome", "task_class", "summary", "evidence_checked"],
+  "properties": {
+    "outcome": {"enum": ["tiny", "full_cycle", "docs_writer"]},
+    "task_class": {"enum": ["tiny", "full_cycle", "route_out"]},
+    "summary": {"type": "string", "minLength": 1},
+    "evidence_checked": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "contract": {
+      "type": "object",
+      "required": ["artifact", "audience", "surface", "goal", "scope", "non_goals", "structure", "proof_points", "allowed_claims", "risky_claims", "tone"],
+      "properties": {
+        "artifact": {"type": "string", "minLength": 1},
+        "audience": {"type": "string", "minLength": 1},
+        "surface": {"type": "string", "minLength": 1},
+        "goal": {"type": "string", "minLength": 1},
+        "scope": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "non_goals": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "structure": {"type": "string", "minLength": 1},
+        "proof_points": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "allowed_claims": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "risky_claims": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "tone": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "route_target": {"const": "workflows/docs-writer/workflow.toml"},
+    "routing_reason": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"enum": ["tiny", "full_cycle"]}}, "required": ["outcome"]},
+      "then": {"required": ["contract"]}
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "docs_writer"}}, "required": ["outcome"]},
+      "then": {
+        "required": ["route_target", "routing_reason"],
+        "properties": {"task_class": {"const": "route_out"}}
+      }
+    }
+  ],
+  "additionalProperties": false
+}

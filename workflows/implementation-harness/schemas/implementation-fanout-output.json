@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/implementation-harness/implementation-fanout-output",
+  "title": "Implementation Harness Development Packet",
+  "description": "Verified development handoff for a separate hostile-prior review stage. Outcome is the runner discriminator; the remaining required fields translate the source skill output packet.",
+  "type": "object",
+  "required": [
+    "outcome",
+    "summary",
+    "repo",
+    "issue_url",
+    "status",
+    "implementer_owners",
+    "execution_contract_basis",
+    "branch_name",
+    "pr_url",
+    "change_summary",
+    "verification_results",
+    "review_handoff",
+    "warnings",
+    "next_action",
+    "issue_comment"
+  ],
+  "properties": {
+    "outcome": {
+      "const": "ready_for_review",
+      "description": "Runner routing discriminator required for worker output."
+    },
+    "summary": { "type": "string", "minLength": 1 },
+    "repo": { "type": "string", "minLength": 1 },
+    "issue_url": { "type": "string" },
+    "status": { "const": "ready_for_review" },
+    "implementer_owners": { "$ref": "#/$defs/ownerMap" },
+    "execution_contract_basis": { "type": "string", "minLength": 1 },
+    "branch_name": { "type": "string" },
+    "pr_url": { "type": "string" },
+    "change_summary": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "verification_results": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/verificationResult" }
+    },
+    "review_handoff": {
+      "type": "object",
+      "required": [
+        "prior",
+        "review_status",
+        "reviewer_plan",
+        "hotspots",
+        "contract_gaps",
+        "resolved_proof_obligations",
+        "architecture_contract_deviations",
+        "unresolved_compatibility_surfaces",
+        "negative_checks_run"
+      ],
+      "properties": {
+        "prior": { "const": "hostile_prior" },
+        "review_status": { "const": "not_run" },
+        "reviewer_plan": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": true
+        },
+        "hotspots": { "$ref": "#/$defs/stringArray" },
+        "contract_gaps": { "$ref": "#/$defs/stringArray" },
+        "resolved_proof_obligations": { "$ref": "#/$defs/stringArray" },
+        "architecture_contract_deviations": { "$ref": "#/$defs/stringArray" },
+        "unresolved_compatibility_surfaces": { "$ref": "#/$defs/stringArray" },
+        "negative_checks_run": { "$ref": "#/$defs/stringArray" }
+      },
+      "additionalProperties": false
+    },
+    "warnings": { "$ref": "#/$defs/stringArray" },
+    "next_action": { "type": "string", "minLength": 1 },
+    "issue_comment": { "type": "string" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "nonEmptyStringArray": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "ownerMap": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 2,
+      "properties": {
+        "backend": { "$ref": "#/$defs/nonEmptyStringArray" },
+        "frontend": { "$ref": "#/$defs/nonEmptyStringArray" }
+      },
+      "additionalProperties": false
+    },
+    "verificationResult": {
+      "type": "object",
+      "required": [
+        "implementer_owner",
+        "check",
+        "result",
+        "evidence",
+        "role_material_requirements_satisfied"
+      ],
+      "properties": {
+        "implementer_owner": { "enum": ["backend", "frontend"] },
+        "check": { "type": "string", "minLength": 1 },
+        "result": { "const": "passed" },
+        "evidence": { "type": "string", "minLength": 1 },
+        "role_material_requirements_satisfied": { "const": true },
+        "gaps": { "$ref": "#/$defs/stringArray" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

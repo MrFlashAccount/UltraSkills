@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-architecture/proposal-output",
+  "title": "Create Architecture Proposal Output",
+  "type": "object",
+  "required": [
+    "outcome",
+    "summary",
+    "selected_direction",
+    "artifact_scope",
+    "implementation_scope",
+    "next_step",
+    "artifacts"
+  ],
+  "properties": {
+    "outcome": {"const": "ready_for_review"},
+    "summary": {"type": "string", "minLength": 1},
+    "selected_direction": {"type": "string", "minLength": 1},
+    "artifact_scope": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "implementation_scope": {"enum": ["proposal_only", "implement"]},
+    "next_step": {"enum": ["done", "architecture_implementation"]},
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "prefixItems": [
+        {
+          "allOf": [
+            {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"},
+            {
+              "type": "object",
+              "properties": {
+                "id": {"const": "architecture-proposal"},
+                "content_type": {"const": "text/markdown"}
+              },
+              "required": ["id", "content_type"]
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "results": {
+      "type": "array",
+      "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"implementation_scope": {"const": "proposal_only"}}, "required": ["implementation_scope"]},
+      "then": {"properties": {"next_step": {"const": "done"}}}
+    },
+    {
+      "if": {"properties": {"implementation_scope": {"const": "implement"}}, "required": ["implementation_scope"]},
+      "then": {"properties": {"next_step": {"const": "architecture_implementation"}}}
+    }
+  ]
+}

@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/loop/controller-output",
+  "title": "Loop Controller Output",
+  "description": "Controller-owned progress accounting, durable baton update, and continue/retry/finish decision.",
+  "type": "object",
+  "required": ["outcome", "decision", "reason", "progress_update", "baton"],
+  "properties": {
+    "outcome": {"enum": ["continue", "retry", "finish"]},
+    "decision": {"enum": ["continue", "retry_with_context", "finish_success", "finish_saturation", "finish_max_iterations", "finish_verification_failure", "finish_unsafe", "finish_user_stop"]},
+    "reason": {"type": "string", "minLength": 1},
+    "progress_update": {"type": "string", "minLength": 1},
+    "baton": {"$ref": "#/$defs/baton"}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "continue"}}, "required": ["outcome"]},
+      "then": {"properties": {"decision": {"const": "continue"}}}
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "retry"}}, "required": ["outcome"]},
+      "then": {
+        "properties": {
+          "decision": {"const": "retry_with_context"},
+          "baton": {"type": "object", "properties": {"retry_context": {"type": "object"}}}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "finish"}}, "required": ["outcome"]},
+      "then": {"properties": {"decision": {"type": "string", "pattern": "^finish_"}}}
+    },
+    {
+      "if": {"properties": {"decision": {"const": "finish_user_stop"}}, "required": ["decision"]},
+      "then": {"properties": {"baton": {"type": "object", "properties": {"user_stop_requested": {"const": true}}}}}
+    }
+  ],
+  "$defs": {
+    "stringList": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "verification": {
+      "type": "object",
+      "required": ["iteration", "check", "result"],
+      "properties": {
+        "iteration": {"type": "integer", "minimum": 1, "maximum": 3},
+        "check": {"type": "string", "minLength": 1},
+        "result": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "object",
+      "required": ["files", "prs", "issues", "notes"],
+      "properties": {
+        "files": {"$ref": "#/$defs/stringList"},
+        "prs": {"$ref": "#/$defs/stringList"},
+        "issues": {"$ref": "#/$defs/stringList"},
+        "notes": {"$ref": "#/$defs/stringList"}
+      },
+      "additionalProperties": false
+    },
+    "lastResult": {
+      "type": "object",
+      "required": ["status", "summary", "evidence", "artifacts", "verification"],
+      "properties": {
+        "status": {"enum": ["completed", "partial", "no-progress"]},
+        "summary": {"type": "string", "minLength": 1},
+        "evidence": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "artifacts": {"$ref": "#/$defs/artifacts"},
+        "verification": {"type": "array", "items": {"$ref": "#/$defs/verification"}}
+      },
+      "additionalProperties": false
+    },
+    "cycleSummary": {
+      "type": "object",
+      "required": ["iteration", "status", "summary", "progress_made"],
+      "properties": {
+        "iteration": {"type": "integer", "minimum": 1, "maximum": 3},
+        "status": {"enum": ["completed", "partial", "no-progress"]},
+        "summary": {"type": "string", "minLength": 1},
+        "progress_made": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "retryContext": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["failure", "evidence", "changed_next_attempt"],
+          "properties": {
+            "failure": {"type": "string", "minLength": 1},
+            "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+            "changed_next_attempt": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "baton": {
+      "type": "object",
+      "required": ["loop_id", "task", "requested_max_iterations", "max_iterations", "runtime_max_iterations", "limit_mismatch", "saturation_limit", "iteration", "iterations_completed", "success_criteria", "stop_conditions", "help_conditions", "verification_requirements", "executor_constraints", "last_result", "next_action", "no_progress_count", "open_risks", "artifacts", "verification", "cycle_summaries", "retry_context", "approval_boundaries", "resolved_help_conditions", "user_stop_requested"],
+      "properties": {
+        "loop_id": {"type": "string", "minLength": 1},
+        "task": {"type": "string", "minLength": 1},
+        "requested_max_iterations": {"type": "integer", "minimum": 1},
+        "max_iterations": {"type": "integer", "minimum": 1, "maximum": 3},
+        "runtime_max_iterations": {"const": 3},
+        "limit_mismatch": {"type": ["string", "null"], "minLength": 1},
+        "saturation_limit": {"type": "integer", "minimum": 1, "maximum": 3},
+        "iteration": {"type": "integer", "minimum": 1, "maximum": 3},
+        "iterations_completed": {"type": "integer", "minimum": 1, "maximum": 3},
+        "success_criteria": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "stop_conditions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "help_conditions": {"$ref": "#/$defs/stringList"},
+        "verification_requirements": {"$ref": "#/$defs/stringList"},
+        "executor_constraints": {"$ref": "#/$defs/executorConstraints"},
+        "last_result": {"$ref": "#/$defs/lastResult"},
+        "next_action": {"type": "string", "minLength": 1},
+        "no_progress_count": {"type": "integer", "minimum": 0, "maximum": 3},
+        "open_risks": {"$ref": "#/$defs/stringList"},
+        "artifacts": {"$ref": "#/$defs/artifacts"},
+        "verification": {"type": "array", "items": {"$ref": "#/$defs/verification"}},
+        "cycle_summaries": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"$ref": "#/$defs/cycleSummary"}},
+        "retry_context": {"$ref": "#/$defs/retryContext"},
+        "approval_boundaries": {"$ref": "#/$defs/stringList"},
+        "resolved_help_conditions": {"$ref": "#/$defs/stringList"},
+        "user_stop_requested": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "executorConstraints": {
+      "type": "object",
+      "required": ["allowed_tools", "write_scope", "external_actions", "target_scope", "reporting_requirements"],
+      "properties": {
+        "allowed_tools": {"$ref": "#/$defs/stringList"},
+        "write_scope": {"$ref": "#/$defs/stringList"},
+        "external_actions": {"$ref": "#/$defs/stringList"},
+        "target_scope": {"$ref": "#/$defs/stringList"},
+        "reporting_requirements": {"$ref": "#/$defs/stringList"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

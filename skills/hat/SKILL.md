@@ -45,7 +45,7 @@ This skill is stateful.
 ## Core rules
 
 - `hat` changes framing, priorities, and judgment lens, not safety rules or approval rules.
-- `hat` does not replace workflow skills like `create-skill`, `create-design`, or `code-review-orchestrator`.
+- `hat` does not replace workflows like `create-skill`, `create-design`, or `code-review-orchestrator`.
 - Keep using the right workflow/tooling for the task; the hat only changes the specialist lens.
 - Resolve hats by calling `scripts/resolve-role.sh <role>` from this skill root; do not manually walk `../../roles/*` or invent roles that are not present.
 - When displaying the full available role list, call `scripts/list-roles.sh` from this skill root and use its `name - description` output instead of maintaining a manual list.

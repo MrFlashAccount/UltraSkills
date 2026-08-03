@@ -1,27 +1,38 @@
 name = "research-critic"
 version = 1
-description = "Pre-implementation Researcher draft -> Researcher attack workflow for closing task context before downstream planning or implementation. Use when a task needs evidence gathering, assumption pressure, ambiguity cleanup, readiness judgment, or a reusable reasons-canvas-research artifact. Do not use when the task is already approved for direct implementation, needs PR/code review, or should be executed through a larger planning/development workflow."
+description = "Produce a challenged pre-implementation reasons-canvas-research artifact and wrapper verdict through Researcher draft, hostile attack, at most one bounded revision, and a terminal handoff packet. Use when a task needs structured research, assumption pressure, ambiguity cleanup, or readiness judgment before human approval and downstream architecture or execution planning. Do not use for direct implementation, PR/code review, GitHub or ticket lifecycle work, polling, or transport orchestration."
 start = "research_draft"
 done = "done"
+
+[loopPolicies.research_hostile_review]
+steps = ["research_draft", "research_attack"]
+entry = "research_draft"
+boundary = "research_attack"
+maxIterations = 2
+onLimit = "research_handoff"
 
 [steps.research_draft]
 name = "Research draft"
 kind = "worker"
+agent = "researcher"
 
 [steps.research_draft.input]
 role = "researcher"
-prompt = '''
-Normalize the task input, inspect available evidence, and produce exactly one first-class research artifact named `reasons-canvas-research`. Do not create any separate legacy research artifact or structured legacy output. Fill only the research-owned depth with evidence-backed Requirements, observed domain Entities, candidate options, research-level constraints, risks, norms, safeguards, and explicit open questions or tensions. Do not finalize architecture, file-level operations, or implementation work. Return ready_for_attack only when the required Canvas artifact is ready for researcher attack. When user answers or other external help are required, report a non-blocking stop with the smallest direct user-facing question in non_blocking_stop.needed; do not encode that request as completed output. After resolution, preserve answered decisions and continue this same request to completed ready_for_attack output.
-Loop continuity across workflow loop iterations is prompt based: rely only on explicit input.prompt context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations. If concise clarification is needed, do not ask the user directly; return a clarification request for the orchestrator to relay, then continue in the same clarification session after the orchestrator forwards the user's reply without restart or context widening.
+prompt = '''Apply the canonical Researcher role contract and its relevant learnings. This is pre-implementation research, not architecture, planning, implementation, review, or transport work.
+
+Normalize the task into: task summary; goal; known facts and evidence; domain vocabulary and known entities; constraints; non-goals; decisions already made; existing open questions; candidate file zones or systems only when known; acceptance hints; design-test need and hints; and missing context already known. Consume available context and evidence before asking for more. Keep answered questions and resolved decisions closed unless contradictory evidence reopens them. Do not invent repo details, structural entities, implementation entities, or acceptance claims.
+
+Produce exactly one first-class artifact named `reasons-canvas-research` with the canonical Researcher-owned REASONS sections: Requirements, Entities, Approach, Structure, Operations, Norms, and Safeguards. Separate facts and evidence, assumptions, unknowns, decisions needed, risks, and blockers. Name bounded candidate approaches without selecting a final structural contract or producing code, pseudocode, algorithms, exact signatures, command sequences, file-level edit steps, or an implementation plan. If UI, behavior, or interaction design is material, record whether a compact design-test is needed and what it must establish. Keep critic findings and wrapper verdict language out of the Canvas.
+
+On the initial pass, build the Canvas from the normalized input. When the latest research_attack requested revision, revise the latest Canvas, address every bounded evidence-backed finding, preserve already answered decisions, and emit a fresh immutable `reasons-canvas-research` artifact. Return outcome ready_for_attack only when that artifact is ready for hostile review.
+
+When the desired outcome, user-visible result, acceptance target, or another implementation-critical fact is still fuzzy and cannot be recovered from available evidence, report a non-blocking stop with non_blocking_stop.source_step_id = research_draft and put the smallest direct user-facing question in non_blocking_stop.needed. Do not encode missing input as completed output. Resume this same request after resolution without restarting or widening scope.
+
+Loop continuity is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent worker reuse across iterations.
 
 Input context:
-Previous research artifacts:
-${{ input.research_draft.artifacts | default: "No previous research artifacts." }}
-
-Critic verdict:
-${{ input.research_attack.verdict | default: "No previous research attack verdict." }}
-
-'''
+- Previous research Canvas artifact: ${{ input.research_draft.artifacts | default: "No previous research Canvas artifact." }}
+- Latest hostile attack: ${{ input.research_attack.verdict | default: "No previous hostile attack." }}'''
 
 [steps.research_draft.output]
 template = "../../shared/templates/reasons/reasons-canvas-template.md"
@@ -36,21 +47,22 @@ ready_for_attack = "research_attack"
 [steps.research_attack]
 name = "Research attack"
 kind = "worker"
+agent = "research_critic"
 
 [steps.research_attack.input]
 role = "researcher"
-prompt = '''
-Start from a hostile prior: assume the change, proposal, draft, or Canvas is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed must-fix finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
-Attack the latest available `reasons-canvas-research` artifact for weak evidence, unsafe assumptions, missing user input, misclassified blockers, over-broad candidate approaches, and fake architecture/implementation certainty. Verify the artifact captures research-owned Requirements and observed Entities while leaving architecture/implementation-owned detail as explicit questions, constraints, or tensions. Treat a missing `reasons-canvas-research` artifact as a blocking research failure. Prefer draft-producing outputs in this deterministic freshness order: research_revision, then research_draft. Return approved only when the Canvas is ready for downstream handoff, or needs_revision when a bounded revision should loop through a fresh draft-producing output. When user answers or other external help are required, report a non-blocking stop with the smallest direct user-facing question in non_blocking_stop.needed; do not encode that request as completed output. Resume this same attack request after resolution.
-Loop continuity across workflow loop iterations is prompt based: rely only on explicit input.prompt context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations. If concise clarification is needed, do not ask the user directly; return a clarification request for the orchestrator to relay, then continue in the same clarification session after the orchestrator forwards the user's reply without restart or context widening.
+prompt = '''Apply the same canonical Researcher role contract in adversarial mode. Start from a hostile prior: assume the Canvas is wrong, incomplete, overcomplicated, or under-evidenced until it proves otherwise. Do not credit intent, confidence, green self-reports, or plausible structure. Do not invent bugs.
+
+Attack the latest `reasons-canvas-research` artifact for weak evidence, unsupported assumptions, unresolved or misclassified unknowns, decisions and blockers, over-broad candidate approaches, architecture-by-guess, implementation-plan-shaped content, boundary violations, and a missing design-test need for material UI or interaction work. Verify the Canvas covers research-owned Requirements and observed domain Entities while leaving structural and implementation ownership downstream. Treat a missing Canvas as a blocking failure.
+
+Return approved only after serious attack finds no evidence-backed blocker or important finding and the Canvas can be presented for human handoff approval without broad downstream rediscovery. Return needs_revision when the latest Canvas still has bounded changes or missing research. Every finding must be concrete, evidence-backed, and include the required next action; use exact file/function/line or equivalent evidence location when applicable. Keep the attack findings transient and out of the Canvas.
+
+When a user answer or external help is required before the attack can finish, report a non-blocking stop with non_blocking_stop.source_step_id = research_attack and put the smallest direct user-facing question or external need in non_blocking_stop.needed. Do not submit a completed verdict until the stop is resolved; resume this same attack request afterward.
+
+Loop continuity is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent worker reuse across iterations.
 
 Input context:
-Research revision artifacts:
-${{ input.research_revision.artifacts | default: "No research_revision artifacts." }}
-
-Research draft artifacts:
-${{ input.research_draft.artifacts | default: "No research_draft artifacts." }}
-'''
+- Latest research Canvas artifact: ${{ input.research_draft.artifacts | default: "No research Canvas artifact is available." }}'''
 
 [steps.research_attack.output]
 template = "../../shared/templates/review-verdict-template.md"
@@ -60,77 +72,40 @@ schema = "schemas/research-attack-output.json"
 match = "${{ output.outcome }}"
 
 [steps.research_attack.next.cases]
-approved = "save_research_canvas"
-needs_revision = "research_revision"
+approved = "research_handoff"
+needs_revision = "research_draft"
 
-[steps.research_revision]
-name = "Research revision"
+[steps.research_handoff]
+name = "Research handoff"
 kind = "worker"
 
-[steps.research_revision.input]
-role = "researcher"
-prompt = '''
-Revise the latest available `reasons-canvas-research` artifact using the latest research_attack verdict and any resolved help context. Prefer draft-producing outputs in this deterministic freshness order: research_revision, then research_draft. Preserve answered decisions, address each bounded attack finding, and always emit a fresh immutable `reasons-canvas-research` artifact at research-owned depth. Return ready_for_attack only when the required Canvas artifact is ready for another researcher attack. When user answers or other external help are required, report a non-blocking stop with the smallest direct user-facing question in non_blocking_stop.needed; do not encode that request as completed output. Resume this same revision request after resolution.
-Loop continuity across workflow loop iterations is prompt based: rely only on explicit input.prompt context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations. If concise clarification is needed, do not ask the user directly; return a clarification request for the orchestrator to relay, then continue in the same clarification session after the orchestrator forwards the user's reply without restart or context widening.
+[steps.research_handoff.input]
+prompt = '''Project the latest Researcher Canvas and hostile attack into the exact research-critic wrapper output. Do not change the Canvas, perform more research, create another artifact, claim external persistence, approve on the user's behalf, or start architecture or execution planning.
+
+Return all wrapper fields: reasons_canvas_artifact, critic_findings, missing_evidence, unresolved_blockers, verdict, and readiness_note. Set reasons_canvas_artifact.producerStepId to research_draft and copy the exact latest `reasons-canvas-research` artifact metadata into reasons_canvas_artifact.artifact. Keep findings and verdict outside the Canvas.
+
+If research_attack.outcome is approved, return verdict approve_as_is only when unresolved_blockers is empty and the Canvas is ready to present for explicit human handoff approval. If the bounded initial-plus-one-revision loop ended with research_attack.outcome needs_revision, preserve every remaining finding: return approve_with_changes only when the direction is coherent and all remaining changes are bounded, otherwise return needs_more_research. Any non-approve_as_is result must have scannable unresolved_blockers; distinguish absent proof in missing_evidence from the blocking consequence in unresolved_blockers. The readiness_note must name the next responsible stage after human approval: Architect for architecture-sensitive structural scope, execution planning otherwise, or more research while blockers remain.
+
+If required source output is unavailable or malformed, report a non-blocking stop with non_blocking_stop.source_step_id = research_handoff and the exact missing source output in non_blocking_stop.needed. Resume this same projection after resolution.
 
 Input context:
-Latest research revision artifacts:
-${{ input.research_revision.artifacts | default: "No research_revision artifacts." }}
+- Latest research Canvas artifact: ${{ input.research_draft.artifacts | default: "No research Canvas artifact is available." }}
+- Latest hostile attack outcome: ${{ input.research_attack.outcome }}
+- Latest hostile attack verdict: ${{ input.research_attack.verdict }}'''
 
-Research draft artifacts:
-${{ input.research_draft.artifacts | default: "No research_draft artifacts." }}
+[steps.research_handoff.output]
+template = "templates/research-handoff-template.md"
+schema = "schemas/research-handoff-output.json"
 
-Critic verdict:
-${{ input.research_attack.verdict }}
-
-'''
-
-[steps.research_revision.output]
-template = "../../shared/templates/reasons/reasons-canvas-template.md"
-schema = "schemas/research-draft-output.json"
-
-[steps.research_revision.next]
+[steps.research_handoff.next]
 match = "${{ output.outcome }}"
 
-[steps.research_revision.next.cases]
-ready_for_attack = "research_attack"
-
-[steps.save_research_canvas]
-name = "Save research Canvas"
-kind = "worker"
-
-[steps.save_research_canvas.input]
-role = "researcher"
-prompt = '''
-Finalize persistence metadata for the approved `reasons-canvas-research` artifact using the latest approved research artifacts and latest research_attack verdict. Prefer draft-producing outputs in this deterministic freshness order: research_revision, then research_draft. Return saved after emitting artifact/result references to the saved research Canvas as completed output, or report a non-blocking stop if the artifact cannot be safely saved.
-Loop continuity across workflow loop iterations is prompt based: rely only on explicit input.prompt context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations. If concise clarification is needed, do not ask the user directly; return a clarification request for the orchestrator to relay, then continue in the same clarification session after the orchestrator forwards the user's reply without restart or context widening.
-
-Input context:
-Research revision artifacts:
-${{ input.research_revision.artifacts | default: "No research_revision artifacts." }}
-
-Research draft artifacts:
-${{ input.research_draft.artifacts | default: "No research_draft artifacts." }}
-
-Critic verdict:
-${{ input.research_attack.verdict }}
-'''
-
-[steps.save_research_canvas.output]
-template = "../../shared/templates/research-canvas-save-metadata-template.md"
-schema = "schemas/save-research-canvas-output.json"
-
-[steps.save_research_canvas.next]
-match = "${{ output.outcome }}"
-
-[steps.save_research_canvas.next.cases]
-saved = "done"
+[steps.research_handoff.next.cases]
+handoff_ready = "done"
 
 [steps.done]
 name = "Done"
 kind = "done"
 
 [steps.done.input]
-prompt = '''
-Research Canvas approved and saved.
-'''
+prompt = '''Project the `research_handoff` packet exactly as the terminal result. The workflow produced a challenged research Canvas and wrapper verdict only. It did not persist externally, grant human approval, or start downstream architecture, planning, or implementation. Preserve unresolved blockers and any non-clean verdict when the bounded hostile-review loop ended with findings.'''

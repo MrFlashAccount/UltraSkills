@@ -1,0 +1,252 @@
+name = "docs-writer"
+version = 1
+description = "Write or rewrite teaching-oriented library and product documentation through a contract-first tiny or full-cycle path. Use for setup, usage, onboarding, migration, examples, API behavior, and reference clarity, including README sections whose main job is teaching. Do not use for product framing, README openings, launch copy, or polish-first DevRel messaging; use the devrel-copywriter workflow for those."
+start = "docs_intake"
+done = "done"
+
+[steps.docs_intake]
+name = "Documentation contract and routing"
+kind = "worker"
+agent = "docs_intake_writer"
+
+[steps.docs_intake.input]
+role = "tech-writer"
+prompt = '''Classify the requested documentation work and produce the compact contract before editing. Do not edit during this step.
+
+Read the canonical TechWriter role contract and rubric at `../../roles/tech-writer/ROLE.md` and `../../roles/tech-writer/RUBRIC.md`, including role-directed durable learnings. Read `references/task-contract.md` and `references/doc-modes.md` from this workflow package.
+
+Use this workflow only when the main job is documentation teaching: setup, usage, quick starts, tutorials, how-tos, onboarding, migration, API behavior/options/examples, reference clarity, or README sections whose main job is teaching. A full product-facing repository README rewrite, framing or positioning, README opening, launch copy, changelog blurb, or polish-first rewrite belongs to the DevRel workflow at `workflows/devrel-copywriter/workflow.toml`. For a clear DevRel-owned request, do not edit or stop for clarification: return outcome `devrel_writer`, task_class `devrel-owned`, files_edited false, route_target `workflows/devrel-copywriter/workflow.toml`, and a concise route_reason. If a mixed request crosses the boundary, keep only the unambiguous docs-teaching slice here; report a non-blocking stop with source_step_id `docs_intake` only when the user-owned scope split is genuinely ambiguous and cannot be recovered from the request or repository.
+
+Classify the task as:
+- `tiny` for a local clarity fix, one option or field, one narrow patch, or a similar edit that does not change teaching flow or primary doc mode;
+- `full-cycle` for any change to the first-win path, concept order, section structure, primary doc mode, or onboarding flow.
+If unsure, choose `full-cycle`.
+
+Build the compact contract with: artifact/goal, reader, job to be done, first win, scope, non-goals, one current or target doc mode, prerequisites, source of truth, and risks/unknowns. Inspect available code, existing docs, examples, tests, screenshots, and maintainer statements before declaring source evidence missing. Ask only for the smallest implementation-critical blocker through a runner non-blocking stop; do not invent source truth, reader context, defaults, setup, or claims.
+
+Return `tiny_ready` or `full_cycle_ready` only when the contract is evidence-grounded and executable. Tiny work must still name the doc mode and source of truth. Full-cycle work must lock one primary doc mode before routing onward. Return `devrel_writer` only for the clear route-out case and do not fabricate a documentation contract for work this workflow does not own.'''
+
+[steps.docs_intake.output]
+template = "templates/docs-contract.md"
+schema = "schemas/docs-intake-output.json"
+
+[steps.docs_intake.next]
+match = "${{ output.outcome }}"
+
+[steps.docs_intake.next.cases]
+tiny_ready = "tiny_edit"
+full_cycle_ready = "teaching_plan"
+devrel_writer = "done"
+
+[steps.tiny_edit]
+name = "Tiny documentation edit"
+kind = "worker"
+agent = "docs_tiny_editor"
+next = "tiny_review"
+
+[steps.tiny_edit.input]
+role = "tech-writer"
+prompt = '''Perform only the tiny documentation edit described by the approved intake contract.
+
+Read `../../roles/tech-writer/ROLE.md`, `../../roles/tech-writer/RUBRIC.md`, relevant role-directed learnings, and `references/doc-modes.md`. Preserve the contract's primary doc mode, teaching flow, scope, and source of truth. Optimize for low confusion and fast first success. Prefer teaching over impressing, expose prerequisites and glue code, keep onboarding from becoming full reference, and prefer one strong example over many weak ones.
+
+Inspect the exact source evidence needed for every changed claim. Edit only the requested documentation surface. Run the smallest meaningful checks available for examples, links, commands, or formatting when practical. Do not broaden into DevRel framing, a full README rewrite, implementation code, publishing, commit, or push.
+
+Return `ready_for_review` with exact changed files, evidence checked, source checks, remaining risks, and a concise summary. If an implementation-critical fact or permission is missing, report a runner non-blocking stop with source_step_id `tiny_edit` and resume this same request after resolution.'''
+
+[steps.tiny_edit.output]
+template = "templates/docs-work-result.md"
+schema = "schemas/docs-work-output.json"
+
+[steps.tiny_review]
+name = "Tiny hostile review"
+kind = "worker"
+agent = "docs_tiny_reviewer"
+
+[steps.tiny_review.input]
+role = "tech-writer"
+prompt = '''Independently review the tiny documentation edit. Do not edit it.
+
+Read `../../roles/tech-writer/ROLE.md`, `../../roles/tech-writer/RUBRIC.md`, relevant role-directed learnings, `references/doc-modes.md`, and `references/review-policy.md`. Start from a hostile prior: assume the edit is wrong, incomplete, overcomplicated, misleading, or under-evidenced until the artifact proves otherwise. Do not credit intent, confidence, or green self-reports.
+
+Verify that the patch stayed inside the contract's primary doc mode and preserved its teaching flow. Attack hidden prerequisites, missing setup/imports/glue, jargon before meaning, concept-order regressions, polluted quick-start paths, overly long examples, accidental mode mixing, fragile claims, and unsupported simplicity claims. Check the actual changed documentation and relevant source-of-truth evidence.
+
+Return PASS/`approved` only after serious attack finds no evidence-backed blocker or important finding. Otherwise return FAIL/`needs_revision`; every finding must identify a precise section/file/line or equivalent location, evidence, impact, required action, and why existing checks missed it. This is the single independent review required for the tiny path; do not edit or self-approve a fix. If evidence is unavailable, report a runner non-blocking stop with source_step_id `tiny_review` instead of inventing a verdict.
+
+Input context:
+- Documentation contract: ${{ input.docs_intake }}
+- Tiny edit result: ${{ input.tiny_edit }}'''
+
+[steps.tiny_review.output]
+template = "templates/docs-review-verdict.md"
+schema = "schemas/docs-review-output.json"
+
+[steps.tiny_review.next]
+match = "${{ output.outcome }}"
+
+[steps.tiny_review.next.cases]
+approved = "done"
+needs_revision = "done"
+
+[steps.teaching_plan]
+name = "Full-cycle teaching plan"
+kind = "worker"
+agent = "docs_plan_writer"
+next = "plan_debate"
+
+[steps.teaching_plan.input]
+role = "tech-writer"
+prompt = '''Create and critique the full-cycle teaching plan before drafting. Do not edit the target documentation yet.
+
+Read `../../roles/tech-writer/ROLE.md`, `../../roles/tech-writer/RUBRIC.md`, relevant role-directed learnings, `references/doc-modes.md`, and `references/task-contract.md`. Treat the intake contract's one primary doc mode as fixed unless contradictory source evidence requires a runner non-blocking stop.
+
+Define the first-minute outcome, strict concept order, section sequence, prerequisite placement, example strategy, source-evidence map, and explicit exclusions. Critique the plan against its doc mode. Attack hidden setup, bad concept order, premature API surface, jargon before meaning, copy-paste failure, examples that are longer than needed, and accidental mixing of tutorial, reference, and explanation.
+
+Return `ready_for_debate` only with a compact evidence-grounded teaching plan and its self-critique. Do not drift into product framing, implementation code, or a full product-facing README rewrite. If the plan requires a missing user-owned decision or source fact, report a runner non-blocking stop with source_step_id `teaching_plan` and resume this same request after resolution.
+
+Input context:
+- Documentation contract: ${{ input.docs_intake }}'''
+
+[steps.teaching_plan.output]
+template = "templates/teaching-plan.md"
+schema = "schemas/teaching-plan-output.json"
+
+[steps.plan_debate]
+name = "TechWriter versus Critic debate"
+kind = "worker"
+agent = "docs_plan_critic"
+next = "full_draft"
+
+[steps.plan_debate.input]
+role = "critic"
+prompt = '''Run one short Critic response to the TechWriter teaching plan. This is the full-cycle debate round. Do not edit documentation and do not widen scope.
+
+Read `../../roles/critic/ROLE.md`, `../../roles/critic/RUBRIC.md`, relevant role-directed learnings, `references/doc-modes.md`, and `references/review-policy.md`. Treat the teaching plan as the TechWriter side of the debate. Attack it from a hostile prior for unsupported assumptions, unnecessary breadth, hidden setup, weak source grounding, poor concept order, premature API surface, jargon-before-meaning, copy-paste failure, mode drift, and a slower-than-necessary first win.
+
+Return `ready_for_draft` with the strongest bounded challenge, what survives the attack, and one explicit drafting decision for each material disagreement. Prefer the simpler, clearer path when evidence supports it. Do not invent a false consensus; preserve unresolved issues as risks, and use a runner non-blocking stop with source_step_id `plan_debate` when a user-owned decision or missing external evidence is required.
+
+Input context:
+- Documentation contract: ${{ input.docs_intake }}
+- TechWriter teaching plan and self-critique: ${{ input.teaching_plan }}'''
+
+[steps.plan_debate.output]
+template = "templates/plan-debate.md"
+schema = "schemas/plan-debate-output.json"
+
+[steps.full_draft]
+name = "Full-cycle documentation draft"
+kind = "worker"
+agent = "docs_full_editor"
+next = "review_checkpoint_1"
+
+[steps.full_draft.input]
+role = "tech-writer"
+prompt = '''Draft or rewrite the documentation from the contract, teaching plan, and debate result.
+
+Read `../../roles/tech-writer/ROLE.md`, `../../roles/tech-writer/RUBRIC.md`, relevant role-directed learnings, and `references/doc-modes.md`. Keep the primary doc mode honest. Optimize for low confusion and fast first success. Do not hide prerequisites or glue code, overload onboarding with reference material, introduce jargon before meaning, or replace a strong narrow example with a broad tour. Keep style polish optional and subordinate to clarity.
+
+Verify changed claims against the contract's source of truth. Run the smallest meaningful checks available for examples, links, commands, or formatting when practical. Edit only the requested documentation surface; do not take over DevRel framing, implementation code, publishing, commit, or push.
+
+Return `ready_for_review` with exact changed files, evidence checked, source checks, remaining risks, and a concise summary. If implementation-critical input is missing, report a runner non-blocking stop with source_step_id `full_draft` and resume the same request after resolution.
+
+Input context:
+- Documentation contract: ${{ input.docs_intake }}
+- Teaching plan: ${{ input.teaching_plan }}
+- Debate result: ${{ input.plan_debate }}'''
+
+[steps.full_draft.output]
+template = "templates/docs-work-result.md"
+schema = "schemas/docs-work-output.json"
+
+[steps.review_checkpoint_1]
+name = "Full-cycle review checkpoint 1"
+kind = "worker"
+agent = "docs_reviewer_one"
+next = "full_fix"
+
+[steps.review_checkpoint_1.input]
+role = "tech-writer"
+prompt = '''Run the first independent hostile review checkpoint on the full-cycle draft. Do not edit it.
+
+Read `../../roles/tech-writer/ROLE.md`, `../../roles/tech-writer/RUBRIC.md`, relevant role-directed learnings, `references/doc-modes.md`, and `references/review-policy.md`. Start from a hostile prior and inspect the actual draft plus relevant source truth. Attack hidden prerequisites, missing imports/setup/glue, jargon before meaning, confusing concept order, a polluted first-win path, unnecessary examples, mode mixing, misleading defaults, fragile claims, and scope drift.
+
+Return PASS/`approved` only after serious attack finds no evidence-backed blocker or important finding. Otherwise return FAIL/`needs_revision`. Every finding must identify a precise section/file/line or equivalent location, evidence, impact, required action, and why existing checks missed it. Even a clean checkpoint routes through the fix stage so the author explicitly confirms whether any change is needed. If evidence is unavailable, report a runner non-blocking stop with source_step_id `review_checkpoint_1`.
+
+Input context:
+- Documentation contract: ${{ input.docs_intake }}
+- Teaching plan: ${{ input.teaching_plan }}
+- Debate result: ${{ input.plan_debate }}
+- Draft result: ${{ input.full_draft }}'''
+
+[steps.review_checkpoint_1.output]
+template = "templates/docs-review-verdict.md"
+schema = "schemas/docs-review-output.json"
+
+[steps.full_fix]
+name = "Full-cycle review fixes"
+kind = "worker"
+agent = "docs_full_fixer"
+next = "review_checkpoint_2"
+
+[steps.full_fix.input]
+role = "tech-writer"
+prompt = '''Address every evidence-backed must-fix and should-fix finding from review checkpoint 1, preserving the documentation contract, primary doc mode, source truth, and decisions that survived the debate. If checkpoint 1 passed, inspect its evidence and explicitly confirm that no edit is needed; do not manufacture churn.
+
+Read `../../roles/tech-writer/ROLE.md`, `../../roles/tech-writer/RUBRIC.md`, relevant role-directed learnings, `references/doc-modes.md`, and `references/review-policy.md`. Recheck changed claims and rerun the smallest relevant documentation checks after fixes. Do not broaden scope, rewrite product framing, modify implementation code, publish, commit, or push.
+
+Return `ready_for_final_review` with exact changed files across the draft/fix stage, evidence checked, source checks, remaining risks, and a concise mapping from findings to resolutions. If a finding needs missing user input or external evidence, report a runner non-blocking stop with source_step_id `full_fix` and resume the same request after resolution.
+
+Input context:
+- Documentation contract: ${{ input.docs_intake }}
+- Draft result: ${{ input.full_draft }}
+- Review checkpoint 1: ${{ input.review_checkpoint_1 }}'''
+
+[steps.full_fix.output]
+template = "templates/docs-work-result.md"
+schema = "schemas/docs-work-output.json"
+
+[steps.review_checkpoint_2]
+name = "Full-cycle review checkpoint 2"
+kind = "worker"
+agent = "docs_reviewer_two"
+
+[steps.review_checkpoint_2.input]
+role = "tech-writer"
+prompt = '''Run the second independent hostile review checkpoint. Confirm that checkpoint-1 fixes actually resolved their findings and did not damage the first-win path or primary doc mode. Do not edit.
+
+Read `../../roles/tech-writer/ROLE.md`, `../../roles/tech-writer/RUBRIC.md`, relevant role-directed learnings, `references/doc-modes.md`, and `references/review-policy.md`. Inspect the final documentation, both work results, the first review, and relevant source truth. Apply the same hostile-prior checks for prerequisites, setup/glue, jargon, concept order, first win, example quality, mode discipline, misleading defaults, fragile claims, and scope.
+
+Return PASS/`approved` only when no evidence-backed must-fix or should-fix remains. Otherwise return FAIL/`needs_revision` and preserve precise evidence-backed findings; the bounded two-checkpoint workflow ends without claiming a clean pass. If required evidence is unavailable, report a runner non-blocking stop with source_step_id `review_checkpoint_2`.
+
+Input context:
+- Documentation contract: ${{ input.docs_intake }}
+- Initial draft result: ${{ input.full_draft }}
+- Review checkpoint 1: ${{ input.review_checkpoint_1 }}
+- Fix result: ${{ input.full_fix }}'''
+
+[steps.review_checkpoint_2.output]
+template = "templates/docs-review-verdict.md"
+schema = "schemas/docs-review-output.json"
+
+[steps.review_checkpoint_2.next]
+match = "${{ output.outcome }}"
+
+[steps.review_checkpoint_2.next.cases]
+approved = "done"
+needs_revision = "done"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project the documentation workflow result from the executed path. When docs_intake returned `devrel_writer`, report that the request was routed without edits to the exact target `workflows/devrel-copywriter/workflow.toml`, preserve the route reason, and do not claim that the DevRel workflow ran. Otherwise report the contract and task class, changed files, source evidence and checks, latest independent review verdict, remaining findings/risks, and next action. Never claim PASS when the tiny review or second full-cycle checkpoint returned needs_revision. Never claim edits, checks, publishing, commits, or pushes not present in worker evidence.
+
+Input context:
+- Documentation contract: ${{ input.docs_intake }}
+- Tiny edit result: ${{ input.tiny_edit | default: "Tiny path was not selected." }}
+- Tiny review: ${{ input.tiny_review | default: "Tiny path was not selected." }}
+- Full-cycle draft result: ${{ input.full_draft | default: "Full-cycle path was not selected." }}
+- Full-cycle checkpoint 1: ${{ input.review_checkpoint_1 | default: "Full-cycle path was not selected." }}
+- Full-cycle fix result: ${{ input.full_fix | default: "Full-cycle path was not selected." }}
+- Full-cycle checkpoint 2: ${{ input.review_checkpoint_2 | default: "Full-cycle path was not selected." }}'''

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/docs-writer/docs-review-output",
+  "title": "Docs Writer Review Output",
+  "type": "object",
+  "required": ["outcome", "verdict", "summary", "evidence_checked", "findings"],
+  "properties": {
+    "outcome": {"enum": ["approved", "needs_revision"]},
+    "verdict": {"enum": ["PASS", "FAIL"]},
+    "summary": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "evidence_checked": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "location", "finding", "evidence", "impact", "required_action", "why_checks_missed"],
+        "properties": {
+          "severity": {"enum": ["must_fix", "should_fix", "can_delay"]},
+          "location": {"type": "string", "minLength": 1},
+          "finding": {"type": "string", "minLength": 1},
+          "evidence": {"type": "string", "minLength": 1},
+          "impact": {"type": "string", "minLength": 1},
+          "required_action": {"type": "string", "minLength": 1},
+          "why_checks_missed": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "results": {"type": "array", "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "approved"}}, "required": ["outcome"]},
+      "then": {
+        "properties": {
+          "verdict": {"const": "PASS"},
+          "findings": {"type": "array", "items": {"type": "object", "properties": {"severity": {"const": "can_delay"}}}}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "needs_revision"}}, "required": ["outcome"]},
+      "then": {
+        "properties": {"verdict": {"const": "FAIL"}, "findings": {"type": "array", "minItems": 1}}
+      }
+    }
+  ]
+}

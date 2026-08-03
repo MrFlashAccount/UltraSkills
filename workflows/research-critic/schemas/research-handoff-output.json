@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/research-critic/research-handoff-output",
+  "title": "Research Critic Handoff Output",
+  "description": "Terminal research-critic wrapper packet. It references the existing Canvas without claiming external persistence or human approval.",
+  "type": "object",
+  "required": [
+    "outcome",
+    "reasons_canvas_artifact",
+    "critic_findings",
+    "missing_evidence",
+    "unresolved_blockers",
+    "verdict",
+    "readiness_note"
+  ],
+  "properties": {
+    "outcome": {
+      "const": "handoff_ready",
+      "description": "The wrapper packet is ready; this does not imply that research itself was approved."
+    },
+    "reasons_canvas_artifact": {
+      "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/aggregateArtifact",
+      "description": "Reference to the latest canonical reasons-canvas-research artifact and its producing workflow step."
+    },
+    "critic_findings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "missing_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "unresolved_blockers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "verdict": {
+      "enum": [
+        "approve_as_is",
+        "approve_with_changes",
+        "needs_more_research"
+      ]
+    },
+    "readiness_note": {
+      "type": "string",
+      "minLength": 1
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "approve_as_is"
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "properties": {
+          "unresolved_blockers": {
+            "type": "array",
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "unresolved_blockers": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}

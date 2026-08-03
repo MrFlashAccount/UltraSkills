@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { readWorkflowFileRef, defaultRepositoryRootForWorkflow } from './resource-resolver.mjs';
+import { readWorkflowFileRef, resolveWorkflowFileRef, defaultRepositoryRootForWorkflow } from './resource-resolver.mjs';
 import { loadOutputSchema } from './output-schema-loader.mjs';
 import { isInside } from '../filesystem/path-safety.mjs';
 import { WorkflowRuntimeError } from '../../errors.mjs';
@@ -76,6 +76,19 @@ function roleNames(workflow) {
     }
   }
   return roles;
+}
+
+function inputResourceRefs(workflow) {
+  const refs = new Set();
+  const collect = (input) => {
+    for (const ref of input?.resources ?? []) refs.add(ref);
+  };
+  for (const step of Object.values(workflow?.steps ?? {})) {
+    collect(step?.input);
+    collect(step?.worker?.input);
+    for (const branch of Object.values(step?.branches ?? {})) collect(branch?.input);
+  }
+  return refs;
 }
 
 
@@ -183,12 +196,34 @@ function loadRoleMaterials({ workflow, repositoryRoot }) {
   return roleMaterials;
 }
 
+function loadInputResources({ workflow, workflowPath, repositoryRoot }) {
+  const inputResources = {};
+  for (const ref of inputResourceRefs(workflow)) {
+    const resolvedPath = resolveWorkflowFileRef({
+      workflowPath,
+      fileRef: ref,
+      fieldName: 'input.resources',
+      kind: 'resource',
+      messagePrefix: 'workflow prompt render failed',
+      repositoryRoot,
+    });
+    if (!statSync(resolvedPath).isFile()) {
+      throw new WorkflowRuntimeError(`workflow prompt render failed: input.resources resource must be a file: ${ref}`);
+    }
+    inputResources[ref] = {
+      path: resolvedPath,
+    };
+  }
+  return inputResources;
+}
+
 export function loadWorkflowResources({ workflow, workflowPath, repositoryRoot = defaultRepositoryRootForWorkflow(workflowPath), runDir } = {}) {
   return {
     templates: loadTemplates({ workflow, workflowPath, repositoryRoot }),
     outputSchemas: loadSchemas({ workflow, workflowPath, repositoryRoot }),
     schemaDefinitions: [batonSchema],
     roleMaterials: loadRoleMaterials({ workflow, repositoryRoot }),
+    inputResources: loadInputResources({ workflow, workflowPath, repositoryRoot }),
     allowedRoles: listAllowedWorkflowRoles({ repositoryRoot }),
     runDir: runDir ? path.resolve(runDir) : undefined,
     readRunArtifact: artifactReaderForRunDir(runDir),
@@ -212,6 +247,7 @@ function loadWorkflowStaticResources({ workflow, workflowPath, repositoryRoot = 
     outputSchemas: loadSchemas({ workflow, workflowPath, repositoryRoot }),
     schemaDefinitions: [batonSchema],
     roleMaterials: loadRoleMaterials({ workflow, repositoryRoot }),
+    inputResources: loadInputResources({ workflow, workflowPath, repositoryRoot }),
     allowedRoles: listAllowedWorkflowRoles({ repositoryRoot }),
   };
 }
@@ -228,6 +264,9 @@ function resourceSignaturePaths({ workflowPath, repositoryRoot, resources }) {
     for (const material of materials ?? []) {
       if (material?.path) paths.push(material.path);
     }
+  }
+  for (const resource of Object.values(resources.inputResources ?? {})) {
+    if (resource?.path) paths.push(resource.path);
   }
   return [...new Set(paths.map((entry) => path.resolve(entry)))].sort();
 }

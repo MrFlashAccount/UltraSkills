@@ -6,9 +6,9 @@
   ],
   "type": "module",
   "scripts": {
-    "test": "AGENT=1 make -C skills/orbita test && bun test --timeout=30000 scripts/render-html-selector-captures.test.mjs skills/create-skill/scripts/doctor.test.mjs",
+    "test": "AGENT=1 make -C skills/orbita test && bun test --timeout=30000 scripts/render-html-selector-captures.test.mjs",
     "test:workflow-e2e": "AGENT=1 make -C skills/orbita test-workflow-e2e",
-    "skill:doctor": "bun skills/create-skill/scripts/doctor.mjs",
+    "skill:doctor": "bun workflows/create-skill/scripts/doctor.mjs",
     "workflow:validate": "bun skills/orbita/lib/entrypoints/cli/validate-workflow.mjs workflows",
     "validate": "bun run dashboard:format:check && bun run dashboard:lint && bun run dashboard:typecheck && bun run dashboard:test && bun run dashboard:test:runtime && bun run depcruise:check && bun run role-evidence:check && bun run test && bun run workflow:validate && bun run agents:check && bun run schema-validation:check-vendor-ajv",
     "prepare": "git config core.hooksPath .githooks || true",

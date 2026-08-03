@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/code-review-orchestrator/reviewer-verdict-output",
+  "title": "Code Review Orchestrator Reviewer Verdict",
+  "type": "object",
+  "required": [
+    "outcome",
+    "review_branch",
+    "reviewer_role",
+    "verdict",
+    "is_blocking",
+    "summary",
+    "evidence_checked",
+    "must_fix",
+    "should_fix",
+    "can_delay",
+    "disagreements",
+    "contract_docs_drift",
+    "confidence"
+  ],
+  "properties": {
+    "outcome": { "const": "reviewed" },
+    "review_branch": { "$ref": "#/$defs/reviewBranch" },
+    "reviewer_role": { "$ref": "#/$defs/role" },
+    "verdict": { "enum": ["PASS", "FAIL"] },
+    "is_blocking": { "type": "boolean" },
+    "summary": { "$ref": "#/$defs/evidence" },
+    "evidence_checked": { "$ref": "#/$defs/evidence" },
+    "must_fix": { "$ref": "#/$defs/findings" },
+    "should_fix": { "$ref": "#/$defs/findings" },
+    "can_delay": { "$ref": "#/$defs/findings" },
+    "disagreements": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "contract_docs_drift": { "$ref": "#/$defs/contractDocsDrift" },
+    "architecture_checks": { "$ref": "#/$defs/architectureChecks" },
+    "confidence": { "enum": ["low", "medium", "high"] }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "type": "object", "properties": { "verdict": { "const": "PASS" } }, "required": ["verdict"] },
+      "then": {
+        "type": "object",
+        "properties": {
+          "is_blocking": { "const": false },
+          "must_fix": { "type": "array", "maxItems": 0 },
+          "should_fix": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "verdict": { "const": "FAIL" } }, "required": ["verdict"] },
+      "then": {
+        "type": "object",
+        "anyOf": [
+          { "type": "object", "properties": { "must_fix": { "type": "array", "minItems": 1 } } },
+          { "type": "object", "properties": { "should_fix": { "type": "array", "minItems": 1 } } }
+        ]
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "must_fix": { "type": "array", "minItems": 1 } }, "required": ["must_fix"] },
+      "then": { "type": "object", "properties": { "is_blocking": { "const": true } } }
+    },
+    {
+      "if": { "type": "object", "properties": { "review_branch": { "const": "architect_review" } }, "required": ["review_branch"] },
+      "then": {
+        "type": "object",
+        "required": ["architecture_checks"],
+        "properties": {
+          "reviewer_role": { "const": "architect" },
+          "contract_docs_drift": {
+            "type": "object",
+            "properties": { "status": { "enum": ["cleared", "failed"] } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "review_branch": { "const": "critic_review" } }, "required": ["review_branch"] },
+      "then": { "properties": { "reviewer_role": { "const": "critic" } } }
+    },
+    {
+      "if": { "properties": { "review_branch": { "const": "backend_review" } }, "required": ["review_branch"] },
+      "then": { "properties": { "reviewer_role": { "const": "backend" } } }
+    },
+    {
+      "if": { "properties": { "review_branch": { "const": "frontend_review" } }, "required": ["review_branch"] },
+      "then": { "properties": { "reviewer_role": { "const": "frontend" } } }
+    },
+    {
+      "if": { "properties": { "review_branch": { "const": "frontend_taste_review" } }, "required": ["review_branch"] },
+      "then": { "properties": { "reviewer_role": { "const": "frontend taste" } } }
+    },
+    {
+      "if": { "properties": { "review_branch": { "const": "security_review" } }, "required": ["review_branch"] },
+      "then": { "properties": { "reviewer_role": { "const": "security" } } }
+    },
+    {
+      "if": { "properties": { "review_branch": { "const": "privacy_review" } }, "required": ["review_branch"] },
+      "then": { "properties": { "reviewer_role": { "const": "privacy/data-safety" } } }
+    },
+    {
+      "if": { "properties": { "review_branch": { "const": "qa_review" } }, "required": ["review_branch"] },
+      "then": { "properties": { "reviewer_role": { "const": "qa/reliability" } } }
+    },
+    {
+      "if": { "properties": { "review_branch": { "const": "performance_review" } }, "required": ["review_branch"] },
+      "then": { "properties": { "reviewer_role": { "const": "performance" } } }
+    }
+  ],
+  "$defs": {
+    "reviewBranch": {
+      "enum": [
+        "critic_review",
+        "architect_review",
+        "backend_review",
+        "frontend_review",
+        "frontend_taste_review",
+        "security_review",
+        "privacy_review",
+        "qa_review",
+        "performance_review"
+      ]
+    },
+    "role": {
+      "enum": [
+        "critic",
+        "architect",
+        "backend",
+        "frontend",
+        "frontend taste",
+        "security",
+        "privacy/data-safety",
+        "qa/reliability",
+        "performance"
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["summary", "location", "mechanism", "impact", "evidence", "tests_gap", "required_next_action", "confidence"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "location": { "type": "string", "minLength": 1 },
+        "mechanism": { "type": "string", "minLength": 1 },
+        "impact": { "type": "string", "minLength": 1 },
+        "evidence": { "$ref": "#/$defs/evidence" },
+        "tests_gap": { "type": "string", "minLength": 1 },
+        "required_next_action": { "type": "string", "minLength": 1 },
+        "confidence": { "enum": ["low", "medium", "high"] }
+      },
+      "additionalProperties": false
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "contractDocsDrift": {
+      "type": "object",
+      "required": ["status", "evidence"],
+      "properties": {
+        "status": { "enum": ["cleared", "failed", "not_required"] },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "architectureCheck": {
+      "type": "object",
+      "required": ["status", "evidence"],
+      "properties": {
+        "status": { "enum": ["yes", "no", "not_applicable"] },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "architectureChecks": {
+      "type": "object",
+      "required": [
+        "architecture_contract_verdict",
+        "proof_map_checked",
+        "negative_checks_passed",
+        "compatibility_surfaces_resolved",
+        "fake_modules_absent",
+        "naming_honesty_passed",
+        "schema_domain_alignment_passed"
+      ],
+      "properties": {
+        "architecture_contract_verdict": { "enum": ["PASS", "FAIL"] },
+        "proof_map_checked": { "$ref": "#/$defs/architectureCheck" },
+        "negative_checks_passed": { "$ref": "#/$defs/architectureCheck" },
+        "compatibility_surfaces_resolved": { "$ref": "#/$defs/architectureCheck" },
+        "fake_modules_absent": { "$ref": "#/$defs/architectureCheck" },
+        "naming_honesty_passed": { "$ref": "#/$defs/architectureCheck" },
+        "schema_domain_alignment_passed": { "$ref": "#/$defs/architectureCheck" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

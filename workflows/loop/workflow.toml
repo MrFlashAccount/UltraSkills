@@ -1,0 +1,133 @@
+name = "loop"
+version = 1
+description = "Generic bounded task loop with normalized inputs, a compact durable baton, exactly one focused executor cycle per worker request, controller-owned continuation decisions, verification evidence, executable saturation, approval/help recovery through non-blocking stops, and an intentional final report. Use for explicit repeated task cycles such as bug hunts, cleanup passes, or review/fix iterations. Do not use for one-shot work, unbounded autonomy, or work that cannot define a safe next action."
+start = "loop_intake"
+done = "done"
+
+[loopPolicies.task_cycle]
+steps = ["execute_cycle", "control_cycle"]
+entry = "execute_cycle"
+boundary = "control_cycle"
+maxIterations = 3
+onLimit = "done"
+
+[steps.loop_intake]
+name = "Normalize loop request"
+kind = "worker"
+next = "execute_cycle"
+
+[steps.loop_intake.input]
+prompt = '''Normalize the startup request into one compact durable loop baton. Do not perform the task itself.
+
+Collect or safely infer:
+- task;
+- requested maxIterations, defaulting to 3;
+- observable success criteria;
+- stop conditions;
+- help conditions;
+- verification requirements;
+- executor constraints, including allowed tools, write/external-action scope, target paths or repositories, and reporting requirements;
+- approval boundaries.
+
+Set saturation_limit to 2 by default. If the user explicitly requests a different positive executable-saturation window, preserve it when it fits this run and cap it at the static three-cycle runtime bound.
+
+The runner loop policy has a static hard limit of 3 complete executor-to-controller traversals. Set requested_max_iterations to the positive integer requested by the user, or 3 when omitted. Set max_iterations to the smaller of requested_max_iterations and 3. Set runtime_max_iterations to 3. When requested_max_iterations is above 3, preserve it and set a concise limit_mismatch explaining that this run is capped at 3; otherwise set limit_mismatch to null. Never silently claim that a higher requested bound is representable.
+
+Initialize iteration to 1, iterations_completed and no_progress_count to 0, last_result to the empty initial value, next_action to one concrete first-cycle objective, retry_context to null, user_stop_requested to false, and the cumulative artifact, verification, cycle-summary, risk, and resolved-help collections to their empty values. Keep the baton compact; do not embed transcripts, large logs, file bodies, or speculative future work.
+
+If the task is under-specified in a way that changes safety or success, has no concrete safe first action, or already requires missing user input, capability, permission, or approval, report a runner non-blocking stop with non_blocking_stop.source_step_id = loop_intake and the smallest concrete help or approval request. Do not return completed output. After resolution, resume this same intake request and preserve the resolved answer in the baton.
+
+Return outcome ready only when the normalized baton is executable and safe.'''
+
+[steps.loop_intake.output]
+template = "templates/loop-intake-output.md"
+schema = "schemas/loop-intake-output.json"
+
+[steps.execute_cycle]
+name = "Execute one cycle"
+kind = "worker"
+next = "control_cycle"
+
+[steps.execute_cycle.input]
+prompt = '''You are the executor for exactly one loop iteration. Perform one focused cycle, report it, and stop. Do not launch another worker, subagent, recursive loop, or next iteration. Do not make the continuation decision.
+
+Choose the current baton from the latest control_cycle output when present; otherwise use loop_intake. Work only on baton.next_action unless a small prerequisite lookup is required. Respect every executor constraint and approval boundary. Preserve exact paths, commands, IDs, errors, findings, and artifacts in the compact report. Run configured verification when applicable and safe. A red check caused by your in-scope work is work to diagnose, fix, and rerun within this cycle when feasible; record unresolved failure evidence and retry context when it cannot be closed in this cycle.
+
+Treat the baton as durable coordination state, not proof that the task environment is unchanged. At the start of the cycle, inspect the current target and referenced artifacts needed for next_action. When an interruption or external change may have made evidence stale, rerun only cheap relevant verification before acting.
+
+Return outcome cycle_reported; status completed, partial, or no-progress; a concise result; exact evidence; files/PRs/issues/notes created or changed; verification checks and observed outcomes; open risks; whether executable progress occurred; retry context for failure; and one specific recommended next action. Do not represent missing help as no progress.
+
+If continuing or even starting the assigned action needs missing orchestrator/user input, capability, permission, or approval, report a runner non-blocking stop with non_blocking_stop.source_step_id = execute_cycle and the smallest concrete request. Preserve the current iteration and resume this same executor request after resolution. Do not complete the step merely because help is needed. If the user asks to stop through the resumed help context, return a no-progress report whose recommended next action says to stop and whose evidence records the user-stop signal; do not perform more task work.
+
+Input context:
+- Initial normalized baton: ${{ input.loop_intake.baton }}
+- Latest controller baton: ${{ input.control_cycle.baton | default: "No controller baton yet; use the initial normalized baton." }}'''
+
+[steps.execute_cycle.output]
+template = "templates/executor-output.md"
+schema = "schemas/executor-output.json"
+
+[steps.control_cycle]
+name = "Control loop continuation"
+kind = "worker"
+
+[steps.control_cycle.input]
+prompt = '''Act only as the loop controller/orchestrator. Do not perform the task, edit task artifacts, rerun verification, or delegate work.
+
+Read the latest executor report and the latest baton, preferring control_cycle.baton when present and otherwise loop_intake.baton. Validate that the executor handled exactly the baton iteration and one cycle. Produce a concise progress_update suitable for the orchestrator to relay before another cycle.
+
+Update the durable baton:
+- append one compact completed-cycle summary and increment iterations_completed;
+- update last_result, cumulative artifacts, verification evidence, and open risks without embedding large logs or file bodies;
+- reset no_progress_count to 0 for a new useful result, approved change, resolved risk/help condition, or evidence that materially changes the next action;
+- increment no_progress_count only for an executable attempt that repeats known information or yields no actionable evidence;
+- never increment no_progress_count for missing input, permission, approval, capability, or external help;
+- capture exact failures and the materially changed next attempt in retry_context;
+- increment iteration only when another executor cycle will actually run.
+
+The controller exclusively chooses:
+- continue / continue when there is a concrete new next action and all continuation rules hold;
+- retry / retry_with_context when exact failure evidence materially changes the next attempt;
+- finish / finish_success when success criteria are met and required verification is satisfied;
+- finish / finish_saturation when no_progress_count reaches baton.saturation_limit for executable saturation;
+- finish / finish_max_iterations when iterations_completed reaches baton.max_iterations without success;
+- finish / finish_verification_failure when verification proves the approach is failing;
+- finish / finish_unsafe when safe continuation is impossible without a resolvable help request;
+- finish / finish_user_stop when the user has asked to stop.
+
+Continue or retry only when iterations_completed is below baton.max_iterations, no stop condition fired, there is a concrete next action, progress occurred or retry context materially changes the attempt, and no new approval boundary is active. Keep max_iterations at the normalized effective value; never raise it beyond runtime_max_iterations.
+
+Missing input, capability, permission, or an approval boundary is not a finish decision. Report a runner non-blocking stop with non_blocking_stop.source_step_id = control_cycle and the smallest concrete orchestrator/user help or approval request; preserve the current iteration and resume this same controller request after resolution. Record the resolved condition in resolved_help_conditions. If the resolution is a user stop, return finish_user_stop.
+
+Input context:
+- Initial normalized baton: ${{ input.loop_intake.baton }}
+- Previous controller baton: ${{ input.control_cycle.baton | default: "No previous controller baton." }}
+- Latest executor report: ${{ input.execute_cycle }}'''
+
+[steps.control_cycle.output]
+template = "templates/controller-output.md"
+schema = "schemas/controller-output.json"
+
+[steps.control_cycle.next]
+match = "${{ output.outcome }}"
+
+[steps.control_cycle.next.cases]
+continue = "execute_cycle"
+retry = "execute_cycle"
+finish = "done"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project the final loop report from the normalized intake, latest controller decision, latest executor report, and runner-owned loop limit.
+
+Include: why the loop stopped; iterations completed; results found or changes made; verification performed and exact observed outcomes; resolved help or approval conditions; open risks; files, PRs, issues, and notes touched; any requested-versus-effective iteration limit mismatch; and the recommended next step.
+
+Use the controller decision as authoritative when it is finish. If the latest controller outcome is continue or retry but the runner routed here through loopPolicies.onLimit, report finish_max_iterations and state that the static three-traversal runner limit ended the run. Never claim success when verification is missing or failed, never describe a non-blocking stop as completion, and never claim external actions or approvals not present in the evidence.
+
+Input context:
+- Normalized intake: ${{ input.loop_intake }}
+- Latest executor report: ${{ input.execute_cycle }}
+- Latest controller output: ${{ input.control_cycle }}'''

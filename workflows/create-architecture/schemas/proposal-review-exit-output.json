@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-architecture/proposal-review-exit-output",
+  "title": "Architecture Proposal Review Exit Output",
+  "type": "object",
+  "required": ["outcome", "summary", "unresolved_findings"],
+  "properties": {
+    "outcome": {"enum": ["ready_for_approval", "exhausted"]},
+    "summary": {"type": "string", "minLength": 1},
+    "unresolved_findings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/finding"}
+    },
+    "results": {
+      "type": "array",
+      "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "ready_for_approval"}}, "required": ["outcome"]},
+      "then": {"properties": {"unresolved_findings": {"type": "array", "maxItems": 0}}}
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "exhausted"}}, "required": ["outcome"]},
+      "then": {"properties": {"unresolved_findings": {"type": "array", "minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": ["severity", "finding", "evidence", "required_next_action"],
+      "properties": {
+        "severity": {"enum": ["must_fix", "should_fix", "can_delay"]},
+        "finding": {"type": "string", "minLength": 1},
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "required_next_action": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

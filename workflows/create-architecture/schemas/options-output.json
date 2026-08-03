@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-architecture/options-output",
+  "title": "Create Architecture Option Narrowing Output",
+  "type": "object",
+  "required": ["outcome", "summary", "options", "recommended_option"],
+  "properties": {
+    "outcome": {"const": "ready_for_proposal"},
+    "summary": {"type": "string", "minLength": 1},
+    "options": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "summary",
+          "fit",
+          "pain_addressed",
+          "seams",
+          "team_changes",
+          "complexity",
+          "non_goals",
+          "required_artifacts",
+          "tradeoffs",
+          "failure_mode",
+          "loses_because"
+        ],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "summary": {"type": "string", "minLength": 1},
+          "fit": {"type": "string", "minLength": 1},
+          "pain_addressed": {"type": "string", "minLength": 1},
+          "seams": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "team_changes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "complexity": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "non_goals": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "required_artifacts": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "tradeoffs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "failure_mode": {"type": "string", "minLength": 1},
+          "loses_because": {"type": ["string", "null"], "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "recommended_option": {"type": "string", "minLength": 1},
+    "results": {
+      "type": "array",
+      "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}
+    }
+  },
+  "additionalProperties": false
+}

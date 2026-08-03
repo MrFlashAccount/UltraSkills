@@ -1,0 +1,451 @@
+name = "devrel-copywriter"
+version = 1
+description = "Shape or rewrite a repository README when it is the product-facing entrypoint. Route procedural teaching work to the docs-writer workflow, classify README work as tiny or full-cycle, preserve proof-backed claims, and run the source DevRel proposal, attack, synthesis, humanizer, and review gates. Do not use for deep setup, usage, configuration, migration, tutorial, or API documentation."
+start = "readme_intake"
+done = "done"
+
+[loopPolicies.tiny_review]
+steps = ["tiny_edit", "tiny_humanizer", "tiny_review"]
+entry = "tiny_edit"
+boundary = "tiny_review"
+maxIterations = 2
+onLimit = "done"
+
+[loopPolicies.final_quality]
+steps = ["full_fix", "full_humanizer_two", "full_review_two", "final_checklist"]
+entry = "full_fix"
+boundary = "final_checklist"
+maxIterations = 2
+onLimit = "done"
+
+[steps.readme_intake]
+name = "README routing and contract"
+kind = "worker"
+agent = "devrel_intake"
+
+[steps.readme_intake.input]
+role = "dev-rel"
+prompt = '''Route the request and build the writing contract before drafting or editing.
+
+Load `references/task-contract.md` and `references/readme-workflow.md` relative to this workflow package. Apply the DevRel role material from `../../roles/dev-rel/ROLE.md` and `../../roles/dev-rel/RUBRIC.md`, resolved relative to this workflow package.
+
+Route repository README work here only when the file acts as the product-facing entrypoint and the request concerns framing, structure, first-screen pitch, positioning, message hierarchy, or a local wording change that affects those concerns. If the main job is teaching setup, usage, configuration, product flow, migration, tutorial, reference, or API behavior, return outcome `docs_writer`, identify `workflows/docs-writer/workflow.toml` as the target, and do not edit or draft.
+
+Classify in-scope work:
+- `tiny`: a local wording, flow, or emphasis fix that does not change audience, angle, structure, headline, positioning, or claim hierarchy.
+- `full_cycle`: a new repository README or any rewrite that changes angle, audience, structure, proof framing, headline, positioning, or claim hierarchy.
+
+If unsure, choose `full_cycle`. Inspect the real repository README, source tree, runnable entrypoints, config, examples, and linked docs needed to ground the contract. Capture Artifact, Audience, Surface, Goal, Scope and non-goals, Structure, Proof points, Allowed claims, Risky claims, and Tone. Do not invent proof, exact metrics, quickstarts, or roadmap reality. If any contract field that materially changes the work cannot be recovered, report a runner non-blocking stop with source_step_id `readme_intake` and the smallest concrete question; resume this same step after resolution.
+
+Return `tiny`, `full_cycle`, or `docs_writer` only when routing and evidence are clear.'''
+
+[steps.readme_intake.output]
+template = "templates/intake-result.md"
+schema = "schemas/intake-output.json"
+
+[steps.readme_intake.next]
+match = "${{ output.outcome }}"
+
+[steps.readme_intake.next.cases]
+tiny = "tiny_edit"
+full_cycle = "full_proposal"
+docs_writer = "done"
+
+[steps.tiny_edit]
+name = "Tiny README edit"
+kind = "worker"
+agent = "devrel_tiny_editor"
+next = "tiny_humanizer"
+
+[steps.tiny_edit.input]
+role = "dev-rel"
+prompt = '''Apply only the contracted local README wording, flow, or emphasis fix. Load the DevRel role material and the workflow-local `references/review-policy.md`. Preserve the existing audience, angle, structure, headline, positioning, claim hierarchy, and all facts outside the requested slice. Use repository evidence; do not invent proof or strengthen claims beyond it.
+
+On a revision pass, address every bounded finding from the latest independent review without widening scope. Edit the actual target file, then report the exact changed file and evidence used.
+
+Contract and routing:
+${{ input.readme_intake }}
+
+Latest independent review:
+${{ input.tiny_review | default: "No previous review." }}'''
+
+[steps.tiny_edit.output]
+template = "templates/writing-result.md"
+schema = "schemas/writing-output.json"
+
+[steps.tiny_humanizer]
+name = "Tiny humanizer pass"
+kind = "worker"
+agent = "devrel_tiny_humanizer"
+next = "tiny_review"
+
+[steps.tiny_humanizer.input]
+role = "dev-rel"
+prompt = '''Run a narrow humanizer-style cleanup over only the contracted edited slice. Improve naturalness, tone, and rhythm without changing facts, claims, angle, structure, positioning, or message hierarchy. Humanizer is polish, not the structural decision-maker. Inspect the target file after editing and report the exact changed file.
+
+Contract:
+${{ input.readme_intake }}
+
+Latest edit:
+${{ input.tiny_edit }}'''
+
+[steps.tiny_humanizer.output]
+template = "templates/writing-result.md"
+schema = "schemas/writing-output.json"
+
+[steps.tiny_review]
+name = "Tiny independent review"
+kind = "worker"
+agent = "devrel_tiny_reviewer"
+
+[steps.tiny_review.input]
+role = "dev-rel"
+prompt = '''Act as an independent DevRel reviewer. This is read-only: do not edit the target. Load `references/review-policy.md` relative to this workflow package and apply the DevRel role and rubric. Review the actual target file and diff, not only the author summary.
+
+Check scope preservation, payoff clarity, proof, tone, scan speed, and whether the humanizer distorted facts, angle, or structure. Return `approved` only when no evidence-backed must-fix or important current-scope finding remains. Return `needs_revision` with bounded, precisely located findings otherwise. Do not invent issues or expand a tiny request into a structural rewrite.
+
+Contract:
+${{ input.readme_intake }}
+
+Edit:
+${{ input.tiny_edit }}
+
+Humanizer pass:
+${{ input.tiny_humanizer }}'''
+
+[steps.tiny_review.output]
+template = "templates/review-verdict.md"
+schema = "schemas/review-output.json"
+
+[steps.tiny_review.next]
+match = "${{ output.outcome }}"
+
+[steps.tiny_review.next.cases]
+approved = "done"
+needs_revision = "tiny_edit"
+
+[steps.full_proposal]
+name = "README framing proposal"
+kind = "worker"
+agent = "devrel_proposer"
+next = "pre_draft_attack"
+
+[steps.full_proposal.input]
+role = "dev-rel"
+prompt = '''Act as the DevRel proposer. Load workflow-local `references/readme-workflow.md` and the DevRel role and rubric. Do not write the full README yet.
+
+Complete the product identity pass: Name, Logo or visual direction, Tagline, one-sentence pitch, Category, Audience or JTBD, What it is, and Why it exists. Propose 2-3 viable structure directions. For each, state first-screen emphasis, product fit, tradeoff, first-value location, and handoff into deeper docs/examples/reference. Choose one provisional direction and ground every claim in repository evidence. Reject directions that cannot satisfy the DevRel rubric with real proof.
+
+Contract:
+${{ input.readme_intake }}'''
+
+[steps.full_proposal.output]
+template = "templates/writing-result.md"
+schema = "schemas/writing-output.json"
+
+[steps.pre_draft_attack]
+name = "Independent pre-draft attack"
+kind = "worker"
+agent = "devrel_proposal_critic"
+next = "proposal_reconciliation"
+
+[steps.pre_draft_attack.input]
+role = "dev-rel"
+prompt = '''Act as a separate hostile-prior DevRel critic. This pass is read-only and must happen before a full draft. Load workflow-local `references/readme-workflow.md` and `references/review-policy.md`, plus the DevRel role and rubric.
+
+Assume the contract and proposal are wrong, generic, overcomplicated, incomplete, or under-evidenced until they prove otherwise. Attack vague positioning, unsupported claims, audience mismatch, weak proof, fake differentiation, and structure that cannot support the first-value path or final checklist. Inspect the cited repository sources. Do not lightly polish, draft, or edit. Return evidence-backed findings and an honest `approved` or `needs_revision` verdict.
+
+Contract:
+${{ input.readme_intake }}
+
+Proposal:
+${{ input.full_proposal }}'''
+
+[steps.pre_draft_attack.output]
+template = "templates/review-verdict.md"
+schema = "schemas/review-output.json"
+
+[steps.proposal_reconciliation]
+name = "Proposal reconciliation"
+kind = "worker"
+agent = "devrel_reconciler"
+
+[steps.proposal_reconciliation.input]
+role = "dev-rel"
+prompt = '''Resolve the proposer/critic disagreement into one chosen README direction with explicit tradeoffs and repository evidence. Do not average both outputs or blindly accept either side. Do not draft the full README yet.
+
+Return `needs_approval` only when the chosen direction materially changes public positioning, promised audience, product naming/tagline, or expected repository information architecture and the triggering request did not already authorize that direction. Otherwise return `ready_for_draft`. The summary must be a concise approval-ready statement of the chosen direction and material changes.
+
+Contract:
+${{ input.readme_intake }}
+
+Proposal:
+${{ input.full_proposal }}
+
+Attack:
+${{ input.pre_draft_attack }}'''
+
+[steps.proposal_reconciliation.output]
+template = "templates/reconciliation-result.md"
+schema = "schemas/reconciliation-output.json"
+
+[steps.proposal_reconciliation.next]
+match = "${{ output.outcome }}"
+
+[steps.proposal_reconciliation.next.cases]
+ready_for_draft = "full_draft"
+needs_approval = "approve_positioning"
+
+[steps.approve_positioning]
+name = "Approve positioning and structure"
+kind = "approval"
+
+[steps.approve_positioning.input]
+summary = "${{ input.proposal_reconciliation.summary }}"
+
+[steps.approve_positioning.next]
+match = "${{ output.approval }}"
+
+[steps.approve_positioning.next.cases]
+approved = "full_draft"
+rejected = "done"
+
+[steps.full_draft]
+name = "Full README draft"
+kind = "worker"
+agent = "devrel_drafter"
+next = "draft_attack"
+
+[steps.full_draft.input]
+role = "dev-rel"
+prompt = '''Write the full repository README against the reconciled and, when required, approved direction. Load workflow-local `references/readme-workflow.md`, the DevRel role, and the DevRel rubric. Write for scan speed, first-screen comprehension, and first-use confidence. Verify the first-value path against real source/config/examples/docs before presenting it as usable. Do not invent proof, exact metrics, current capabilities, or roadmap promises. Edit only the contracted target.
+
+Contract:
+${{ input.readme_intake }}
+
+Chosen direction:
+${{ input.proposal_reconciliation }}
+
+Approval:
+${{ input.approve_positioning | default: "No separate approval was required because the request already authorized the direction." }}'''
+
+[steps.full_draft.output]
+template = "templates/writing-result.md"
+schema = "schemas/writing-output.json"
+
+[steps.draft_attack]
+name = "Independent draft attack"
+kind = "worker"
+agent = "devrel_draft_critic"
+next = "draft_synthesis"
+
+[steps.draft_attack.input]
+role = "dev-rel"
+prompt = '''Act as an independent hostile-prior DevRel critic. Read-only: do not edit. Load workflow-local `references/review-policy.md`, the DevRel role, and the DevRel rubric. Inspect the actual README and cited repository evidence.
+
+Attack first-screen clarity, product identity, positioning, proof, the real first-value path, scan speed, tone, unsupported claims, and drift from the approved contract/direction. Assume the draft is wrong or under-evidenced until it survives serious attack. PASS only when no evidence-backed blocker or important finding remains. Every failure must identify a precise location, evidence, impact, and why ordinary checks did not catch it.
+
+Contract:
+${{ input.readme_intake }}
+
+Direction:
+${{ input.proposal_reconciliation }}
+
+Draft result:
+${{ input.full_draft }}'''
+
+[steps.draft_attack.output]
+template = "templates/review-verdict.md"
+schema = "schemas/review-output.json"
+
+[steps.draft_synthesis]
+name = "Draft synthesis and edit"
+kind = "worker"
+agent = "devrel_synthesizer"
+next = "full_humanizer_one"
+
+[steps.draft_synthesis.input]
+role = "dev-rel"
+prompt = '''Act as synthesizer/editor. Resolve the proposal attack and draft attack against the contract and chosen direction, then own the resulting README. Do not average proposer and critic output or accept either blindly. Fix structural issues before polish. Preserve proof boundaries and edit only the contracted target. Inspect the finished file and report exact changes and evidence.
+
+Contract:
+${{ input.readme_intake }}
+
+Direction and reconciliation:
+${{ input.proposal_reconciliation }}
+
+Draft attack:
+${{ input.draft_attack }}'''
+
+[steps.draft_synthesis.output]
+template = "templates/writing-result.md"
+schema = "schemas/writing-output.json"
+
+[steps.full_humanizer_one]
+name = "First humanizer pass"
+kind = "worker"
+agent = "devrel_humanizer_one"
+next = "full_review_one"
+
+[steps.full_humanizer_one.input]
+role = "dev-rel"
+prompt = '''Run a humanizer-style cleanup over the synthesized README. Improve tone and rhythm without changing facts, claims, structure, positioning, or the approved direction. Humanizer is polish, not the structural decision-maker. Inspect the target after editing and report exact changes.
+
+Contract:
+${{ input.readme_intake }}
+
+Synthesized draft:
+${{ input.draft_synthesis }}'''
+
+[steps.full_humanizer_one.output]
+template = "templates/writing-result.md"
+schema = "schemas/writing-output.json"
+
+[steps.full_review_one]
+name = "Review checkpoint one"
+kind = "worker"
+agent = "devrel_checkpoint_one_reviewer"
+next = "full_fix"
+
+[steps.full_review_one.input]
+role = "dev-rel"
+prompt = '''Run the first independent read-only review checkpoint over the actual README and diff. Load workflow-local `references/review-policy.md`, the DevRel role, and the rubric. Check the full must-catch list, contract/direction fidelity, proof, first-screen comprehension, developer trust, and humanizer factual/structural drift. Return precise evidence and all bounded findings. Return `approved` only for a clean checkpoint; otherwise `needs_revision`. Do not edit.
+
+Contract:
+${{ input.readme_intake }}
+
+Chosen direction:
+${{ input.proposal_reconciliation }}
+
+First polish result:
+${{ input.full_humanizer_one }}'''
+
+[steps.full_review_one.output]
+template = "templates/review-verdict.md"
+schema = "schemas/review-output.json"
+
+[steps.full_fix]
+name = "Checkpoint fixes"
+kind = "worker"
+agent = "devrel_fixer"
+next = "full_humanizer_two"
+
+[steps.full_fix.input]
+role = "dev-rel"
+prompt = '''Apply every bounded evidence-backed finding from review checkpoint one on the first pass, or from the latest final checklist on a correction pass. When the relevant verdict is clean, inspect and preserve the draft without gratuitous edits. Keep the approved structure, positioning, proof limits, and target scope frozen. Report exact changes and evidence.
+
+Contract:
+${{ input.readme_intake }}
+
+Checkpoint one:
+${{ input.full_review_one }}
+
+Latest checkpoint two:
+${{ input.full_review_two | default: "No previous checkpoint two." }}
+
+Latest final checklist:
+${{ input.final_checklist | default: "No previous final checklist." }}'''
+
+[steps.full_fix.output]
+template = "templates/writing-result.md"
+schema = "schemas/writing-output.json"
+
+[steps.full_humanizer_two]
+name = "Second humanizer pass"
+kind = "worker"
+agent = "devrel_humanizer_two"
+next = "full_review_two"
+
+[steps.full_humanizer_two.input]
+role = "dev-rel"
+prompt = '''After fixes, run a second narrow humanizer-style pass only where tone or rhythm still needs cleanup. Do not change facts, claims, angle, structure, positioning, or message hierarchy. If no polish is needed, preserve the file and report a no-op with evidence.
+
+Contract:
+${{ input.readme_intake }}
+
+Latest fixes:
+${{ input.full_fix }}'''
+
+[steps.full_humanizer_two.output]
+template = "templates/writing-result.md"
+schema = "schemas/writing-output.json"
+
+[steps.full_review_two]
+name = "Review checkpoint two"
+kind = "worker"
+agent = "devrel_checkpoint_two_reviewer"
+next = "final_checklist"
+
+[steps.full_review_two.input]
+role = "dev-rel"
+prompt = '''Run the second independent read-only review checkpoint over the updated README and diff. Load workflow-local `references/review-policy.md`, the DevRel role, and the rubric. Check the complete must-catch list and whether fixes and polish preserved the approved facts, angle, and structure. Return `approved` only when no evidence-backed blocker or important current-scope finding remains; otherwise return `needs_revision` with precise findings. Do not edit.
+
+Contract:
+${{ input.readme_intake }}
+
+Latest fixes and polish:
+${{ input.full_fix }}
+${{ input.full_humanizer_two }}'''
+
+[steps.full_review_two.output]
+template = "templates/review-verdict.md"
+schema = "schemas/review-output.json"
+
+[steps.final_checklist]
+name = "Final DevRel checklist"
+kind = "worker"
+agent = "devrel_final_reviewer"
+
+[steps.final_checklist.input]
+role = "dev-rel"
+prompt = '''Run the final read-only DevRel role/rubric checklist over the actual README. Load workflow-local `references/review-policy.md`. Confirm a skeptical developer would believe the copy, the first screen communicates the pitch, every strong claim is earned, the first-value path is real, and humanizer passes improved tone without changing the message. Also require checkpoint two to have no unresolved important finding.
+
+Return `approved` only for a clean final result. Return `needs_revision` with bounded precise findings otherwise. Do not edit.
+
+Contract:
+${{ input.readme_intake }}
+
+Chosen direction:
+${{ input.proposal_reconciliation }}
+
+Checkpoint two:
+${{ input.full_review_two }}'''
+
+[steps.final_checklist.output]
+template = "templates/review-verdict.md"
+schema = "schemas/review-output.json"
+
+[steps.final_checklist.next]
+match = "${{ output.outcome }}"
+
+[steps.final_checklist.next.cases]
+approved = "done"
+needs_revision = "full_fix"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project only the result actually reached.
+
+- `docs_writer`: report that no README edit was performed and route the request to `workflows/docs-writer/workflow.toml`.
+- `tiny`: report the contracted edit, humanizer pass, latest independent verdict, changed files, and any findings preserved when the bounded review loop ended.
+- `full_cycle`: report the chosen direction, whether a separate approval was required and obtained, changed files, hostile attacks, both review checkpoints, final checklist, and any unresolved findings or approval rejection. Never present a rejected approval or exhausted review loop as a clean pass.
+
+Do not claim proof, edits, approval, or review results absent from step outputs.
+
+Input context:
+- Intake: ${{ input.readme_intake }}
+- Tiny edit: ${{ input.tiny_edit | default: "Not selected." }}
+- Tiny humanizer: ${{ input.tiny_humanizer | default: "Not selected." }}
+- Tiny review: ${{ input.tiny_review | default: "Not selected." }}
+- Proposal reconciliation: ${{ input.proposal_reconciliation | default: "Not selected." }}
+- Positioning approval: ${{ input.approve_positioning | default: "Not required or not reached." }}
+- Full draft: ${{ input.full_draft | default: "Not selected." }}
+- Draft attack: ${{ input.draft_attack | default: "Not selected." }}
+- Synthesis: ${{ input.draft_synthesis | default: "Not selected." }}
+- Review checkpoint one: ${{ input.full_review_one | default: "Not selected." }}
+- Fixes: ${{ input.full_fix | default: "Not selected." }}
+- Review checkpoint two: ${{ input.full_review_two | default: "Not selected." }}
+- Final checklist: ${{ input.final_checklist | default: "Not selected." }}'''

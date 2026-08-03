@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/code-review-orchestrator/review-intake-output",
+  "title": "Code Review Orchestrator Intake Output",
+  "type": "object",
+  "required": [
+    "outcome",
+    "pass_number",
+    "target",
+    "approved_contract",
+    "sensitive_surface",
+    "sensitive_surface_scan",
+    "contract_bearing_change",
+    "iterative_review",
+    "selected_review_steps",
+    "review_plan",
+    "skipped_reviewers"
+  ],
+  "properties": {
+    "outcome": { "const": "ready_for_review" },
+    "pass_number": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "target": { "$ref": "#/$defs/target" },
+    "approved_contract": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Approved contract or acceptance criteria available for this review; may be empty when none was supplied."
+    },
+    "sensitive_surface": { "type": "boolean" },
+    "sensitive_surface_scan": { "$ref": "#/$defs/sensitiveSurfaceScan" },
+    "contract_bearing_change": { "type": "boolean" },
+    "iterative_review": { "type": "boolean" },
+    "selected_review_steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "critic_review",
+          "architect_review",
+          "backend_review",
+          "frontend_review",
+          "frontend_taste_review",
+          "security_review",
+          "privacy_review",
+          "qa_review",
+          "performance_review"
+        ]
+      }
+    },
+    "review_plan": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 9,
+      "items": { "$ref": "#/$defs/reviewerPlan" }
+    },
+    "skipped_reviewers": {
+      "type": "array",
+      "maxItems": 9,
+      "items": {
+        "type": "object",
+        "required": ["review_branch", "reason"],
+        "properties": {
+          "review_branch": { "$ref": "#/$defs/reviewBranch" },
+          "reason": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": { "sensitive_surface": { "const": true } },
+        "required": ["sensitive_surface"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "selected_review_steps": { "type": "array", "contains": { "const": "privacy_review" } },
+          "sensitive_surface_scan": {
+            "type": "object",
+            "properties": { "status": { "enum": ["clear", "findings"] } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": { "sensitive_surface": { "const": false } },
+        "required": ["sensitive_surface"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "sensitive_surface_scan": {
+            "type": "object",
+            "properties": { "status": { "enum": ["not_required", "clear", "findings"] } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": { "contract_bearing_change": { "const": true } },
+        "required": ["contract_bearing_change"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "selected_review_steps": { "type": "array", "contains": { "const": "architect_review" } }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "reviewBranch": {
+      "enum": [
+        "critic_review",
+        "architect_review",
+        "backend_review",
+        "frontend_review",
+        "frontend_taste_review",
+        "security_review",
+        "privacy_review",
+        "qa_review",
+        "performance_review"
+      ]
+    },
+    "role": {
+      "enum": [
+        "critic",
+        "architect",
+        "backend",
+        "frontend",
+        "frontend taste",
+        "security",
+        "privacy/data-safety",
+        "qa/reliability",
+        "performance"
+      ]
+    },
+    "reviewBranches": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/reviewBranch" }
+    },
+    "target": {
+      "type": "object",
+      "required": ["repository", "scope", "ref_or_pr", "base_comparison", "context_checked"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "ref_or_pr": { "type": "string", "minLength": 1 },
+        "base_comparison": { "type": "string", "minLength": 1 },
+        "context_checked": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "sensitiveSurfaceScan": {
+      "type": "object",
+      "required": ["status", "evidence"],
+      "properties": {
+        "status": { "enum": ["not_required", "clear", "findings"] },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "reviewerPlanBase": {
+      "type": "object",
+      "required": ["review_branch", "role", "reason", "surfaces", "required"],
+      "properties": {
+        "review_branch": { "$ref": "#/$defs/reviewBranch" },
+        "role": { "$ref": "#/$defs/role" },
+        "reason": { "type": "string", "minLength": 1 },
+        "surfaces": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "required": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "reviewerPlan": {
+      "oneOf": [
+        { "$ref": "#/$defs/criticPlan" },
+        { "$ref": "#/$defs/architectPlan" },
+        { "$ref": "#/$defs/backendPlan" },
+        { "$ref": "#/$defs/frontendPlan" },
+        { "$ref": "#/$defs/frontendTastePlan" },
+        { "$ref": "#/$defs/securityPlan" },
+        { "$ref": "#/$defs/privacyPlan" },
+        { "$ref": "#/$defs/qaPlan" },
+        { "$ref": "#/$defs/performancePlan" }
+      ]
+    },
+    "criticPlan": { "allOf": [{ "$ref": "#/$defs/reviewerPlanBase" }, { "type": "object", "properties": { "review_branch": { "const": "critic_review" }, "role": { "const": "critic" } } }] },
+    "architectPlan": { "allOf": [{ "$ref": "#/$defs/reviewerPlanBase" }, { "type": "object", "properties": { "review_branch": { "const": "architect_review" }, "role": { "const": "architect" } } }] },
+    "backendPlan": { "allOf": [{ "$ref": "#/$defs/reviewerPlanBase" }, { "type": "object", "properties": { "review_branch": { "const": "backend_review" }, "role": { "const": "backend" } } }] },
+    "frontendPlan": { "allOf": [{ "$ref": "#/$defs/reviewerPlanBase" }, { "type": "object", "properties": { "review_branch": { "const": "frontend_review" }, "role": { "const": "frontend" } } }] },
+    "frontendTastePlan": { "allOf": [{ "$ref": "#/$defs/reviewerPlanBase" }, { "type": "object", "properties": { "review_branch": { "const": "frontend_taste_review" }, "role": { "const": "frontend taste" } } }] },
+    "securityPlan": { "allOf": [{ "$ref": "#/$defs/reviewerPlanBase" }, { "type": "object", "properties": { "review_branch": { "const": "security_review" }, "role": { "const": "security" } } }] },
+    "privacyPlan": { "allOf": [{ "$ref": "#/$defs/reviewerPlanBase" }, { "type": "object", "properties": { "review_branch": { "const": "privacy_review" }, "role": { "const": "privacy/data-safety" } } }] },
+    "qaPlan": { "allOf": [{ "$ref": "#/$defs/reviewerPlanBase" }, { "type": "object", "properties": { "review_branch": { "const": "qa_review" }, "role": { "const": "qa/reliability" } } }] },
+    "performancePlan": { "allOf": [{ "$ref": "#/$defs/reviewerPlanBase" }, { "type": "object", "properties": { "review_branch": { "const": "performance_review" }, "role": { "const": "performance" } } }] }
+  }
+}

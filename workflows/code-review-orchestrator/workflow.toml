@@ -1,0 +1,196 @@
+name = "code-review-orchestrator"
+version = 1
+description = "Read-only multi-role code review for a repository, path, branch, pull request, or diff. Resolve the target and base comparison, select the smallest risk-based set of canonical reviewers, run them in parallel, and merge one evidence-first PASS/FAIL report with must-fix, should-fix, can-delay, disagreements, and optional re-review for at most three passes. Do not use this workflow to implement fixes, mutate a pull request, publish comments, approve, merge, commit, or push."
+start = "review_intake"
+done = "done"
+
+[loopPolicies.code_review]
+steps = ["review_intake", "review"]
+entry = "review_intake"
+boundary = "review"
+maxIterations = 3
+onLimit = "done"
+
+[steps.review_intake]
+name = "Review intake"
+kind = "worker"
+next = "review"
+
+[steps.review_intake.input]
+resources = ["scripts/check_sensitive_surface.py"]
+prompt = '''Prepare the shared context and reviewer plan for one read-only code-review pass. Do not edit files, implement fixes, publish comments, approve, merge, commit, push, or otherwise mutate the target.
+
+Identify the target repository/path/ref/PR and base comparison. If the target, repository path, branch, or PR is missing or ambiguous, report a non-blocking stop with source_step_id review_intake and ask only for that missing input. Read the target repo's AGENTS.md first. Gather compact context: the approved contract or acceptance criteria when available, git status, current branch, diff stat, touched files, relevant tests, docs, config, and existing verification evidence.
+
+For sensitive-surface diffs, run the package-local read-only scanner exposed as `scripts/check_sensitive_surface.py` under Workflow resources against the target repository and include its result in sensitive_surface_scan. Use the exact resolved absolute path shown there; do not resolve it from the target repository. A scanner failure or missing required review context is a non-blocking stop, not a clean review result.
+
+Select the smallest risk-based reviewer set from these exact branches: critic_review, architect_review, backend_review, frontend_review, frontend_taste_review, security_review, privacy_review, qa_review, performance_review. Default to one independent reviewer. Add roles only when primary risks are genuinely separate. privacy_review is mandatory for sensitive surfaces. architect_review is mandatory when the work changes or may change contract-bearing docs, artifacts, states, schemas, workflows, process contracts, symbolic lifecycle values, or architecture-sensitive boundaries, unless an approved contract explicitly assigns that drift gate elsewhere. Record considered but unselected roles in skipped_reviewers.
+
+On pass two or three, use the current changed-surface owners and the prior merged report rather than blindly repeating the original fanout. Prefer fresh independent reviewers for re-review. Reuse a reviewer only when availability is constrained and the scope remained frozen; record that constraint in the plan reason. Set pass_number to 1 initially or one more than the preceding review pass. Set iterative_review only when the user requested a review/fix/re-review loop.
+
+Every review_plan entry must match one selected branch and include the canonical role, evidence-backed reason, exact surfaces, and whether it is required. If a required reviewer cannot be delegated, report a non-blocking stop and request the smallest concrete help needed; do not replace the delegated review gate with a manual intake-worker review. Return ready_for_review only when the target, context, and reviewer selection are complete.
+
+Previous merged review:
+${{ input.review | default: "No previous review pass." }}'''
+
+[steps.review_intake.output]
+template = "../../shared/templates/reviewer-handoff-template.md"
+schema = "schemas/review-intake-output.json"
+
+[steps.review]
+name = "Independent reviews"
+kind = "fanout"
+max_parallel = 9
+next = "${{ output.next }}"
+
+[steps.review.input]
+branches = "${{ input.review_intake.selected_review_steps }}"
+prompt = '''Merge only the reviewer branches selected by review_intake. This is a read-only review owner: do not edit files, implement findings, mutate a pull request, publish comments, approve, merge, commit, or push.
+
+Require every selected reviewer to return an explicit PASS or FAIL against the approved contract for non-trivial work. If required delegation is unavailable, failed to start, or cannot satisfy its role material, report a non-blocking stop and resume the same gate after resolution; never substitute a manual owner review. Dedupe findings by mechanism and affected surface. Elevate only evidence-backed blockers. Preserve disagreements instead of averaging them away. Keep must_fix, should_fix, and can_delay separate and group findings by file or theme. Known debt is not a waiver unless evidence proves this change does not worsen, depend on, normalize, or entrench it.
+
+PASS requires no evidence-backed must-fix or should-fix finding. One high-confidence blocker is enough for FAIL. For contract-bearing work, require architect_review and report contract/docs drift as cleared or failed. For non-contract-bearing work use not_required. For sensitive surfaces, state whether privacy/data-safety and security ran and which role cleared the slice; privacy_review is mandatory, while security_review runs only when exploitability or trust-boundary risk warrants it.
+
+Return a short merged report with Summary, Must fix, Should fix, Can delay, Disagreements / needs more context, and Suggested next step. If review passes, return outcome passed, next done, and verdict PASS. If review fails and no iterative re-review was requested or external rework is not ready, return outcome failed, next done, and verdict FAIL. When the user requested iteration and external rework is ready, passes one and two may return outcome needs_rereview, next review_intake, and verdict FAIL. If rework is not ready, report a non-blocking stop from review with the exact findings and smallest help request; this workflow never performs the fixes itself. Pass three must terminate with passed or failed.
+
+Input context:
+- Review intake: ${{ input.review_intake }}
+- Critic review: ${{ input.critic_review | default: "not selected" }}
+- Architect review: ${{ input.architect_review | default: "not selected" }}
+- Backend review: ${{ input.backend_review | default: "not selected" }}
+- Frontend review: ${{ input.frontend_review | default: "not selected" }}
+- Frontend taste review: ${{ input.frontend_taste_review | default: "not selected" }}
+- Security review: ${{ input.security_review | default: "not selected" }}
+- Privacy/data-safety review: ${{ input.privacy_review | default: "not selected" }}
+- QA/reliability review: ${{ input.qa_review | default: "not selected" }}
+- Performance review: ${{ input.performance_review | default: "not selected" }}'''
+
+[steps.review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/review-merge-output.json"
+
+[steps.review.branches.critic_review]
+name = "Critic review"
+[steps.review.branches.critic_review.input]
+role = "critic"
+prompt = '''Review the selected target as critic, read-only. Follow the loaded ROLE.md and RUBRIC.md. Apply the shared known-debt rule: known debt is not a waiver without evidence that this change does not worsen, depend on, normalize, or entrench it. Focus on avoidable complexity, weak trade-offs, hidden fragility, scope creep, and whether the slice can be simpler or narrower without breaking the approved contract.
+
+Start from a hostile prior: assume the change is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not credit intent, author confidence, green self-reports, or plausible structure. PASS only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL needs a precise file/function/line or equivalent location, evidence, impact, and why existing tests or checks missed it. Return only the schema-defined PASS/FAIL verdict, is_blocking flag, must_fix / should_fix / can_delay, disagreements, evidence checked, contract/docs drift status, and confidence. Report a non-blocking stop with source_step_id critic_review if required evidence or role material is unavailable.
+
+Review assignment: ${{ input.review_intake }}'''
+[steps.review.branches.critic_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/reviewer-verdict-output.json"
+
+[steps.review.branches.architect_review]
+name = "Architect review"
+[steps.review.branches.architect_review.input]
+role = "architect"
+prompt = '''Review the selected target as architect, read-only. Follow the loaded ROLE.md and RUBRIC.md and any role-directed references. Apply the shared known-debt rule. Enforce the approved architecture contract, source-layout and owning-zone rules, boundaries, dependency direction, naming honesty, compatibility decisions, negative checks, and contract/docs drift without inventing a new architecture. Final or re-review must compare implementation, tests/checks, docs, architecture artifacts, schemas, workflows, states, and symbolic lifecycle values that are contract-bearing.
+
+Start from a hostile prior: assume the change is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not credit intent, author confidence, green self-reports, or plausible structure. PASS only after serious attack finds no evidence-backed blocker or important finding. Do not invent bugs. Any FAIL needs a precise file/function/line or equivalent location, evidence, impact, and why existing tests or checks missed it. Return the schema-defined verdict plus architecture_checks for architecture contract, proof map, negative checks, compatibility surfaces, fake modules, naming honesty, and schema/domain alignment; use not_applicable with evidence when a check is not triggered. Report a non-blocking stop with source_step_id architect_review if required evidence or role material is unavailable.
+
+Review assignment: ${{ input.review_intake }}'''
+[steps.review.branches.architect_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/reviewer-verdict-output.json"
+
+[steps.review.branches.backend_review]
+name = "Backend review"
+[steps.review.branches.backend_review.input]
+role = "backend"
+prompt = '''Review the selected target as backend, read-only. Follow the loaded ROLE.md and RUBRIC.md and apply the shared known-debt rule. Focus on backend/server correctness, contracts, data flow, validation, edge cases, auth and permission hygiene, rollout/rollback safety, observability, and testability.
+
+Start from a hostile prior: assume the change is wrong, incomplete, overcomplicated, or under-evidenced until proved otherwise. Do not credit intent, confidence, or green self-reports. PASS only after serious attack finds no evidence-backed blocker or important finding; do not invent bugs. Any FAIL needs a precise location, evidence, impact, and why tests/checks missed it. Return only the schema-defined evidence-first verdict. Report a non-blocking stop with source_step_id backend_review if required evidence or role material is unavailable.
+
+Review assignment: ${{ input.review_intake }}'''
+[steps.review.branches.backend_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/reviewer-verdict-output.json"
+
+[steps.review.branches.frontend_review]
+name = "Frontend review"
+[steps.review.branches.frontend_review.input]
+role = "frontend"
+prompt = '''Review the selected target as frontend, read-only. Follow the loaded ROLE.md and RUBRIC.md and any role-directed frontend references. Apply the shared known-debt rule. Focus on client correctness, contract consumption, state/data flow, loading/error/empty/pending states, routing/hydration, async behavior, accessibility-relevant behavior, and maintainability.
+
+Start from a hostile prior: assume the change is wrong, incomplete, overcomplicated, or under-evidenced until proved otherwise. Do not credit intent, confidence, or green self-reports. PASS only after serious attack finds no evidence-backed blocker or important finding; do not invent bugs. Any FAIL needs a precise location, evidence, impact, and why tests/checks missed it. Return only the schema-defined evidence-first verdict. Report a non-blocking stop with source_step_id frontend_review if required evidence or role material is unavailable.
+
+Review assignment: ${{ input.review_intake }}'''
+[steps.review.branches.frontend_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/reviewer-verdict-output.json"
+
+[steps.review.branches.frontend_taste_review]
+name = "Frontend taste review"
+[steps.review.branches.frontend_taste_review.input]
+role = "frontend-taste"
+prompt = '''Review the selected rendered surface as frontend taste, read-only. Read repo DESIGN.md first when it exists, then follow the loaded ROLE.md and RUBRIC.md and any role-directed references. Repo design law overrides portable taste guidance. Apply the shared known-debt rule. Focus on hierarchy, spacing, typography, color, composition, motion, density, responsive containment, and polish; stay out of client correctness unless the problem is visibly manifested.
+
+Start from a hostile prior: assume the change is wrong, incomplete, overcomplicated, or under-evidenced until proved otherwise. Do not credit intent, confidence, filenames, or green self-reports. PASS only after serious attack finds no evidence-backed blocker or important finding; do not invent bugs. Any FAIL needs a precise surface/location, evidence, impact, and why existing proof/checks missed it. Return only the schema-defined evidence-first verdict. Report a non-blocking stop with source_step_id frontend_taste_review if rendered evidence or role material is unavailable.
+
+Review assignment: ${{ input.review_intake }}'''
+[steps.review.branches.frontend_taste_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/reviewer-verdict-output.json"
+
+[steps.review.branches.security_review]
+name = "Security review"
+[steps.review.branches.security_review.input]
+role = "security"
+prompt = '''Review the selected target as security, read-only. Follow the loaded ROLE.md and RUBRIC.md and any role-directed references. Apply the shared known-debt rule. Focus on exploitability, authentication, authorization, injection, secrets, privilege, dependencies, abuse paths, and trust-boundary regressions in the approved slice.
+
+Start from a hostile prior: assume the change is wrong, incomplete, overcomplicated, or under-evidenced until proved otherwise. Do not credit intent, confidence, or green self-reports. PASS only after serious attack finds no evidence-backed blocker or important finding; do not invent bugs. Any FAIL needs a precise location, evidence, impact, and why tests/checks missed it. Return only the schema-defined evidence-first verdict. Report a non-blocking stop with source_step_id security_review if required evidence or role material is unavailable.
+
+Review assignment: ${{ input.review_intake }}'''
+[steps.review.branches.security_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/reviewer-verdict-output.json"
+
+[steps.review.branches.privacy_review]
+name = "Privacy and data-safety review"
+[steps.review.branches.privacy_review.input]
+role = "privacy-data-safety"
+prompt = '''Review the selected target as privacy/data-safety, read-only. Follow the loaded ROLE.md and RUBRIC.md and any role-directed references. Apply the shared known-debt rule. Inspect the sensitive-surface scanner evidence and focus on local-path leakage, committed personal docs, prompt/example leakage, retained user data, consent/retention mistakes, unsafe persistence, destructive data behavior, and repo-visible private content.
+
+Start from a hostile prior: assume the change is wrong, incomplete, overcomplicated, or under-evidenced until proved otherwise. Do not credit intent, confidence, or green self-reports. PASS only after serious attack finds no evidence-backed blocker or important finding; do not invent bugs. Any FAIL needs a precise location, evidence, impact, and why tests/checks missed it. Return only the schema-defined evidence-first verdict. Report a non-blocking stop with source_step_id privacy_review if scanner evidence, required context, or role material is unavailable.
+
+Review assignment: ${{ input.review_intake }}'''
+[steps.review.branches.privacy_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/reviewer-verdict-output.json"
+
+[steps.review.branches.qa_review]
+name = "QA and reliability review"
+[steps.review.branches.qa_review.input]
+role = "qa-reliability"
+prompt = '''Review the selected target as QA/reliability, read-only. Follow the loaded ROLE.md and RUBRIC.md and any role-directed references. Apply the shared known-debt rule. Focus on failure handling, timeouts, retries, fallbacks, rollback/recovery, degraded behavior, observability, diagnosability, nondeterminism, flakiness, and test coverage/signal gaps.
+
+Start from a hostile prior: assume the change is wrong, incomplete, overcomplicated, or under-evidenced until proved otherwise. Do not credit intent, confidence, or green self-reports. PASS only after serious attack finds no evidence-backed blocker or important finding; do not invent bugs. Any FAIL needs a precise location, evidence, impact, and why tests/checks missed it. Return only the schema-defined evidence-first verdict. Report a non-blocking stop with source_step_id qa_review if required evidence or role material is unavailable.
+
+Review assignment: ${{ input.review_intake }}'''
+[steps.review.branches.qa_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/reviewer-verdict-output.json"
+
+[steps.review.branches.performance_review]
+name = "Performance review"
+[steps.review.branches.performance_review.input]
+role = "performance"
+prompt = '''Review the selected target as performance, read-only. Follow the loaded ROLE.md and RUBRIC.md and any role-directed references. Apply the shared known-debt rule. Focus on hot paths, blocking I/O, unnecessary work, repeated calls, large allocations, leaks, avoidable latency, throughput, CPU, memory, network, render churn, and scaling behavior.
+
+Start from a hostile prior: assume the change is wrong, incomplete, overcomplicated, or under-evidenced until proved otherwise. Do not credit intent, confidence, or green self-reports. PASS only after serious attack finds no evidence-backed blocker or important finding; do not invent bugs. Any FAIL needs a precise location, evidence, impact, and why tests/checks missed it. Return only the schema-defined evidence-first verdict. Report a non-blocking stop with source_step_id performance_review if required evidence or role material is unavailable.
+
+Review assignment: ${{ input.review_intake }}'''
+[steps.review.branches.performance_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/reviewer-verdict-output.json"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project the latest merged review as the terminal report. Preserve its PASS/FAIL verdict, pass number, Summary, Must fix, Should fix, Can delay, Disagreements / needs more context, contract/docs drift result, sensitive-surface coverage, and suggested next step. If pass three ended with FAIL, say that the configured three-pass review limit was reached. Never claim that this read-only workflow fixed code, mutated a pull request, published comments, approved, merged, committed, or pushed.
+
+Final merged review: ${{ input.review }}'''

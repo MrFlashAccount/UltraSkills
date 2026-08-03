@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-design/post-review-output",
+  "type": "object",
+  "required": ["outcome", "mode", "verdict"],
+  "properties": {
+    "outcome": {"enum": ["approved", "needs_revision"]},
+    "mode": {"const": "implement"},
+    "verdict": {"type": "object", "required": ["summary", "findings"], "properties": {"summary": {"type": "string", "minLength": 1}, "findings": {"type": "array", "items": {"type": "object"}}}, "additionalProperties": true},
+    "artifacts": {"type": "array", "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"}},
+    "results": {"type": "array", "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}}
+  },
+  "additionalProperties": false
+}

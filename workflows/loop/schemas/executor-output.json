@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/loop/executor-output",
+  "title": "Loop Executor Cycle Output",
+  "description": "Report from exactly one focused executor cycle. Missing help is reported through the runner non-blocking-stop channel instead of this output.",
+  "type": "object",
+  "required": ["outcome", "iteration", "status", "result", "evidence", "artifacts", "verification", "open_risks", "progress_made", "retry_context", "next_recommended_action"],
+  "properties": {
+    "outcome": {"const": "cycle_reported"},
+    "iteration": {"type": "integer", "minimum": 1, "maximum": 3},
+    "status": {"enum": ["completed", "partial", "no-progress"]},
+    "result": {"type": "string", "minLength": 1},
+    "evidence": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "artifacts": {
+      "type": "object",
+      "required": ["files", "prs", "issues", "notes"],
+      "properties": {
+        "files": {"$ref": "#/$defs/stringList"},
+        "prs": {"$ref": "#/$defs/stringList"},
+        "issues": {"$ref": "#/$defs/stringList"},
+        "notes": {"$ref": "#/$defs/stringList"}
+      },
+      "additionalProperties": false
+    },
+    "verification": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["check", "result"],
+        "properties": {
+          "check": {"type": "string", "minLength": 1},
+          "result": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "open_risks": {"$ref": "#/$defs/stringList"},
+    "progress_made": {"type": "boolean"},
+    "retry_context": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["failure", "evidence", "changed_next_attempt"],
+          "properties": {
+            "failure": {"type": "string", "minLength": 1},
+            "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+            "changed_next_attempt": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "next_recommended_action": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "no-progress"}}, "required": ["status"]},
+      "then": {"properties": {"progress_made": {"const": false}}}
+    }
+  ],
+  "$defs": {
+    "stringList": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  }
+}

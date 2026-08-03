@@ -4,7 +4,7 @@
 
 # Ultra Skills
 
-Editable source repo for OpenClaw skills, reusable roles, shared reference packages, and conventions.
+Editable source repo for OpenClaw skills, runnable workflow packages, reusable roles, shared reference packages, and conventions.
 
 Use this repo when you want to:
 - find the right skill for a task
@@ -32,35 +32,41 @@ Local OpenClaw reads skills directly from this repo's `SKILL.md` files, so packa
 
 If you need...
 - a runnable skill -> go to [`skills/`](#skill-index)
+- a runnable multi-stage workflow -> go to [`workflows/`](workflows/)
 - reusable reference material that is not a runnable skill -> go to [`shared/`](#shared-reference-packages)
 - a reusable reviewer/writer/specialist role -> go to [`roles/`](#role-index)
 - a repo-level shared rule or memory convention -> go to [`conventions/`](#conventions)
-- to create or rewrite a skill -> start with [`skills/create-skill`](#skill-index)
+- to create or rewrite a skill -> start with [`workflows/create-skill`](workflows/create-skill/)
 
 ## How this repo works
 
-Think of the repo in four layers:
+Think of the repo in six layers:
 
 1. `skills/` — executable skill source
    - each skill lives in its own folder
    - runtime entrypoint is `skills/<name>/SKILL.md`
    - references, scripts, and assets live beside it
 
-2. `roles/` — reusable role contracts
+2. `workflows/` — runnable multi-stage process packages
+   - each migrated workflow lives in `workflows/<skill-name>/`
+   - `workflow.toml` is the runtime graph
+   - schemas, templates, and other runtime sub-files live beside it
+
+3. `roles/` — reusable role contracts
    - these are not runnable skills
    - they hold canonical specialist identity, rubric, and learnings
    - skills should load and adapt them instead of re-owning the same role prose
 
-3. `agents/` — generated Codex custom-agent files
+4. `agents/` — generated Codex custom-agent files
    - these are generated from `roles/`
    - they let Codex spawn the same specialist roles as subagents
    - do not edit them by hand; regenerate them after role changes
 
-4. `conventions/` — repo-level defaults
+5. `conventions/` — repo-level defaults
    - shared conventions that multiple roles or skills may reference
    - use these when the rule is broader than one skill but narrower than general repo docs
 
-5. `shared/` — reusable reference packages
+6. `shared/` — reusable reference packages
    - these are not runnable skills
    - use them for cross-skill contracts, snippets, or authoring references that should stay out of the active skill catalog
 
@@ -68,6 +74,7 @@ Think of the repo in four layers:
 
 ```text
 skills/         runnable skill folders
+workflows/      runnable multi-stage workflow packages
 roles/          reusable role contracts
 agents/         generated Codex custom-agent TOML files
 shared/         reusable reference packages, not runtime skills
@@ -119,18 +126,23 @@ When a canonical label and folder path differ, the folder path is the source of 
 
 ### Find the right skill
 
-- developer-facing README intros, technical launch framing, developer-facing product positioning -> `skills/devrel-copywriter`
-- docs, setup, usage, onboarding, API explanation -> `skills/docs-writer`
+- developer-facing README intros, technical launch framing, developer-facing product positioning -> `workflows/devrel-copywriter`
+- docs, setup, usage, onboarding, API explanation -> `workflows/docs-writer`
 - market-facing copy, copy refreshes, content planning, launch planning, pricing/packaging, sales collateral, competitor dossiers, customer research, cold outreach, or lifecycle email -> `roles/marketing` (start at `roles/marketing/ROLE.md` and follow the role's own task-type routing table)
-- create or refactor a skill -> `skills/create-skill`
+- create or refactor a skill -> `workflows/create-skill`
 - workflow-runner orchestration through CLI-returned instructions -> `skills/orbita`
-- multi-role review -> `skills/code-review-orchestrator`
-- pre-implementation Researcher -> Critic research verdict -> `skills/research-critic`
+- multi-role read-only review -> `workflows/code-review-orchestrator`
+- pre-implementation Researcher -> Critic research verdict -> `workflows/research-critic`
+- approved closed contract -> backend/frontend implementation + verification handoff -> `workflows/implementation-harness`
+- architecture audit/proposal/approval/implementation -> `workflows/create-architecture`
+- design-memory review/proposal/implementation -> `workflows/create-design`
+- create, audit, simplify, or restructure a skill -> `workflows/create-skill`
+- bounded repeated execution with explicit controller decisions -> `workflows/loop`
 - small UI design -> implementation -> review -> PR smoke tests -> `workflows/frontend-ui-pr-smoke`
 
 ### Reuse a role
 
-If a skill needs a reusable specialist voice:
+If a skill or workflow needs a reusable specialist voice:
 - load from `roles/`
 - in skill runtime instructions, resolve paths relative to the skill root (`skills/<name>/`), not relative to nested reference files
 - for repo-level shared roles/conventions from a skill, use paths like `../../roles/<role>/...` or `../../conventions/<file>.md`
@@ -150,7 +162,7 @@ If a skill needs reusable instructions that are not a runnable skill:
 ### Add or update a skill
 
 1. Start from concrete usage, not abstract theory.
-2. Use `skills/create-skill` when building or rewriting the skill.
+2. Use `workflows/create-skill` when building or rewriting the skill.
 3. Keep `SKILL.md` lean.
 4. Push bulky or variant-specific detail into `references/`.
 5. Add scripts only for deterministic repeated work.
@@ -172,12 +184,12 @@ Fresh clones can use the committed schema-validation library dist artifact direc
 
 ### Writing and docs
 
-- `skills/devrel-copywriter`
+- `workflows/devrel-copywriter`
   - What it is: developer-facing framing, positioning, launch copy, README intros, and messaging polish.
   - Use when: the main job is message hierarchy, payoff, tone, and believable product framing.
   - Do not use when: the main job is teaching setup, usage, onboarding, migration, or API behavior.
 
-- `skills/docs-writer`
+- `workflows/docs-writer`
   - What it is: documentation writing and rewriting for usage, setup, onboarding, migration, and API/reference clarity.
   - Use when: the main job is reader success through clear explanation and structure.
   - Do not use when: the main job is framing, positioning, or README opening copy.
@@ -208,45 +220,20 @@ Fresh clones can use the committed schema-validation library dist artifact direc
   - What it is: the self-contained Marketing role for market-facing work.
   - Start at: `roles/marketing/ROLE.md`
   - Use when: the task is copywriting, copy editing, content strategy, launch planning, pricing/packaging, sales collateral, competitor profiling, customer research, cold outreach, or lifecycle email.
-  - Do not use when: the main job is developer-facing README/docs/adoption/trust work; keep that in `skills/devrel-copywriter` or `skills/docs-writer`.
+  - Do not use when: the main job is developer-facing README/docs/adoption/trust work; keep that in `workflows/devrel-copywriter` or `workflows/docs-writer`.
   - Routing: follow the Marketing role's own task-type routing table.
 
 ### Planning, review, and implementation flow
-
-- `skills/create-skill`
-  - What it is: evidence-driven workflow for creating, auditing, simplifying, or restructuring a skill folder.
-  - Use when: skill work needs source grounding, context reduction, trigger tuning, progressive disclosure, or eval-backed implementation.
-  - Do not use when: the request is ordinary domain work rather than authoring or evaluating a skill.
 
 - `skills/orbita`
   - What it is: workflow-runner host adapter skill for following runner-returned `next`/`continue --only-instructions` directives.
   - Use when: driving a workflow-runner run through CLI-returned host requests, worker delegation, approval waits, and exact embedded continuation commands.
   - Do not use when: the task is ordinary implementation, planning, research, or review that does not run through workflow-runner.
 
-- `skills/implementation-harness`
-  - What it is: direct implementation harness for already-approved work.
-  - Use when: scope is locked and the main job is execution.
-  - Do not use when: the task still needs discovery or approval shaping.
-
-- `skills/loop`
-  - What it is: generic agent-agnostic loop router for bounded repeated task cycles with state baton, one-cycle executors, progress reporting, and explicit stop rules.
-  - Use when: a task should run through repeated independent cycles, such as bug hunts, docs cleanup passes, PR comment handling, or quality-gated review/fix loops.
-  - Do not use when: the task only needs a one-shot answer, continuation criteria are missing, or another cycle would bypass required approval, safety, or external-action gates.
-
-- `skills/code-review-orchestrator`
-  - What it is: one entrypoint for multi-role code review with merged findings.
-  - Use when: the user wants a repo, diff, branch, or PR reviewed from one or more specialist angles.
-  - Do not use when: the main job is pre-implementation planning or direct implementation.
-
-- `skills/research-critic`
-  - What it is: reusable pre-implementation Researcher -> Critic workflow that returns a final research verdict.
-  - Use when: a task needs context closure, assumption pressure, readiness judgment, or structured research before downstream ownership.
-  - Do not use when: implementation, Architect-owned structural scoping, or PR review should already be happening.
-
 - `skills/grill-me`
   - What it is: scoping/interrogation helper for unclear tasks.
   - Use when: the real problem is still figuring out what should be built.
-  - Do not use when: the work is already scoped enough for `create-skill` or implementation.
+  - Do not use when: the work is already scoped enough for `workflows/create-skill` or implementation.
 
 ### Frontend and architecture specialties
 

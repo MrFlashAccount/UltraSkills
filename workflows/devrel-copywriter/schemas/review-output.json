@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/devrel-copywriter/review-output",
+  "title": "DevRel Copywriter Review Output",
+  "type": "object",
+  "required": ["outcome", "summary", "evidence_checked", "findings"],
+  "properties": {
+    "outcome": {"enum": ["approved", "needs_revision"]},
+    "summary": {"type": "string", "minLength": 1},
+    "evidence_checked": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["location", "evidence", "impact", "required_change"],
+        "properties": {
+          "location": {"type": "string", "minLength": 1},
+          "evidence": {"type": "string", "minLength": 1},
+          "impact": {"type": "string", "minLength": 1},
+          "required_change": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "approved"}}, "required": ["outcome"]},
+      "then": {"properties": {"findings": {"type": "array", "maxItems": 0}}}
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "needs_revision"}}, "required": ["outcome"]},
+      "then": {"properties": {"findings": {"type": "array", "minItems": 1}}}
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-architecture/source-audit-output",
+  "title": "Create Architecture Source Audit Output",
+  "type": "object",
+  "required": [
+    "outcome",
+    "mode",
+    "implementation_scope",
+    "summary",
+    "representative_asks",
+    "architecture_change_needed",
+    "current_shape",
+    "missing_evidence",
+    "constraints",
+    "pressure_points"
+  ],
+  "properties": {
+    "outcome": {"enum": ["audit_complete", "ready_for_context"]},
+    "mode": {"enum": ["audit", "scaffold", "improve"]},
+    "subtype": {"const": "align"},
+    "implementation_scope": {"enum": ["proposal_only", "implement"]},
+    "summary": {"type": "string", "minLength": 1},
+    "representative_asks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "architecture_change_needed": {"type": "boolean"},
+    "current_shape": {"type": "string", "minLength": 1},
+    "missing_evidence": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "constraints": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "pressure_points": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "evolution_slice_needed": {"type": "boolean"},
+    "findings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "recommendation": {"enum": ["stop", "scaffold_next", "improve_next", "continue"]},
+    "results": {
+      "type": "array",
+      "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "audit_complete"}}, "required": ["outcome"]},
+      "then": {
+        "properties": {
+          "mode": {"const": "audit"},
+          "implementation_scope": {"const": "proposal_only"}
+        },
+        "required": ["findings", "recommendation"]
+      }
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "ready_for_context"}}, "required": ["outcome"]},
+      "then": {
+        "properties": {
+          "mode": {"enum": ["scaffold", "improve"]},
+          "recommendation": {"const": "continue"}
+        },
+        "required": ["recommendation"]
+      }
+    },
+    {
+      "if": {"properties": {"subtype": {"const": "align"}}, "required": ["subtype"]},
+      "then": {"properties": {"mode": {"const": "improve"}}}
+    }
+  ]
+}

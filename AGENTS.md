@@ -9,18 +9,20 @@
 - This repo is self-contained.
 - Do not rely on critical external skill dependencies.
 - If a skill depends on another skill, that dependency must also live in this repo.
-- Copy skills into `skills/`; never move them out of their source location.
-- Copy the runtime-required skill contents, including references, scripts, assets, and any other required files.
+- Keep atomic runtime skills under `skills/` and multi-stage runner-owned processes under `workflows/`.
+- When explicitly migrating a skill process into a workflow, copy its runtime-required contents into `workflows/<name>/` and remove the replaced skill entrypoint only after repository routing points at the workflow package.
+- Copy the runtime-required package contents, including references, scripts, assets, templates, schemas, and any other required files.
 - Do not copy auxiliary repo/editor docs when they are not part of the skill runtime behavior.
 - `skills/` is the source of truth for local runtime loading.
+- `workflows/` is the source of truth for workflow-runner loading; do not keep duplicate `SKILL.md` facades for migrated workflows.
 - `shared/` holds reusable reference packages, not runtime skills.
 - Shared packages must not contain `SKILL.md`; keep them discoverable from `README.md` instead.
 - Every skill listed in `README.md` must include compact guidance in this exact shape: `What it is`, `Use when`, `Do not use when`.
-- Skills are either simple atomic skills (`caveman`/`forthright`/`hat` style) or workflows that describe a high-level process and the roles they invoke.
+- Skills are simple atomic tools (`caveman`/`forthright`/`hat` style); multi-stage processes are workflows that describe the high-level process and roles they invoke.
 - Do not describe a role as the essence of a skill; workflows orchestrate roles, and reusable roles live under `roles/`.
 - Roles are self-contained knowledge/thinking containers.
 - Use `hat <role>` when you need to converse or work through a role lens.
-- A skill is a workflow/process tool, not a facade for one role.
+- A skill is an atomic runtime tool, not a facade for one role or a duplicate workflow entrypoint.
 - Do not create `skills/<role>` just to mirror, load, or re-export `roles/<role>`.
 - Skills may reference a role entrypoint and rubric when the skill is a real process adapter that needs that role boundary or quality bar.
 - Allowed from `skills/**`: `roles/<role>/ROLE.md`.

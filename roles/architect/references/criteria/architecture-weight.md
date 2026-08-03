@@ -23,7 +23,7 @@ Start with the lightest shape that still protects the real risks.
 ## Sources
 
 1. Repo canon: `roles/architect/ROLE.md`, `roles/architect/RUBRIC.md`
-2. Repo canon: `skills/create-architecture/references/option-catalog.md`
+2. Repo canon: `workflows/create-architecture/references/option-catalog.md`
 
 ## Final role evidence
 

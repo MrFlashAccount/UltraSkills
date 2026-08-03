@@ -19,7 +19,7 @@ Responsibility zones are only useful if a reviewer can tell both the owner and t
 ## Sources
 
 1. Repo canon: `roles/architect/ROLE.md`, `roles/architect/RUBRIC.md`
-2. Repo canon: `skills/create-architecture/references/architecture-artifact-contract.md`, `skills/create-architecture/references/language.md`
+2. Repo canon: `workflows/create-architecture/references/architecture-artifact-contract.md`, `workflows/create-architecture/references/language.md`
 
 ## Final role evidence
 

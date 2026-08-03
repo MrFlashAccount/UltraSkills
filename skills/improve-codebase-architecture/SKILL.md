@@ -1,12 +1,12 @@
 ---
 name: improve-codebase-architecture
-description: Legacy donor/reference skill for existing-codebase deepening concepts. Prefer `create-architecture` in `improve` mode for active architecture work; use this file as reference material for module/interface/seam/depth thinking.
+description: Legacy donor/reference skill for existing-codebase deepening concepts. Prefer the `create-architecture` workflow in `improve` mode for active architecture work; use this file as reference material for module/interface/seam/depth thinking.
 ---
 
 # Improve Codebase Architecture (Legacy / Reference)
 
 This skill is kept as a donor/reference artifact.
-For active architecture work, route through `create-architecture` in `improve` mode so the work stays inside the main architecture workflow, approval gate, and artifact system.
+For active architecture work, route through `workflows/create-architecture` in `improve` mode so the work stays inside the main architecture workflow, approval gate, and artifact system.
 
 What remains useful here:
 - module/interface/seam/depth/locality vocabulary

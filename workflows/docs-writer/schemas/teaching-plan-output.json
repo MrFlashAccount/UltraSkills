@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/docs-writer/teaching-plan-output",
+  "title": "Docs Writer Teaching Plan Output",
+  "type": "object",
+  "required": ["outcome", "first_minute_outcome", "ordered_sections", "prerequisite_strategy", "example_strategy", "source_map", "exclusions", "self_critique"],
+  "properties": {
+    "outcome": {"const": "ready_for_debate"},
+    "first_minute_outcome": {"type": "string", "minLength": 1},
+    "ordered_sections": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "prerequisite_strategy": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "example_strategy": {"type": "string", "minLength": 1},
+    "source_map": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "exclusions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "self_critique": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "results": {"type": "array", "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}}
+  },
+  "additionalProperties": false
+}

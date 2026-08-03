@@ -129,6 +129,9 @@
           "type": "string",
           "minLength": 1
         },
+        "resources": {
+          "$ref": "#/$defs/workflowResourceRefs"
+        },
         "shards": {
           "$ref": "#/$defs/shardValues"
         }
@@ -223,6 +226,9 @@
         "role": {
           "type": "string",
           "minLength": 1
+        },
+        "resources": {
+          "$ref": "#/$defs/workflowResourceRefs"
         },
         "branches": {
           "$ref": "#/$defs/fanoutBranchSelection"
@@ -494,9 +500,22 @@
         "role": {
           "type": "string",
           "minLength": 1
+        },
+        "resources": {
+          "$ref": "#/$defs/workflowResourceRefs"
         }
       },
       "additionalProperties": false
+    },
+    "workflowResourceRefs": {
+      "description": "Workflow-package-local files exposed to workers as absolute paths without requiring the task cwd to contain the workflow package.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "prompt": {
       "description": "Workflow prompt text. Use a string for compact prompts or an array of strings for readable multi-line authoring; array items are joined with newline characters before rendering.",

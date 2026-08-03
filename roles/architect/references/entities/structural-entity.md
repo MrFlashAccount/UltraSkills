@@ -21,7 +21,7 @@ In this repo, structural entities are explicitly not Researcher domain vocabular
 
 ## Sources
 
-1. Repo canon: `roles/architect/ROLE.md`, `roles/architect/RUBRIC.md`, `skills/create-architecture/references/language.md`
+1. Repo canon: `roles/architect/ROLE.md`, `roles/architect/RUBRIC.md`, `workflows/create-architecture/references/language.md`
 
 ## Final role evidence
 

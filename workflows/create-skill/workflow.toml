@@ -1,0 +1,104 @@
+name = "create-skill"
+version = 1
+description = "Create, rewrite, audit, simplify, or restructure a skill folder through the smallest evidence-driven path. Use for skill authoring, trigger tuning, progressive disclosure, deterministic helpers, and evidence-based comparison against current and no-skill baselines. The triggering request authorizes the requested mode; audit and proposal remain read-only. Do not use for ordinary repository implementation, documentation writing, or role authoring that does not change a skill package."
+start = "skill_authoring"
+done = "done"
+
+[loopPolicies.substantial_evaluation]
+steps = ["skill_authoring", "skill_evaluation"]
+entry = "skill_authoring"
+boundary = "skill_evaluation"
+maxIterations = 2
+onLimit = "done"
+
+[steps.skill_authoring]
+name = "Skill authoring"
+kind = "worker"
+agent = "skill_author"
+
+[steps.skill_authoring.input]
+resources = [
+  "references/authoring.md",
+  "references/evaluation.md",
+  "references/state-machines.md",
+  "scripts/doctor.mjs",
+]
+prompt = '''The request that triggered this workflow authorizes the requested mode. Start when the target and scope are clear. Keep audit and proposal read-only unless the user also requested edits. Ask only for a missing decision that would materially change the result, and preserve independent safety, privacy, destructive-action, publishing, commit, and push boundaries. When user input is required, use the runner non-blocking-stop channel with the smallest concrete question; do not complete the step with an invented assumption.
+
+Build the smallest skill that adds durable value beyond the model, repository, tools, and user request.
+
+1. Inspect the real source, current skill, runtime, repo instructions, and representative usage.
+2. Separate non-obvious knowledge and fragile invariants from instructions recoverable from the request, repository, tools, code, or source artifacts.
+3. Choose the smallest useful `SKILL.md`, references, scripts, and assets.
+4. Validate trigger behavior and task quality on enough real cases to cover material risks, including intended and paraphrased asks, adjacent asks that should stay quiet, material branches, and observed failures. Do not force an arbitrary case count.
+5. Compare against the current and no-skill baseline when the change is substantial.
+6. Remove context that has no demonstrated value; restore only what evidence shows is needed.
+
+Encode durable opinions, product knowledge, local gotchas, and user/team/product/runtime-specific procedures. Prefer expressive interfaces, schemas, scripts, tests, code, and source artifacts over prose that teaches reasoning. Match instruction strength to fragility: allow judgment for flexible work and use hard constraints for safety, destructive actions, exact protocols, and repeatedly observed failures. Check conflicts and repetition across the request, repo instructions, roles, tools, target skill, and references. Keep the common path in `SKILL.md` and detailed variants behind progressive disclosure. Add scripts only for deterministic or repeated work and assets only for output resources. Keep claimed capabilities aligned with the files, tools, and paths that ship. For sensitive surfaces, keep repo-visible content local-safe and run the relevant privacy/data-safety review.
+
+Use the exact absolute paths exposed under Workflow resources; do not resolve package files from the target repository. Read `references/authoring.md` when creating or materially restructuring skill files, and `references/evaluation.md` before a substantial rewrite, trigger tuning, or evidence-based simplification. Read `references/state-machines.md` only when unfinished output or invalid transitions can escape into user-visible or external state; do not add a state machine for a normal draft/review/fix cycle. Run `bun <resolved scripts/doctor.mjs path> <skill-folder> [--eval <cases.jsonl>] [--json]` when auditing context shape, direct references, repeated rules, or eval-corpus structure. Keep eval cases outside the runtime skill unless the runtime needs them there.
+
+A direct low-risk edit, audit, or proposal with sufficient evidence may return `complete`. A substantial rewrite, trigger change, or evidence-based simplification must return `needs_evaluation`; do not self-approve it or route small work into evaluation merely because this workflow supports it. After addressing prior evaluation findings, return `needs_evaluation` so the revised candidate is checked again.
+
+Address the latest bounded evaluation findings when present. Preserve the requested scope and already-supported behavior rather than widening the task.
+
+Previous evaluation outcome:
+${{ input.skill_evaluation.outcome | default: "No previous evaluation." }}
+
+Previous evaluation findings:
+${{ input.skill_evaluation.verdict.findings | default: "No previous evaluation findings." }}'''
+
+[steps.skill_authoring.output]
+template = "templates/authoring-result.md"
+schema = "schemas/authoring-output.json"
+
+[steps.skill_authoring.next]
+match = "${{ output.outcome }}"
+
+[steps.skill_authoring.next.cases]
+complete = "done"
+needs_evaluation = "skill_evaluation"
+
+[steps.skill_evaluation]
+name = "Skill evaluation"
+kind = "worker"
+agent = "skill_critic"
+
+[steps.skill_evaluation.input]
+role = "critic"
+prompt = '''Evaluate only the latest substantial skill-authoring result. This is a read-only evaluation: do not edit the target, publish, commit, push, or widen the requested scope.
+
+Use real tasks in clean contexts and keep author conclusions or intended fixes out of the evaluator context. Cover enough evidence for the material risks, including intended and paraphrased trigger asks, adjacent asks that should stay quiet, material branches and edge cases, representative task quality, and previously observed failures. Do not force an arbitrary case count.
+
+Compare all three variants: no skill, the current skill baseline, and the candidate. Record concrete evidence for each variant plus the overall conclusion. When practical, judge outputs blind. Consider trigger correctness, task/rubric pass, user correction or retry count, failed tool or script calls, token/context cost, elapsed time, and unexpected behavior. Do not retain a rule because it sounds prudent; require measured value or a real safety/protocol boundary.
+
+Check source grounding, smallest useful surface, instruction strength, progressive disclosure, shipped dependency closure, conflicts/repetition, context cost, deterministic-script and asset justification, privacy/safety handling, doctor/eval evidence, and read/write scope. Treat structural doctor errors as failures. Treat strong-rule, unconditional-load, repeated-text, and context-size findings as review candidates that need behavioral interpretation, not automatic failures.
+
+Return `approved` only when the candidate demonstrates durable value without unnecessary instruction weight and all must-fix/should-fix findings are absent. Return `needs_revision` with bounded, evidence-backed findings otherwise. Do not add ceremony for its own sake. If required evidence or user input is unavailable, use the runner non-blocking-stop channel instead of submitting a terminal verdict.
+
+Latest authoring result:
+${{ input.skill_authoring }}'''
+
+[steps.skill_evaluation.output]
+template = "templates/evaluation-verdict.md"
+schema = "schemas/evaluation-output.json"
+
+[steps.skill_evaluation.next]
+match = "${{ output.outcome }}"
+
+[steps.skill_evaluation.next.cases]
+approved = "done"
+needs_revision = "skill_authoring"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project the requested mode result from the latest authoring output and, when present, the latest evaluation output. State whether files were edited; summarize inspected source and representative trigger/task evidence; explain what was removed, retained, or deferred and why; report doctor/eval results when used; and preserve remaining risks. If evaluation was not needed, say so briefly. If the evaluation loop ended with `needs_revision`, preserve the unresolved findings and do not claim a clean pass.
+
+Latest authoring result:
+${{ input.skill_authoring }}
+
+Latest evaluation result:
+${{ input.skill_evaluation | default: "Evaluation was not needed." }}'''

@@ -29,13 +29,11 @@ PARENT_FORBIDDEN_PATTERNS = (
     re.compile(r"ROLE_[A-Z0-9_]*EVIDENCE[A-Z0-9_]*"),
 )
 DELEGATION_DOCS = (
-    "skills/code-review-orchestrator/SKILL.md",
-    "skills/code-review-orchestrator/references/role-prompts.md",
-    "skills/create-architecture/references/workflow.md",
-    "skills/create-design/references/workflow.md",
-    "skills/implementation-harness/SKILL.md",
-    "skills/implementation-harness/references/roles/implementers.md",
-    "skills/implementation-harness/references/workflow.md",
+    "workflows/code-review-orchestrator/references/role-prompts.md",
+    "workflows/create-architecture/references/workflow.md",
+    "workflows/create-design/references/workflow.md",
+    "workflows/implementation-harness/references/roles/implementers.md",
+    "workflows/implementation-harness/references/workflow.md",
 )
 DUPLICATED_DELEGATION_SNIPPETS = (
     "load selected role material;\n- follow all instructions in loaded role material;",
@@ -58,7 +56,7 @@ CANONICAL_REVIEWER_LABEL_FOLDERS = {
 }
 
 REVIEWER_MAPPING_DOCS = (
-    "skills/code-review-orchestrator/references/role-prompts.md",
+    "workflows/code-review-orchestrator/references/role-prompts.md",
 )
 
 CODE_REVIEW_SECTION_HEADINGS = {
@@ -88,7 +86,7 @@ def final_block(text: str) -> str | None:
 
 def scan_parent_prompt_boundaries(errors: list[str]) -> None:
     """Prevent parent/orchestrator docs from exposing role-evidence mechanics."""
-    scan_roots = [ROOT / "skills", ROOT / "shared" / "delegate"]
+    scan_roots = [ROOT / "skills", ROOT / "workflows", ROOT / "shared" / "delegate"]
     for base in scan_roots:
         if not base.exists():
             continue
@@ -122,7 +120,7 @@ def scan_delegated_role_wrapper_smells(errors: list[str]) -> None:
 
 
 def scan_implementer_prompt_compactness(errors: list[str]) -> None:
-    rel = "skills/implementation-harness/references/roles/implementers.md"
+    rel = "workflows/implementation-harness/references/roles/implementers.md"
     path = ROOT / rel
     if not path.exists():
         errors.append(f"{rel}: missing implementer role overlay")
