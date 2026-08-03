@@ -6,14 +6,14 @@ import { fileURLToPath } from 'node:url';
 import { readWorkflowDocument } from '../persistence/workflow-resources/workflow-document-reader.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-const workflowDoc = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/dev-harness/workflow.toml'));
+const workflowDoc = readWorkflowDocument(path.join(REPO_ROOT, 'workflows/spdd/workflow.toml'));
 
 function promptText(step) {
   const prompt = step.input?.prompt ?? '';
   return Array.isArray(prompt) ? prompt.join('\n') : prompt;
 }
 
-test('dev-harness implementation branches consume only their owner-written rework handoff', () => {
+test('spdd implementation branches consume only their owner-written rework handoff', () => {
   const handoffByBranch = {
     backend_implementation: 'input.review.implementer_handoffs.backend_implementation',
     frontend_implementation: 'input.review.implementer_handoffs.frontend_implementation',

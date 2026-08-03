@@ -12,7 +12,7 @@ const summary = {
   occupancy: { state: "unclaimed" },
   runId: "run-1",
   title: { sourceClass: "run_title", value: "Safe run", policyVersion: "2" },
-  workflow: "dev-harness",
+  workflow: "spdd",
 } as const;
 
 describe("dashboard browser contracts", () => {

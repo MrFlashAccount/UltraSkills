@@ -1,6 +1,6 @@
 {
-  "title": "DevHarness Implementation Output",
-  "description": "Producer output contract for a DevHarness implementation worker after applying its assigned slice.",
+  "title": "SPDD Implementation Output",
+  "description": "Producer output contract for a SPDD implementation worker after applying its assigned slice.",
   "type": "object",
   "required": [
     "outcome"
@@ -79,7 +79,7 @@
   },
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/implementation-output",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/implementation-output",
   "allOf": [
     {
       "if": {

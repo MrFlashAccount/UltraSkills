@@ -24,7 +24,7 @@ export function makeRun(index = 1, laneId: DashboardLaneId = "waiting_for_user")
     status: "active",
     title: { sourceClass: "run_title", value: `Run ${index} needs attention`, policyVersion: "2" },
     updatedAt: timestamp,
-    workflow: index % 2 ? "dev-harness" : "research",
+    workflow: index % 2 ? "spdd" : "research",
   };
 }
 

@@ -10,7 +10,7 @@ import { runsIndexPathsForRoot } from './run-index.mjs';
 
 const runnerDir = dirname(fileURLToPath(import.meta.url));
 export const repositoryRoot = resolve(runnerDir, '../../../../..');
-export const defaultWorkflowPath = join(repositoryRoot, 'workflows/dev-harness/workflow.toml');
+export const defaultWorkflowPath = join(repositoryRoot, 'workflows/spdd/workflow.toml');
 export const legacyWorkflowRunsRoot = join(repositoryRoot, 'skills/orbita/.workflow-runs');
 export const orbitaHome = resolve(process.env.ORBITA_HOME ?? join(homedir(), '.orbita'));
 export const defaultWorkflowRunsRoot = join(orbitaHome, 'workflow-runs/v1');

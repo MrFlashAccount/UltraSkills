@@ -1,5 +1,5 @@
 {
-  "name": "skills-dev-harness-prototype",
+  "name": "skills-spdd-prototype",
   "private": true,
   "workspaces": [
     "shared/scripts/schema-validation"

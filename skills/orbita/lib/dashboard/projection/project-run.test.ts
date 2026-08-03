@@ -12,7 +12,7 @@ const run = {
   title: "Visible title",
   updatedAt: "2026-07-12T00:00:01.000Z",
   workerLease: { tokenHash: "a".repeat(64), leaseExpiresAt: "2026-07-12T00:02:00.000Z" },
-  workflow: { identity: "dev-harness", path: "/private/workflow.toml" },
+  workflow: { identity: "spdd", path: "/private/workflow.toml" },
 };
 
 describe("dashboard public projection", () => {

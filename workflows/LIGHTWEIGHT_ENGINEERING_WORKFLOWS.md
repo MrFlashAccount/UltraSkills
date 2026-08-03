@@ -12,7 +12,7 @@ Implemented packages:
 - `workflows/make-it-fast/`
 - `workflows/deep-debugging/`
 
-`Lightweight` means narrower and less ceremonial than `dev-harness`, not that
+`Lightweight` means narrower and less ceremonial than `spdd`, not that
 every route is cheap. `make-it-fast` and `deep-debugging` are intentionally
 specialized evidence workflows
 for tasks where direct execution would otherwise become guesswork.
@@ -26,7 +26,7 @@ path between a direct edit and those heavier workflows.
 That gap matters for bounded bug fixes, small behavior changes, concrete review
 follow-up, measured optimization, and difficult diagnosis. A direct edit is
 cheap but has no reusable execution contract. `implementation-harness` expects
-approved task, research, and execution-plan input. `dev-harness` owns a larger
+approved task, research, and execution-plan input. `spdd` owns a larger
 research-to-review lifecycle. `loop` repeats generic cycles without owning the
 evidence contract for any of these task types.
 
@@ -55,7 +55,7 @@ default ceremony for every code edit.
 | `make-it-fast` | Performance is the primary acceptance target and a stable workload, baseline, and metric can be established. | The optimization is speculative, measurement is too noisy, or performance is only an optional concern inside a correctness change. |
 | `deep-debugging` | The symptom is real but the root cause is uncertain, local reproduction is insufficient, or user/remote reproduction plus diagnostic logs are required. | The cause is already concrete enough for `red-green-refactor`, the input is an existing finding, or the task is a live incident requiring domain-specific operational control. |
 | `implementation-harness` | The task already has approved, closed task/research/plan input and disjoint implementation ownership. | Discovery, architecture, or product decisions are still open. |
-| `dev-harness` | The work needs staged research, architecture or UI direction, approval, broad implementation, or multi-role review. | The work is a small, closed change that one of the lighter routes can prove directly. |
+| `spdd` | The work needs staged research, architecture or UI direction, approval, broad implementation, or multi-role review. | The work is a small, closed change that one of the lighter routes can prove directly. |
 
 A focused route has one primary behavior, finding set, metric, or symptom; clear
 ownership; and no unresolved product or architecture decision. TDD and pair work
@@ -512,7 +512,7 @@ terminal bugfix result.
 
 - building a general catalogue of XP ceremonies or debugging rituals;
 - making pair work mandatory for ordinary implementation;
-- replacing `dev-harness`, `implementation-harness`, or independent code review;
+- replacing `spdd`, `implementation-harness`, or independent code review;
 - treating `make it fast` as mandatory optimization without a benchmark;
 - treating more hypotheses, logging, or internet search as diagnostic progress;
 - turning every checkpoint into a separate worker or approval gate;
@@ -561,4 +561,4 @@ investigation as a fix.
 - no difficult-bug continuation without an information-gain certificate;
 - one hostile reset per debugging run, followed by an honest bounded exit;
 - escalation narrows or changes the route; it does not silently grow the
-  lightweight workflow into a second `dev-harness`.
+  lightweight workflow into a second `spdd`.

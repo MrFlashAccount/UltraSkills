@@ -1,6 +1,6 @@
 # Artifact contract prototype
 
-This is a narrow contract prototype for DevHarness/research workflows. It centralizes low-level artifact mechanics in schema definitions and renderer-generated field notes while keeping workflow step prompts focused on semantic instructions.
+This is a narrow contract prototype for SPDD/research workflows. It centralizes low-level artifact mechanics in schema definitions and renderer-generated field notes while keeping workflow step prompts focused on semantic instructions.
 
 It does not implement a full Artifact Store, promotion model, aliases, revisions, or runtime-managed artifact persistence. The prompt builder remains a dumb renderer: it reads templates/schemas, replaces supported placeholders, appends strict generated sections, and does not choose artifact ids, paths, or workflow behavior.
 
@@ -68,7 +68,7 @@ Workflow step prompts and markdown templates must not repeat low-level mechanics
 
 Those mechanics belong in schema definitions and renderer-generated field notes.
 
-## DevHarness end-to-end flow
+## SPDD end-to-end flow
 
 1. `research_draft` emits `artifacts[0]` for the full human-facing research Canvas, for example:
 

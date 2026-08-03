@@ -14,7 +14,7 @@ const run = {
   occupancy: { state: "unclaimed" as const },
   runId: "run-1",
   title: { policyVersion: "2" as const, sourceClass: "run_title" as const, value: "Run one" },
-  workflow: "dev-harness",
+  workflow: "spdd",
 };
 
 const snapshot = {

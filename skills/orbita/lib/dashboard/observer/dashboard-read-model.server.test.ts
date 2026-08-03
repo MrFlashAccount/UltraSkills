@@ -8,7 +8,7 @@ const run: RunSummaryDTO = {
   occupancy: { state: "unclaimed" },
   runId: "run-1",
   title: { sourceClass: "run_title", value: "Run one", policyVersion: "2" },
-  workflow: "dev-harness",
+  workflow: "spdd",
 };
 
 describe("DashboardReadModel", () => {

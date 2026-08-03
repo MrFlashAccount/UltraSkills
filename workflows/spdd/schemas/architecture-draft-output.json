@@ -1,6 +1,6 @@
 {
-  "title": "DevHarness Architecture Draft Output",
-  "description": "Producer output contract for the execution-ready DevHarness architecture draft and its implementation/review routing.",
+  "title": "SPDD Architecture Draft Output",
+  "description": "Producer output contract for the execution-ready SPDD architecture draft and its implementation/review routing.",
   "type": "object",
   "required": [
     "outcome"
@@ -235,7 +235,7 @@
   },
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/architecture-draft-output",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/architecture-draft-output",
   "$defs": {
     "reviewStepId": {
       "enum": [

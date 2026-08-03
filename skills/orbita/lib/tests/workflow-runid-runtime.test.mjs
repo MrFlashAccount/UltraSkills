@@ -90,7 +90,7 @@ test('workflow-runner CLI exposes runId and rejects runDir', () => {
 test('installed plugin layout starts a catalog-created run from the skill cwd', () => {
   const pluginRoot = mkdtempSync(path.join(tmpdir(), 'workflow-installed-layout-'));
   const skillRoot = path.join(pluginRoot, 'skills/orbita');
-  const workflowsRoot = path.join(pluginRoot, 'workflows/dev-harness');
+  const workflowsRoot = path.join(pluginRoot, 'workflows/spdd');
   const runsRoot = path.join(pluginRoot, '.workflow-runs');
   const id = runId('installed-layout');
 
@@ -98,7 +98,7 @@ test('installed plugin layout starts a catalog-created run from the skill cwd', 
     cpSync(path.join(root, 'skills/orbita/lib'), path.join(skillRoot, 'lib'), { recursive: true });
     cpSync(path.join(root, 'shared'), path.join(pluginRoot, 'shared'), { recursive: true });
     mkdirSync(workflowsRoot, { recursive: true });
-    writeFileSync(path.join(workflowsRoot, 'workflow.toml'), `name = "dev-harness"
+    writeFileSync(path.join(workflowsRoot, 'workflow.toml'), `name = "spdd"
 description = "Minimal installed-layout workflow fixture."
 version = 1
 start = "prepare"
@@ -129,8 +129,8 @@ prompt = "Finished."
       encoding: 'utf8',
     });
     assert.equal(catalog.status, 0, catalog.stderr);
-    const workflowPath = JSON.parse(catalog.stdout).workflows.find((workflow) => workflow.name === 'dev-harness')?.path;
-    assert.equal(realpathSync(workflowPath), realpathSync(path.join(pluginRoot, 'workflows/dev-harness/workflow.toml')));
+    const workflowPath = JSON.parse(catalog.stdout).workflows.find((workflow) => workflow.name === 'spdd')?.path;
+    assert.equal(realpathSync(workflowPath), realpathSync(path.join(pluginRoot, 'workflows/spdd/workflow.toml')));
 
     const create = spawnSync(process.execPath, [
       './lib/entrypoints/cli/workflow-runs.mjs',
@@ -140,7 +140,7 @@ prompt = "Finished."
       '--workflow',
       workflowPath,
       '--workflow-identity',
-      'dev-harness',
+      'spdd',
     ], { cwd: skillRoot, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUNS_ROOT: runsRoot } });
     assert.equal(create.status, 0, create.stderr);
 

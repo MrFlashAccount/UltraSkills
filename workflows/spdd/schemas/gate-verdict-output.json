@@ -1,6 +1,6 @@
 {
-  "title": "DevHarness Gate Attack Verdict Output",
-  "description": "Producer output contract for DevHarness attack gates that approve, request revision, or block an upstream draft.",
+  "title": "SPDD Gate Verdict Output",
+  "description": "Producer output contract for SPDD gates that pass, request changes, request revision, or block work.",
   "type": "object",
   "required": [
     "outcome",
@@ -10,7 +10,9 @@
     "outcome": {
       "enum": [
         "approved",
-        "needs_revision"
+        "needs_revision",
+        "passed",
+        "needs_changes"
       ],
       "description": "Producer must emit the single enum value that reflects the completed stage state. Report missing help through the runner non-blocking stop control channel, never as an output outcome.",
       "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when it requires revision."
@@ -53,7 +55,20 @@
       },
       "additionalProperties": true,
       "description": "Producer must emit the gate decision payload, including summary, checked evidence, and findings supporting the outcome.",
-      "x-usage": "Use this with outcome as the authoritative decision. Advance only on approved, revise only on needs_revision,. Report missing help through the runner control channel without completing the step."
+      "x-usage": "Use this with outcome as the authoritative decision. Advance only on pass/approval states, rework only on rework states,. Report missing help through the runner control channel without completing the step."
+    },
+    "required_implementation_steps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "backend_implementation",
+          "frontend_implementation",
+          "architecture_artifact_update"
+        ]
+      },
+      "description": "Producer must list implementation branch ids that must rerun to address review or gate findings.",
+      "x-usage": "Use only these branch ids when rerunning implementation for required changes. Do not add branches from prose alone."
     },
     "artifacts": {
       "type": "array",
@@ -74,5 +89,5 @@
   },
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/gate-attack-verdict-output"
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/gate-verdict-output"
 }

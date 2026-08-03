@@ -2,7 +2,7 @@
 
 This records the direct skill-to-workflow migration. Each replaced source skill
 was removed after its process and runtime sub-files moved into one self-contained
-`workflows/<skill-name>/` package. `workflows/dev-harness/workflow.toml` is the
+`workflows/<skill-name>/` package. `workflows/spdd/workflow.toml` is the
 structural reference for worker steps, approvals where the source requires
 them, bounded loops, non-blocking stops, typed outputs, and terminal projection.
 

@@ -1,16 +1,13 @@
 {
-  "title": "DevHarness Gate Verdict Output",
-  "description": "Producer output contract for DevHarness gates that pass, request changes, request revision, or block work.",
+  "title": "SPDD Gate Review Verdict Output",
+  "description": "Producer output contract for SPDD review gates that pass, request changes, or block implemented work.",
   "type": "object",
   "required": [
-    "outcome",
-    "verdict"
+    "outcome"
   ],
   "properties": {
     "outcome": {
       "enum": [
-        "approved",
-        "needs_revision",
         "passed",
         "needs_changes"
       ],
@@ -54,8 +51,8 @@
         }
       },
       "additionalProperties": true,
-      "description": "Producer must emit the gate decision payload, including summary, checked evidence, and findings supporting the outcome.",
-      "x-usage": "Use this with outcome as the authoritative decision. Advance only on pass/approval states, rework only on rework states,. Report missing help through the runner control channel without completing the step."
+      "description": "Producer must emit the review decision payload, including summary, checked evidence, and findings supporting pass, rework, or block.",
+      "x-usage": "Use this with outcome as the authoritative decision. Pass only on passed, send changes only on needs_changes,. Report missing help through the runner control channel without completing the step."
     },
     "required_implementation_steps": {
       "type": "array",
@@ -67,8 +64,9 @@
           "architecture_artifact_update"
         ]
       },
-      "description": "Producer must list implementation branch ids that must rerun to address review or gate findings.",
-      "x-usage": "Use only these branch ids when rerunning implementation for required changes. Do not add branches from prose alone."
+      "description": "Producer must list implementation branch ids that must rerun when review requires rework.",
+      "x-usage": "Use only these branch ids when rerunning implementation for required changes. Do not add branches from prose alone.",
+      "minItems": 1
     },
     "artifacts": {
       "type": "array",
@@ -89,5 +87,42 @@
   },
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/gate-verdict-output"
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/gate-review-verdict-output",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "passed"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "verdict"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "needs_changes"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "verdict",
+          "required_implementation_steps"
+        ]
+      }
+    }
+  ]
 }

@@ -186,7 +186,7 @@ test('E2E fixture: long happy path loops through review revision and preserves l
   assert.match(readHistory(run), /id=review action=run_worker/);
 });
 
-test('E2E fixture: DevHarness-style artifact path is required-read context for downstream review instructions', async () => {
+test('E2E fixture: SPDD-style artifact path is required-read context for downstream review instructions', async () => {
   const workflow = fixture('long-revision.workflow.json');
   const run = runDir('artifact-content');
 

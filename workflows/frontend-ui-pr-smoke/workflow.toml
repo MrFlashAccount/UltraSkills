@@ -66,7 +66,7 @@ Input context:
 
 [steps.design_attack.output]
 template = "../../shared/templates/review-verdict-template.md"
-schema = "../dev-harness/schemas/gate-attack-verdict-output.json"
+schema = "../spdd/schemas/gate-attack-verdict-output.json"
 
 [steps.design_attack.next]
 match = "${{ output.outcome }}"
@@ -140,7 +140,7 @@ Input context:
 
 [steps.implementation.branches.frontend_implementation.output]
 template = "../../shared/templates/implementer-handoff-template.md"
-schema = "../dev-harness/schemas/implementation-output.json"
+schema = "../spdd/schemas/implementation-output.json"
 
 [steps.review]
 name = "Frontend reviews"
@@ -179,7 +179,7 @@ Input context:
 
 [steps.review.branches.frontend_review.output]
 template = "../../shared/templates/review-verdict-template.md"
-schema = "../dev-harness/schemas/gate-review-verdict-output.json"
+schema = "../spdd/schemas/gate-review-verdict-output.json"
 
 [steps.review.branches.frontend_taste_review]
 name = "Frontend taste review"
@@ -199,7 +199,7 @@ Input context:
 
 [steps.review.branches.frontend_taste_review.output]
 template = "../../shared/templates/review-verdict-template.md"
-schema = "../dev-harness/schemas/gate-review-verdict-output.json"
+schema = "../spdd/schemas/gate-review-verdict-output.json"
 
 [steps.pull_request]
 name = "Open pull request"

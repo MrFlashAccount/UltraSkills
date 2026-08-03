@@ -95,7 +95,7 @@ function schemaCoveredWorkflow(overrides = {}) {
   return workflow;
 }
 
-function devHarnessImplementationSchema() {
+function spddImplementationSchema() {
   const schemaDir = path.join(tempDir, 'schemas');
   mkdirSync(schemaDir, { recursive: true });
   const schemaPath = path.join(schemaDir, 'implementation-output.json');
@@ -115,8 +115,8 @@ function devHarnessImplementationSchema() {
   return path.basename(schemaPath);
 }
 
-function devHarnessImplementationWorkflow() {
-  devHarnessImplementationSchema();
+function spddImplementationWorkflow() {
+  spddImplementationSchema();
   const implementationOutput = { template: 'output.md', schema: 'schemas/implementation-output.json' };
   const steps = {
     backend_implementation: {
@@ -136,7 +136,7 @@ function devHarnessImplementationWorkflow() {
     done: { name: 'Done', kind: 'done', input: { prompt: 'Finished.' } },
   };
   return {
-    name: 'dev-harness',
+    name: 'spdd',
     version: 1,
     start: 'backend_implementation',
     done: 'done',
@@ -311,7 +311,7 @@ test('runner reuse hints: approval non-blocking stop waits for orchestrator reso
   assert.match(resolved.orchestratorInstruction, /Ask for approval again with the resolved concern\./);
 });
 test('runner reuse hints: non-blocking stop redacts private fields and sensitive text', async () => {
-  const workflow = devHarnessImplementationWorkflow();
+  const workflow = spddImplementationWorkflow();
   const customRunsRoot = path.join(tempDir, 'non-blocking-stop-custom-runs-root');
   const { runId, runDir, workflowPath, runsRoot, leaseToken, now } = await runCase('non-blocking-stop-redaction', workflow, { runsRoot: customRunsRoot });
   const customIndexPath = path.join(customRunsRoot, 'runs.json');

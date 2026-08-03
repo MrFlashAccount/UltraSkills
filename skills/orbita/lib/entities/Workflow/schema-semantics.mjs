@@ -22,7 +22,7 @@ function fieldPath(...parts) {
 }
 
 function isExternalWorkflowOutputSchema(_schemaRef, schema) {
-  return typeof schema?.$id === 'string' && schema.$id.includes('/schemas/workflow/dev-harness/');
+  return typeof schema?.$id === 'string' && schema.$id.includes('/schemas/workflow/spdd/');
 }
 
 function collectFieldAnnotationWarnings(schema, schemaRef, warnings, pathSegments = []) {

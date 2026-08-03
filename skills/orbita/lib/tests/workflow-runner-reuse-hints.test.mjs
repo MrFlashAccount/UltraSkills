@@ -95,7 +95,7 @@ function schemaCoveredWorkflow(overrides = {}) {
   return workflow;
 }
 
-function devHarnessImplementationSchema() {
+function spddImplementationSchema() {
   const schemaDir = path.join(tempDir, 'schemas');
   mkdirSync(schemaDir, { recursive: true });
   const schemaPath = path.join(schemaDir, 'implementation-output.json');
@@ -115,8 +115,8 @@ function devHarnessImplementationSchema() {
   return path.basename(schemaPath);
 }
 
-function devHarnessImplementationWorkflow() {
-  devHarnessImplementationSchema();
+function spddImplementationWorkflow() {
+  spddImplementationSchema();
   const implementationOutput = { template: 'output.md', schema: 'schemas/implementation-output.json' };
   const steps = {
     backend_implementation: {
@@ -136,7 +136,7 @@ function devHarnessImplementationWorkflow() {
     done: { name: 'Done', kind: 'done', input: { prompt: 'Finished.' } },
   };
   return {
-    name: 'dev-harness',
+    name: 'spdd',
     version: 1,
     start: 'backend_implementation',
     done: 'done',
@@ -398,7 +398,7 @@ test('runner reuse hints: continue bind-agent renews stale matching worker lease
 
 
 test('runner reuse hints: non-blocking stop keeps host work active with same-worker follow-up', async () => {
-  const workflow = devHarnessImplementationWorkflow();
+  const workflow = spddImplementationWorkflow();
   const { runId, runDir, workflowPath, leaseToken, now } = await runCase('non-blocking-stop-same-worker', workflow);
 
   const first = await next({ runId, workflowPath, leaseToken, now });
@@ -652,7 +652,7 @@ test('runner reuse hints: any worker can report a non-blocking stop at the same 
 });
 
 test('runner reuse hints: non-blocking stop has fresh-worker fallback without preferred worker', async () => {
-  const workflow = devHarnessImplementationWorkflow();
+  const workflow = spddImplementationWorkflow();
   const { runId, runDir, workflowPath, leaseToken, now } = await runCase('non-blocking-stop-fresh-worker', workflow);
 
   await next({ runId, workflowPath, leaseToken, now });
