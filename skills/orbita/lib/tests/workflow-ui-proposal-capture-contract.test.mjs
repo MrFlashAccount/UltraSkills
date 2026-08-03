@@ -6,15 +6,15 @@ import { fileURLToPath } from "node:url";
 import { readWorkflowDocument } from "../persistence/workflow-resources/workflow-document-reader.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
-const workflow = readWorkflowDocument(path.join(REPO_ROOT, "workflows/dev-harness/workflow.toml"));
+const workflow = readWorkflowDocument(path.join(REPO_ROOT, "workflows/spdd/workflow.toml"));
 const schema = JSON.parse(
   readFileSync(
-    path.join(REPO_ROOT, "workflows/dev-harness/schemas/ui-intent-draft-output.json"),
+    path.join(REPO_ROOT, "workflows/spdd/schemas/ui-intent-draft-output.json"),
     "utf8",
   ),
 );
 const template = readFileSync(
-  path.join(REPO_ROOT, "workflows/dev-harness/templates/ui-design-proposal-html-template.html"),
+  path.join(REPO_ROOT, "workflows/spdd/templates/ui-design-proposal-html-template.html"),
   "utf8",
 );
 
@@ -38,7 +38,7 @@ function promptText(step) {
   return Array.isArray(prompt) ? prompt.join("\n") : prompt;
 }
 
-test("dev-harness derives stable PNG references from the final HTML proposal", () => {
+test("spdd derives stable PNG references from the final HTML proposal", () => {
   const draftPrompt = promptText(workflow.steps.ui_intent_draft);
   const attackPrompt = promptText(workflow.steps.ui_intent_attack);
   const implementationPrompt = promptText(

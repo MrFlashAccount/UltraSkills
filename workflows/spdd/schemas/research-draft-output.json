@@ -1,6 +1,6 @@
 {
-  "title": "DevHarness Research Draft Output",
-  "description": "Producer output contract for the DevHarness research draft before critic attack or repeat user approval.",
+  "title": "SPDD Research Draft Output",
+  "description": "Producer output contract for the SPDD research draft before critic attack or repeat user approval.",
   "type": "object",
   "required": [
     "outcome",
@@ -61,7 +61,7 @@
   },
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/research-draft-output",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/research-draft-output",
   "allOf": [
     {
       "if": {

@@ -528,10 +528,10 @@ test('prompt renderer: appends required reads, output, and workflow prompt in fi
   assert.doesNotMatch(compiled.prompt, /## Prompt input context/);
 });
 
-test('dev-harness research approval stays within the compact stdout budget', () => {
-  const workflowPath = path.join(root, 'workflows/dev-harness/workflow.toml');
+test('spdd research approval stays within the compact stdout budget', () => {
+  const workflowPath = path.join(root, 'workflows/spdd/workflow.toml');
   const workflow = readWorkflowDocument(workflowPath);
-  const runId = 'dev-harness-approval-budget';
+  const runId = 'spdd-approval-budget';
   const runsRoot = path.join(tempDir, 'runs');
   const runDir = path.join(runsRoot, runId);
   const stepId = 'approve_research';
@@ -580,7 +580,7 @@ test('dev-harness research approval stays within the compact stdout budget', () 
     { runId, workflow, workflowPath, repositoryRoot: root, runsRoot, leaseToken, includeInlineInstructions: true, resources },
   );
 
-  assert.ok(Buffer.byteLength(response.orchestratorInstruction) <= 3_000, 'real DevHarness approval stdout exceeded the 3 KB outer-envelope budget');
+  assert.ok(Buffer.byteLength(response.orchestratorInstruction) <= 3_000, 'real SPDD approval stdout exceeded the 3 KB outer-envelope budget');
   assert.match(response.orchestratorInstruction, /The revised research contract is ready for approval/);
   assert.match(response.orchestratorInstruction, /\[reasons-canvas-research\]\(<.*reasons-canvas-research\.md>\)/);
   assert.match(response.orchestratorInstruction, /\[research-evidence\]\(<.*research-evidence\.md>\)/);

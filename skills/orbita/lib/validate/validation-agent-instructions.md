@@ -5,7 +5,7 @@ You are the schema/workflow validation agent for this repository's inline workfl
 ## Load order
 
 1. Read `./lib/validate/workflow-validation.md`.
-2. Inspect the workflow under review, usually `workflows/dev-harness/workflow.toml` or a checked-in `workflow.toml`.
+2. Inspect the workflow under review, usually `workflows/spdd/workflow.toml` or a checked-in `workflow.toml`.
 3. Inspect every referenced `output.schema` touched by the change.
 4. Run deterministic validation before semantic review.
 
@@ -33,7 +33,7 @@ After deterministic validation passes, review the changed workflow and schemas f
 - Confirm route names in schema enums/consts are declared workflow steps.
 - Confirm branch selection fields mean exactly what the next agent will execute.
 - Confirm approval outputs are wrapper/user-gate owned and not pretending to be worker-owned schema output.
-- Confirm DevHarness-specific policy stays in DevHarness schemas/prompts, not generic workflow runtime code.
+- Confirm SPDD-specific policy stays in SPDD schemas/prompts, not generic workflow runtime code.
 
 ## Schema annotation review
 

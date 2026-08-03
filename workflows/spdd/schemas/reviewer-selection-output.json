@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/reviewer-selection-output",
-  "title": "DevHarness Reviewer Selection Output",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/reviewer-selection-output",
+  "title": "SPDD Reviewer Selection Output",
   "description": "Producer output contract for declaring reviewer selection state without triggering runtime fan-out.",
   "type": "object",
   "required": [

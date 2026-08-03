@@ -9,7 +9,7 @@ Validation ownership is split by runtime owner:
 - Runtime host response contracts: `./lib/persistence/run-state/schema/**`.
 - CLI argument contract: `./lib/entrypoints/cli/schema/**`.
 
-DevHarness workflow-output schemas remain external under `workflows/dev-harness/schemas/**`; tests or DevHarness entrypoints inject them explicitly instead of making `./lib` own them.
+SPDD workflow-output schemas remain external under `workflows/spdd/schemas/**`; tests or SPDD entrypoints inject them explicitly instead of making `./lib` own them.
 
 ## Loop policy validation
 

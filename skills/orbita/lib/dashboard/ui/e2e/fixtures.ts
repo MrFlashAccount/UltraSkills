@@ -60,7 +60,7 @@ export function buildSnapshot(
         "run_title",
       ),
       updatedAt: now,
-      workflow: index % 2 ? "dev-harness" : "research-critic",
+      workflow: index % 2 ? "spdd" : "research-critic",
     };
   });
   return {

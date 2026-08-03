@@ -253,7 +253,7 @@ test('Workflow.validateOutputSchemas returns external-schema field annotation wa
     return workflow;
   });
   const externalSchema = {
-    $id: 'https://example.test/schemas/workflow/dev-harness/external.schema.json',
+    $id: 'https://example.test/schemas/workflow/spdd/external.schema.json',
     type: 'object',
     required: ['outcome', 'summary'],
     properties: { outcome: { type: 'string' }, summary: { type: 'string', description: 'Reviewer summary.' } },

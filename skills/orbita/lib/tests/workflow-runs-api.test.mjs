@@ -19,7 +19,7 @@ const tempDir = makeTestDir('workflow-runs-api');
 const runsRoot = path.join(tempDir, 'runs');
 const cliRunsRoot = path.join(tempDir, 'cli-runs');
 const runsIndexPath = path.join(runsRoot, 'runs.json');
-const defaultWorkflow = path.join(root, 'workflows/dev-harness/workflow.toml');
+const defaultWorkflow = path.join(root, 'workflows/spdd/workflow.toml');
 const runPrefix = `runs-api-${process.pid}-`;
 
 function makeSymlinkedRunsRoot() {
@@ -254,7 +254,7 @@ test('workflow runs API creates accepted safe run id with public metadata only',
     runsRoot,
     runId,
     workflowPath: defaultWorkflow,
-    workflowIdentity: 'dev-harness',
+    workflowIdentity: 'spdd',
     title: 'Human title',
     summary: 'Short summary',
     taskKey: 'task:key/1',
@@ -264,7 +264,7 @@ test('workflow runs API creates accepted safe run id with public metadata only',
   assert.equal(response.runId, runId);
   assert.equal(response.title, 'Human title');
   assert.equal(response.summary, 'Short summary');
-  assert.deepEqual(response.workflow, { identity: 'dev-harness' });
+  assert.deepEqual(response.workflow, { identity: 'spdd' });
   assert.equal(response.status, 'running');
   assert.equal(response.taskKey, 'task:key/1');
   assert.equal(response.taskFingerprint, 'fingerprint-1');
@@ -278,7 +278,7 @@ test('workflow runs API creates accepted safe run id with public metadata only',
   assert.equal('runDir' in listed[0], false);
   assert.equal('runsRoot' in listed[0], false);
   const authority = await readRunAuthority(resolveRunPaths({ runId, workflowPath: defaultWorkflow, runsRoot }));
-  assert.equal(authority.workflow.identity, 'dev-harness');
+  assert.equal(authority.workflow.identity, 'spdd');
   assert.equal(authority.status, 'running');
   assert.equal(authority.workerLease, null);
 });
@@ -374,7 +374,7 @@ test('workflow-runs create rejects relative workflow paths clearly', async () =>
     () => registerWorkflowRunAtRoot({
       runsRoot,
       runId: `${runPrefix}relative-workflow-api`,
-      workflowPath: 'workflows/dev-harness/workflow.toml',
+      workflowPath: 'workflows/spdd/workflow.toml',
     }),
     /workflow path must be absolute.*workflow-catalog.*absolute catalog path/,
   );
@@ -386,7 +386,7 @@ test('workflow-runs create rejects relative workflow paths clearly', async () =>
     '--run-id',
     `${runPrefix}relative-workflow-cli`,
     '--workflow',
-    'workflows/dev-harness/workflow.toml',
+    'workflows/spdd/workflow.toml',
   ], { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUNS_ROOT: cliRunsRoot } });
 
   assert.equal(result.status, 1);
@@ -406,13 +406,13 @@ test('workflow-runs create accepts catalog absolute workflow path from a differe
     '--workflow',
     defaultWorkflow,
     '--workflow-identity',
-    'dev-harness',
+    'spdd',
   ], { cwd: tempDir, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUNS_ROOT: cliRunsRoot } });
 
   assert.equal(result.status, 0, result.stderr);
   const response = JSON.parse(result.stdout);
   assert.equal(response.runId, runId);
-  assert.deepEqual(response.workflow, { identity: 'dev-harness' });
+  assert.deepEqual(response.workflow, { identity: 'spdd' });
 });
 
 test('workflow-runs create validates direct absolute workflow before index writes', () => {

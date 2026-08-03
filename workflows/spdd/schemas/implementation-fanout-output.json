@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/implementation-fanout-output",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/implementation-fanout-output",
   "title": "Implementation Fanout Owner Output",
   "description": "Owner-worker output after the selected implementation branches finish.",
   "type": "object",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/review-fanout-output",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/review-fanout-output",
   "title": "Review Fanout Owner Output",
   "description": "Owner-worker decision after the selected review branches finish.",
   "type": "object",

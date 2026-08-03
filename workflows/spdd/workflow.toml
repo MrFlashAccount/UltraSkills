@@ -1,4 +1,4 @@
-name = "dev-harness"
+name = "spdd"
 version = 1
 description = "End-to-end architecture and execution workflow for non-trivial code work: research attack, optional UI design proposal gate, one execution-ready architecture Canvas and approval, implementation and review fanout, and final user implementation approval. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
 start = "research_draft"

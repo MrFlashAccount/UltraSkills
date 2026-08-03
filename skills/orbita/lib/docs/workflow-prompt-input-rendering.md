@@ -3,7 +3,7 @@
 ## Status
 
 - State: implemented in the v3 workflow runtime layers.
-- Scope boundary: generic workflow runtime; no DevHarness-specific runtime semantics.
+- Scope boundary: generic workflow runtime; no SPDD-specific runtime semantics.
 - Workflow authors pass prior step data through explicit `input.prompt` interpolation or dynamic `next` expressions.
 
 ## Contract

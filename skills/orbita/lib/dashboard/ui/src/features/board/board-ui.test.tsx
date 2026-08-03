@@ -34,7 +34,7 @@ describe("board UI contracts", () => {
     );
     const card = screen.getByRole("button", { name: /Run 1 needs attention/ });
     expect(card).toHaveTextContent("Approval needed");
-    expect(card).toHaveTextContent("dev-harness");
+    expect(card).toHaveTextContent("spdd");
     expect(card).toHaveTextContent("step-1");
     fireEvent.click(card);
     expect(onSelect).toHaveBeenCalledWith("run-1", card);

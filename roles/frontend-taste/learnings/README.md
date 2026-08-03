@@ -48,7 +48,7 @@ If the repo has no `DESIGN.md` or no declared `design/project-type.md` yet:
 
 ## Design creation support
 
-This library is not only for post-hoc review. When a calling Create Design-style flow is creating `DESIGN.md`, Frontend Taste can act as a design architect for the visual/design-context parts: ask for missing context, challenge generic assumptions, and turn closed answers into durable repo design memory. The actual create-design/dev-harness wiring lives outside this folder.
+This library is not only for post-hoc review. When a calling Create Design-style flow is creating `DESIGN.md`, Frontend Taste can act as a design architect for the visual/design-context parts: ask for missing context, challenge generic assumptions, and turn closed answers into durable repo design memory. The actual create-design/spdd wiring lives outside this folder.
 
 ## Boundary
 

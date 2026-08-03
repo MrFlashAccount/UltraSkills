@@ -15,7 +15,7 @@ than replacing that artifact.
 ## User and Product Route
 
 Orbita dashboard is an operations surface for watching live `workflow-runner`
-and `dev-harness` runs.
+and `spdd` runs.
 
 Audience:
 - expert local users running multiple Codex/Orbita sessions

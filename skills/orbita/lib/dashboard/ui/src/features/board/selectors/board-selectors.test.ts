@@ -23,6 +23,6 @@ describe("board selectors", () => {
   });
 
   it("returns stable unique workflow options", () => {
-    expect(workflowsFor(runs)).toEqual(["dev-harness", "research"]);
+    expect(workflowsFor(runs)).toEqual(["research", "spdd"]);
   });
 });

@@ -12,11 +12,11 @@ async function fixture() {
   roots.push(root);
   const runsRoot = join(root, "runs");
   await mkdir(runsRoot, { recursive: true });
-  const workflowPath = resolve("workflows/dev-harness/workflow.toml");
+  const workflowPath = resolve("workflows/spdd/workflow.toml");
   const entries = {
     created: {
       runId: "created",
-      workflow: { identity: "dev-harness", path: workflowPath },
+      workflow: { identity: "spdd", path: workflowPath },
       status: "running",
       createdAt: "2026-07-12T00:00:00.000Z",
       updatedAt: "2026-07-12T00:03:00.000Z",
@@ -25,7 +25,7 @@ async function fixture() {
     },
     corrupt: {
       runId: "corrupt",
-      workflow: { identity: "dev-harness", path: workflowPath },
+      workflow: { identity: "spdd", path: workflowPath },
       status: "running",
       createdAt: "2026-07-12T00:00:00.000Z",
       updatedAt: "2026-07-12T00:01:00.000Z",
@@ -34,7 +34,7 @@ async function fixture() {
     },
     healthy: {
       runId: "healthy",
-      workflow: { identity: "dev-harness", path: workflowPath },
+      workflow: { identity: "spdd", path: workflowPath },
       status: "running",
       createdAt: "2026-07-12T00:00:00.000Z",
       updatedAt: "2026-07-12T00:02:00.000Z",
@@ -94,7 +94,7 @@ describe("RunsRootObserverReader", () => {
     expect(first.find((run) => run.runId === "created")?.laneId).toBe("worker_running");
     expect(first.find((run) => run.runId === "healthy")?.laneId).toBe("waiting_for_user");
     expect(first.find((run) => run.runId === "corrupt")?.laneId).toBe("degraded");
-    expect(first.find((run) => run.runId === "legacy")?.workflow).toBe("dev-harness");
+    expect(first.find((run) => run.runId === "legacy")?.workflow).toBe("spdd");
   });
 
   test("treats whole-index corruption as snapshot failure, never empty success", async () => {

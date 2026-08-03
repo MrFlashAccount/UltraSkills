@@ -1,6 +1,6 @@
 {
-  "title": "DevHarness UI Design Proposal Draft Output",
-  "description": "Producer output contract for the DevHarness UI design proposal draft gate before architecture.",
+  "title": "SPDD UI Design Proposal Draft Output",
+  "description": "Producer output contract for the SPDD UI design proposal draft gate before architecture.",
   "type": "object",
   "required": [
     "outcome"
@@ -113,7 +113,7 @@
   },
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/ui-intent-draft-output",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/ui-intent-draft-output",
   "allOf": [
     {
       "if": {

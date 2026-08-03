@@ -1,7 +1,7 @@
 {
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/research-draft-output",
-  "title": "DevHarness Research Draft Output",
-  "description": "Producer output contract for the DevHarness research draft gate before critic attack.",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/research-draft-output",
+  "title": "SPDD Research Draft Output",
+  "description": "Producer output contract for the SPDD research draft gate before critic attack.",
   "type": "object",
   "required": [
     "outcome",

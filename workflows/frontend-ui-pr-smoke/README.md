@@ -1,6 +1,6 @@
 # Frontend UI PR Smoke Workflow
 
-Small experimental workflow for testing the frontend design-to-implementation path without running the full Dev Harness.
+Small experimental workflow for testing the frontend design-to-implementation path without running the full SPDD.
 
 Flow:
 
@@ -15,4 +15,4 @@ The design artifact must capture UI applicability and product/surface route, des
 
 Taste-sensitive or materially new UI compares 3-4 viable directions inside the available design basis before approval. The hostile attack checks hierarchy, typography/rhythm, spacing/composition, color/emphasis/contrast, focus-visible and target affordance, responsive containment, motion/reduced-motion, fidelity, and generic UI slop without inventing `DESIGN.md`.
 
-Use this for small UI feature experiments where the goal is to inspect the resulting PR and tune the workflow. It is not a replacement for `dev-harness`.
+Use this for small UI feature experiments where the goal is to inspect the resulting PR and tune the workflow. It is not a replacement for `spdd`.

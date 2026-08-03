@@ -1,5 +1,5 @@
 {
-  "title": "DevHarness Review Join Output",
+  "title": "SPDD Review Join Output",
   "type": "object",
   "required": [
     "outcome",
@@ -112,5 +112,5 @@
   },
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/review-join-output"
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/review-join-output"
 }
