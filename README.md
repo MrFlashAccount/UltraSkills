@@ -134,7 +134,7 @@ When a canonical label and folder path differ, the folder path is the source of 
 - multi-role read-only review -> `workflows/code-review-orchestrator`
 - pre-implementation Researcher -> Critic research verdict -> `workflows/research-critic`
 - approved closed contract -> backend/frontend implementation + verification handoff -> `workflows/implementation-harness`
-- focused TDD, parallel pair, findings, performance, and difficult-bug workflow proposal -> [`workflows/LIGHTWEIGHT_ENGINEERING_WORKFLOWS.md`](workflows/LIGHTWEIGHT_ENGINEERING_WORKFLOWS.md)
+- proposed `red-green-refactor`, `pair-programming`, `review-fix-verify`, `make-it-fast`, and `deep-debugging` workflows -> [`workflows/LIGHTWEIGHT_ENGINEERING_WORKFLOWS.md`](workflows/LIGHTWEIGHT_ENGINEERING_WORKFLOWS.md)
 - architecture audit/proposal/approval/implementation -> `workflows/create-architecture`
 - design-memory review/proposal/implementation -> `workflows/create-design`
 - create, audit, simplify, or restructure a skill -> `workflows/create-skill`

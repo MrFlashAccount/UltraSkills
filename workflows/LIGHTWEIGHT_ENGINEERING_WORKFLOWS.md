@@ -5,15 +5,15 @@ does not add runnable workflow graphs, prompts, or schemas.
 
 Proposed packages:
 
-- `workflows/test-driven-change/`
-- `workflows/parallel-pair-change/`
-- `workflows/address-findings/`
-- `workflows/profile-guided-change/`
-- `workflows/hypothesis-driven-bugfix/`
+- `workflows/red-green-refactor/`
+- `workflows/pair-programming/`
+- `workflows/review-fix-verify/`
+- `workflows/make-it-fast/`
+- `workflows/deep-debugging/`
 
 `Lightweight` means narrower and less ceremonial than `dev-harness`, not that
-every route is cheap. `profile-guided-change` and
-`hypothesis-driven-bugfix` are intentionally specialized evidence workflows
+every route is cheap. `make-it-fast` and `deep-debugging` are intentionally
+specialized evidence workflows
 for tasks where direct execution would otherwise become guesswork.
 
 ## Why these workflows
@@ -48,11 +48,11 @@ default ceremony for every code edit.
 | Route | Use when | Do not use when |
 | --- | --- | --- |
 | Direct execution | The edit is mechanical, obvious, and cheaply verified: wording, formatting, a local config value, or an equally narrow change. | Behavior must be reproduced, a regression test is valuable, or an independent second perspective is justified. |
-| `test-driven-change` | One bounded behavior or invariant can be demonstrated by a focused automated test and changed by one implementation owner. | The test boundary is unavailable or disproportionately expensive, or the work contains an unresolved product or architecture decision. |
-| `parallel-pair-change` | The change is still bounded and locally observable, but edge cases or regression risk make independent parallel investigation or test design worth the extra worker. | The bug needs repeated external reproduction and runtime evidence, file ownership cannot be made safe, or integration is more expensive than the likely second-track value. |
-| `address-findings` | Review comments, CI findings, or other concrete findings already identify a bounded correction surface. | The root cause is still unknown, the finding requires product or architecture decisions, or the task is open-ended review. |
-| `profile-guided-change` | Performance is the primary acceptance target and a stable workload, baseline, and metric can be established. | The optimization is speculative, measurement is too noisy, or performance is only an optional concern inside a correctness change. |
-| `hypothesis-driven-bugfix` | The symptom is real but the root cause is uncertain, local reproduction is insufficient, or user/remote reproduction plus diagnostic logs are required. | The cause is already concrete enough for `test-driven-change`, the input is an existing finding, or the task is a live incident requiring domain-specific operational control. |
+| `red-green-refactor` | One bounded behavior or invariant can be demonstrated by a focused automated test and changed by one implementation owner. | The test boundary is unavailable or disproportionately expensive, or the work contains an unresolved product or architecture decision. |
+| `pair-programming` | The change is still bounded and locally observable, but edge cases or regression risk make independent parallel investigation or test design worth the extra worker. | The bug needs repeated external reproduction and runtime evidence, file ownership cannot be made safe, or integration is more expensive than the likely second-track value. |
+| `review-fix-verify` | Review comments, CI findings, or other concrete findings already identify a bounded correction surface. | The root cause is still unknown, the finding requires product or architecture decisions, or the task is open-ended review. |
+| `make-it-fast` | Performance is the primary acceptance target and a stable workload, baseline, and metric can be established. | The optimization is speculative, measurement is too noisy, or performance is only an optional concern inside a correctness change. |
+| `deep-debugging` | The symptom is real but the root cause is uncertain, local reproduction is insufficient, or user/remote reproduction plus diagnostic logs are required. | The cause is already concrete enough for `red-green-refactor`, the input is an existing finding, or the task is a live incident requiring domain-specific operational control. |
 | `implementation-harness` | The task already has approved, closed task/research/plan input and disjoint implementation ownership. | Discovery, architecture, or product decisions are still open. |
 | `dev-harness` | The work needs staged research, architecture or UI direction, approval, broad implementation, or multi-role review. | The work is a small, closed change that one of the lighter routes can prove directly. |
 
@@ -62,7 +62,7 @@ normally keep a bounded file zone. Performance and difficult-bug work may cross
 several diagnostic surfaces while still preserving one measured target or
 causal question. File count alone is not a routing rule.
 
-## Workflow 1: `test-driven-change`
+## Workflow 1: `red-green-refactor`
 
 ### Purpose
 
@@ -126,7 +126,7 @@ Do not force a test-first cycle onto documentation, generated output, or simple
 configuration edits where the test would be artificial and cost more than the
 change.
 
-## Workflow 2: `parallel-pair-change`
+## Workflow 2: `pair-programming`
 
 ### Purpose
 
@@ -191,11 +191,11 @@ behavior, or a risky regression surface that both agents can inspect in the
 same local evidence cycle.
 
 Route a deterministic one-file fix to direct execution or
-`test-driven-change`. Route repeated user/remote reproduction and unknown root
-cause to `hypothesis-driven-bugfix`. Escalate broad ownership, unresolved
+`red-green-refactor`. Route repeated user/remote reproduction and unknown root
+cause to `deep-debugging`. Escalate broad ownership, unresolved
 design, unsafe integration, or cross-system changes to a heavier workflow.
 
-## Workflow 3: `address-findings`
+## Workflow 3: `review-fix-verify`
 
 ### Purpose
 
@@ -231,7 +231,7 @@ verification, remaining disagreement, and any external action still needed.
 ### Applicability limits
 
 This workflow starts from already concrete findings. Unknown root cause routes
-to `hypothesis-driven-bugfix`; open-ended discovery routes to research or
+to `deep-debugging`; open-ended discovery routes to research or
 review. Broad redesign, new product decisions, and architecture changes are
 escalations rather than findings that can be silently accepted.
 
@@ -239,7 +239,7 @@ GitHub, Arcanum, CI, or other provider transport stays outside this workflow.
 It may prepare replies and evidence, but must not comment, resolve, push, rerun,
 or approve without authority from the outer request.
 
-## Workflow 4: `profile-guided-change`
+## Workflow 4: `make-it-fast`
 
 ### Purpose
 
@@ -273,12 +273,12 @@ metric_intake -> baseline -> profile_hypothesis -> implement -> compare -> revie
    and whether the claimed improvement exceeds noise.
 
 Use this workflow only when performance is the task's primary outcome. Keep
-`FAST` inside `test-driven-change` when performance is only a conditional final
+`FAST` inside `red-green-refactor` when performance is only a conditional final
 checkpoint. Do not claim success from a one-off timing, a changed workload, or
 an improvement that breaks correctness or moves cost outside the measured
 window.
 
-## Workflow 5: `hypothesis-driven-bugfix`
+## Workflow 5: `deep-debugging`
 
 ### Purpose
 
@@ -533,19 +533,19 @@ tasks and compared with direct execution. Record:
 - whether `RED` failed for the intended reason;
 - whether the Navigator found a material issue or merely duplicated the Driver;
 - ownership conflicts and integration cost.
-- findings closed, rejected, or reopened after `address-findings`;
+- findings closed, rejected, or reopened after `review-fix-verify`;
 - benchmark stability and measured improvement relative to noise;
 - hypothesis rounds, information-gain failures, hostile resets, user
   reproduction count, and final bugfix truth state.
 
-Promote `test-driven-change` when its proof contract prevents meaningful
+Promote `red-green-refactor` when its proof contract prevents meaningful
 regressions without turning small work into a heavy process. Promote
-`parallel-pair-change` when its independent track catches material misses often
+`pair-programming` when its independent track catches material misses often
 enough to repay fanout and integration cost. Otherwise keep direct execution as
-the cheaper baseline. Promote `address-findings` when it closes concrete
-feedback with less reviewer churn. Promote `profile-guided-change` only when
-measured improvements survive identical reruns. Promote
-`hypothesis-driven-bugfix` when its convergence controller resolves difficult
+the cheaper baseline. Promote `review-fix-verify` when it closes concrete
+feedback with less reviewer churn. Promote `make-it-fast` only when measured
+improvements survive identical reruns. Promote `deep-debugging` when its
+convergence controller resolves difficult
 bugs with fewer repeated experiments and never projects mitigation or stalled
 investigation as a fix.
 
