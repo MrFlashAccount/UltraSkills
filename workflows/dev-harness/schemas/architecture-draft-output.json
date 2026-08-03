@@ -1,6 +1,6 @@
 {
   "title": "DevHarness Architecture Draft Output",
-  "description": "Producer output contract for the DevHarness architecture draft before critic attack or repeat user approval.",
+  "description": "Producer output contract for the execution-ready DevHarness architecture draft and its implementation/review routing.",
   "type": "object",
   "required": [
     "outcome"
@@ -17,16 +17,207 @@
     "summary": {
       "type": "string",
       "minLength": 1,
-      "description": "Producer must summarize the architecture proposal state for human approval without embedding the reasons-canvas-architecture artifact body.",
-      "x-usage": "Use this as the human-facing approval state for the architecture gate. Show it with the artifact attachment; do not recreate the summary from artifact contents in the orchestrator."
+      "description": "Producer must summarize the architecture proposal, implementation route, review route, verification, and rollback state without embedding the reasons-canvas-architecture artifact body.",
+      "x-usage": "Use this as the human-facing approval state for the single architecture gate. Show it with the Canvas attachment; do not recreate the summary from artifact contents in the orchestrator."
+    },
+    "selected_implementation_steps": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "backend_implementation",
+          "frontend_implementation",
+          "architecture_artifact_update"
+        ]
+      },
+      "description": "Exact implementation branch ids required by the approved architecture Canvas.",
+      "x-usage": "Use this approved list as the initial implementation fan-out target. Do not add branches unless the architecture contract is revised and approved."
+    },
+    "selected_review_steps": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "architect_review",
+          "backend_review",
+          "frontend_review",
+          "frontend_taste_review",
+          "security_review",
+          "privacy_review",
+          "qa_review"
+        ]
+      },
+      "description": "Exact review branch ids that must run after implementation.",
+      "x-usage": "Use this approved list as the initial review fan-out baseline. Record optional or absence-confirmation reviewers in skipped_review_steps instead."
+    },
+    "skipped_review_steps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/skippedReviewer"
+      },
+      "description": "Reviewers considered but intentionally excluded from runtime fan-out.",
+      "x-usage": "Use this as non-routing architecture evidence only. It does not expand review scope."
+    },
+    "review_escalation": {
+      "type": "object",
+      "required": [
+        "reason",
+        "risk_classes"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "risk_classes": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Evidence-backed justification required when more than three reviewers are selected.",
+      "x-usage": "Reject expanded review fan-out unless each additional reviewer maps to an independent material risk class."
+    },
+    "review_plan": {
+      "type": "object",
+      "required": [
+        "reviewers"
+      ],
+      "properties": {
+        "reviewers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reviewer"
+          },
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "step_id": {
+                    "const": "architect_review"
+                  }
+                },
+                "required": [
+                  "step_id"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "step_id": {
+                    "const": "backend_review"
+                  }
+                },
+                "required": [
+                  "step_id"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "step_id": {
+                    "const": "frontend_review"
+                  }
+                },
+                "required": [
+                  "step_id"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "step_id": {
+                    "const": "frontend_taste_review"
+                  }
+                },
+                "required": [
+                  "step_id"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "step_id": {
+                    "const": "security_review"
+                  }
+                },
+                "required": [
+                  "step_id"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "step_id": {
+                    "const": "privacy_review"
+                  }
+                },
+                "required": [
+                  "step_id"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "step_id": {
+                    "const": "qa_review"
+                  }
+                },
+                "required": [
+                  "step_id"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Mandatory reviewer rationale and exact focus surfaces aligned with selected_review_steps.",
+      "x-usage": "Use this as the approved review scope; do not run unlisted reviewers unless actual changed surfaces require the implementation owner to widen the baseline."
     },
     "artifacts": {
       "type": "array",
       "items": {
         "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
       },
-      "description": "Producer must emit artifact metadata for the required immutable reasons-canvas-architecture artifact when ready for attack or approval.",
-      "x-usage": "Emit only artifact metadata here; the full architecture contract body lives in the referenced artifact file.",
+      "description": "Producer must emit only the required immutable reasons-canvas-architecture artifact when ready for attack or approval.",
+      "x-usage": "The Canvas is the sole human-facing architecture/execution artifact; routing remains in the structured fields.",
       "minItems": 1,
       "maxItems": 1,
       "contains": {
@@ -45,17 +236,76 @@
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/dev-harness/architecture-draft-output",
+  "$defs": {
+    "reviewStepId": {
+      "enum": [
+        "architect_review",
+        "backend_review",
+        "frontend_review",
+        "frontend_taste_review",
+        "security_review",
+        "privacy_review",
+        "qa_review"
+      ]
+    },
+    "skippedReviewer": {
+      "type": "object",
+      "required": [
+        "step_id",
+        "reason"
+      ],
+      "properties": {
+        "step_id": {
+          "$ref": "#/$defs/reviewStepId"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "surfaces": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "reviewer": {
+      "type": "object",
+      "required": [
+        "step_id",
+        "reason",
+        "surfaces",
+        "required"
+      ],
+      "properties": {
+        "step_id": {
+          "$ref": "#/$defs/reviewStepId"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "surfaces": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
   "allOf": [
     {
       "if": {
-        "properties": {
-          "outcome": {
-            "enum": [
-              "ready_for_attack",
-              "ready_for_approval"
-            ]
-          }
-        },
         "required": [
           "outcome"
         ]
@@ -63,7 +313,28 @@
       "then": {
         "required": [
           "summary",
+          "selected_implementation_steps",
+          "selected_review_steps",
+          "review_plan",
           "artifacts"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "selected_review_steps": {
+            "type": "array",
+            "minItems": 4
+          }
+        },
+        "required": [
+          "selected_review_steps"
+        ]
+      },
+      "then": {
+        "required": [
+          "review_escalation"
         ]
       }
     }
