@@ -60,6 +60,8 @@ Prompt input artifact required reads are derived only from explicit prompt refer
 
 `input.template`, `output.template`, and `output.schema` are resolved relative to the directory containing the active `workflow.toml` or `workflow.json`. Shared resources must be referenced explicitly with normal relative paths such as `../../shared/templates/...`.
 
+Worker, fanout, shard, and delegated worker inputs may declare `input.resources` as a non-empty unique array of workflow-relative file paths. The renderer resolves each entry within the repository boundary and exposes its exact absolute path under `Workflow resources`. These entries are path declarations, not unconditional reads: the step prompt decides when a worker must read or execute each resource. Use this for package-local scripts and conditionally loaded references that must remain available when the task working directory is another repository.
+
 Missing or escaping files fail deterministically. The renderer performs no network IO and does not infer repository-root fallbacks for workflow-local refs.
 
 ## Ownership

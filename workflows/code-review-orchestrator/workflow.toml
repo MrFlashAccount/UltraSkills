@@ -17,11 +17,12 @@ kind = "worker"
 next = "review"
 
 [steps.review_intake.input]
+resources = ["scripts/check_sensitive_surface.py"]
 prompt = '''Prepare the shared context and reviewer plan for one read-only code-review pass. Do not edit files, implement fixes, publish comments, approve, merge, commit, push, or otherwise mutate the target.
 
 Identify the target repository/path/ref/PR and base comparison. If the target, repository path, branch, or PR is missing or ambiguous, report a non-blocking stop with source_step_id review_intake and ask only for that missing input. Read the target repo's AGENTS.md first. Gather compact context: the approved contract or acceptance criteria when available, git status, current branch, diff stat, touched files, relevant tests, docs, config, and existing verification evidence.
 
-For sensitive-surface diffs, run the package-local read-only scanner at workflows/code-review-orchestrator/scripts/check_sensitive_surface.py against the target repository and include its result in sensitive_surface_scan. A scanner failure or missing required review context is a non-blocking stop, not a clean review result.
+For sensitive-surface diffs, run the package-local read-only scanner exposed as `scripts/check_sensitive_surface.py` under Workflow resources against the target repository and include its result in sensitive_surface_scan. Use the exact resolved absolute path shown there; do not resolve it from the target repository. A scanner failure or missing required review context is a non-blocking stop, not a clean review result.
 
 Select the smallest risk-based reviewer set from these exact branches: critic_review, architect_review, backend_review, frontend_review, frontend_taste_review, security_review, privacy_review, qa_review, performance_review. Default to one independent reviewer. Add roles only when primary risks are genuinely separate. privacy_review is mandatory for sensitive surfaces. architect_review is mandatory when the work changes or may change contract-bearing docs, artifacts, states, schemas, workflows, process contracts, symbolic lifecycle values, or architecture-sensitive boundaries, unless an approved contract explicitly assigns that drift gate elsewhere. Record considered but unselected roles in skipped_reviewers.
 

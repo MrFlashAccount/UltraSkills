@@ -32,6 +32,17 @@ function readInputRole({ input, resources }) {
   };
 }
 
+function readInputResources({ input, resources }) {
+  const loadedResources = resources?.inputResources ?? {};
+  return (input?.resources ?? []).map((ref) => {
+    const loaded = loadedResources instanceof Map ? loadedResources.get(ref) : loadedResources[ref];
+    if (!loaded || typeof loaded.path !== 'string' || !path.isAbsolute(loaded.path)) {
+      throw new Error(`workflow prompt render failed: missing resolved input.resources entry '${ref}'`);
+    }
+    return { ref, path: loaded.path };
+  });
+}
+
 function promptInputDependencies(input) {
   const selectors = [];
   const artifactSelectors = new Set();
@@ -79,9 +90,11 @@ export function prepareWorkflowPromptContext({ baton, stepId, step, resources } 
   const selectedState = selectState({ batonState: baton?.state ?? {}, selectors, stepId });
   const promptInput = { value: selectedState.value, keys: selectedState.selectedKeys };
   const inputRole = readInputRole({ input, resources });
+  const inputResources = readInputResources({ input, resources });
   const promptInputArtifacts = promptInputArtifactItems(promptInput, resources, artifactSelectors);
   return {
     promptInput,
+    workflowResources: inputResources,
     requiredReads: [
       ...inputRole.readItems,
       ...promptInputArtifacts,

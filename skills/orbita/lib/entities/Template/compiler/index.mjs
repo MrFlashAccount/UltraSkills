@@ -32,6 +32,17 @@ function requiredReadsForRender(items, { followUp = false } = {}) {
   return items.filter((item) => item?.source !== 'role-material');
 }
 
+function workflowResourcesBlock(items = []) {
+  if (items.length === 0) return '';
+  const lines = [
+    'Use these exact absolute paths for workflow-package resources; do not resolve them from the task working directory.',
+    'Read or run a resource only when the workflow step prompt requires it.',
+    '',
+  ];
+  items.forEach((item, index) => lines.push(`${index + 1}. \`${item.ref}\`: \`${item.path}\``));
+  return lines.join('\n');
+}
+
 function nonBlockingStopBlock({ baton, stepId }) {
   const stop = baton?.nonBlockingStops?.[stepId];
   if (!stop || typeof stop !== 'object' || Array.isArray(stop)) return '';
@@ -70,12 +81,13 @@ function nonBlockingStopBlock({ baton, stepId }) {
   return lines.join('\n');
 }
 
-function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlock, requiredReads, nonBlockingStop, inlinePrompt, outputContract, userPrompt, finalReminder }) {
+function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlock, requiredReads, workflowResources, nonBlockingStop, inlinePrompt, outputContract, userPrompt, finalReminder }) {
   assertNoUnsupportedPlaceholders(promptLayer, templatePath);
   const parts = [trimStable(promptLayer)];
 
   if (workflowInstructionBlock) parts.push(section('Workflow instruction', workflowInstructionBlock).trimEnd());
   if (requiredReads) parts.push(section('Required reads', requiredReads).trimEnd());
+  if (workflowResources) parts.push(section('Workflow resources', workflowResources).trimEnd());
   if (nonBlockingStop) parts.push(section('Non-blocking stop', nonBlockingStop).trimEnd());
   if (outputContract) parts.push(outputContract.trimEnd());
   if (inlinePrompt) parts.push(section('Workflow step prompt', inlinePrompt.trim()));
@@ -85,7 +97,7 @@ function assembleFixedPrompt({ promptLayer, templatePath, workflowInstructionBlo
   return `${parts.filter(Boolean).join('\n\n')}\n`;
 }
 
-export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources, promptInput = { value: {}, keys: [] }, shard, requiredReads = [], roleMetadataPaths = [], includeDiagnostics = false, userPrompt, userPromptInjected = false, followUp = false } = {}) {
+export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources, promptInput = { value: {}, keys: [] }, shard, requiredReads = [], workflowResources = [], roleMetadataPaths = [], includeDiagnostics = false, userPrompt, userPromptInjected = false, followUp = false } = {}) {
   const input = step.input ?? {};
   const inputTemplate = readInputTemplate({ input, resources });
   const outputTemplate = readOutputTemplate({ step, resources });
@@ -104,11 +116,13 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
   const usesDefaultPrompt = inputTemplate.content === undefined;
   const promptLayer = usesDefaultPrompt ? defaultPrompt({ step, input }) : inputTemplate.content;
   const requiredReadsSection = requiredReadsBlock(requiredReadsForRender(requiredReads, { followUp }));
+  const workflowResourcesSection = workflowResourcesBlock(workflowResources);
   const prompt = assembleFixedPrompt({
     promptLayer,
     templatePath: inputTemplate.metadataPath,
     workflowInstructionBlock,
     requiredReads: requiredReadsSection,
+    workflowResources: workflowResourcesSection,
     nonBlockingStop: nonBlockingStopBlock({ baton, stepId }),
     inlinePrompt: interpolatePromptExpressions(
       normalizePromptText(input.prompt),
@@ -130,6 +144,7 @@ export function renderWorkflowPrompt({ workflow, baton, stepId, step, resources,
 
   const metadata = {};
   if (input.template) metadata.inputTemplate = input.template;
+  if (workflowResources.length > 0) metadata.workflowResources = workflowResources.map((item) => item.path);
   if (step.output?.template) metadata.outputTemplate = step.output.template;
   if (step.output?.schema) metadata.outputSchema = step.output.schema;
   if (roleMetadataPaths.length > 0) metadata.roleMaterial = roleMetadataPaths;
