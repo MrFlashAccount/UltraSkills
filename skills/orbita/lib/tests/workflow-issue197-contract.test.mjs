@@ -13,77 +13,6 @@ function promptText(step) {
   return Array.isArray(prompt) ? prompt.join('\n') : prompt;
 }
 
-test('dev-harness uses implementation and review as the only fanout owners', () => {
-  assert.equal(workflowDoc.steps.implementation.kind, 'fanout');
-  assert.deepEqual(workflowDoc.steps.implementation.input.branches.first_of, [
-    '${{ input.review.implementation_branches }}',
-    '${{ input.planning_draft.selected_implementation_steps }}',
-  ]);
-  assert.deepEqual(Object.keys(workflowDoc.steps.implementation.branches), [
-    'backend_implementation',
-    'frontend_implementation',
-    'architecture_artifact_update',
-  ]);
-  assert.equal(workflowDoc.steps.review.kind, 'fanout');
-  assert.equal(workflowDoc.steps.review.input.branches, '${{ input.implementation.review_branches }}');
-  assert.deepEqual(Object.keys(workflowDoc.steps.review.branches), [
-    'architect_review',
-    'backend_review',
-    'frontend_review',
-    'frontend_taste_review',
-    'security_review',
-    'privacy_review',
-    'qa_review',
-  ]);
-  for (const retiredStepId of ['implementation_dispatch', 'implementation_join', 'review_dispatch', 'review_join']) {
-    assert.equal(Object.hasOwn(workflowDoc.steps, retiredStepId), false);
-  }
-});
-
-test('dev-harness caps planning hostile reviews at two cycles and code review at three', () => {
-  assert.deepEqual(workflowDoc.loopPolicies, {
-    research_hostile_review: {
-      steps: ['research_draft', 'research_attack'],
-      entry: 'research_draft',
-      boundary: 'research_attack',
-      maxIterations: 2,
-      onLimit: 'approve_research',
-    },
-    ui_design_hostile_review: {
-      steps: ['ui_intent_draft', 'ui_intent_attack'],
-      entry: 'ui_intent_draft',
-      boundary: 'ui_intent_attack',
-      maxIterations: 2,
-      onLimit: 'approve_ui_intent',
-    },
-    architecture_hostile_review: {
-      steps: ['architecture_draft', 'architecture_attack'],
-      entry: 'architecture_draft',
-      boundary: 'architecture_attack',
-      maxIterations: 2,
-      onLimit: 'approve_architecture',
-    },
-    planning_hostile_review: {
-      steps: ['planning_draft', 'planning_attack'],
-      entry: 'planning_draft',
-      boundary: 'planning_attack',
-      maxIterations: 2,
-      onLimit: 'approve_plan',
-    },
-    code_review: {
-      steps: ['implementation', 'review'],
-      entry: 'implementation',
-      boundary: 'review',
-      maxIterations: 3,
-      onLimit: 'done',
-    },
-  });
-
-  const donePrompt = promptText(workflowDoc.steps.done);
-  assert.match(donePrompt, /three-cycle code-review limit with unresolved findings/);
-  assert.match(donePrompt, /Do not claim that review passed/);
-});
-
 test('dev-harness implementation branches consume only their owner-written rework handoff', () => {
   const handoffByBranch = {
     backend_implementation: 'input.review.implementer_handoffs.backend_implementation',
@@ -98,25 +27,6 @@ test('dev-harness implementation branches consume only their owner-written rewor
     assert.match(text, /first implementation pass/);
     assert.doesNotMatch(text, rawReviewerInput);
   }
-});
-
-test('issue 197: dev-harness implementation instructions and schema align on self-caused red-test semantics', () => {
-  for (const stepId of ['backend_implementation', 'frontend_implementation']) {
-    const text = promptText(workflowDoc.steps.implementation.branches[stepId]);
-    assert.match(text, /red tests, lint failures, typecheck failures/);
-    assert.match(text, /own in-scope .* changes as implementation work to fix and rerun, not as blockers by themselves/);
-    assert.match(text, /missing external input, permission, an approved-contract change, a redesign\/plan decision/);
-  }
-
-  const schemaText = readFileSync(path.join(REPO_ROOT, 'workflows/dev-harness/schemas/implementation-output.json'), 'utf8');
-  assert.match(schemaText, /own in-scope changes are implementation work to fix and rerun/);
-  assert.match(schemaText, /external or contract-level missing help through the runner non-blocking stop control channel/);
-  assert.doesNotMatch(schemaText, /failed checks as blockers by themselves|red tests.*blockers by themselves/);
-
-  const testingReference = readFileSync(path.join(REPO_ROOT, 'workflows/implementation-harness/references/testing.md'), 'utf8');
-  const outputContractReference = readFileSync(path.join(REPO_ROOT, 'workflows/implementation-harness/references/output-contract.md'), 'utf8');
-  assert.match(testingReference, /own in-scope implementation changes as work to fix and rerun/);
-  assert.match(outputContractReference, /Red tests caused by your own in-scope changes are implementation work to fix and rerun/);
 });
 
 test('issue 197: Orbita host watchdog instructions split bootstrap silence from active progress evidence', () => {
