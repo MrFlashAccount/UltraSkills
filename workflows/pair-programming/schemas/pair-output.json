@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/pair-programming/pair-output",
+  "type": "object",
+  "required": ["outcome", "summary", "evidence", "changed_files", "verification", "conflicts", "resolutions", "remaining_risks"],
+  "properties": {
+    "outcome": {"enum": ["ready_for_integration", "ready_for_review"]},
+    "summary": {"type": "string", "minLength": 1},
+    "evidence": {"$ref": "#/$defs/strings"},
+    "changed_files": {"$ref": "#/$defs/strings"},
+    "verification": {"$ref": "#/$defs/strings"},
+    "conflicts": {"$ref": "#/$defs/strings"},
+    "resolutions": {"$ref": "#/$defs/strings"},
+    "remaining_risks": {"$ref": "#/$defs/strings"}
+  },
+  "additionalProperties": false,
+  "$defs": {"strings": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}
+}

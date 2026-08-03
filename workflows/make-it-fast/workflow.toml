@@ -1,0 +1,145 @@
+name = "make-it-fast"
+version = 1
+description = "Optimize a proven hot path from a reproducible baseline through profiling, a bounded implementation, comparable measurement, and independent review. Use when performance is the primary requirement; do not use for speculative optimization without a stable workload and metric."
+start = "intake"
+done = "done"
+
+[loopPolicies.optimization_rework]
+steps = ["implement", "compare", "review"]
+entry = "implement"
+boundary = "review"
+maxIterations = 2
+onLimit = "done"
+
+[steps.intake]
+name = "Metric contract"
+kind = "worker"
+agent = "performance_intake"
+next = "baseline"
+
+[steps.intake.input]
+prompt = '''Inspect the performance request and repository read-only. Define the exact workload, primary metric, correctness guard, measurement method, environment controls, warmup/sample policy, success threshold, edit boundary, and stop conditions. Refuse proxy metrics that do not represent the reported pain. If no stable workload or decision threshold can be defined, use a non-blocking stop with source_step_id = intake rather than optimizing speculatively.'''
+
+[steps.intake.output]
+template = "templates/metric-contract.md"
+schema = "schemas/intake-output.json"
+
+[steps.baseline]
+name = "Baseline and profile"
+kind = "worker"
+agent = "performance_baseline"
+next = "hypothesis"
+
+[steps.baseline.input]
+role = "performance"
+prompt = '''Measure the unchanged system using exactly the intake workload and method. Capture raw samples, aggregate value, environment, correctness result, and profiler evidence that localizes the dominant cost. Do not edit production code. If the measurement is unstable or the profiler does not identify a supported target, use a non-blocking stop with source_step_id = baseline.
+
+Metric contract:
+${{ input.intake }}'''
+
+[steps.baseline.output]
+template = "templates/measurement.md"
+schema = "schemas/baseline-output.json"
+
+[steps.hypothesis]
+name = "Profile-guided hypothesis"
+kind = "worker"
+agent = "performance_analyst"
+next = "implement"
+
+[steps.hypothesis.input]
+role = "performance"
+prompt = '''Form one bounded causal optimization hypothesis from the baseline/profile evidence. State the mechanism, target, expected metric movement, edit surface, correctness risks, falsifying result, and rollback. Do not edit files or add unrelated cleanup. If evidence does not support a concrete hypothesis, use a non-blocking stop with source_step_id = hypothesis.
+
+Contract:
+${{ input.intake }}
+
+Baseline:
+${{ input.baseline }}'''
+
+[steps.hypothesis.output]
+template = "templates/hypothesis.md"
+schema = "schemas/hypothesis-output.json"
+
+[steps.implement]
+name = "Implement optimization"
+kind = "worker"
+agent = "performance_implementer"
+next = "compare"
+
+[steps.implement.input]
+role = "performance"
+prompt = '''Implement only the supported optimization hypothesis. Preserve correctness and unrelated changes. Run focused correctness checks, but do not change the workload, metric, threshold, environment controls, or measurement method to make the result look better. On rework, address the latest comparison and review evidence. If the hypothesis requires scope growth, use a non-blocking stop with source_step_id = implement.
+
+Contract:
+${{ input.intake }}
+
+Baseline:
+${{ input.baseline }}
+
+Hypothesis:
+${{ input.hypothesis }}
+
+Prior comparison and review:
+${{ input.compare | default: "No prior comparison." }}
+${{ input.review | default: "No prior review." }}'''
+
+[steps.implement.output]
+template = "templates/implementation.md"
+schema = "schemas/implementation-output.json"
+
+[steps.compare]
+name = "Comparable measurement"
+kind = "worker"
+agent = "performance_comparator"
+next = "review"
+
+[steps.compare.input]
+role = "qa-reliability"
+prompt = '''Run the exact baseline workload and measurement method against the current implementation. Record raw samples, aggregate value, delta, threshold decision, environment parity, and correctness guard. Do not edit production code and do not hide regressions behind an average. Mark invalid when the comparison is not genuinely comparable.
+
+Contract:
+${{ input.intake }}
+
+Baseline:
+${{ input.baseline }}
+
+Implementation:
+${{ input.implement }}'''
+
+[steps.compare.output]
+template = "templates/measurement.md"
+schema = "schemas/comparison-output.json"
+
+[steps.review]
+name = "Performance evidence review"
+kind = "worker"
+agent = "performance_reviewer"
+
+[steps.review.input]
+role = "performance"
+prompt = '''Review the current diff, baseline, profiler evidence, implementation, and comparison read-only. Require identical workload/method, environment parity, correctness, a causal link to the profiled cost, and threshold-level improvement. Return passed only when the performance claim is supported without unacceptable complexity or regression. Otherwise return needs_revision with bounded action; do not generate replacement measurements yourself.
+
+Contract: ${{ input.intake }}
+Baseline: ${{ input.baseline }}
+Hypothesis: ${{ input.hypothesis }}
+Implementation: ${{ input.implement }}
+Comparison: ${{ input.compare }}'''
+
+[steps.review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/review-output.json"
+
+[steps.review.next]
+match = "${{ output.next }}"
+
+[steps.review.next.cases]
+implement = "implement"
+done = "done"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project the baseline, implemented mechanism, comparable result, correctness evidence, and latest review. Make no performance claim when comparison was invalid or the bounded loop ended without a pass.'''

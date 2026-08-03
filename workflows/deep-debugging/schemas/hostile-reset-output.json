@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/deep-debugging/hostile-reset-output",
+  "type": "object",
+  "required": ["outcome", "summary", "invalidated_assumptions", "contradictions", "source_quality", "candidate_discriminators", "web_status"],
+  "properties": {
+    "outcome": {"const": "ready_for_reframe"},
+    "summary": {"type": "string", "minLength": 1},
+    "invalidated_assumptions": {"$ref": "#/$defs/strings"},
+    "contradictions": {"$ref": "#/$defs/strings"},
+    "source_quality": {"$ref": "#/$defs/strings"},
+    "candidate_discriminators": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "web_status": {"enum": ["used", "unavailable_cold_repo_fallback"]}
+  },
+  "additionalProperties": false,
+  "$defs": {"strings": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}
+}

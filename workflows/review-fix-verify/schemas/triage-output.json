@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/review-fix-verify/triage-output",
+  "type": "object",
+  "required": ["outcome", "dispositions", "implementation_order"],
+  "properties": {
+    "outcome": {"const": "ready_for_fix"},
+    "dispositions": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["id", "disposition", "reason", "evidence", "owner", "edit_surface", "acceptance_check"], "properties": {"id": {"type": "string", "minLength": 1}, "disposition": {"enum": ["accepted", "rejected_with_evidence", "needs_input", "duplicate", "out_of_scope"]}, "reason": {"type": "string", "minLength": 1}, "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}, "owner": {"type": ["string", "null"]}, "edit_surface": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}, "acceptance_check": {"type": ["string", "null"]}}, "additionalProperties": false}},
+    "implementation_order": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  },
+  "additionalProperties": false
+}

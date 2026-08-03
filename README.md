@@ -134,7 +134,12 @@ When a canonical label and folder path differ, the folder path is the source of 
 - multi-role read-only review -> `workflows/code-review-orchestrator`
 - pre-implementation Researcher -> Critic research verdict -> `workflows/research-critic`
 - approved closed contract -> backend/frontend implementation + verification handoff -> `workflows/implementation-harness`
-- proposed `red-green-refactor`, `pair-programming`, `review-fix-verify`, `make-it-fast`, and `deep-debugging` workflows -> [`workflows/LIGHTWEIGHT_ENGINEERING_WORKFLOWS.md`](workflows/LIGHTWEIGHT_ENGINEERING_WORKFLOWS.md)
+- `workflows/red-green-refactor` — **What it is:** one evidence-bearing RED-GREEN-REFACTOR cycle plus independent review. **Use when:** a small behavior has a cheap deterministic test. **Do not use when:** the cause or oracle is unknown.
+- `workflows/pair-programming` — **What it is:** parallel driver/navigator tracks with explicit write ownership, integration, and review. **Use when:** a bounded change benefits from two independent perspectives. **Do not use when:** one agent is enough or safe ownership cannot be stated.
+- `workflows/review-fix-verify` — **What it is:** finding normalization, evidence triage, implementation, and independent recheck. **Use when:** concrete review or QA findings already exist. **Do not use when:** root-cause discovery or external comment transport is the actual task.
+- `workflows/make-it-fast` — **What it is:** baseline-first, profile-guided optimization with comparable measurement. **Use when:** performance is the primary requirement and the workload is stable. **Do not use when:** the optimization or metric is speculative.
+- `workflows/deep-debugging` — **What it is:** bounded falsifiable diagnosis with independent evidence judgment and one hostile reset. **Use when:** an observable bug has no exact causal chain yet. **Do not use when:** the cause is already obvious or no reproduction can be defined.
+- design rationale and shared routing boundaries for those five workflows -> [`workflows/LIGHTWEIGHT_ENGINEERING_WORKFLOWS.md`](workflows/LIGHTWEIGHT_ENGINEERING_WORKFLOWS.md)
 - architecture audit/proposal/approval/implementation -> `workflows/create-architecture`
 - design-memory review/proposal/implementation -> `workflows/create-design`
 - create, audit, simplify, or restructure a skill -> `workflows/create-skill`

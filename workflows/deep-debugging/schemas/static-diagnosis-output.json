@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/deep-debugging/static-diagnosis-output",
+  "type": "object",
+  "required": ["outcome", "next", "summary", "symptom", "mechanism", "systemic_cause", "evidence", "remaining_hypotheses"],
+  "properties": {
+    "outcome": {"enum": ["exact_cause", "needs_experiment", "not_reproduced"]},
+    "next": {"enum": ["experiment", "fix_and_verify", "cleanup"]},
+    "summary": {"type": "string", "minLength": 1},
+    "symptom": {"type": "string", "minLength": 1},
+    "mechanism": {"type": ["string", "null"]},
+    "systemic_cause": {"type": ["string", "null"]},
+    "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "remaining_hypotheses": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "exact_cause"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "fix_and_verify"}, "mechanism": {"type": "string", "minLength": 1}, "systemic_cause": {"type": "string", "minLength": 1}}}},
+    {"if": {"properties": {"outcome": {"const": "needs_experiment"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "experiment"}, "remaining_hypotheses": {"type": "array", "minItems": 1}}}},
+    {"if": {"properties": {"outcome": {"const": "not_reproduced"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "cleanup"}}}}
+  ]
+}

@@ -1,0 +1,97 @@
+name = "review-fix-verify"
+version = 1
+description = "Triage an existing set of review findings, implement accepted fixes, and independently verify disposition and evidence. Use when concrete findings already exist; do not use to discover a bug root cause or to transport review comments to an external system."
+start = "intake"
+done = "done"
+
+[loopPolicies.fix_recheck]
+steps = ["fix", "verify"]
+entry = "fix"
+boundary = "verify"
+maxIterations = 2
+onLimit = "done"
+
+[steps.intake]
+name = "Finding intake"
+kind = "worker"
+agent = "findings_intake"
+next = "triage"
+
+[steps.intake.input]
+prompt = '''Inspect the supplied review findings and target repository read-only. Normalize each finding with a stable id, source, severity, claimed problem, location, requested action, and available evidence. Preserve the original meaning and separate duplicates. Do not fetch, reply to, resolve, or mutate external review systems. If the actual finding text or target is missing, use a non-blocking stop with source_step_id = intake.'''
+
+[steps.intake.output]
+template = "templates/findings.md"
+schema = "schemas/intake-output.json"
+
+[steps.triage]
+name = "Evidence triage"
+kind = "worker"
+agent = "findings_triage"
+next = "fix"
+
+[steps.triage.input]
+role = "critic"
+prompt = '''Evaluate every normalized finding against the current code and task scope read-only. Give exactly one disposition per finding: accepted, rejected_with_evidence, needs_input, duplicate, or out_of_scope. Accepted findings require an owner, bounded edit surface, acceptance check, and implementation order. Rejections require concrete counter-evidence. Use a non-blocking stop for a needs_input item that prevents a safe disposition; do not turn uncertainty into rejection.
+
+Findings:
+${{ input.intake }}'''
+
+[steps.triage.output]
+template = "templates/triage.md"
+schema = "schemas/triage-output.json"
+
+[steps.fix]
+name = "Implement accepted findings"
+kind = "worker"
+agent = "findings_fixer"
+next = "verify"
+
+[steps.fix.input]
+prompt = '''Implement only accepted current-scope findings in the declared order and edit surface. Preserve the stable finding ids in the handoff. Run each acceptance check plus relevant regressions; fix failures caused by the changes. On rework, address the latest verifier findings. Preserve unrelated edits. Do not publish, comment, or resolve external review threads. Use a non-blocking stop with source_step_id = fix only for missing external input or an unsafe scope contradiction.
+
+Triage:
+${{ input.triage }}
+
+Prior verification:
+${{ input.verify | default: "No prior verification." }}'''
+
+[steps.fix.output]
+template = "templates/fix.md"
+schema = "schemas/fix-output.json"
+
+[steps.verify]
+name = "Independent finding recheck"
+kind = "worker"
+agent = "findings_verifier"
+
+[steps.verify.input]
+role = "qa-reliability"
+prompt = '''Recheck the current diff and submitted evidence read-only. For every stable finding id, confirm that its disposition is evidence-backed and that each accepted finding is actually closed by the implementation and acceptance checks. Reject scope creep, missing mapping, unsupported rejection, stale evidence, or regressions. Do not create missing verification yourself. Return passed only when all current-scope findings are honestly resolved; otherwise return needs_revision with finding ids and required actions.
+
+Original findings:
+${{ input.intake }}
+
+Triage:
+${{ input.triage }}
+
+Fix result:
+${{ input.fix }}'''
+
+[steps.verify.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/verify-output.json"
+
+[steps.verify.next]
+match = "${{ output.next }}"
+
+[steps.verify.next.cases]
+fix = "fix"
+done = "done"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project a finding-by-finding closure report from intake, triage, fix, and the latest verification. External review transport was not performed. Preserve unresolved findings if the bounded loop exhausted.'''

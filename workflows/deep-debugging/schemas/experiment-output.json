@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/deep-debugging/experiment-output",
+  "type": "object",
+  "required": ["outcome", "phase", "attempt_number", "hypothesis", "fingerprint", "instrumentation", "reproduction_evidence", "observed_result", "debugger_information_gain_claimed", "attempt_ledger", "cleanup_inventory"],
+  "properties": {
+    "outcome": {"const": "ready_for_judgment"},
+    "phase": {"enum": ["pre_reset", "post_reset"]},
+    "attempt_number": {"type": "integer", "minimum": 1, "maximum": 5},
+    "hypothesis": {"$ref": "#/$defs/hypothesis"},
+    "fingerprint": {"$ref": "#/$defs/fingerprint"},
+    "instrumentation": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "reproduction_evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "observed_result": {"enum": ["supports", "falsifies", "no_information"]},
+    "debugger_information_gain_claimed": {"const": false},
+    "attempt_ledger": {"type": "array", "minItems": 1, "maxItems": 5, "items": {"$ref": "#/$defs/ledgerEntry"}},
+    "cleanup_inventory": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "strings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "fingerprint": {"type": "object", "required": ["component_or_boundary", "mechanism", "observable", "edit_surface"], "properties": {"component_or_boundary": {"type": "string", "minLength": 1}, "mechanism": {"type": "string", "minLength": 1}, "observable": {"type": "string", "minLength": 1}, "edit_surface": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}, "additionalProperties": false},
+    "hypothesis": {"type": "object", "required": ["id", "claim", "component_or_boundary", "mechanism", "observable", "edit_surface", "evidence_for", "evidence_against", "true_signal", "false_signal", "minimal_experiment", "instrumentation_risk"], "properties": {"id": {"type": "string", "minLength": 1}, "claim": {"type": "string", "minLength": 1}, "component_or_boundary": {"type": "string", "minLength": 1}, "mechanism": {"type": "string", "minLength": 1}, "observable": {"type": "string", "minLength": 1}, "edit_surface": {"$ref": "#/$defs/strings"}, "evidence_for": {"$ref": "#/$defs/strings"}, "evidence_against": {"$ref": "#/$defs/strings"}, "true_signal": {"type": "string", "minLength": 1}, "false_signal": {"type": "string", "minLength": 1}, "minimal_experiment": {"type": "string", "minLength": 1}, "instrumentation_risk": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "ledgerEntry": {"type": "object", "required": ["attempt_number", "hypothesis_id", "fingerprint", "observed_result"], "properties": {"attempt_number": {"type": "integer", "minimum": 1, "maximum": 5}, "hypothesis_id": {"type": "string", "minLength": 1}, "fingerprint": {"$ref": "#/$defs/fingerprint"}, "observed_result": {"enum": ["supports", "falsifies", "no_information"]}}, "additionalProperties": false}
+  }
+}
