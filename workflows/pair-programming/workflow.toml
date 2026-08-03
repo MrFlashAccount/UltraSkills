@@ -1,0 +1,130 @@
+name = "pair-programming"
+version = 1
+description = "Run a bounded driver-navigator implementation pair with explicit write ownership, parallel independent work where safe, integration, and focused review. Use for small but ambiguous changes that benefit from two simultaneous perspectives; do not use when one agent and one test are enough."
+start = "intake"
+done = "done"
+
+[loopPolicies.integration_rework]
+steps = ["integration", "review"]
+entry = "integration"
+boundary = "review"
+maxIterations = 2
+onLimit = "done"
+
+[steps.intake]
+name = "Pair contract"
+kind = "worker"
+agent = "pair_intake"
+next = "pair"
+
+[steps.intake.input]
+prompt = '''Inspect the task and repository read-only. Select exactly one collaboration mode: isolated_workspaces, disjoint_zones, or shared_zone. Define driver and navigator responsibilities, write ownership, integration owner, success checks, and files or zones. Never permit concurrent writes to the same path. In shared_zone mode the driver is the only writer and the navigator is read-only. If safe ownership cannot be stated, use a non-blocking stop with source_step_id = intake.'''
+
+[steps.intake.output]
+template = "templates/intake.md"
+schema = "schemas/intake-output.json"
+
+[steps.pair]
+name = "Driver and navigator"
+kind = "fanout"
+max_parallel = 2
+next = "integration"
+
+[steps.pair.input]
+branches = ["driver", "navigator"]
+prompt = '''Aggregate the two independent pair tracks without editing implementation. Preserve disagreements and evidence; do not silently choose a winner. Return both tracks' summaries, changed files, verification evidence, and explicit conflicts for the integration owner.
+
+Pair contract:
+${{ input.intake }}
+
+Driver:
+${{ input.driver }}
+
+Navigator:
+${{ input.navigator }}'''
+
+[steps.pair.output]
+template = "templates/pair-result.md"
+schema = "schemas/pair-output.json"
+
+[steps.pair.branches.driver]
+name = "Driver"
+
+[steps.pair.branches.driver.input]
+prompt = '''Act as the implementation driver. Follow the pair contract exactly. In isolated_workspaces mode create a candidate only in the assigned isolated workspace. In disjoint_zones mode write only the driver's zone. In shared_zone mode you are the only writer. Implement the smallest coherent change, run relevant checks, and record decisions and uncertainty. Do not touch navigator-owned paths.
+
+Pair contract:
+${{ input.intake }}'''
+
+[steps.pair.branches.driver.output]
+template = "templates/track-result.md"
+schema = "schemas/track-output.json"
+
+[steps.pair.branches.navigator]
+name = "Navigator"
+
+[steps.pair.branches.navigator.input]
+role = "critic"
+prompt = '''Act as the independent navigator. Inspect assumptions, edge cases, repository conventions, and the likely diff. In isolated_workspaces mode you may build a competing candidate only in the assigned isolated workspace. In disjoint_zones mode write only the navigator's zone. In shared_zone mode remain read-only and return precise guidance/evidence. Never edit a path concurrently owned by the driver.
+
+Pair contract:
+${{ input.intake }}'''
+
+[steps.pair.branches.navigator.output]
+template = "templates/track-result.md"
+schema = "schemas/track-output.json"
+
+[steps.integration]
+name = "Pair integration"
+kind = "worker"
+agent = "pair_integrator"
+next = "review"
+
+[steps.integration.input]
+prompt = '''Inspect the current filesystem before integrating; branch reports are evidence, not assumed state. Reconcile the driver and navigator results under the declared ownership contract, resolve conflicts explicitly, keep only the best supported approach, and run the relevant verification. Address prior review findings on rework. Preserve unrelated edits. If integration needs a material user decision, use a non-blocking stop with source_step_id = integration.
+
+Contract:
+${{ input.intake }}
+
+Pair outputs:
+${{ input.pair }}
+
+Prior review:
+${{ input.review | default: "No prior review." }}'''
+
+[steps.integration.output]
+template = "templates/pair-result.md"
+schema = "schemas/pair-output.json"
+
+[steps.review]
+name = "Focused pair review"
+kind = "worker"
+agent = "pair_reviewer"
+
+[steps.review.input]
+role = "qa-reliability"
+prompt = '''Review the integrated current diff and evidence read-only. Confirm that ownership was respected, no same-path concurrent-write risk escaped, disagreements were resolved explicitly, the result is coherent, and verification matches the changed surface. Return passed only with no actionable current-scope findings; otherwise return needs_revision to the integration owner.
+
+Contract:
+${{ input.intake }}
+
+Integrated result:
+${{ input.integration }}'''
+
+[steps.review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/review-output.json"
+
+[steps.review.next]
+match = "${{ output.next }}"
+
+[steps.review.next.cases]
+integration = "integration"
+done = "done"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project the pair result, ownership mode, integration evidence, and latest review. Do not claim a clean pass if the bounded review loop exhausted with unresolved findings.'''

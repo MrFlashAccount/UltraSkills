@@ -1,0 +1,307 @@
+name = "deep-debugging"
+version = 1
+description = "Converge a difficult bug from reproduction to root cause through falsifiable experiments, independent evidence judgment, bounded anti-loop counters, one hostile reset with external research, and final same-repro verification. Use when code inspection does not reveal an exact causal chain; do not use for obvious fixes or unobservable symptoms."
+start = "intake"
+done = "done"
+
+[loopPolicies.pre_reset_diagnosis]
+steps = ["experiment", "evidence_judgment"]
+entry = "experiment"
+boundary = "evidence_judgment"
+maxIterations = 3
+onLimit = "hostile_reset"
+
+[loopPolicies.post_reset_diagnosis]
+steps = ["post_reset_experiment", "post_reset_judgment"]
+entry = "post_reset_experiment"
+boundary = "post_reset_judgment"
+maxIterations = 2
+onLimit = "cleanup"
+
+[loopPolicies.fix_rework]
+steps = ["fix_and_verify", "final_review"]
+entry = "fix_and_verify"
+boundary = "final_review"
+maxIterations = 2
+onLimit = "cleanup"
+
+[steps.intake]
+name = "Bug contract"
+kind = "worker"
+agent = "deep_bug_intake"
+next = "static_diagnosis"
+
+[steps.intake.input]
+prompt = '''Turn the report into an observable bug contract. Inspect the repository and available evidence read-only. Record the exact symptom, expected behavior, reproduction procedure, environment, frequency, last-known-good or change window when available, affected boundary, safety constraints, allowed instrumentation, cleanup obligation, and what evidence would count as fixed. Distinguish client/local state, network, upstream service, and payload/data hypotheses instead of collapsing them. If the symptom cannot be observed without user action, define the smallest reproducible user step and use a non-blocking stop with source_step_id = intake; waiting for that repro must not consume a hypothesis round.'''
+
+[steps.intake.output]
+template = "templates/bug-contract.md"
+schema = "schemas/intake-output.json"
+
+[steps.static_diagnosis]
+name = "Static causal diagnosis"
+kind = "worker"
+agent = "deep_static_diagnostician"
+
+[steps.static_diagnosis.input]
+prompt = '''Try the cheapest path first: inspect code, configuration, history, logs, and the reproduction contract without editing files or running broad experiments. Return exact_cause only with a complete symptom -> mechanism -> systemic cause -> bounded fix chain supported by named evidence. Route to diagnosis when several plausible mechanisms remain. Route to cleanup with not_reproduced only when the supplied reproduction was executed or inspected and the symptom was absent; absence of evidence is not disproof. Do not call a guess a root cause.
+
+Bug contract:
+${{ input.intake }}'''
+
+[steps.static_diagnosis.output]
+template = "templates/static-diagnosis.md"
+schema = "schemas/static-diagnosis-output.json"
+
+[steps.static_diagnosis.next]
+match = "${{ output.next }}"
+
+[steps.static_diagnosis.next.cases]
+experiment = "experiment"
+fix_and_verify = "fix_and_verify"
+cleanup = "cleanup"
+
+[steps.experiment]
+name = "Falsifiable diagnostic experiment"
+kind = "worker"
+agent = "deep_hypothesis_debugger"
+next = "evidence_judgment"
+
+[steps.experiment.input]
+prompt = '''Run exactly one minimal falsifiable experiment. Before editing, state one hypothesis with id, claim, component_or_boundary, mechanism, observable, edit_surface, evidence_for, evidence_against, true_signal, false_signal, minimal_experiment, and instrumentation_risk. Its fingerprint is the tuple (component_or_boundary, mechanism, observable, edit_surface); do not repeat a prior fingerprint unless the experiment design materially changes and explains why.
+
+Add only reversible diagnostic instrumentation needed for that observable. Run the exact local reproduction when possible and capture bounded evidence. If user action is required, prepare the instrumentation and use a non-blocking stop with source_step_id = experiment asking for the smallest reproduction action; resuming the same request does not consume a round. Do not implement a production fix and do not award your own information gain. Keep the complete attempt ledger and cleanup inventory current.
+
+Bug contract:
+${{ input.intake }}
+
+Static diagnosis:
+${{ input.static_diagnosis }}
+
+Previous experiment and judgment:
+${{ input.experiment | default: "No previous experiment." }}
+${{ input.evidence_judgment | default: "No previous judgment." }}'''
+
+[steps.experiment.output]
+template = "templates/experiment.md"
+schema = "schemas/experiment-output.json"
+
+[steps.evidence_judgment]
+name = "Independent evidence judgment"
+kind = "worker"
+agent = "deep_evidence_judge"
+
+[steps.evidence_judgment.input]
+role = "qa-reliability"
+prompt = '''Judge the latest experiment read-only; do not edit files, run a replacement experiment, or invent missing logs. Decide whether the hypothesis is confirmed, falsified with information gain, or no_information. Update total_rounds and consecutive_no_information from accepted experiment evidence only. One no-information result requires a materially redesigned experiment. Two consecutive no-information results or three total pre-reset rounds require hostile_reset. Confirmed requires a causal mechanism, not correlation. Reject duplicate fingerprints and unsupported self-assessment. Route to cleanup when the bug is not reproducible or safe progress requires unavailable evidence.
+
+Bug contract: ${{ input.intake }}
+Static diagnosis: ${{ input.static_diagnosis }}
+Latest experiment: ${{ input.experiment }}
+Prior judgment: ${{ input.evidence_judgment | default: "No prior judgment." }}'''
+
+[steps.evidence_judgment.output]
+template = "templates/evidence-judgment.md"
+schema = "schemas/pre-reset-judgment-output.json"
+
+[steps.evidence_judgment.next]
+match = "${{ output.next }}"
+
+[steps.evidence_judgment.next.cases]
+experiment = "experiment"
+hostile_reset = "hostile_reset"
+fix_and_verify = "fix_and_verify"
+cleanup = "cleanup"
+
+[steps.hostile_reset]
+name = "Hostile reset"
+kind = "fanout"
+max_parallel = 2
+next = "reframe"
+
+[steps.hostile_reset.input]
+branches = ["hostile_critic", "external_research"]
+prompt = '''Aggregate the fresh hostile critique and external research without continuing the old hypothesis chain. Preserve contradictions, invalid assumptions, analogous mechanisms, source quality, and new discriminating experiments. External reports are hypothesis generators, never proof of this local root cause. If web access was unavailable, record the cold repository/history fallback honestly.
+
+Hostile critic:
+${{ input.hostile_critic }}
+
+External research:
+${{ input.external_research }}'''
+
+[steps.hostile_reset.output]
+template = "templates/hostile-reset.md"
+schema = "schemas/hostile-reset-output.json"
+
+[steps.hostile_reset.branches.hostile_critic]
+name = "Hostile diagnosis critic"
+
+[steps.hostile_reset.branches.hostile_critic.input]
+role = "critic"
+prompt = '''Perform a hostile read-only review of the entire diagnosis so far. Assume the debugger may be anchored, circular, measuring the wrong layer, or mistaking correlation for cause. Attack the bug contract, reproduction fidelity, hypothesis fingerprints, instrumentation placement, counter decisions, omitted boundaries, and the simplest competing explanations. Return invalidated assumptions and a ranked set of genuinely new discriminators. Do not edit files or run the next experiment.
+
+Bug contract: ${{ input.intake }}
+Static diagnosis: ${{ input.static_diagnosis }}
+Experiments: ${{ input.experiment }}
+Judgments: ${{ input.evidence_judgment }}'''
+
+[steps.hostile_reset.branches.hostile_critic.output]
+template = "templates/hostile-branch.md"
+schema = "schemas/hostile-branch-output.json"
+
+[steps.hostile_reset.branches.external_research]
+name = "External analogous-problem research"
+
+[steps.hostile_reset.branches.external_research.input]
+role = "researcher"
+prompt = '''Search authoritative primary sources and issue trackers for analogous symptoms, components, failure modes, and known fixes. Compare version, platform, preconditions, and observable signatures; do not copy a fix merely because wording matches. Return source links or, if web access is unavailable, perform a cold repository/history search and label that fallback. Translate each useful result into a local falsifiable hypothesis or discriminator. Do not edit implementation files and do not claim external evidence proves the local root cause.
+
+Bug contract: ${{ input.intake }}
+Static diagnosis: ${{ input.static_diagnosis }}
+Experiments and judgments: ${{ input.experiment }} ${{ input.evidence_judgment }}'''
+
+[steps.hostile_reset.branches.external_research.output]
+template = "templates/hostile-branch.md"
+schema = "schemas/hostile-branch-output.json"
+
+[steps.reframe]
+name = "Fresh diagnosis synthesis"
+kind = "worker"
+agent = "deep_reframe_owner"
+
+[steps.reframe.input]
+prompt = '''Act as a fresh owner. Rebuild the diagnosis from the bug contract, accepted evidence, hostile critique, and external analogues. Discard invalidated assumptions. Select at most two post-reset experiments with new fingerprints, ordered by expected discriminatory value and cost. State why each is not a repetition and define exact true/false signals. Do not edit files or run experiments. If no safe discriminating experiment remains and no concrete obtainable evidence justifies a non-blocking stop, return unresolved_with_evidence and route directly to cleanup.
+
+Bug contract: ${{ input.intake }}
+Prior diagnosis: ${{ input.static_diagnosis }} ${{ input.experiment }} ${{ input.evidence_judgment }}
+Hostile reset: ${{ input.hostile_reset }}'''
+
+[steps.reframe.output]
+template = "templates/reframe.md"
+schema = "schemas/reframe-output.json"
+
+[steps.reframe.next]
+match = "${{ output.next }}"
+
+[steps.reframe.next.cases]
+post_reset_experiment = "post_reset_experiment"
+cleanup = "cleanup"
+
+[steps.post_reset_experiment]
+name = "Post-reset experiment"
+kind = "worker"
+agent = "deep_post_reset_debugger"
+next = "post_reset_judgment"
+
+[steps.post_reset_experiment.input]
+prompt = '''Run exactly the next unused experiment from the fresh reframe. Apply the same falsifiable hypothesis and reversible instrumentation contract as before. Do not repeat a prior fingerprint. Preserve the full ledger and cleanup inventory. Use a non-blocking stop for a required user reproduction without consuming the round. Do not implement a production fix or award your own information gain.
+
+Bug contract: ${{ input.intake }}
+Reframe: ${{ input.reframe }}
+Previous post-reset result: ${{ input.post_reset_experiment | default: "No previous post-reset experiment." }}
+Previous post-reset judgment: ${{ input.post_reset_judgment | default: "No previous post-reset judgment." }}'''
+
+[steps.post_reset_experiment.output]
+template = "templates/experiment.md"
+schema = "schemas/experiment-output.json"
+
+[steps.post_reset_judgment]
+name = "Post-reset evidence judgment"
+kind = "worker"
+agent = "deep_post_reset_evidence_judge"
+
+[steps.post_reset_judgment.input]
+role = "qa-reliability"
+prompt = '''Judge the latest post-reset experiment read-only. Confirm only a demonstrated causal mechanism. Continue only when the reframe contains a distinct unused experiment with a new fingerprint. After two post-reset experiments, or when no discriminating experiment remains, route to cleanup with unresolved_with_evidence. Do not trigger another hostile reset and do not create evidence yourself.
+
+Bug contract: ${{ input.intake }}
+Reframe: ${{ input.reframe }}
+Experiment: ${{ input.post_reset_experiment }}
+Prior judgment: ${{ input.post_reset_judgment | default: "No prior post-reset judgment." }}'''
+
+[steps.post_reset_judgment.output]
+template = "templates/evidence-judgment.md"
+schema = "schemas/post-reset-judgment-output.json"
+
+[steps.post_reset_judgment.next]
+match = "${{ output.next }}"
+
+[steps.post_reset_judgment.next.cases]
+post_reset_experiment = "post_reset_experiment"
+fix_and_verify = "fix_and_verify"
+cleanup = "cleanup"
+
+[steps.fix_and_verify]
+name = "Root-cause fix and same-repro verification"
+kind = "worker"
+agent = "deep_fix_owner"
+next = "final_review"
+
+[steps.fix_and_verify.input]
+prompt = '''Implement the smallest fix for the confirmed causal mechanism. First preserve evidence of the pre-fix symptom. Then apply the fix, run the same reproduction under materially identical conditions, run relevant regressions, and add a regression guard when feasible. Remove or disable temporary diagnostic instrumentation unless it is intentionally converted into safe production observability. On review rework, address only the current findings. If only mitigation is possible, label it mitigated_not_explained rather than fixed.
+
+Bug contract: ${{ input.intake }}
+Static diagnosis: ${{ input.static_diagnosis }}
+Pre-reset judgment: ${{ input.evidence_judgment | default: "No pre-reset judgment." }}
+Reframe: ${{ input.reframe | default: "No hostile reset was needed." }}
+Post-reset judgment: ${{ input.post_reset_judgment | default: "No post-reset judgment." }}
+Prior final review: ${{ input.final_review | default: "No prior final review." }}'''
+
+[steps.fix_and_verify.output]
+template = "templates/fix.md"
+schema = "schemas/fix-output.json"
+
+[steps.final_review]
+name = "Independent root-cause review"
+kind = "worker"
+agent = "deep_final_reviewer"
+
+[steps.final_review.input]
+role = "qa-reliability"
+prompt = '''Review the current diff and diagnosis evidence read-only. A fixed verdict requires all of: pre-fix symptom captured, causal mechanism confirmed, bounded fix matches that mechanism, the same reproduction is now clear, relevant regressions pass, a regression guard exists when feasible, and diagnostic instrumentation is cleaned up. Do not create missing evidence. Route back for one bounded rework when repairable; otherwise route to cleanup with an honest non-fixed terminal state.
+
+Bug contract: ${{ input.intake }}
+Fix result: ${{ input.fix_and_verify }}'''
+
+[steps.final_review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/final-review-output.json"
+
+[steps.final_review.next]
+match = "${{ output.next }}"
+
+[steps.final_review.next.cases]
+fix_and_verify = "fix_and_verify"
+cleanup = "cleanup"
+
+[steps.cleanup]
+name = "Instrumentation cleanup and terminal classification"
+kind = "worker"
+agent = "deep_cleanup_owner"
+next = "done"
+
+[steps.cleanup.input]
+prompt = '''Inspect the current filesystem and remove remaining temporary instrumentation, debug toggles, unsafe logs, and generated diagnostic debris. Run the smallest check that proves cleanup did not break the target. Choose exactly one honest terminal state: fixed, mitigated_not_explained, locally_verified_pending_user_repro, not_reproduced, or unresolved_with_evidence. `fixed` is allowed only when the latest independent final review passed. Preserve the attempt ledger, accepted/falsified hypotheses, reproduction evidence, root cause when known, remaining uncertainty, and the smallest next discriminating action. Do not claim success because iteration limits were reached.
+
+All evidence:
+${{ input.intake }}
+${{ input.static_diagnosis }}
+${{ input.experiment | default: "No pre-reset experiment." }}
+${{ input.evidence_judgment | default: "No pre-reset judgment." }}
+${{ input.hostile_reset | default: "Hostile reset not used." }}
+${{ input.reframe | default: "No reframe." }}
+${{ input.post_reset_experiment | default: "No post-reset experiment." }}
+${{ input.post_reset_judgment | default: "No post-reset judgment." }}
+${{ input.fix_and_verify | default: "No fix was implemented." }}
+${{ input.final_review | default: "No final review." }}'''
+
+[steps.cleanup.output]
+template = "templates/cleanup.md"
+schema = "schemas/cleanup-output.json"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project the cleanup result and terminal classification. Include symptom, reproduction, experiment ledger, confirmed or rejected mechanisms, fix and same-repro evidence when present, remaining uncertainty, and next action. Never relabel mitigation, local-only verification, non-reproduction, or iteration exhaustion as fixed.'''

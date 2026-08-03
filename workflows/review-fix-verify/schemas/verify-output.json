@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/review-fix-verify/verify-output",
+  "type": "object",
+  "required": ["outcome", "next", "summary", "finding_results", "evidence_checked", "findings"],
+  "properties": {
+    "outcome": {"enum": ["passed", "needs_revision"]},
+    "next": {"enum": ["fix", "done"]},
+    "summary": {"type": "string", "minLength": 1},
+    "finding_results": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["id", "closed", "evidence"], "properties": {"id": {"type": "string", "minLength": 1}, "closed": {"type": "boolean"}, "evidence": {"type": "string", "minLength": 1}}, "additionalProperties": false}},
+    "evidence_checked": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "findings": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "passed"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "done"}}}},
+    {"if": {"properties": {"outcome": {"const": "needs_revision"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "fix"}, "findings": {"type": "array", "minItems": 1}}}}
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/make-it-fast/review-output",
+  "type": "object",
+  "required": ["outcome", "next", "summary", "evidence_checked", "findings"],
+  "properties": {
+    "outcome": {"enum": ["passed", "needs_revision"]},
+    "next": {"enum": ["implement", "done"]},
+    "summary": {"type": "string", "minLength": 1},
+    "evidence_checked": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "findings": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "passed"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "done"}}}},
+    {"if": {"properties": {"outcome": {"const": "needs_revision"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "implement"}, "findings": {"type": "array", "minItems": 1}}}}
+  ]
+}

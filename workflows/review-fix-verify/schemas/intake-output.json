@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/review-fix-verify/intake-output",
+  "type": "object",
+  "required": ["outcome", "findings"],
+  "properties": {
+    "outcome": {"const": "ready"},
+    "findings": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["id", "source", "severity", "problem", "location", "requested_action", "evidence"], "properties": {"id": {"type": "string", "minLength": 1}, "source": {"type": "string", "minLength": 1}, "severity": {"enum": ["must_fix", "should_fix", "can_delay"]}, "problem": {"type": "string", "minLength": 1}, "location": {"type": "string", "minLength": 1}, "requested_action": {"type": "string", "minLength": 1}, "evidence": {"type": "array", "items": {"type": "string", "minLength": 1}}}, "additionalProperties": false}}
+  },
+  "additionalProperties": false
+}

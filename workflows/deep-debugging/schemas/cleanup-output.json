@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/deep-debugging/cleanup-output",
+  "type": "object",
+  "required": ["outcome", "terminal_state", "summary", "cleanup_evidence", "attempt_ledger", "confirmed_mechanisms", "falsified_hypotheses", "remaining_uncertainty", "next_action", "final_review_status"],
+  "properties": {
+    "outcome": {"const": "complete"},
+    "terminal_state": {"enum": ["fixed", "mitigated_not_explained", "locally_verified_pending_user_repro", "not_reproduced", "unresolved_with_evidence"]},
+    "summary": {"type": "string", "minLength": 1},
+    "cleanup_evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "attempt_ledger": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "confirmed_mechanisms": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "falsified_hypotheses": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "remaining_uncertainty": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "next_action": {"type": "string", "minLength": 1},
+    "final_review_status": {"enum": ["passed", "not_passed", "not_run"]}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"terminal_state": {"const": "fixed"}}, "required": ["terminal_state"]}, "then": {"properties": {"final_review_status": {"const": "passed"}, "confirmed_mechanisms": {"type": "array", "minItems": 1}}}}
+  ]
+}

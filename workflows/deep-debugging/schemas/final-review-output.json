@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/deep-debugging/final-review-output",
+  "type": "object",
+  "required": ["outcome", "next", "summary", "evidence_checked", "causal_chain_confirmed", "same_repro_clear", "regressions_passed", "instrumentation_clean", "findings"],
+  "properties": {
+    "outcome": {"enum": ["passed", "needs_revision", "not_fixed"]},
+    "next": {"enum": ["fix_and_verify", "cleanup"]},
+    "summary": {"type": "string", "minLength": 1},
+    "evidence_checked": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "causal_chain_confirmed": {"type": "boolean"},
+    "same_repro_clear": {"type": "boolean"},
+    "regressions_passed": {"type": "boolean"},
+    "instrumentation_clean": {"type": "boolean"},
+    "findings": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "passed"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "cleanup"}, "causal_chain_confirmed": {"const": true}, "same_repro_clear": {"const": true}, "regressions_passed": {"const": true}, "instrumentation_clean": {"const": true}}}},
+    {"if": {"properties": {"outcome": {"const": "needs_revision"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "fix_and_verify"}, "findings": {"type": "array", "minItems": 1}}}},
+    {"if": {"properties": {"outcome": {"const": "not_fixed"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "cleanup"}}}}
+  ]
+}

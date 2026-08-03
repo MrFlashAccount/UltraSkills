@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/red-green-refactor/intake-output",
+  "type": "object",
+  "required": ["outcome", "behavior_contract", "test_oracle", "test_location", "verification_command", "out_of_scope"],
+  "properties": {
+    "outcome": {"const": "ready"},
+    "behavior_contract": {"type": "string", "minLength": 1},
+    "test_oracle": {"type": "string", "minLength": 1},
+    "test_location": {"type": "string", "minLength": 1},
+    "verification_command": {"type": "string", "minLength": 1},
+    "out_of_scope": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  },
+  "additionalProperties": false
+}

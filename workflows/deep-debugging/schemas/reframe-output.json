@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/deep-debugging/reframe-output",
+  "type": "object",
+  "required": ["outcome", "next", "summary", "discarded_assumptions", "experiments"],
+  "properties": {
+    "outcome": {"enum": ["ready_for_post_reset", "unresolved_with_evidence"]},
+    "next": {"enum": ["post_reset_experiment", "cleanup"]},
+    "summary": {"type": "string", "minLength": 1},
+    "discarded_assumptions": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "experiments": {"type": "array", "maxItems": 2, "items": {"type": "object", "required": ["order", "hypothesis", "fingerprint", "true_signal", "false_signal", "expected_information_gain", "cost", "novelty"], "properties": {"order": {"type": "integer", "minimum": 1, "maximum": 2}, "hypothesis": {"type": "string", "minLength": 1}, "fingerprint": {"type": "string", "minLength": 1}, "true_signal": {"type": "string", "minLength": 1}, "false_signal": {"type": "string", "minLength": 1}, "expected_information_gain": {"type": "string", "minLength": 1}, "cost": {"type": "string", "minLength": 1}, "novelty": {"type": "string", "minLength": 1}}, "additionalProperties": false}}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "ready_for_post_reset"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "post_reset_experiment"}, "experiments": {"type": "array", "minItems": 1}}}},
+    {"if": {"properties": {"outcome": {"const": "unresolved_with_evidence"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "cleanup"}, "experiments": {"type": "array", "maxItems": 0}}}}
+  ]
+}

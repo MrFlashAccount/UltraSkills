@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/deep-debugging/pre-reset-judgment-output",
+  "type": "object",
+  "required": ["outcome", "next", "summary", "accepted_evidence", "information_gain", "duplicate_fingerprint", "total_rounds", "consecutive_no_information", "reason"],
+  "properties": {
+    "outcome": {"enum": ["confirmed", "continue", "hostile_reset", "not_reproduced"]},
+    "next": {"enum": ["experiment", "hostile_reset", "fix_and_verify", "cleanup"]},
+    "summary": {"type": "string", "minLength": 1},
+    "accepted_evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "information_gain": {"type": "boolean"},
+    "duplicate_fingerprint": {"type": "boolean"},
+    "total_rounds": {"type": "integer", "minimum": 1, "maximum": 3},
+    "consecutive_no_information": {"type": "integer", "minimum": 0, "maximum": 3},
+    "reason": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "confirmed"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "fix_and_verify"}, "information_gain": {"const": true}, "duplicate_fingerprint": {"const": false}}}},
+    {"if": {"properties": {"outcome": {"const": "continue"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "experiment"}}}},
+    {"if": {"properties": {"outcome": {"const": "hostile_reset"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "hostile_reset"}}}},
+    {"if": {"properties": {"outcome": {"const": "not_reproduced"}}, "required": ["outcome"]}, "then": {"properties": {"next": {"const": "cleanup"}}}}
+  ]
+}

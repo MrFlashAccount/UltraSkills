@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/UltraSkills/schemas/workflow/review-fix-verify/fix-output",
+  "type": "object",
+  "required": ["outcome", "summary", "finding_changes", "changed_files", "verification", "remaining_risks"],
+  "properties": {
+    "outcome": {"const": "ready_for_verify"},
+    "summary": {"type": "string", "minLength": 1},
+    "finding_changes": {"type": "array", "items": {"type": "object", "required": ["id", "status", "evidence"], "properties": {"id": {"type": "string", "minLength": 1}, "status": {"enum": ["fixed", "unchanged"]}, "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}}, "additionalProperties": false}},
+    "changed_files": {"$ref": "#/$defs/strings"},
+    "verification": {"$ref": "#/$defs/strings"},
+    "remaining_risks": {"$ref": "#/$defs/strings"}
+  },
+  "additionalProperties": false,
+  "$defs": {"strings": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}
+}

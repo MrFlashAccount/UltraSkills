@@ -1,0 +1,84 @@
+name = "red-green-refactor"
+version = 1
+description = "Implement a small behavior change through one evidence-bearing RED-GREEN-REFACTOR cycle and an independent focused review. Use for small changes with a cheap deterministic test; do not use when the cause, contract, or test oracle is still unknown."
+start = "intake"
+done = "done"
+
+[loopPolicies.review_rework]
+steps = ["cycle", "review"]
+entry = "cycle"
+boundary = "review"
+maxIterations = 2
+onLimit = "done"
+
+[steps.intake]
+name = "TDD intake"
+kind = "worker"
+agent = "red_green_intake"
+next = "cycle"
+
+[steps.intake.input]
+prompt = '''Confirm that the requested change is small, the intended behavior is observable, and a deterministic test can express it. Inspect the repository and nearby tests read-only. Define the narrow behavior contract, test location, verification command, and explicit out-of-scope boundary. Do not edit files or run implementation. If the behavior or oracle is materially ambiguous, use a non-blocking stop with source_step_id = intake instead of guessing.'''
+
+[steps.intake.output]
+template = "templates/intake.md"
+schema = "schemas/intake-output.json"
+
+[steps.cycle]
+name = "RED GREEN REFACTOR"
+kind = "worker"
+agent = "red_green_driver"
+next = "review"
+
+[steps.cycle.input]
+prompt = '''Own one complete TDD cycle against the intake contract.
+
+RED: add or change the smallest test that expresses the missing behavior, run it, and record the expected failure plus why that failure proves the test is connected to the requested behavior. A compile error, unrelated failure, or test that already passes is not valid RED.
+GREEN: make the smallest production change that makes the RED test pass, then run the focused test and relevant regression checks.
+REFACTOR: improve structure only when evidence shows a concrete readability, duplication, ownership, or maintainability problem; keep behavior green. Do not refactor speculatively.
+FAST: only when performance is part of the request, compare the same workload and metric before and after; otherwise mark it skipped.
+
+Address the latest review findings when this is a rework pass. Keep the edit surface bounded and preserve unrelated user changes. If required input or environment support is missing, use a non-blocking stop with source_step_id = cycle.
+
+Intake contract:
+${{ input.intake }}
+
+Previous review:
+${{ input.review | default: "No previous review." }}'''
+
+[steps.cycle.output]
+template = "templates/cycle.md"
+schema = "schemas/cycle-output.json"
+
+[steps.review]
+name = "Focused evidence review"
+kind = "worker"
+agent = "red_green_reviewer"
+
+[steps.review.input]
+role = "qa-reliability"
+prompt = '''Review the current diff and submitted evidence read-only. Do not edit files or manufacture missing verification. Require a real RED failure for the intended reason, a GREEN pass of the same test, relevant regression evidence, bounded scope, and a behavior-preserving refactor. When FAST ran, require a comparable baseline; when it was irrelevant, accept skipped. Return passed only with no current-scope must-fix or should-fix findings. Otherwise return needs_revision with precise evidence and required action.
+
+Intake:
+${{ input.intake }}
+
+Cycle result:
+${{ input.cycle }}'''
+
+[steps.review.output]
+template = "../../shared/templates/review-verdict-template.md"
+schema = "schemas/review-output.json"
+
+[steps.review.next]
+match = "${{ output.next }}"
+
+[steps.review.next.cases]
+cycle = "cycle"
+done = "done"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project the latest cycle and review honestly. Claim completion only when the latest review passed. If the bounded review loop ended on needs_revision, preserve those unresolved findings.'''

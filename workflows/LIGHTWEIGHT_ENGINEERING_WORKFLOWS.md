@@ -1,9 +1,10 @@
-# Lightweight engineering workflows proposal
+# Lightweight engineering workflows
 
-Status: proposal only. This document defines five target workflow packages; it
-does not add runnable workflow graphs, prompts, or schemas.
+Status: implemented. This document preserves the shared routing rationale and
+design contracts; each package now contains a runnable graph, prompts, schemas,
+templates, and a package README.
 
-Proposed packages:
+Implemented packages:
 
 - `workflows/red-green-refactor/`
 - `workflows/pair-programming/`
@@ -518,15 +519,14 @@ terminal bugfix result.
 - claiming success from generated artifacts without executing the relevant
   behavioral path.
 
-## Promotion plan
+## Evaluation plan
 
-If this proposal is accepted, implement the five packages in later PRs. Each
-package must include its runtime graph, worker schemas, prompts/references,
-package README, focused tests, catalog entry, semantic workflow validation, and
-an executable smoke path.
+Each package includes its runtime graph, worker schemas, prompts, package
+README, catalog entry, semantic workflow validation, and an executable smoke
+path. Keep the routes experimental until they have been exercised on several
+representative tasks and compared with direct execution.
 
-Keep them experimental until each has been exercised on several representative
-tasks and compared with direct execution. Record:
+Record:
 
 - success and regression or rework rate;
 - worker turns, elapsed time, and token cost;
