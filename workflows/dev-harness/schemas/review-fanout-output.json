@@ -6,24 +6,16 @@
   "type": "object",
   "required": [
     "outcome",
-    "next"
+    "verdict"
   ],
   "properties": {
     "outcome": {
       "enum": [
-        "passed",
+        "approved",
         "needs_changes"
       ],
       "description": "Aggregate result for the current review activation.",
       "x-usage": "Use needs_changes for any actionable current-scope must-fix or should-fix finding."
-    },
-    "next": {
-      "enum": [
-        "implementation",
-        "done"
-      ],
-      "description": "Scalar workflow transition target selected by the owner output.",
-      "x-usage": "Use implementation for needs_changes and done for passed; never encode implementation branch ids in next."
     },
     "implementation_branches": {
       "$ref": "#/$defs/implementationBranches",
@@ -43,7 +35,7 @@
     "verdict": {
       "$ref": "#/$defs/verdict",
       "description": "Compact aggregate review evidence.",
-      "x-usage": "Use as the final result on passed and as rework evidence on needs_changes."
+      "x-usage": "Use as the final approval-gate context on approved and as rework evidence on needs_changes."
     },
     "artifacts": {
       "type": "array",
@@ -68,7 +60,7 @@
       "if": {
         "properties": {
           "outcome": {
-            "const": "passed"
+            "const": "approved"
           }
         },
         "required": [
@@ -77,14 +69,8 @@
       },
       "then": {
         "required": [
-          "next",
           "verdict"
         ],
-        "properties": {
-          "next": {
-            "const": "done"
-          }
-        },
         "not": {
           "anyOf": [
             {
@@ -119,17 +105,11 @@
       },
       "then": {
         "required": [
-          "next",
           "implementation_branches",
           "review_branches",
           "implementer_handoffs",
           "verdict"
-        ],
-        "properties": {
-          "next": {
-            "const": "implementation"
-          }
-        }
+        ]
       }
     },
     {
@@ -262,7 +242,8 @@
       "required": [
         "summary",
         "reviewed_branches",
-        "failed_review_branches"
+        "failed_review_branches",
+        "findings"
       ],
       "properties": {
         "summary": {
@@ -289,6 +270,14 @@
               "qa_review"
             ]
           }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Aggregated actionable findings shown at the final user implementation gate; empty only for a clean approved review.",
+          "x-usage": "Present these as reviewer context at the user gate and preserve them when the automated review loop exhausts; do not silently downgrade or discard them."
         }
       },
       "additionalProperties": true
