@@ -1,6 +1,6 @@
 name = "dev-harness"
 version = 1
-description = "End-to-end architecture and execution workflow for non-trivial code work: research attack, optional UI design proposal gate, one execution-ready architecture Canvas and approval, implementation fanout, and review fanout. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
+description = "End-to-end architecture and execution workflow for non-trivial code work: research attack, optional UI design proposal gate, one execution-ready architecture Canvas and approval, implementation and review fanout, and final user implementation approval. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
 start = "research_draft"
 done = "done"
 
@@ -30,7 +30,7 @@ steps = ["implementation", "review"]
 entry = "implementation"
 boundary = "review"
 maxIterations = 3
-onLimit = "done"
+onLimit = "approve_implementation"
 
 [steps.research_draft]
 name = "Research draft"
@@ -337,7 +337,6 @@ name = "Implementation"
 kind = "fanout"
 agent = "implementation"
 max_parallel = 3
-next = "review"
 
 [steps.implementation.input]
 branches = { first_of = ["${{ input.review.implementation_branches }}", "${{ input.architecture_draft.selected_implementation_steps }}"] }
@@ -346,7 +345,9 @@ Use the `reasons-canvas-architecture` artifact from `architecture_draft` as the 
 Confirm every selected branch completed, supplied verification evidence, and stayed within scope.
 On the first pass, architecture_draft.selected_review_steps is the mandatory review baseline. After rework, review.review_branches is the mandatory re-review baseline.
 You may widen that baseline when actual changed files or touched surfaces require another planned or previously skipped reviewer. Never remove a mandatory reviewer.
-Return outcome ready_for_review with review_branches as the exact next review fanout and one reviewer_handoffs.<review_branch_id> entry per selected reviewer.
+Always emit a concise user-facing summary of the current implementation state and copy every selected branch's `implementation-handoff` artifact metadata into artifacts[] without embedding or merging artifact bodies.
+When the latest approve_implementation decision is rejected, verify that every selected branch addressed the user feedback within its owned scope, then return outcome ready_for_user_approval without review_branches or reviewer_handoffs. This user-requested rework returns directly to the same user gate; do not silently insert another automated review cycle.
+Otherwise return outcome ready_for_review with review_branches as the exact next review fanout and one reviewer_handoffs.<review_branch_id> entry per selected reviewer.
 If incomplete, report a non-blocking stop with non_blocking_stop.source_step_id = implementation.
 
 Input context:
@@ -354,6 +355,7 @@ Input context:
 - Initial implementation branches: ${{ input.architecture_draft.selected_implementation_steps }}
 - Initial review baseline: ${{ input.architecture_draft.selected_review_steps }}
 - Mandatory re-review baseline: ${{ input.review.review_branches | default: "No prior re-review baseline." }}
+- Latest user implementation approval: ${{ input.approve_implementation | default: "No prior user implementation decision; route this activation through automated review." }}
 - Backend implementation: ${{ input.backend_implementation | default: "backend_implementation was not selected in this activation." }}
 - Frontend implementation: ${{ input.frontend_implementation | default: "frontend_implementation was not selected in this activation." }}
 - Architecture artifact update: ${{ input.architecture_artifact_update | default: "architecture_artifact_update was not selected in this activation." }}'''
@@ -361,6 +363,13 @@ Input context:
 [steps.implementation.output]
 template = "../../shared/templates/reviewer-handoff-template.md"
 schema = "schemas/implementation-fanout-output.json"
+
+[steps.implementation.next]
+match = "${{ output.outcome }}"
+
+[steps.implementation.next.cases]
+ready_for_review = "review"
+ready_for_user_approval = "approve_implementation"
 
 [steps.implementation.branches.backend_implementation]
 name = "Backend implementation"
@@ -380,7 +389,8 @@ If a required source row cannot be satisfied in the assigned backend scope, or i
 Treat the approved architecture Canvas as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the Canvas, report a non-blocking stop or request an approved architecture revision.
 Return implemented as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = backend_implementation.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
-When rerun from review needs_changes, consume only input.review.implementer_handoffs.backend_implementation as actionable rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
+When rerun from review needs_changes before the user implementation gate, consume only input.review.implementer_handoffs.backend_implementation as the automated-review rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
+When the latest approve_implementation decision is rejected, treat its feedback as mandatory user-requested rework for this owned backend slice. If the feedback does not apply to this slice, do not invent changes; record that scoped determination and its evidence in the handoff.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
 If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = backend_implementation and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
@@ -391,7 +401,8 @@ Input context:
 - Previous backend implementation artifacts: ${{ input.backend_implementation.artifacts | default: "No previous backend_implementation artifacts in input context." }}
 - Branch-specific review rework handoff: ${{ input.review.implementer_handoffs.backend_implementation | default: "No backend rework handoff; this is the first implementation pass." }}
 - Aggregate review verdict: ${{ input.review.verdict | default: "No aggregate review verdict; this is the first implementation pass." }}
-- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved architecture baseline." }}'''
+- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved architecture baseline." }}
+- User-requested implementation feedback: ${{ input.approve_implementation.feedback | default: "No user-requested rework feedback." }}'''
 
 [steps.implementation.branches.backend_implementation.output]
 template = "../../shared/templates/implementer-handoff-template.md"
@@ -424,8 +435,9 @@ If a required source row cannot be satisfied in the assigned frontend scope, or 
 Treat the approved architecture Canvas as the executable contract. Do not edit, complete, or reinterpret REASONS artifacts; if implementation reality conflicts with the Canvas, report a non-blocking stop or request an approved architecture revision.
 Return implemented as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = frontend_implementation.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
-When rerun from review needs_changes, consume only input.review.implementer_handoffs.frontend_implementation as actionable rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
+When rerun from review needs_changes before the user implementation gate, consume only input.review.implementer_handoffs.frontend_implementation as the automated-review rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
 Treat `must_fix` and `should_fix` review findings routed to frontend_implementation as mandatory rework. Do not leave actionable current-scope `should_fix` items unresolved in the next handoff.
+When the latest approve_implementation decision is rejected, treat its feedback as mandatory user-requested rework for this owned frontend slice. If the feedback does not apply to this slice, do not invent changes; record that scoped determination and its evidence in the handoff.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
 If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = frontend_implementation and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
@@ -438,7 +450,8 @@ Input context:
 - Previous frontend implementation artifacts: ${{ input.frontend_implementation.artifacts | default: "No previous frontend_implementation artifacts in input context." }}
 - Branch-specific review rework handoff: ${{ input.review.implementer_handoffs.frontend_implementation | default: "No frontend rework handoff; this is the first implementation pass." }}
 - Aggregate review verdict: ${{ input.review.verdict | default: "No aggregate review verdict; this is the first implementation pass." }}
-- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved architecture baseline." }}'''
+- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved architecture baseline." }}
+- User-requested implementation feedback: ${{ input.approve_implementation.feedback | default: "No user-requested rework feedback." }}'''
 
 [steps.implementation.branches.frontend_implementation.output]
 template = "../../shared/templates/implementer-handoff-template.md"
@@ -459,7 +472,8 @@ Do not edit, complete, or reinterpret REASONS artifacts unless the approved arch
 Read prior step outputs from input.<step_id> fields only.
 Return implemented as completed output, or report a non-blocking stop with non_blocking_stop.source_step_id = architecture_artifact_update.
 When implemented, emit the full implementer handoff as one `implementation-handoff` artifact and keep JSON compact: summary, changed_files, verification, artifacts. Do not embed the handoff body in JSON.
-When rerun from review needs_changes, consume only input.review.implementer_handoffs.architecture_artifact_update as actionable rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
+When rerun from review needs_changes before the user implementation gate, consume only input.review.implementer_handoffs.architecture_artifact_update as the automated-review rework instructions. Use the aggregate review verdict and mandatory re-review baseline only for shared context; do not reconstruct rework from raw reviewer outputs.
+When the latest approve_implementation decision is rejected, treat its feedback as mandatory user-requested rework for this owned architecture/documentation slice. If the feedback does not apply to this slice, do not invent changes; record that scoped determination and its evidence in the handoff.
 Loop continuity across workflow loop iterations is prompt based: rely only on workflow input context and prior step outputs; do not assume persistent draft/attack worker reuse across iterations.
 If concise clarification is needed, do not ask the user directly; report a non-blocking stop with non_blocking_stop.source_step_id = architecture_artifact_update and put the user-facing clarification prompt in non_blocking_stop.needed. After the orchestrator resolves it, continue the same clarification session without restart or context widening.
 
@@ -470,7 +484,8 @@ Input context:
 - Previous architecture artifact update artifacts: ${{ input.architecture_artifact_update.artifacts | default: "No previous architecture_artifact_update artifacts in input context." }}
 - Branch-specific review rework handoff: ${{ input.review.implementer_handoffs.architecture_artifact_update | default: "No architecture artifact rework handoff; this is the first implementation pass." }}
 - Aggregate review verdict: ${{ input.review.verdict | default: "No aggregate review verdict; this is the first implementation pass." }}
-- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved architecture baseline." }}'''
+- Mandatory re-review baseline: ${{ input.review.review_branches | default: "No mandatory re-review baseline; use the approved architecture baseline." }}
+- User-requested implementation feedback: ${{ input.approve_implementation.feedback | default: "No user-requested rework feedback." }}'''
 
 [steps.implementation.branches.architecture_artifact_update.output]
 template = "../../shared/templates/implementer-handoff-template.md"
@@ -481,16 +496,16 @@ name = "Review"
 kind = "fanout"
 agent = "review"
 max_parallel = 7
-next = "${{ output.next }}"
 
 [steps.review.input]
-branches = "${{ input.implementation.review_branches }}"
+branches = { first_of = ["${{ input.implementation.review_branches }}", "${{ input.architecture_draft.selected_review_steps }}"] }
 prompt = '''This is the review fanout owner phase. Aggregate only review branches selected for the current activation.
 Use the `reasons-canvas-architecture` artifact from `architecture_draft` and reviewer outputs as the approved review evidence.
-If every selected reviewer passed with no actionable current-scope must-fix or should-fix findings, return outcome passed and next done.
-If changes are required, return outcome needs_changes, next implementation, exact implementation_branches, one implementer_handoffs.<implementation_branch_id> per branch, and review_branches as the mandatory re-review baseline.
+Always aggregate reviewer findings into verdict.findings; use an empty array only for a clean pass.
+If every selected reviewer passed with no actionable current-scope must-fix or should-fix findings, return outcome approved. The result must go to the user implementation approval gate, never directly to done.
+If changes are required, return outcome needs_changes, exact implementation_branches, one implementer_handoffs.<implementation_branch_id> per branch, and review_branches as the mandatory re-review baseline.
 The re-review baseline must include failed reviewers and reviewers whose owned surfaces must be touched by the prescribed rework. The next implementation owner may widen this baseline after actual changes but may not narrow it.
-If review cannot finish safely, report a non-blocking stop with non_blocking_stop.source_step_id = review and omit next.
+If review cannot finish safely, report a non-blocking stop with non_blocking_stop.source_step_id = review.
 
 Input context:
 - Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
@@ -506,6 +521,13 @@ Input context:
 [steps.review.output]
 template = "../../shared/templates/review-verdict-template.md"
 schema = "schemas/review-fanout-output.json"
+
+[steps.review.next]
+match = "${{ output.outcome }}"
+
+[steps.review.next.cases]
+approved = "approve_implementation"
+needs_changes = "implementation"
 
 [steps.review.branches.architect_review]
 name = "Architect review"
@@ -702,17 +724,44 @@ Input context:
 template = "../../shared/templates/review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
+[steps.approve_implementation]
+name = "Approve implementation result"
+kind = "approval"
+
+[steps.approve_implementation.input]
+summary = "${{ input.implementation.summary }}"
+artifacts = ["${{ input.implementation.artifacts }}"]
+
+[steps.approve_implementation.input.verdict]
+outcome = "${{ input.review.outcome }}"
+summary = "${{ input.review.verdict.summary }}"
+findings = "${{ input.review.verdict.findings }}"
+
+[steps.approve_implementation.input.verdict.include_when]
+selector = "${{ input.implementation.outcome }}"
+equals = "ready_for_review"
+
+[steps.approve_implementation.next]
+match = "${{ output.approval }}"
+
+[steps.approve_implementation.next.cases]
+approved = "done"
+rejected = "implementation"
+
 [steps.done]
 name = "Done"
 kind = "done"
 
 [steps.done.input]
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
-Workflow completed.
-Project review.verdict and review.outcome as the final result; do not summarize artifacts/results globals.
-If review.outcome is needs_changes, state that the workflow exited after the configured three-cycle code-review limit with unresolved findings. Do not claim that review passed or that the requested rework was implemented.
+Workflow completed only because the user explicitly approved the latest implementation result.
+Project approve_implementation, implementation.summary, review.verdict, and review.outcome as the final result; do not summarize artifacts/results globals.
+If review.outcome is needs_changes, state that the automated code-review loop ended after its configured three-cycle limit with unresolved findings and that the user explicitly accepted the result. Do not claim that review passed.
+If implementation.outcome is ready_for_user_approval, state that the latest user-requested rework was implemented and explicitly approved, but was not sent through another automated review cycle. Do not claim that post-review user feedback was reviewer-verified.
 
 Input context:
+- Final user implementation decision: ${{ input.approve_implementation }}
+- Latest implementation summary: ${{ input.implementation.summary }}
 - Final review outcome: ${{ input.review.outcome }}
 - Final review verdict: ${{ input.review.verdict }}
 '''

@@ -12,10 +12,16 @@ Research, UI design, and architecture hostile reviews
 run at most twice. If the second review still requests revision, the workflow
 exits that hostile-review cycle to the corresponding human approval gate.
 
-Implementation code review runs at most three times. If the third review still
-requests changes, the workflow exits to `done` with the unresolved verdict and
-must not report the review as passed. A separate human code-review approval gate
-is not modeled yet.
+Implementation code review runs at most three times. A clean review and an
+exhausted third review both go to the final user implementation gate; unresolved
+findings remain visible and must not be reported as passed. Only explicit user
+approval reaches `done`.
+
+If the user rejects that gate with feedback, the selected implementation branches
+apply the feedback and return directly to the same gate without another automated
+review pass. The approval summary and implementation handoffs must describe the
+latest result, and `done` must not claim that post-review user feedback was
+reviewer-verified.
 
 ## Approval summaries and artifacts
 
