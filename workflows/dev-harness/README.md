@@ -2,7 +2,7 @@
 
 This workflow is the heavy path for non-trivial implementation work. Use it when the task needs staged research, an execution-ready architecture review and approval, selective implementation, and review before completion.
 
-Implementation and review are first-class fanout owner steps. Each activation runs the selected branch workers, returns to the same owner cursor, and then runs the owner worker to choose the next fanout branch set. There are no dispatch or join workers. Rework selection uses the review owner's output first and falls back to the approved architecture routing only when review has not requested a narrower pass.
+Implementation and review are first-class fanout owner steps. Each activation runs the selected branch workers in parallel, returns to the same owner cursor, and then runs the owner worker to choose the next fanout branch set. Selected implementation branches must therefore be independently executable from the approved architecture Canvas and repository state; they cannot wait for sibling outputs or implementation handoffs. In particular, `architecture_artifact_update` updates architecture and documentation from `reasons-canvas-architecture`, not from a backend or frontend handoff. There are no dispatch or join workers. Rework selection uses the review owner's output first and falls back to the approved architecture routing only when review has not requested a narrower pass.
 
 Keep workflow mechanics in `workflow.toml` and schemas in `schemas/*.json`. Use this README for human workflow intent and EA-agent operating rules, not for runtime routing.
 
