@@ -4,10 +4,16 @@
   "title": "Review Fanout Owner Output",
   "description": "Owner-worker decision after the selected review branches finish.",
   "type": "object",
-  "required": ["outcome", "verdict"],
+  "required": [
+    "outcome",
+    "verdict"
+  ],
   "properties": {
     "outcome": {
-      "enum": ["approved", "needs_changes"],
+      "enum": [
+        "approved",
+        "needs_changes"
+      ],
       "description": "Aggregate result for the current review activation.",
       "x-usage": "Use needs_changes for any actionable current-scope must-fix or should-fix finding."
     },
@@ -57,20 +63,30 @@
             "const": "approved"
           }
         },
-        "required": ["outcome"]
+        "required": [
+          "outcome"
+        ]
       },
       "then": {
-        "required": ["verdict"],
+        "required": [
+          "verdict"
+        ],
         "not": {
           "anyOf": [
             {
-              "required": ["implementation_branches"]
+              "required": [
+                "implementation_branches"
+              ]
             },
             {
-              "required": ["review_branches"]
+              "required": [
+                "review_branches"
+              ]
             },
             {
-              "required": ["implementer_handoffs"]
+              "required": [
+                "implementer_handoffs"
+              ]
             }
           ]
         }
@@ -83,7 +99,9 @@
             "const": "needs_changes"
           }
         },
-        "required": ["outcome"]
+        "required": [
+          "outcome"
+        ]
       },
       "then": {
         "required": [
@@ -104,13 +122,17 @@
             }
           }
         },
-        "required": ["implementation_branches"]
+        "required": [
+          "implementation_branches"
+        ]
       },
       "then": {
         "properties": {
           "implementer_handoffs": {
             "type": "object",
-            "required": ["backend_implementation"]
+            "required": [
+              "backend_implementation"
+            ]
           }
         }
       }
@@ -125,13 +147,17 @@
             }
           }
         },
-        "required": ["implementation_branches"]
+        "required": [
+          "implementation_branches"
+        ]
       },
       "then": {
         "properties": {
           "implementer_handoffs": {
             "type": "object",
-            "required": ["frontend_implementation"]
+            "required": [
+              "frontend_implementation"
+            ]
           }
         }
       }
@@ -146,13 +172,17 @@
             }
           }
         },
-        "required": ["implementation_branches"]
+        "required": [
+          "implementation_branches"
+        ]
       },
       "then": {
         "properties": {
           "implementer_handoffs": {
             "type": "object",
-            "required": ["architecture_artifact_update"]
+            "required": [
+              "architecture_artifact_update"
+            ]
           }
         }
       }
@@ -209,7 +239,12 @@
     },
     "verdict": {
       "type": "object",
-      "required": ["summary", "reviewed_branches", "failed_review_branches", "findings"],
+      "required": [
+        "summary",
+        "reviewed_branches",
+        "failed_review_branches",
+        "findings"
+      ],
       "properties": {
         "summary": {
           "type": "array",

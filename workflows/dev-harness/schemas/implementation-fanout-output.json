@@ -4,10 +4,17 @@
   "title": "Implementation Fanout Owner Output",
   "description": "Owner-worker output after the selected implementation branches finish.",
   "type": "object",
-  "required": ["outcome", "summary", "artifacts"],
+  "required": [
+    "outcome",
+    "summary",
+    "artifacts"
+  ],
   "properties": {
     "outcome": {
-      "enum": ["ready_for_review", "ready_for_user_approval"],
+      "enum": [
+        "ready_for_review",
+        "ready_for_user_approval"
+      ],
       "description": "Owner decision for the completed implementation activation.",
       "x-usage": "Use ready_for_review for the initial or reviewer-requested implementation pass. Use ready_for_user_approval after user-requested rework so the result returns directly to the same approval gate."
     },
@@ -54,10 +61,15 @@
             "const": "ready_for_review"
           }
         },
-        "required": ["outcome"]
+        "required": [
+          "outcome"
+        ]
       },
       "then": {
-        "required": ["review_branches", "reviewer_handoffs"]
+        "required": [
+          "review_branches",
+          "reviewer_handoffs"
+        ]
       }
     },
     {
@@ -67,16 +79,22 @@
             "const": "ready_for_user_approval"
           }
         },
-        "required": ["outcome"]
+        "required": [
+          "outcome"
+        ]
       },
       "then": {
         "not": {
           "anyOf": [
             {
-              "required": ["review_branches"]
+              "required": [
+                "review_branches"
+              ]
             },
             {
-              "required": ["reviewer_handoffs"]
+              "required": [
+                "reviewer_handoffs"
+              ]
             }
           ]
         }
@@ -92,13 +110,17 @@
             }
           }
         },
-        "required": ["review_branches"]
+        "required": [
+          "review_branches"
+        ]
       },
       "then": {
         "properties": {
           "reviewer_handoffs": {
             "type": "object",
-            "required": ["architect_review"]
+            "required": [
+              "architect_review"
+            ]
           }
         }
       }
@@ -113,13 +135,17 @@
             }
           }
         },
-        "required": ["review_branches"]
+        "required": [
+          "review_branches"
+        ]
       },
       "then": {
         "properties": {
           "reviewer_handoffs": {
             "type": "object",
-            "required": ["backend_review"]
+            "required": [
+              "backend_review"
+            ]
           }
         }
       }
@@ -134,13 +160,17 @@
             }
           }
         },
-        "required": ["review_branches"]
+        "required": [
+          "review_branches"
+        ]
       },
       "then": {
         "properties": {
           "reviewer_handoffs": {
             "type": "object",
-            "required": ["frontend_review"]
+            "required": [
+              "frontend_review"
+            ]
           }
         }
       }
@@ -155,13 +185,17 @@
             }
           }
         },
-        "required": ["review_branches"]
+        "required": [
+          "review_branches"
+        ]
       },
       "then": {
         "properties": {
           "reviewer_handoffs": {
             "type": "object",
-            "required": ["frontend_taste_review"]
+            "required": [
+              "frontend_taste_review"
+            ]
           }
         }
       }
@@ -176,13 +210,17 @@
             }
           }
         },
-        "required": ["review_branches"]
+        "required": [
+          "review_branches"
+        ]
       },
       "then": {
         "properties": {
           "reviewer_handoffs": {
             "type": "object",
-            "required": ["security_review"]
+            "required": [
+              "security_review"
+            ]
           }
         }
       }
@@ -197,13 +235,17 @@
             }
           }
         },
-        "required": ["review_branches"]
+        "required": [
+          "review_branches"
+        ]
       },
       "then": {
         "properties": {
           "reviewer_handoffs": {
             "type": "object",
-            "required": ["privacy_review"]
+            "required": [
+              "privacy_review"
+            ]
           }
         }
       }
@@ -218,13 +260,17 @@
             }
           }
         },
-        "required": ["review_branches"]
+        "required": [
+          "review_branches"
+        ]
       },
       "then": {
         "properties": {
           "reviewer_handoffs": {
             "type": "object",
-            "required": ["qa_review"]
+            "required": [
+              "qa_review"
+            ]
           }
         }
       }
