@@ -135,6 +135,37 @@ test('Workflow.validate requires worker output schemas to expose a required stri
   );
 });
 
+test('Workflow.validate reserves root artifacts and results for array aggregate fields', () => {
+  for (const [field, fieldSchema] of [
+    ['artifacts', { type: 'object' }],
+    ['results', { type: ['array', 'null'] }],
+  ]) {
+    const invalidSchema = {
+      ...routeOutputSchema,
+      properties: { ...routeOutputSchema.properties, [field]: fieldSchema },
+    };
+    assertWorkflowFailure(
+      pureWorkflow(),
+      new RegExp(`field '${field}' is reserved for runtime aggregate state and must allow only arrays`),
+      { outputSchemas: new Map([['route.schema.json', invalidSchema]]) },
+    );
+  }
+
+  const validSchema = {
+    ...routeOutputSchema,
+    properties: {
+      ...routeOutputSchema.properties,
+      artifacts: { type: 'array', items: { type: 'object' } },
+      results: { const: [] },
+    },
+  };
+  assert.deepEqual(validate(pureWorkflow(), { outputSchemas: new Map([['route.schema.json', validSchema]]) }), {
+    ok: true,
+    workflow: 'pure-entity-fixture',
+    steps: Object.keys(pureWorkflow().steps).length,
+  });
+});
+
 test('Workflow.validate rejects blocked only as a root lifecycle value and preserves nested domain vocabulary', () => {
   const nestedDomainSchema = {
     ...routeOutputSchema,

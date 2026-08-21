@@ -51,11 +51,11 @@ next = "control_cycle"
 [steps.execute_cycle.input]
 prompt = '''You are the executor for exactly one loop iteration. Perform one focused cycle, report it, and stop. Do not launch another worker, subagent, recursive loop, or next iteration. Do not make the continuation decision.
 
-Choose the current baton from the latest control_cycle output when present; otherwise use loop_intake. Work only on baton.next_action unless a small prerequisite lookup is required. Respect every executor constraint and approval boundary. Preserve exact paths, commands, IDs, errors, findings, and artifacts in the compact report. Run configured verification when applicable and safe. A red check caused by your in-scope work is work to diagnose, fix, and rerun within this cycle when feasible; record unresolved failure evidence and retry context when it cannot be closed in this cycle.
+Choose the current baton from the latest control_cycle output when present; otherwise use loop_intake. Work only on baton.next_action unless a small prerequisite lookup is required. Respect every executor constraint and approval boundary. Preserve exact paths, commands, IDs, errors, findings, and touched files/PRs/issues/notes in the compact report. Use the standard root artifacts array only for files emitted through the artifact output channel. Run configured verification when applicable and safe. A red check caused by your in-scope work is work to diagnose, fix, and rerun within this cycle when feasible; record unresolved failure evidence and retry context when it cannot be closed in this cycle.
 
 Treat the baton as durable coordination state, not proof that the task environment is unchanged. At the start of the cycle, inspect the current target and referenced artifacts needed for next_action. When an interruption or external change may have made evidence stale, rerun only cheap relevant verification before acting.
 
-Return outcome cycle_reported; status completed, partial, or no-progress; a concise result; exact evidence; files/PRs/issues/notes created or changed; verification checks and observed outcomes; open risks; whether executable progress occurred; retry context for failure; and one specific recommended next action. Do not represent missing help as no progress.
+Return outcome cycle_reported; status completed, partial, or no-progress; a concise result; exact evidence; a touched map containing files/PRs/issues/notes created or changed; optional standard artifact metadata; verification checks and observed outcomes; open risks; whether executable progress occurred; retry context for failure; and one specific recommended next action. Do not represent missing help as no progress.
 
 If continuing or even starting the assigned action needs missing orchestrator/user input, capability, permission, or approval, report a runner non-blocking stop with non_blocking_stop.source_step_id = execute_cycle and the smallest concrete request. Preserve the current iteration and resume this same executor request after resolution. Do not complete the step merely because help is needed. If the user asks to stop through the resumed help context, return a no-progress report whose recommended next action says to stop and whose evidence records the user-stop signal; do not perform more task work.
 
@@ -78,7 +78,7 @@ Read the latest executor report and the latest baton, preferring control_cycle.b
 
 Update the durable baton:
 - append one compact completed-cycle summary and increment iterations_completed;
-- update last_result, cumulative artifacts, verification evidence, and open risks without embedding large logs or file bodies;
+- update last_result, merge the executor's touched map into cumulative baton.artifacts, and update verification evidence and open risks without embedding large logs or file bodies;
 - reset no_progress_count to 0 for a new useful result, approved change, resolved risk/help condition, or evidence that materially changes the next action;
 - increment no_progress_count only for an executable attempt that repeats known information or yields no actionable evidence;
 - never increment no_progress_count for missing input, permission, approval, capability, or external help;

@@ -4,14 +4,14 @@
   "title": "Loop Executor Cycle Output",
   "description": "Report from exactly one focused executor cycle. Missing help is reported through the runner non-blocking-stop channel instead of this output.",
   "type": "object",
-  "required": ["outcome", "iteration", "status", "result", "evidence", "artifacts", "verification", "open_risks", "progress_made", "retry_context", "next_recommended_action"],
+  "required": ["outcome", "iteration", "status", "result", "evidence", "touched", "verification", "open_risks", "progress_made", "retry_context", "next_recommended_action"],
   "properties": {
     "outcome": {"const": "cycle_reported"},
     "iteration": {"type": "integer", "minimum": 1, "maximum": 3},
     "status": {"enum": ["completed", "partial", "no-progress"]},
     "result": {"type": "string", "minLength": 1},
     "evidence": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "artifacts": {
+    "touched": {
       "type": "object",
       "required": ["files", "prs", "issues", "notes"],
       "properties": {
@@ -21,6 +21,10 @@
         "notes": {"$ref": "#/$defs/stringList"}
       },
       "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"}
     },
     "verification": {
       "type": "array",

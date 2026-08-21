@@ -383,7 +383,7 @@ test('output.schema: loose artifacts item schema still enforces central artifact
   }
 });
 
-test('output.schema: reserved aggregate fields must keep array envelope shape', () => {
+test('output.schema: workflow validation rejects reserved aggregate fields with a non-array envelope', () => {
   const doc = workflowWithSchema('reserved-artifacts-object', {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     type: 'object',
@@ -394,16 +394,12 @@ test('output.schema: reserved aggregate fields must keep array envelope shape', 
     },
     additionalProperties: false,
   });
+  const workflowPath = writeJson('reserved-artifacts-object.workflow.json', doc);
 
-  const retry = runApply('output-schema-reserved-artifacts-object', baton(), {
-    outcome: 'ready',
-    artifacts: { payload: true },
-  }, true, doc);
-
-  assert.equal(retry.baton.cursor, 'worker_step');
-  assert.equal(retry.steps[0].action, 'run_worker');
-  assert.equal(retry.baton.state.attempts['worker_step:output.schema'], 1);
-  assert.match(retry.steps[0].step.input.prompt, /\/artifacts must be array/);
+  assert.throws(
+    () => validateWorkflowFile(workflowPath),
+    /field 'artifacts' is reserved for runtime aggregate state and must allow only arrays/,
+  );
 });
 
 
