@@ -116,14 +116,32 @@ function rootPropertyDeclaresStringValue(schema, propertyName, value) {
   });
 }
 
+function propertySchemasForBranch(branch, propertyName, { includeAdditionalProperties = false } = {}) {
+  const propertySchemas = [];
+  if (Object.hasOwn(branch.properties ?? {}, propertyName)) propertySchemas.push(branch.properties[propertyName]);
+
+  for (const [pattern, patternSchema] of Object.entries(branch.patternProperties ?? {})) {
+    if (new RegExp(pattern, 'u').test(propertyName)) propertySchemas.push(patternSchema);
+  }
+
+  if (propertySchemas.length === 0 && includeAdditionalProperties && Object.hasOwn(branch, 'additionalProperties')) {
+    propertySchemas.push(branch.additionalProperties);
+  }
+
+  if (propertySchemas.length <= 1) return propertySchemas;
+  return [{ allOf: propertySchemas }];
+}
+
 function rootSchemaDeclaresProperty(schema, propertyName) {
   return rootSchemaBranches(schema).some((branch) => Object.hasOwn(branch.properties ?? {}, propertyName));
 }
 
 function assertReservedAggregateOutputFields({ stepId, schema }) {
   for (const field of ['artifacts', 'results']) {
-    if (!rootSchemaDeclaresProperty(schema, field)) continue;
-    const fieldSchemas = schemaRootsForPath(schema, [field]);
+    const required = schemaRequiresPath(schema, [field]);
+    const fieldSchemas = rootSchemaBranches(schema)
+      .flatMap((branch) => propertySchemasForBranch(branch, field, { includeAdditionalProperties: required }));
+    if (!required && fieldSchemas.length === 0) continue;
     if (fieldSchemas.length === 0 || fieldSchemas.some((fieldSchema) => schemaAllowsNonArray(fieldSchema))) {
       fail(`step '${stepId}' output.schema field '${field}' is reserved for runtime aggregate state and must allow only arrays`);
     }
