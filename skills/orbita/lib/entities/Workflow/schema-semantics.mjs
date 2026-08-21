@@ -120,6 +120,16 @@ function rootSchemaDeclaresProperty(schema, propertyName) {
   return rootSchemaBranches(schema).some((branch) => Object.hasOwn(branch.properties ?? {}, propertyName));
 }
 
+function assertReservedAggregateOutputFields({ stepId, schema }) {
+  for (const field of ['artifacts', 'results']) {
+    if (!rootSchemaDeclaresProperty(schema, field)) continue;
+    const fieldSchemas = schemaRootsForPath(schema, [field]);
+    if (fieldSchemas.length === 0 || fieldSchemas.some((fieldSchema) => schemaAllowsNonArray(fieldSchema))) {
+      fail(`step '${stepId}' output.schema field '${field}' is reserved for runtime aggregate state and must allow only arrays`);
+    }
+  }
+}
+
 function validateOutputSchemaDocument(schema, schemaRef, workflow, _runtimeContext, warnings, { stepId, step, requireWorkerOutcomeContract = true, externalSchemas = [] } = {}) {
   let validation;
   try {
@@ -140,6 +150,7 @@ function validateOutputSchemaDocument(schema, schemaRef, workflow, _runtimeConte
   if (rootSchemaDeclaresProperty(normalizedSchema, 'blocker')) {
     fail(`step '${stepId}' output.schema must not declare legacy control field 'blocker'; use the runner non-blocking stop control channel`);
   }
+  assertReservedAggregateOutputFields({ stepId, schema: normalizedSchema });
   if (requireWorkerOutcomeContract && ['worker', 'fanout', 'shard'].includes(step?.kind)) assertWorkerOutputContract({ stepId, schema: normalizedSchema });
   if (isExternalWorkflowOutputSchema(schemaRef, schema)) collectFieldAnnotationWarnings(schema, schemaRef, warnings);
   return normalizedSchema;
@@ -335,6 +346,8 @@ export function schemaRootsForPath(schema, pathSegments) {
 
 export function schemaAllowsNonArray(schema) {
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return true;
+  if (schema.const !== undefined) return !Array.isArray(schema.const);
+  if (Array.isArray(schema.enum)) return schema.enum.some((value) => !Array.isArray(value));
   if (schema.type !== undefined) {
     if (schema.type === 'array') return false;
     if (Array.isArray(schema.type)) return schema.type.some((type) => type !== 'array');
