@@ -136,14 +136,31 @@ test('Workflow.validate requires worker output schemas to expose a required stri
 });
 
 test('Workflow.validate reserves root artifacts and results for array aggregate fields', () => {
-  for (const [field, fieldSchema] of [
-    ['artifacts', { type: 'object' }],
-    ['results', { type: ['array', 'null'] }],
-  ]) {
-    const invalidSchema = {
+  for (const [field, invalidSchema] of [
+    ['artifacts', {
       ...routeOutputSchema,
-      properties: { ...routeOutputSchema.properties, [field]: fieldSchema },
-    };
+      properties: { ...routeOutputSchema.properties, artifacts: { type: 'object' } },
+    }],
+    ['results', {
+      ...routeOutputSchema,
+      properties: { ...routeOutputSchema.properties, results: { type: ['array', 'null'] } },
+    }],
+    ['artifacts', {
+      ...routeOutputSchema,
+      required: [...routeOutputSchema.required, 'artifacts'],
+      patternProperties: { '^artifacts$': { type: 'object' } },
+    }],
+    ['artifacts', {
+      ...routeOutputSchema,
+      required: [...routeOutputSchema.required, 'artifacts'],
+      additionalProperties: { type: 'object' },
+    }],
+    ['results', {
+      ...routeOutputSchema,
+      required: [...routeOutputSchema.required, 'results'],
+      additionalProperties: true,
+    }],
+  ]) {
     assertWorkflowFailure(
       pureWorkflow(),
       new RegExp(`field '${field}' is reserved for runtime aggregate state and must allow only arrays`),
@@ -160,6 +177,17 @@ test('Workflow.validate reserves root artifacts and results for array aggregate 
     },
   };
   assert.deepEqual(validate(pureWorkflow(), { outputSchemas: new Map([['route.schema.json', validSchema]]) }), {
+    ok: true,
+    workflow: 'pure-entity-fixture',
+    steps: Object.keys(pureWorkflow().steps).length,
+  });
+
+  const validPatternSchema = {
+    ...routeOutputSchema,
+    required: [...routeOutputSchema.required, 'artifacts'],
+    patternProperties: { '^artifacts$': { type: 'array', items: { type: 'object' } } },
+  };
+  assert.deepEqual(validate(pureWorkflow(), { outputSchemas: new Map([['route.schema.json', validPatternSchema]]) }), {
     ok: true,
     workflow: 'pure-entity-fixture',
     steps: Object.keys(pureWorkflow().steps).length,

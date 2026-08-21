@@ -55,7 +55,8 @@ Return:
 - evidence: exact paths/commands/IDs/errors/findings
 
 When continuation needs orchestrator or user help, emit `NON_BLOCKING_STOP` through the control channel instead of returning a terminal status. Resume the same iteration after resolution.
-- artifacts: files/PRs/issues/notes created or changed
+- touched: files/PRs/issues/notes created or changed
+- artifacts: optional standard Orbita artifact metadata for files emitted through the artifact output channel
 - verification: checks run and outcomes, or why not run
 - open risks:
 - next: recommended next action
