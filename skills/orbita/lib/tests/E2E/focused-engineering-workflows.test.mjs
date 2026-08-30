@@ -51,6 +51,7 @@ function outputFor(workflowName, id, calls, variant) {
     if (step === 'intake') return { outcome: 'ready', findings: [{ id: 'F1', source: 'review', severity: 'must_fix', problem: 'wrong behavior', location: 'target.js', requested_action: 'correct it', evidence: strings }] };
     if (step === 'triage') return { outcome: 'ready_for_fix', dispositions: [{ id: 'F1', disposition: 'accepted', reason: 'confirmed', evidence: strings, owner: 'findings_fixer', edit_surface: ['target.js'], acceptance_check: 'focused test' }], implementation_order: ['F1'] };
     if (step === 'fix') return { outcome: 'ready_for_verify', summary: 'finding fixed', finding_changes: [{ id: 'F1', status: 'fixed', evidence: strings }], changed_files: ['target.js'], verification: ['focused test passed'], remaining_risks: [] };
+    if (step === 'verify' && variant === 'triage-rework' && n === 1) return { outcome: 'needs_revision', next: 'triage', summary: 'disposition evidence is unsupported', finding_results: [{ id: 'F1', closed: false, evidence: 'triage reason does not match current code' }], evidence_checked: strings, findings: ['F1: correct the disposition'] };
     if (step === 'verify') return { outcome: 'passed', next: 'done', summary: 'finding closed', finding_results: [{ id: 'F1', closed: true, evidence: 'diff and test' }], evidence_checked: strings, findings: [] };
   }
 
@@ -72,9 +73,10 @@ function outputFor(workflowName, id, calls, variant) {
       if (n === 1) return { outcome: 'continue', next: 'experiment', summary: 'redesign required', accepted_evidence: strings, information_gain: false, duplicate_fingerprint: false, total_rounds: 1, consecutive_no_information: 1, reason: 'no information' };
       return { outcome: 'hostile_reset', next: 'hostile_reset', summary: 'anti-loop threshold reached', accepted_evidence: strings, information_gain: false, duplicate_fingerprint: false, total_rounds: 2, consecutive_no_information: 2, reason: 'two no-information rounds' };
     }
-    if (step === 'hostile_critic') return { outcome: 'ready_for_reframe', branch: 'hostile_critic', summary: 'anchoring found', invalidated_assumptions: ['wrong layer'], evidence: strings, sources: [], candidate_discriminators: ['new boundary probe'], limitations: [] };
-    if (step === 'external_research') return { outcome: 'ready_for_reframe', branch: 'external_research', summary: 'analogue found', invalidated_assumptions: [], evidence: strings, sources: ['https://example.com/primary'], candidate_discriminators: ['new signature probe'], limitations: [] };
-    if (step === 'hostile_reset') return { outcome: 'ready_for_reframe', summary: 'fresh evidence joined', invalidated_assumptions: ['wrong layer'], contradictions: [], source_quality: ['primary analogue only'], candidate_discriminators: ['new boundary probe'], web_status: 'used' };
+    if (step === 'hostile_critic') return { outcome: 'ready_for_reframe', branch: 'hostile_critic', summary: 'anchoring found', invalidated_assumptions: ['wrong layer'], evidence: strings, sources: [], candidate_discriminators: variant === 'hostile-empty' ? [] : ['new boundary probe'], limitations: [] };
+    if (step === 'external_research') return { outcome: 'ready_for_reframe', branch: 'external_research', summary: 'analogue search complete', invalidated_assumptions: [], evidence: strings, sources: variant === 'hostile-empty' ? [] : ['https://example.com/primary'], candidate_discriminators: variant === 'hostile-empty' ? [] : ['new signature probe'], limitations: variant === 'hostile-empty' ? ['no applicable analogue'] : [] };
+    if (step === 'hostile_reset') return { outcome: 'ready_for_reframe', summary: 'fresh evidence joined', invalidated_assumptions: ['wrong layer'], contradictions: [], source_quality: variant === 'hostile-empty' ? ['no applicable external source'] : ['primary analogue only'], candidate_discriminators: variant === 'hostile-empty' ? [] : ['new boundary probe'], web_status: 'used' };
+    if (step === 'reframe' && variant === 'hostile-empty') return { outcome: 'unresolved_with_evidence', next: 'cleanup', summary: 'no safe discriminator remains', discarded_assumptions: ['wrong layer'], experiments: [] };
     if (step === 'reframe') return { outcome: 'ready_for_post_reset', next: 'post_reset_experiment', summary: 'fresh plan', discarded_assumptions: ['wrong layer'], experiments: [{ order: 1, hypothesis: 'new cause', fingerprint: 'new-boundary/new-mechanism/new-signal/new-edit', true_signal: 'present', false_signal: 'absent', expected_information_gain: 'separates layers', cost: 'low', novelty: 'new boundary' }] };
     if (step === 'post_reset_judgment') return { outcome: 'unresolved_with_evidence', next: 'cleanup', summary: 'bounded exit', accepted_evidence: strings, information_gain: false, post_reset_rounds: 1, remaining_distinct_experiments: 0, reason: 'no discriminator remains' };
     if (step === 'fix_and_verify') return { outcome: 'ready_for_review', summary: 'root cause fixed', confirmed_mechanism: 'wrong branch condition', fix: 'correct condition', changed_files: ['target.js', 'target.test.js'], pre_fix_symptom: ['focused repro failed'], same_repro_post_fix: ['focused repro passed'], regressions: ['test suite passed'], regression_guard: 'focused regression test', instrumentation_cleanup: ['debug log removed'], remaining_risks: [] };
@@ -124,6 +126,12 @@ for (const workflowName of ['red-green-refactor', 'pair-programming', 'review-fi
   });
 }
 
+test('focused workflow smoke: review-fix-verify sends disposition defects back through triage', async () => {
+  const response = await smoke('review-fix-verify', 'triage-rework');
+  assert.equal(response.baton.state.$loopProgress.triage_fix_recheck, 2);
+  assert.equal(response.baton.state.verify.outcome, 'passed');
+});
+
 test('focused workflow smoke: deep-debugging fixed fast path requires final review and cleanup', async () => {
   const response = await smoke('deep-debugging', 'fixed');
   assert.equal(response.baton.state.cleanup.terminal_state, 'fixed');
@@ -136,4 +144,12 @@ test('focused workflow smoke: deep-debugging no-information path performs one ho
   assert.equal(response.baton.state.$loopProgress.pre_reset_diagnosis, 2);
   assert.equal(response.baton.state.$loopProgress.post_reset_diagnosis, 1);
   assert.ok(response.baton.state.hostile_reset);
+});
+
+test('focused workflow smoke: deep-debugging exits honestly when hostile reset finds no discriminator', async () => {
+  const response = await smoke('deep-debugging', 'hostile-empty');
+  assert.equal(response.baton.state.hostile_reset.candidate_discriminators.length, 0);
+  assert.equal(response.baton.state.reframe.outcome, 'unresolved_with_evidence');
+  assert.equal(response.baton.state.cleanup.terminal_state, 'unresolved_with_evidence');
+  assert.equal(response.baton.state.post_reset_experiment, undefined);
 });

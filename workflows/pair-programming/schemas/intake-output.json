@@ -5,7 +5,7 @@
   "required": ["outcome", "mode", "driver_scope", "navigator_scope", "integration_owner", "success_checks", "forbidden_overlaps"],
   "properties": {
     "outcome": {"const": "ready"},
-    "mode": {"enum": ["isolated_workspaces", "disjoint_zones", "shared_zone"]},
+    "mode": {"enum": ["disjoint_zones", "shared_zone"]},
     "driver_scope": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
     "navigator_scope": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
     "integration_owner": {"const": "pair_integrator"},

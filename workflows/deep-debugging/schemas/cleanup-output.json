@@ -5,7 +5,7 @@
   "required": ["outcome", "terminal_state", "summary", "cleanup_evidence", "attempt_ledger", "confirmed_mechanisms", "falsified_hypotheses", "remaining_uncertainty", "next_action", "final_review_status"],
   "properties": {
     "outcome": {"const": "complete"},
-    "terminal_state": {"enum": ["fixed", "mitigated_not_explained", "locally_verified_pending_user_repro", "not_reproduced", "unresolved_with_evidence"]},
+    "terminal_state": {"enum": ["fixed", "mitigated_not_explained", "locally_verified_pending_user_repro", "not_reproduced", "unresolved_with_evidence"], "description": "locally_verified_pending_user_repro is reserved for an explicitly requested terminal handoff after the user declines or defers reproduction; missing user input remains a non-blocking stop."},
     "summary": {"type": "string", "minLength": 1},
     "cleanup_evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
     "attempt_ledger": {"type": "array", "items": {"type": "string", "minLength": 1}},

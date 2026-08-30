@@ -304,6 +304,42 @@ test('workflow runs list overlays canonical per-run authority on the catalog pro
   assert.equal(listed.occupancy.state, 'occupied');
 });
 
+test('workflow run lifecycle accepts the spdd path for a persisted dev-harness binding', async () => {
+  const runId = `${runPrefix}dev-harness-lifecycle`;
+  const paths = resolveRunPaths({ runId, workflowPath: defaultWorkflow, runsRoot });
+  const legacyWorkflow = path.join(root, 'workflows/dev-harness/workflow.toml');
+  const unrelatedWorkflow = path.join(root, 'workflows/loop/workflow.toml');
+  await registerWorkflowRunAtRoot({ runsRoot, runId, workflowPath: defaultWorkflow, workflowIdentity: 'spdd' });
+  const authority = await readRunAuthority(paths);
+  await withRunStateLock(paths, () => writeRunAuthority(paths, {
+    ...authority,
+    workflow: { identity: 'dev-harness', path: legacyWorkflow },
+  }));
+
+  await assert.rejects(
+    () => claimWorkflowRunAtRoot({ runsRoot, runId, workflowPath: unrelatedWorkflow }),
+    /already bound to a different workflow/,
+  );
+
+  const claimed = await claimWorkflowRunAtRoot({ runsRoot, runId, workflowPath: defaultWorkflow, harness: 'codex' });
+  assert.equal(claimed.ok, true);
+  const heartbeat = await heartbeatWorkflowRunAtRoot({
+    runsRoot,
+    runId,
+    workflowPath: defaultWorkflow,
+    leaseToken: claimed.leaseToken,
+  });
+  assert.equal(heartbeat.ok, true);
+  const released = await releaseWorkflowRunAtRoot({
+    runsRoot,
+    runId,
+    workflowPath: defaultWorkflow,
+    leaseToken: claimed.leaseToken,
+  });
+  assert.equal(released.ok, true);
+  assert.equal((await readRunAuthority(paths)).workflow.path, legacyWorkflow);
+});
+
 test('workflow runs API stores claim harness privately only after a successful claim and clears it on a harnessless claim', async () => {
   const runId = `${runPrefix}harness-binding`;
   await registerWorkflowRunAtRoot({

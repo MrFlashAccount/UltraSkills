@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { rename, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { assertSafeRunId, defaultWorkflowPath, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths, workflowRunsRoot } from './paths.mjs';
+import { assertSafeRunId, canonicalPersistedWorkflowPath, defaultWorkflowPath, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths, workflowRunsRoot } from './paths.mjs';
 import { createRunIndexEntry, deleteRunIndexEntry, readRunsIndex, runsIndexPathsForRoot, upsertRunIndexEntry } from './run-index.mjs';
 import { assertMatchingTokenAuthority, buildTokenLease, generateLeaseToken, occupancyForLease, renewTokenLease } from './lease-authority.mjs';
 import { withRunStateLock } from './lock.mjs';
@@ -108,7 +108,7 @@ function indexProjectionPatch(authority) {
 function assertExistingWorkflowBinding(existing, paths, { requestedWorkflowPath } = {}) {
   const existingWorkflowPath = existing?.workflow?.path;
   if (requestedWorkflowPath === undefined || typeof existingWorkflowPath !== 'string' || existingWorkflowPath.length === 0) return;
-  if (resolve(existingWorkflowPath) !== resolve(requestedWorkflowPath)) {
+  if (canonicalPersistedWorkflowPath(existingWorkflowPath) !== canonicalPersistedWorkflowPath(requestedWorkflowPath)) {
     throw new Error(`workflow run is already bound to a different workflow: ${paths.runId}`);
   }
 }

@@ -19,4 +19,4 @@ The root cause is unknown, no concrete findings exist, or the requested job incl
 - Accepted findings carry owner, edit surface, acceptance check, and order.
 - The fixer does not widen scope or mutate external review state.
 - The verifier is independent and checks every disposition against current code and evidence.
-- One bounded fix/recheck pass is allowed.
+- One bounded triage/fix/recheck pass is allowed.

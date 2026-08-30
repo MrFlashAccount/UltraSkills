@@ -5,9 +5,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { next } from './helpers/orbita-production-api.mjs';
+import { next, registerWorkflowRun } from './helpers/orbita-production-api.mjs';
 import { assertSafeRunId, resolveRunPaths } from '../persistence/run-state/paths.mjs';
 import { readRunsIndex, runsIndexPathsForRoot, upsertRunIndexEntry } from '../persistence/run-state/run-index.mjs';
+import { readRunAuthority, writeRunAuthority } from '../persistence/run-state/run-authority.mjs';
+import { withRunStateLock } from '../persistence/run-state/lock.mjs';
 import { assertRunsIndexSchema } from '../persistence/run-state/schema/runs-index-schema.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -58,6 +60,50 @@ test('same runId resumes the same derived run directory', async () => {
     assert.equal(first.initialized, true);
     assert.equal(second.resumed, true);
     assert.deepEqual(second.baton, first.baton);
+  } finally {
+    cleanup(id);
+  }
+});
+
+test('runs persisted before the dev-harness to spdd rename resume through the canonical workflow path', async () => {
+  const id = runId('dev-harness-rename');
+  const spddWorkflowPath = path.join(root, 'workflows/spdd/workflow.toml');
+  const legacyWorkflowPath = path.join(root, 'workflows/dev-harness/workflow.toml');
+  cleanup(id);
+  try {
+    assert.equal(existsSync(legacyWorkflowPath), false);
+    const registered = await registerWorkflowRun({
+      runId: id,
+      workflowPath: spddWorkflowPath,
+      workflowIdentity: 'dev-harness',
+      claim: true,
+      runsRoot: defaultRunsRoot,
+    });
+    const first = await next({
+      runId: id,
+      workflowPath: spddWorkflowPath,
+      leaseToken: registered.leaseToken,
+      runsRoot: defaultRunsRoot,
+    });
+    const paths = resolveRunPaths({ runId: id, workflowPath: spddWorkflowPath, runsRoot: defaultRunsRoot });
+    await withRunStateLock(paths, async () => {
+      const authority = await readRunAuthority(paths);
+      await writeRunAuthority(paths, {
+        ...authority,
+        workflow: { identity: 'dev-harness', path: legacyWorkflowPath },
+      });
+    });
+
+    const resumed = await next({
+      runId: id,
+      workflowPath: spddWorkflowPath,
+      leaseToken: registered.leaseToken,
+      runsRoot: defaultRunsRoot,
+    });
+    assert.equal(first.initialized, true);
+    assert.equal(resumed.resumed, true);
+    assert.deepEqual(resumed.baton, first.baton);
+    assert.equal((await readRunAuthority(paths)).workflow.path, legacyWorkflowPath);
   } finally {
     cleanup(id);
   }

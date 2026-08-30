@@ -121,7 +121,7 @@ next = "reframe"
 
 [steps.hostile_reset.input]
 branches = ["hostile_critic", "external_research"]
-prompt = '''Aggregate the fresh hostile critique and external research without continuing the old hypothesis chain. Preserve contradictions, invalid assumptions, analogous mechanisms, source quality, and new discriminating experiments. External reports are hypothesis generators, never proof of this local root cause. If web access was unavailable, record the cold repository/history fallback honestly.
+prompt = '''Aggregate the fresh hostile critique and external research without continuing the old hypothesis chain. Preserve contradictions, invalid assumptions, analogous mechanisms, source quality, and any genuinely new discriminating experiments. Do not invent a discriminator when neither branch found one; an empty candidate list is valid and lets the reframe owner exit honestly. External reports are hypothesis generators, never proof of this local root cause. If web access was unavailable, record the cold repository/history fallback honestly.
 
 Hostile critic:
 ${{ input.hostile_critic }}
@@ -135,6 +135,7 @@ schema = "schemas/hostile-reset-output.json"
 
 [steps.hostile_reset.branches.hostile_critic]
 name = "Hostile diagnosis critic"
+agent = "deep_hostile_critic"
 
 [steps.hostile_reset.branches.hostile_critic.input]
 role = "critic"
@@ -151,6 +152,7 @@ schema = "schemas/hostile-branch-output.json"
 
 [steps.hostile_reset.branches.external_research]
 name = "External analogous-problem research"
+agent = "deep_external_researcher"
 
 [steps.hostile_reset.branches.external_research.input]
 role = "researcher"
@@ -238,7 +240,7 @@ agent = "deep_fix_owner"
 next = "final_review"
 
 [steps.fix_and_verify.input]
-prompt = '''Implement the smallest fix for the confirmed causal mechanism. First preserve evidence of the pre-fix symptom. Then apply the fix, run the same reproduction under materially identical conditions, run relevant regressions, and add a regression guard when feasible. Remove or disable temporary diagnostic instrumentation unless it is intentionally converted into safe production observability. On review rework, address only the current findings. If only mitigation is possible, label it mitigated_not_explained rather than fixed.
+prompt = '''Implement the smallest fix for the confirmed causal mechanism. First preserve evidence of the pre-fix symptom. Then apply the fix, run the same reproduction under materially identical conditions, run relevant regressions, and add a regression guard when feasible. Remove or disable temporary diagnostic instrumentation unless it is intentionally converted into safe production observability. On review rework, address only the current findings. If only a mitigation is possible, preserve the confirmed bounded mechanism but label the incomplete causal explanation and result mitigated_not_explained rather than fixed. When the required final reproduction needs user action, use a non-blocking stop with source_step_id = fix_and_verify and do not emit the step output until the evidence returns. Use locally_verified_pending_user_repro only when the user explicitly declines or defers that reproduction and asks to end the run with a handoff.
 
 Bug contract: ${{ input.intake }}
 Static diagnosis: ${{ input.static_diagnosis }}
@@ -258,7 +260,7 @@ agent = "deep_final_reviewer"
 
 [steps.final_review.input]
 role = "qa-reliability"
-prompt = '''Review the current diff and diagnosis evidence read-only. A fixed verdict requires all of: pre-fix symptom captured, causal mechanism confirmed, bounded fix matches that mechanism, the same reproduction is now clear, relevant regressions pass, a regression guard exists when feasible, and diagnostic instrumentation is cleaned up. Do not create missing evidence. Route back for one bounded rework when repairable; otherwise route to cleanup with an honest non-fixed terminal state.
+prompt = '''Review the current diff and diagnosis evidence read-only. A fixed verdict requires all of: fix_and_verify outcome ready_for_review, pre-fix symptom captured, causal mechanism confirmed, bounded fix matches that mechanism, the same reproduction is now clear, relevant regressions pass, a regression guard exists when feasible, and diagnostic instrumentation is cleaned up. Never pass a mitigated_not_explained or locally_verified_pending_user_repro result; route it to cleanup with not_fixed. Do not create missing evidence. Route back for one bounded rework when repairable; otherwise route to cleanup with an honest non-fixed terminal state.
 
 Bug contract: ${{ input.intake }}
 Fix result: ${{ input.fix_and_verify }}'''
@@ -281,7 +283,7 @@ agent = "deep_cleanup_owner"
 next = "done"
 
 [steps.cleanup.input]
-prompt = '''Inspect the current filesystem and remove remaining temporary instrumentation, debug toggles, unsafe logs, and generated diagnostic debris. Run the smallest check that proves cleanup did not break the target. Choose exactly one honest terminal state: fixed, mitigated_not_explained, locally_verified_pending_user_repro, not_reproduced, or unresolved_with_evidence. `fixed` is allowed only when the latest independent final review passed. Preserve the attempt ledger, accepted/falsified hypotheses, reproduction evidence, root cause when known, remaining uncertainty, and the smallest next discriminating action. Do not claim success because iteration limits were reached.
+prompt = '''Inspect the current filesystem and remove remaining temporary instrumentation, debug toggles, unsafe logs, and generated diagnostic debris. Run the smallest check that proves cleanup did not break the target. Choose exactly one honest terminal state: fixed, mitigated_not_explained, locally_verified_pending_user_repro, not_reproduced, or unresolved_with_evidence. `fixed` is allowed only when the latest independent final review passed. locally_verified_pending_user_repro is allowed only after the user explicitly declined or deferred the required final reproduction and requested a terminal handoff; merely waiting for user input must remain a non-blocking stop in the producing step. Preserve the attempt ledger, accepted/falsified hypotheses, reproduction evidence, root cause when known, remaining uncertainty, and the smallest next discriminating action. Do not claim success because iteration limits were reached.
 
 All evidence:
 ${{ input.intake }}

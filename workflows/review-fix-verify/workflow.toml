@@ -4,9 +4,9 @@ description = "Triage an existing set of review findings, implement accepted fix
 start = "intake"
 done = "done"
 
-[loopPolicies.fix_recheck]
-steps = ["fix", "verify"]
-entry = "fix"
+[loopPolicies.triage_fix_recheck]
+steps = ["triage", "fix", "verify"]
+entry = "triage"
 boundary = "verify"
 maxIterations = 2
 onLimit = "done"
@@ -35,7 +35,10 @@ role = "critic"
 prompt = '''Evaluate every normalized finding against the current code and task scope read-only. Give exactly one disposition per finding: accepted, rejected_with_evidence, needs_input, duplicate, or out_of_scope. Accepted findings require an owner, bounded edit surface, acceptance check, and implementation order. Rejections require concrete counter-evidence. Use a non-blocking stop for a needs_input item that prevents a safe disposition; do not turn uncertainty into rejection.
 
 Findings:
-${{ input.intake }}'''
+${{ input.intake }}
+
+Prior verification:
+${{ input.verify | default: "No prior verification." }}'''
 
 [steps.triage.output]
 template = "templates/triage.md"
@@ -67,7 +70,7 @@ agent = "findings_verifier"
 
 [steps.verify.input]
 role = "qa-reliability"
-prompt = '''Recheck the current diff and submitted evidence read-only. For every stable finding id, confirm that its disposition is evidence-backed and that each accepted finding is actually closed by the implementation and acceptance checks. Reject scope creep, missing mapping, unsupported rejection, stale evidence, or regressions. Do not create missing verification yourself. Return passed only when all current-scope findings are honestly resolved; otherwise return needs_revision with finding ids and required actions.
+prompt = '''Recheck the current diff and submitted evidence read-only. For every stable finding id, confirm that its disposition is evidence-backed and that each accepted finding is actually closed by the implementation and acceptance checks. Reject scope creep, missing mapping, unsupported rejection, stale evidence, or regressions. Do not create missing verification yourself. Return passed with next = done only when all current-scope findings are honestly resolved. For any failed recheck, return needs_revision with next = triage, finding ids, and required actions so the triage owner can correct dispositions or preserve them before the fixer runs again. Never send a triage defect directly to the fixer.
 
 Original findings:
 ${{ input.intake }}
@@ -86,7 +89,7 @@ schema = "schemas/verify-output.json"
 match = "${{ output.next }}"
 
 [steps.verify.next.cases]
-fix = "fix"
+triage = "triage"
 done = "done"
 
 [steps.done]

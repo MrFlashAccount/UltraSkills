@@ -14,9 +14,9 @@ One agent plus a deterministic test is sufficient, safe ownership cannot be sepa
 
 ## Runtime contract
 
-- `isolated_workspaces`: both tracks may create candidates in separate workspaces.
 - `disjoint_zones`: each track writes only its declared files or zones.
 - `shared_zone`: driver writes; navigator stays read-only.
+- The runner does not provision isolated workspaces; use `shared_zone` unless disjoint write ownership is already real and explicit.
 - Concurrent writes to the same path are forbidden.
 - The integration owner inspects actual filesystem state and resolves disagreements.
 - A distinct reviewer permits one bounded integration rework pass.

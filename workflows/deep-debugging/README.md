@@ -22,7 +22,8 @@ The exact causal chain and fix are already evident, no observable reproduction c
 - External reports generate local hypotheses; they never prove local cause.
 - At most two post-reset experiments may run.
 - User-reproduction waits use non-blocking stops and do not consume a round.
+- `locally_verified_pending_user_repro` is terminal only when the user explicitly declines or defers the final reproduction and requests a handoff.
 - Every terminal exit cleans up temporary instrumentation.
 - `fixed` requires pre-fix evidence, confirmed mechanism, the same reproduction passing, regression evidence, and independent final review.
 
-Honest non-fixed results are `mitigated_not_explained`, `locally_verified_pending_user_repro`, `not_reproduced`, and `unresolved_with_evidence`.
+Honest non-fixed results are `mitigated_not_explained`, `locally_verified_pending_user_repro`, `not_reproduced`, and `unresolved_with_evidence`; ordinary user-reproduction waits are suspended, not terminal.

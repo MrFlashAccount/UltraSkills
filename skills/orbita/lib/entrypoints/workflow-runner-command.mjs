@@ -20,7 +20,7 @@ import { readText } from '../persistence/run-state/atomic-file.mjs';
 import { assertFreshTokenAuthority, assertMatchingTokenAuthority, buildTokenLease, renewTokenLease } from '../persistence/run-state/lease-authority.mjs';
 import { appendHistoryOnce, recoverDurableCommit } from '../persistence/run-state/durable-commit.mjs';
 import { readPersistedRunState } from '../persistence/run-state/PersistedRunStateReader.mjs';
-import { ensureRunDirectories, ensureRunFiles, initialRunBaton, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../persistence/run-state/paths.mjs';
+import { canonicalPersistedWorkflowPath, ensureRunDirectories, ensureRunFiles, initialRunBaton, migrateLegacyWorkflowRunsRootIfNeeded, pathExists, resolveRunPaths } from '../persistence/run-state/paths.mjs';
 import { createRunIndexEntry, upsertRunIndexEntry } from '../persistence/run-state/run-index.mjs';
 import { readRunAuthorityWithLegacyFallback, runAuthorityFromIndexEntry, writeRunAuthority } from '../persistence/run-state/run-authority.mjs';
 import { durableFileSignature } from '../persistence/run-state/file-signature.mjs';
@@ -80,6 +80,7 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   migrateLegacyWorkflowRunsRootIfNeeded,
   pathExists,
   resolveRunPaths,
+  canonicalPersistedWorkflowPath,
   createRunIndexEntry,
   upsertRunIndexEntry,
   readRunAuthorityWithLegacyFallback,

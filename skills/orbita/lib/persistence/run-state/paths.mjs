@@ -11,6 +11,7 @@ import { runsIndexPathsForRoot } from './run-index.mjs';
 const runnerDir = dirname(fileURLToPath(import.meta.url));
 export const repositoryRoot = resolve(runnerDir, '../../../../..');
 export const defaultWorkflowPath = join(repositoryRoot, 'workflows/spdd/workflow.toml');
+export const legacyDefaultWorkflowPath = join(repositoryRoot, 'workflows/dev-harness/workflow.toml');
 export const legacyWorkflowRunsRoot = join(repositoryRoot, 'skills/orbita/.workflow-runs');
 export const orbitaHome = resolve(process.env.ORBITA_HOME ?? join(homedir(), '.orbita'));
 export const defaultWorkflowRunsRoot = join(orbitaHome, 'workflow-runs/v1');
@@ -114,6 +115,13 @@ function configureWorkflowRunsRoot() {
 }
 
 export const workflowRunsRoot = resolve(configureWorkflowRunsRoot());
+
+export function canonicalPersistedWorkflowPath(workflowPath) {
+  const resolvedWorkflowPath = resolve(workflowPath);
+  if (resolvedWorkflowPath !== legacyDefaultWorkflowPath) return resolvedWorkflowPath;
+  if (existsSync(resolvedWorkflowPath) || !existsSync(defaultWorkflowPath)) return resolvedWorkflowPath;
+  return defaultWorkflowPath;
+}
 
 const SAFE_RUN_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 
