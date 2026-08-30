@@ -6,7 +6,7 @@
   "properties": {
     "outcome": {"const": "ready_for_integration"},
     "track": {"enum": ["driver", "navigator"]},
-    "candidate_kind": {"enum": ["implementation", "isolated_candidate", "read_only_guidance"]},
+    "candidate_kind": {"enum": ["implementation", "read_only_guidance"]},
     "summary": {"type": "string", "minLength": 1},
     "evidence": {"$ref": "#/$defs/strings"},
     "changed_files": {"$ref": "#/$defs/strings"},

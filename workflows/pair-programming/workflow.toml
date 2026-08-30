@@ -18,7 +18,7 @@ agent = "pair_intake"
 next = "pair"
 
 [steps.intake.input]
-prompt = '''Inspect the task and repository read-only. Select exactly one collaboration mode: isolated_workspaces, disjoint_zones, or shared_zone. Define driver and navigator responsibilities, write ownership, integration owner, success checks, and files or zones. Never permit concurrent writes to the same path. In shared_zone mode the driver is the only writer and the navigator is read-only. If safe ownership cannot be stated, use a non-blocking stop with source_step_id = intake.'''
+prompt = '''Inspect the task and repository read-only. Select exactly one collaboration mode: disjoint_zones or shared_zone. The runner does not provision isolated workspaces. Define driver and navigator responsibilities, write ownership, integration owner, success checks, and files or zones. Never permit concurrent writes to the same path. In shared_zone mode the driver is the only writer and the navigator is read-only. If disjoint ownership cannot be proved, select shared_zone. If safe ownership still cannot be stated, use a non-blocking stop with source_step_id = intake.'''
 
 [steps.intake.output]
 template = "templates/intake.md"
@@ -49,9 +49,10 @@ schema = "schemas/pair-output.json"
 
 [steps.pair.branches.driver]
 name = "Driver"
+agent = "pair_driver"
 
 [steps.pair.branches.driver.input]
-prompt = '''Act as the implementation driver. Follow the pair contract exactly. In isolated_workspaces mode create a candidate only in the assigned isolated workspace. In disjoint_zones mode write only the driver's zone. In shared_zone mode you are the only writer. Implement the smallest coherent change, run relevant checks, and record decisions and uncertainty. Do not touch navigator-owned paths.
+prompt = '''Act as the implementation driver. Follow the pair contract exactly. In disjoint_zones mode write only the driver's zone. In shared_zone mode you are the only writer. Implement the smallest coherent change, run relevant checks, and record decisions and uncertainty. Do not touch navigator-owned paths.
 
 Pair contract:
 ${{ input.intake }}'''
@@ -62,10 +63,11 @@ schema = "schemas/track-output.json"
 
 [steps.pair.branches.navigator]
 name = "Navigator"
+agent = "pair_navigator"
 
 [steps.pair.branches.navigator.input]
 role = "critic"
-prompt = '''Act as the independent navigator. Inspect assumptions, edge cases, repository conventions, and the likely diff. In isolated_workspaces mode you may build a competing candidate only in the assigned isolated workspace. In disjoint_zones mode write only the navigator's zone. In shared_zone mode remain read-only and return precise guidance/evidence. Never edit a path concurrently owned by the driver.
+prompt = '''Act as the independent navigator. Inspect assumptions, edge cases, repository conventions, and the likely diff. In disjoint_zones mode write only the navigator's zone. In shared_zone mode remain read-only and return precise guidance/evidence. Never edit a path concurrently owned by the driver.
 
 Pair contract:
 ${{ input.intake }}'''

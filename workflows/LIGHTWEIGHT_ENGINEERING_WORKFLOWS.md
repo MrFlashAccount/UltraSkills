@@ -30,7 +30,7 @@ approved task, research, and execution-plan input. `spdd` owns a larger
 research-to-review lifecycle. `loop` repeats generic cycles without owning the
 evidence contract for any of these task types.
 
-The proposed workflows add only the missing middle:
+The implemented workflows add only the missing middle:
 
 1. a single-writer test-driven cycle for changes that can be proved with a
    focused test;
@@ -155,12 +155,12 @@ Choose exactly one mode during intake:
 
 | Mode | Driver | Navigator | Use when |
 | --- | --- | --- | --- |
-| Isolated workspaces | May implement a candidate in its own workspace. | May implement an independent candidate or test strategy in its own workspace. | The runtime provides isolated copies and the integration owner can compare or selectively apply results. |
 | Disjoint zones | Owns the declared production-code paths. | Owns separate declared test, fixture, or diagnostic paths. | The paths do not overlap and both tracks can make useful progress concurrently. |
 | Shared zone | Is the only writer. | Is read-only: reproduces, inspects, designs tests, and returns counterexamples or review findings. | Both agents need the same files or isolation is unavailable. |
 
-Concurrent agents must never own writes to the same path. If isolation or
-disjoint ownership cannot be proved, the workflow defaults to shared-zone mode.
+The current runner does not provision isolated workspaces. Concurrent agents
+must never own writes to the same path. If disjoint ownership cannot be proved,
+the workflow defaults to shared-zone mode.
 
 ### Pair contract
 
@@ -207,9 +207,9 @@ evidence-backed disposition without assuming that every finding is correct.
 
 ```text
 findings_intake -> finding_triage -> fix_cycle -> independent_recheck -> done
-                                      ^                 |
-                                      |-----------------|
-                                         one rework pass
+                       ^                                  |
+                       |----------------------------------|
+                         one triage-preserving rework pass
 ```
 
 ### Findings contract
@@ -224,7 +224,9 @@ findings_intake -> finding_triage -> fix_cycle -> independent_recheck -> done
    records focused verification for each finding id. Disjoint findings may fan
    out only with explicit non-overlapping ownership.
 4. **Independent recheck** verifies the original claim against the current
-   diff and evidence rather than trusting the implementer's summary.
+   diff and evidence rather than trusting the implementer's summary. Any failed
+   recheck returns through triage so dispositions can be corrected or preserved
+   explicitly before another fix pass.
 
 The terminal packet maps every finding to disposition, changed files,
 verification, remaining disagreement, and any external action still needed.
@@ -376,14 +378,15 @@ actions, time window, expected marker, and bounded sanitized evidence needed;
 ### Independent evidence judgment
 
 A logically independent evidence judge evaluates each result without proposing
-the next fix. It returns exactly one outcome:
+the next fix. Its route-bearing outcome is one of:
 
 - `confirmed`: the predicted causal signal was observed and material
-  alternatives were excluded;
-- `rejected`: the negative prediction or contradictory evidence rules the
-  hypothesis out;
-- `inconclusive`: the experiment did not distinguish the remaining causes;
-- `stalled`: the process is repeating work or no longer reducing uncertainty.
+  alternatives were excluded, so the run may proceed to a fix;
+- `continue`: the hypothesis was falsified with information gain or the result
+  was inconclusive while a materially redesigned experiment remains;
+- `hostile_reset`: the pre-reset budget or no-information threshold was reached;
+- `not_reproduced`: the supplied reproduction was actually executed or
+  inspected and the symptom was absent.
 
 After every experiment the workflow records a progress certificate:
 
@@ -424,7 +427,7 @@ The normal diagnostic path has these default limits:
 
 An experiment counter advances only after evidence judgment. Waiting for user
 reproduction or resolving a missing-capability stop does not consume a round.
-The future runtime graph must preserve explicit pre-reset and post-reset budgets;
+The runtime graph preserves explicit pre-reset and post-reset budgets;
 resume, retry, or hostile reset must not silently clear loop progress.
 
 Hostile reset freezes further edits and fans out two fresh, independent logical
@@ -444,9 +447,10 @@ local root cause. Superficially similar error text is not enough.
 
 A fresh synthesis owner receives the compact debugging ledger rather than the
 full reasoning transcript. It must record discarded assumptions, explain the
-lack of convergence, replace or narrow the hypothesis frontier, and select
-exactly one highest-information experiment. If it cannot do so, the workflow
-exits instead of returning control to blind iteration.
+lack of convergence, replace or narrow the hypothesis frontier, and select at
+most two new experiments in execution order. If it cannot identify even one
+safe discriminator, the workflow exits instead of inventing work or returning
+control to blind iteration.
 
 ### Debugging ledger
 
@@ -479,13 +483,17 @@ same agent that formed the hypothesis.
 7. an independent final review checks that the change did not merely mask the
    symptom, alter timing into a Heisenbug, or cargo-cult an external solution.
 
-If the symptom disappears but the mechanism remains unproven, return
-`mitigated_not_explained`. If the final user reproduction is still required,
-return `locally_verified_pending_user_repro`. Other honest terminal states are
-`not_reproduced` and `unresolved_with_evidence`; none may be projected as
-`fixed`. Missing input, permission, or capability uses the runner's
-non-blocking-stop contract and resumes the same request rather than becoming a
-terminal bugfix result.
+If the symptom is mitigated but the complete causal chain remains unproven,
+return `mitigated_not_explained` and preserve the bounded mechanism that was
+actually confirmed. A required final user reproduction suspends the
+producing step through the runner's non-blocking-stop contract and resumes the
+same request when evidence arrives. Reserve
+`locally_verified_pending_user_repro` for the distinct case where the user
+explicitly declines or defers that reproduction and asks to end with a handoff.
+Other honest terminal states are `not_reproduced` and
+`unresolved_with_evidence`; none may be projected as `fixed`. Other missing
+input, permission, or capability follows the same non-blocking-stop contract
+rather than becoming a terminal bugfix result.
 
 ## Shared safeguards
 
@@ -553,8 +561,7 @@ investigation as a fix.
 
 - one driver owns the complete TDD cycle;
 - one bounded review/rework pass;
-- shared-zone/read-only Navigator unless isolation or disjoint paths are
-  explicit;
+- shared-zone/read-only Navigator unless disjoint paths are explicit;
 - no human approval gate inside the ordinary path of any workflow;
 - `REFACTOR` and `FAST` are conditional checkpoints, not mandatory work;
 - no performance claim without a stable before/after method;

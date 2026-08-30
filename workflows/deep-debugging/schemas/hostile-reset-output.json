@@ -9,7 +9,7 @@
     "invalidated_assumptions": {"$ref": "#/$defs/strings"},
     "contradictions": {"$ref": "#/$defs/strings"},
     "source_quality": {"$ref": "#/$defs/strings"},
-    "candidate_discriminators": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "candidate_discriminators": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
     "web_status": {"enum": ["used", "unavailable_cold_repo_fallback"]}
   },
   "additionalProperties": false,

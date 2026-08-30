@@ -43,6 +43,7 @@ export function createWorkflowRunnerCommand({
   migrateLegacyWorkflowRunsRootIfNeeded,
   pathExists,
   resolveRunPaths,
+  canonicalPersistedWorkflowPath,
   createRunIndexEntry,
   upsertRunIndexEntry,
   readRunAuthorityWithLegacyFallback,
@@ -357,11 +358,13 @@ export function createWorkflowRunnerCommand({
     const authority = await authorityForPaths(defaultPaths);
     const authorityWorkflowPath = authority?.workflow?.path;
     if (typeof authorityWorkflowPath === 'string' && authorityWorkflowPath.length > 0) {
-      if (workflowPath && resolve(authorityWorkflowPath) !== resolve(workflowPath)) {
+      const compatibleAuthorityWorkflowPath = canonicalPersistedWorkflowPath(authorityWorkflowPath);
+      const compatibleRequestedWorkflowPath = workflowPath && canonicalPersistedWorkflowPath(workflowPath);
+      if (compatibleRequestedWorkflowPath && compatibleAuthorityWorkflowPath !== compatibleRequestedWorkflowPath) {
         throw new Error(`workflow run is already bound to a different workflow: ${runId}`);
       }
       return {
-        ...resolveRunPaths({ runId, workflowPath: authorityWorkflowPath, runsRoot }),
+        ...resolveRunPaths({ runId, workflowPath: compatibleAuthorityWorkflowPath, runsRoot }),
         claimContext: authority.claimContext,
         runAuthority: authority,
       };

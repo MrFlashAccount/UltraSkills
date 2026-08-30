@@ -131,7 +131,7 @@ When a canonical label and folder path differ, the folder path is the source of 
 - market-facing copy, copy refreshes, content planning, launch planning, pricing/packaging, sales collateral, competitor dossiers, customer research, cold outreach, or lifecycle email -> `roles/marketing` (start at `roles/marketing/ROLE.md` and follow the role's own task-type routing table)
 - create or refactor a skill -> `workflows/create-skill`
 - workflow-runner orchestration through CLI-returned instructions -> `skills/orbita`
-- `workflows/spdd` — **What it is:** the full staged research, design, architecture, planning, implementation, and review workflow. **Use when:** non-trivial code work needs evidence, approvals, delegated implementation, or coordinated review. **Do not use when:** a direct edit or one focused engineering workflow is sufficient.
+- `workflows/spdd` — **What it is:** the full staged research, design, execution-ready architecture, implementation, and review workflow. **Use when:** non-trivial code work needs evidence, approvals, delegated implementation, or coordinated review. **Do not use when:** a direct edit or one focused engineering workflow is sufficient.
 - multi-role read-only review -> `workflows/code-review-orchestrator`
 - pre-implementation Researcher -> Critic research verdict -> `workflows/research-critic`
 - approved closed contract -> backend/frontend implementation + verification handoff -> `workflows/implementation-harness`

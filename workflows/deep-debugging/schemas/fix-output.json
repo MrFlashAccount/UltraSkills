@@ -4,7 +4,7 @@
   "type": "object",
   "required": ["outcome", "summary", "confirmed_mechanism", "fix", "changed_files", "pre_fix_symptom", "same_repro_post_fix", "regressions", "regression_guard", "instrumentation_cleanup", "remaining_risks"],
   "properties": {
-    "outcome": {"enum": ["ready_for_review", "mitigated_not_explained", "locally_verified_pending_user_repro"]},
+    "outcome": {"enum": ["ready_for_review", "mitigated_not_explained", "locally_verified_pending_user_repro"], "description": "locally_verified_pending_user_repro is a terminal-handoff request only after the user explicitly declines or defers the required reproduction; ordinary waiting uses a runner non-blocking stop and emits no output."},
     "summary": {"type": "string", "minLength": 1},
     "confirmed_mechanism": {"type": "string", "minLength": 1},
     "fix": {"type": "string", "minLength": 1},
