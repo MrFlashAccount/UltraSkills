@@ -3,6 +3,7 @@ import { test } from 'bun:test';
 import { assertWorkflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import { applyWorkflowOutput } from '../runtime/workflow-output/apply.mjs';
 import { renderWorkerInstructions } from '../runtime/render-worker-instructions.mjs';
+import { inspectWorkflow } from '../use-cases/InspectWorkflow.mjs';
 import { resumeCurrentStep, runNext } from '../use-cases/RunNext.mjs';
 import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
 
@@ -115,6 +116,13 @@ function initialBaton(extraState = {}) {
     state: { artifacts: [], results: [], ...extraState },
   };
 }
+
+test('inspectWorkflow starts a fresh fanout activation', () => {
+  const response = inspectWorkflow({ workflowDoc: fanoutWorkflow(), batonDoc: initialBaton(), resources });
+
+  assert.equal(response.baton.state.fanouts.fanout.activation, 1);
+  assert.deepEqual(response.steps.map((entry) => entry.id), ['fanout__fanout__1__branch_a']);
+});
 
 test('scalar transition into fanout materializes branch requests through the owner cursor', () => {
   const workflowDoc = fanoutWorkflow({

@@ -3,6 +3,7 @@ import { test } from 'bun:test';
 import { assertWorkflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import { applyWorkflowOutput } from '../runtime/workflow-output/apply.mjs';
 import { renderWorkerInstructions } from '../runtime/render-worker-instructions.mjs';
+import { inspectWorkflow } from '../use-cases/InspectWorkflow.mjs';
 import { resumeCurrentStep, runNext } from '../use-cases/RunNext.mjs';
 import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
 
@@ -86,6 +87,16 @@ function initialBaton(extraState = {}) {
     state: { artifacts: [], results: [], ...extraState },
   };
 }
+
+test('inspectWorkflow starts a fresh shard activation', () => {
+  const response = inspectWorkflow({ workflowDoc: shardWorkflow(), batonDoc: initialBaton(), resources });
+
+  assert.equal(response.baton.state.shards.shard_work.activation, 1);
+  assert.deepEqual(response.steps.map((entry) => entry.id), [
+    'shard_work__shard__1__0',
+    'shard_work__shard__1__1',
+  ]);
+});
 
 test('shard accepts arbitrary literal JSON values and exposes only explicit interpolation', () => {
   const values = [null, 'SECRET_VALUE', 3, false, { name: 'api' }, ['nested']];
