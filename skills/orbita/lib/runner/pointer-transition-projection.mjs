@@ -140,6 +140,7 @@ export function pointerMoveHistoryDetails({ transition } = {}) {
     `- pointer move: id=${transition.id} direction=${transition.direction}`,
     `- target position id: ${transition.id}`,
     `- pointer move edge: cursor=${transition.from.display} status=${transition.from.status} -> cursor=${transition.to.display} status=${transition.to.status}`,
-    '- state preserved: true',
+    '- append-only history preserved: true',
+    '- target step re-entered from current baton: true',
   ];
 }

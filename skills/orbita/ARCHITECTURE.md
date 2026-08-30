@@ -42,9 +42,10 @@ initialize missing run state, append history, renew authority, or mutate the
 baton/current pointer. It is not an unleased public read because it exposes
 bounded pointer recovery metadata. `movePointer` mutates only
 baton cursor/status through the existing lease, lock, validation, durable writer,
-history, and per-run authority path. Neither surface rolls back, prunes, rewrites, or cleans
-`baton.state`, accepted outputs, artifacts/results, worker bindings, prompt
-markers, attempts, or existing history. A move may target any state-bearing
+history, and per-run authority path, then re-enters the target step. Re-entry
+invalidates only that step's previous execution output and non-blocking stop;
+append-only artifacts/results/history and unrelated step state, worker bindings,
+prompt markers, attempts, and loop progress remain intact. A move may target any state-bearing
 predecessor that reaches the current cursor through transitions resolved from
 the current workflow and baton state; it must never offer a downstream or
 state-less workflow step. Terminal
@@ -52,7 +53,7 @@ single-cursor positions, including a completed `done` run, may move backward to
 a state-bearing non-terminal predecessor; terminal status must not by itself make pointer
 recovery unsupported. Array cursors are rejected by the baton schema and cannot
 enter pointer recovery.
-Pointer moves preserve baton state without an extra acknowledgement gate.
+Pointer moves re-enter the target without an extra acknowledgement gate.
 
 Retired surfaces:
 
@@ -947,7 +948,7 @@ Architecture review must verify:
   instruction text has no baton, serialized response, or next runner command
 - pointer recovery docs, API exports, CLI modes, tests, and source agree that
   `listPointerTransitions` and `movePointer` require active lease authority,
-  preserve baton state, derive predecessors from workflow transitions resolved
+  re-enter the target while preserving append-only and unrelated state, derive predecessors from workflow transitions resolved
   against `baton.state`, never use debug history as navigation state, reject
   invalid legacy array cursor state, and expose only redacted bounded metadata
 - dashboard changes preserve the read-only observer boundary, safe projection

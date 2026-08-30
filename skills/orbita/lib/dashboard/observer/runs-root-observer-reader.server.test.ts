@@ -82,7 +82,7 @@ describe("RunsRootObserverReader", () => {
     const page = await new RunsRootObserverReader(runsRoot).getWorkflowPage("healthy");
 
     expect(page?.complete).toBe(true);
-    expect(page?.nodes).toHaveLength(15);
+    expect(page?.nodes).toHaveLength(13);
     expect(page?.nodes.some((node) => node.stepId === "done" && node.kind === "done")).toBe(true);
   });
 

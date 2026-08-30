@@ -9,7 +9,7 @@ import {
 import { Workflow } from '../entities/Workflow/index.mjs';
 import { WorkflowDTO } from '../dtos/WorkflowDTO.mjs';
 import { WorkflowRuntimeError } from '../errors.mjs';
-import { applyOutputToBatonState } from '../runtime/baton-state.mjs';
+import { applyOutputToBatonState, prepareBatonForStepEntry } from '../runtime/baton-state.mjs';
 import { applyWorkflowOutput } from '../use-cases/ApplyWorkflowOutput.mjs';
 import { inspectWorkflow } from '../use-cases/InspectWorkflow.mjs';
 import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
@@ -141,6 +141,30 @@ test('Baton.withAppliedOutput appends result aggregates without overwriting prev
   const next = baton.withAppliedOutput('producer', { outcome: 'ready', artifacts: [], results: [{ type: 'current' }] });
 
   assert.deepEqual(next.state.results, [{ type: 'previous' }, { type: 'current' }]);
+});
+
+test('step entry invalidates only the current execution output and stop', () => {
+  const source = batonDoc({
+    state: {
+      artifacts: [],
+      results: [{ type: 'append-only' }],
+      producer: { outcome: 'stale' },
+      reviewer: { outcome: 'keep' },
+    },
+    nonBlockingStops: {
+      producer: { needed: 'stale decision' },
+      reviewer: { needed: 'keep decision' },
+    },
+  });
+
+  const next = prepareBatonForStepEntry(source, 'producer');
+
+  assert.equal(Object.hasOwn(next.state, 'producer'), false);
+  assert.equal(Object.hasOwn(next.nonBlockingStops, 'producer'), false);
+  assert.deepEqual(next.state.reviewer, { outcome: 'keep' });
+  assert.deepEqual(next.nonBlockingStops.reviewer, { needed: 'keep decision' });
+  assert.deepEqual(next.state.results, [{ type: 'append-only' }]);
+  assert.deepEqual(source.state.producer, { outcome: 'stale' });
 });
 
 test('Baton.withAppliedOutput rejects non-array artifact aggregates before mutating state', () => {

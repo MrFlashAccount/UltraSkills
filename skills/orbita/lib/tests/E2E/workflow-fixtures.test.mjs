@@ -220,7 +220,8 @@ test('E2E fixture: match route covers retry loop', async () => {
   const retry = await continueWith(retryRun, workflow, output('triage-retry.json'), 'continue triage retry');
   assert.equal(retry.status, 'needs_host_actions');
   assert.equal(retry.baton.cursor, 'triage');
-  assert.equal(retry.baton.state.triage.results[0].summary, 'needs another pass');
+  assert.equal(Object.hasOwn(retry.baton.state, 'triage'), false);
+  assert.equal(retry.baton.state.results.at(-1).summary, 'needs another pass');
 
   const ready = await continueWith(retryRun, workflow, output('triage-ready.json'), 'continue triage ready');
   assert.equal(ready.baton.cursor, 'resolve');

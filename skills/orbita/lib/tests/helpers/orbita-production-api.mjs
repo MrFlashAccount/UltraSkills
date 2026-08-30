@@ -9,7 +9,7 @@ import { createWorkflowRuns } from '../../use-cases/WorkflowRuns.mjs';
 import { acceptedOutputHistoryDetails, orchestratorDebugHistoryDetails, publicFailureHistoryDetails, transitionHistoryDetails } from '../../runner/history-projection.mjs';
 import { pointerMoveHistoryDetails, projectPointerTransitions, resolvePointerMove } from '../../runner/pointer-transition-projection.mjs';
 import { renderAppliedResponse } from '../../use-cases/ContinueRun.mjs';
-import { runNext } from '../../use-cases/RunNext.mjs';
+import { resumeCurrentStep, runNext } from '../../use-cases/RunNext.mjs';
 import { resolveStartupUserPrompt, startupUserPromptTarget } from '../../runtime/user-prompt.mjs';
 import { loadWorkflowRuntime } from '../../persistence/workflow-resources/runtime-reader.mjs';
 import { readWorkflowDocument } from '../../persistence/workflow-resources/workflow-document-reader.mjs';
@@ -63,6 +63,7 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   projectPointerTransitions,
   resolvePointerMove,
   renderAppliedResponse,
+  resumeCurrentStep,
   runNext,
   resolveStartupUserPrompt,
   startupUserPromptTarget,

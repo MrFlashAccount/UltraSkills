@@ -3,7 +3,7 @@ import { invariant } from '../errors.mjs';
 import { applyOutputToBatonState } from './baton-state.mjs';
 import {
   batonWithShardActivation,
-  shardActivationForBaton,
+  currentShardActivation,
   shardRecordForRequest,
   stepForShardWorker,
 } from './shard.mjs';
@@ -155,7 +155,7 @@ function applyFinalWorkerOutput({ workflow, baton, parentStepId, parentStep, act
 }
 
 export function applyShardStepOutput({ workflow, baton, parentStepId, parentStep, allOutput, outputParseError, resources }) {
-  const activation = shardActivationForBaton({ baton, parentStepId, parentStep });
+  const activation = currentShardActivation({ baton, parentStepId });
   invariant(activation.parent_step_id === parentStepId, `shard activation parent mismatch for '${parentStepId}'`);
   if (activation.phase === 'shards') {
     return applyShardBatch({ workflow, baton, parentStepId, parentStep, activation, allOutput, resources });

@@ -135,6 +135,6 @@ bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" list-pointer-tr
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" move-pointer --run-id <run-id> --transition-id <id> --lease-token "$lease_token"
 ```
 
-The list includes every valid predecessor present in `baton.state`, resolved through the workflow's current transition rules; it never derives navigation from debug history or offers downstream steps. Choose the target matching the request and move once. The move preserves baton state without extra acknowledgement. No matching target: report available moves and stop. Never edit baton/history.
+The list contains every valid predecessor present in `baton.state`, resolved from the current workflow and baton, never debug history or downstream steps. Choose the target and move once. The move re-enters it without acknowledgement: only that step's prior output and stop are invalidated; append-only and unrelated state stay. No match: report and stop. Never edit baton/history.
 
 On `done`, stop and report the terminal embedded JSON using its workflow-specific baton/projection; do not assume a generic `result` field.
