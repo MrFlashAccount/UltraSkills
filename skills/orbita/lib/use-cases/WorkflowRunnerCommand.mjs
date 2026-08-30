@@ -16,6 +16,7 @@ export function createWorkflowRunnerCommand({
   projectPointerTransitions,
   resolvePointerMove,
   renderAppliedResponse,
+  resumeCurrentStep,
   runNext,
   resolveStartupUserPrompt,
   startupUserPromptTarget,
@@ -257,10 +258,10 @@ export function createWorkflowRunnerCommand({
     };
   }
 
-  async function renderCurrentHostResponse(paths, baton, { leaseToken, includeDiagnostics = false, includeInlineInstructions = false, followUp = false } = {}) {
+  async function renderHostResponse(paths, baton, execute, { leaseToken, includeDiagnostics = false, includeInlineInstructions = false, followUp = false } = {}) {
     const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton });
     const renderResources = resourcesWithValidatingWriter(runtime.resources, paths, { leaseToken });
-    const rendered = runNext({ workflowDoc: runtime.workflow, batonDoc: runtime.baton, resources: renderResources, includeDiagnostics, followUp });
+    const rendered = execute({ workflowDoc: runtime.workflow, batonDoc: runtime.baton, resources: renderResources, includeDiagnostics, followUp });
     const { persistedResponse, response } = await responsePairForRendered(paths, rendered, {
       initialized: false,
       resumed: true,
@@ -271,6 +272,14 @@ export function createWorkflowRunnerCommand({
       followUp,
     });
     return { runtime, resources: renderResources, rendered, persistedResponse, response };
+  }
+
+  async function renderCurrentHostResponse(paths, baton, options = {}) {
+    return renderHostResponse(paths, baton, resumeCurrentStep, options);
+  }
+
+  async function renderStepEntryHostResponse(paths, baton, options = {}) {
+    return renderHostResponse(paths, baton, runNext, options);
   }
 
   async function nextInternal({ runId, workflowPath, includeDiagnostics = false, userPrompt, userPromptFile, taskKey, taskFingerprint, leaseToken, now = new Date(), runsRoot } = {}) {
@@ -302,7 +311,8 @@ export function createWorkflowRunnerCommand({
         const initialBaton = resumed ? undefined : initialRunBaton(paths, { userPrompt: startupUserPrompt, userPromptTarget: startupPromptTarget });
         const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: persisted?.baton ?? initialBaton });
         const renderResources = resourcesWithValidatingWriter(runtime.resources, paths, { leaseToken });
-        const rendered = runNext({ workflowDoc: runtime.workflow, batonDoc: runtime.baton, resources: renderResources, includeDiagnostics });
+        const execute = resumed ? resumeCurrentStep : runNext;
+        const rendered = execute({ workflowDoc: runtime.workflow, batonDoc: runtime.baton, resources: renderResources, includeDiagnostics });
         const response = await persistNextHostResponse(paths, rendered, { initialized: !resumed, resumed }, {
           leaseToken, workflowDoc: runtime.workflow, resources: renderResources, currentState: persisted,
         });
@@ -334,7 +344,7 @@ export function createWorkflowRunnerCommand({
     readWorkflowDocument,
     renderCurrentHostResponse,
     loadWorkflowRuntime,
-    runNext,
+    resumeCurrentStep,
     resourcesWithValidatingWriter,
     runnerResponseForRendered,
     recoverDurableCommit,
@@ -407,7 +417,7 @@ export function createWorkflowRunnerCommand({
       if (recoveryResolutions) {
         const recoveryRuntime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: runtime.baton });
         const renderResources = resourcesWithValidatingWriter(recoveryRuntime.resources, paths, { leaseToken });
-        const rendered = runNext({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
+        const rendered = resumeCurrentStep({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
         const { persistedResponse, response } = await responsePairForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true, workflowDoc: recoveryRuntime.workflow, resources: renderResources });
         const currentState = await writeContinuePreActionHistory(paths, {
           bindingHistoryEntries: preActions.entries,
@@ -444,7 +454,7 @@ export function createWorkflowRunnerCommand({
         const recoveryBaton = partial.baton;
         const recoveryRuntime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: recoveryBaton });
         const renderResources = resourcesWithValidatingWriter(recoveryRuntime.resources, paths, { leaseToken });
-        const rendered = runNext({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
+        const rendered = resumeCurrentStep({ workflowDoc: recoveryRuntime.workflow, batonDoc: recoveryRuntime.baton, resources: renderResources, includeDiagnostics });
         const { persistedResponse, response } = await responsePairForRendered(paths, rendered, { initialized: false, resumed: true, leaseToken, includeInlineInstructions: true, workflowDoc: recoveryRuntime.workflow, resources: renderResources });
         const currentState = await writeContinuePreActionHistory(paths, {
           bindingHistoryEntries: preActions.entries,
@@ -539,13 +549,13 @@ export function createWorkflowRunnerCommand({
         baton: runtime.baton,
         transitionId,
       });
-      const { persistedResponse, response } = await renderCurrentHostResponse(paths, resolved.baton, { leaseToken });
+      const { persistedResponse, response } = await renderStepEntryHostResponse(paths, resolved.baton, { leaseToken });
       await writePersistedRunStateUpdate(paths, {
-        baton: resolved.baton,
+        baton: persistedResponse.baton,
         currentRequests: persistedResponse.requests ?? [],
         history: {
           source: 'workflow-runner-move-pointer',
-          baton: resolved.baton,
+          baton: persistedResponse.baton,
           output: `pointer:${resolved.transition.id}`,
           details: pointerMoveHistoryDetails({ transition: resolved.transition }),
         },
@@ -556,8 +566,8 @@ export function createWorkflowRunnerCommand({
         runId: paths.runId,
         moved: resolved.transition,
         current: {
-          cursor: resolved.baton.cursor,
-          status: resolved.baton.status,
+          cursor: persistedResponse.baton.cursor,
+          status: persistedResponse.baton.status,
         },
       };
     });

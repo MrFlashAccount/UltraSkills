@@ -72,10 +72,17 @@ export function createShardActivation({ parentStepId, parentStep, baton, previou
   };
 }
 
-export function shardActivationForBaton({ baton, parentStepId, parentStep }) {
+export function startShardActivation({ baton, parentStepId, parentStep }) {
   const previous = baton?.state?.[SHARD_STATE_KEY]?.[parentStepId];
-  if (previous && previous.phase !== 'completed') return clone(previous);
   return createShardActivation({ parentStepId, parentStep, baton, previousActivation: previous });
+}
+
+export function currentShardActivation({ baton, parentStepId }) {
+  const activation = baton?.state?.[SHARD_STATE_KEY]?.[parentStepId];
+  if (!activation || activation.phase === 'completed') {
+    fail(`step '${parentStepId}' has no active shard activation`);
+  }
+  return clone(activation);
 }
 
 export function batonWithShardActivation(baton, parentStepId, activation) {
@@ -137,8 +144,7 @@ function publicShardContext(activation, record) {
   };
 }
 
-export function shardStepEntries(parentStepId, parentStep, baton) {
-  const activation = activationWithCurrentShardRequests(shardActivationForBaton({ baton, parentStepId, parentStep }));
+export function shardStepEntries(parentStepId, parentStep, activation) {
   if (activation.phase === 'worker') {
     return [{
       id: parentStepId,
@@ -156,8 +162,12 @@ export function shardStepEntries(parentStepId, parentStep, baton) {
   }));
 }
 
-export function shardActivationWithRequests({ baton, parentStepId, parentStep }) {
-  return activationWithCurrentShardRequests(shardActivationForBaton({ baton, parentStepId, parentStep }));
+export function startShardActivationWithRequests({ baton, parentStepId, parentStep }) {
+  return activationWithCurrentShardRequests(startShardActivation({ baton, parentStepId, parentStep }));
+}
+
+export function currentShardActivationWithRequests({ baton, parentStepId }) {
+  return activationWithCurrentShardRequests(currentShardActivation({ baton, parentStepId }));
 }
 
 export function shardRecordForRequest(activation, requestId) {

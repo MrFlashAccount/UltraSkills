@@ -5,7 +5,7 @@ import {
   FANOUT_STATE_KEY,
   batonWithFanoutActivation,
   branchRecordForRequest,
-  fanoutActivationForBaton,
+  currentFanoutActivation,
   stepForFanoutBranch,
 } from './fanout.mjs';
 import { assertOutputSchemaIfDeclared, readWorkerOutputForStep } from './output/worker-output.mjs';
@@ -163,7 +163,7 @@ function applyOwnerOutput({ workflow, baton, ownerStepId, ownerStep, activation,
 }
 
 export function applyFanoutStepOutput({ workflow, baton, ownerStepId, ownerStep, allOutput, outputParseError, resources }) {
-  const activation = fanoutActivationForBaton({ baton, ownerStepId, ownerStep });
+  const activation = currentFanoutActivation({ baton, ownerStepId });
   invariant(activation.owner_step_id === ownerStepId, `fanout activation owner mismatch for '${ownerStepId}'`);
   if (activation.phase === 'branches') {
     return applyBranchBatch({ workflow, baton, ownerStepId, ownerStep, activation, allOutput, resources });

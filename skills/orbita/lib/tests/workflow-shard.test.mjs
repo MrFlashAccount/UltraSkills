@@ -3,7 +3,7 @@ import { test } from 'bun:test';
 import { assertWorkflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import { applyWorkflowOutput } from '../runtime/workflow-output/apply.mjs';
 import { renderWorkerInstructions } from '../runtime/render-worker-instructions.mjs';
-import { runNext } from '../use-cases/RunNext.mjs';
+import { resumeCurrentStep, runNext } from '../use-cases/RunNext.mjs';
 import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
 
 const workerSchema = {
@@ -140,7 +140,8 @@ test('shard dynamic input snapshots values and supports nested value interpolati
   });
   assert.deepEqual(second.baton.state.shards.shard_work.values, [{ name: 'api' }, { name: 'runtime' }, { name: 'cli' }]);
   assert.deepEqual(second.steps.map((entry) => entry.id), ['shard_work__shard__1__2']);
-  const renderedSecond = runNext({ workflowDoc, batonDoc: second.baton, resources });
+  const renderedSecond = resumeCurrentStep({ workflowDoc, batonDoc: second.baton, resources });
+  assert.equal(renderedSecond.baton.state.shards.shard_work.activation, 1);
   assert.match(renderWorkerInstructions({ workflow: workflowDoc, baton: renderedSecond.baton, entry: renderedSecond.steps[0], resources }), /Package=cli index=2 total=3/);
 });
 

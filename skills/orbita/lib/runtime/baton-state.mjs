@@ -7,6 +7,16 @@ function cloneBoundaryData(dto) {
   return typeof dto?.toJSON === 'function' ? dto.toJSON() : structuredClone(dto);
 }
 
+export function prepareBatonForStepEntry(baton, stepId) {
+  const nextBaton = cloneBoundaryData(baton);
+  if (nextBaton.state) delete nextBaton.state[stepId];
+  if (nextBaton.nonBlockingStops?.[stepId]) {
+    delete nextBaton.nonBlockingStops[stepId];
+    if (Object.keys(nextBaton.nonBlockingStops).length === 0) delete nextBaton.nonBlockingStops;
+  }
+  return nextBaton;
+}
+
 function cloneArtifactMetadata(artifact, path) {
   return cloneCentralArtifactMetadata(artifact, path, { errorPrefix: 'worker output failed schema validation' });
 }

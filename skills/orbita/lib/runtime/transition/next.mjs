@@ -1,5 +1,5 @@
 import { Step } from '../../entities/Step/index.mjs';
-import { responseForCursor } from '../output/response.mjs';
+import { responseForStepEntry } from '../output/response.mjs';
 import { markUserPromptInjectedForStep, validateSelectedStartupUserPromptTarget } from '../user-prompt.mjs';
 
 export function applyNextTransition({ workflow, baton, cursorStep, workerOutput, stepId = baton.cursor }) {
@@ -10,7 +10,7 @@ export function applyNextTransition({ workflow, baton, cursorStep, workerOutput,
     stepId,
   });
   const applied = cursor.applyOutput({ workflow, baton: batonWithPromptMarker, output: workerOutput });
-  const response = responseForCursor(applied.baton, workflow);
+  const response = responseForStepEntry(applied.baton, workflow);
   const updatedBaton = validateSelectedStartupUserPromptTarget({
     workflow,
     baton: response.baton,

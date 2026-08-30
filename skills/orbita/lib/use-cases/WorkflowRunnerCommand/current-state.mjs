@@ -6,7 +6,7 @@ export function createWorkflowRunnerCurrentState({
   readWorkflowDocument,
   renderCurrentHostResponse,
   loadWorkflowRuntime,
-  runNext,
+  resumeCurrentStep,
   resourcesWithValidatingWriter,
   runnerResponseForRendered,
   recoverDurableCommit,
@@ -191,7 +191,7 @@ export function createWorkflowRunnerCurrentState({
     const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
     const persistedResponse = await responseForPersistedCurrentRequests(paths, current);
     if (persistedResponse) return { runtime, response: persistedResponse };
-    const rendered = runNext({
+    const rendered = resumeCurrentStep({
       workflowDoc: runtime.workflow,
       batonDoc: runtime.baton,
       resources: resourcesWithValidatingWriter(runtime.resources, paths, { leaseToken }),

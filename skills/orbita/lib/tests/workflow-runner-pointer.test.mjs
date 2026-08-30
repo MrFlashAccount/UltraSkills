@@ -238,7 +238,7 @@ test('pointer projection uses the runtime loop-limit exit and offers only state-
   assert.equal(projected.transitions.some((transition) => transition.to.cursor === 'done'), false);
 });
 
-test('runner pointer API moves to a state-bearing predecessor while preserving replaceable state', async () => {
+test('pointer rollback re-enters an ordinary worker without treating its previous output as current', async () => {
   const run = await createClaimedRun('api-retained');
   await next({ ...run, userPrompt: 'keep prompt marker', now: new Date('2026-06-01T10:00:01.000Z') });
   await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared' });
@@ -260,15 +260,21 @@ test('runner pointer API moves to a state-bearing predecessor while preserving r
   assert.equal(moved.current.cursor, 'prepare');
   assert.equal(afterMove.baton.cursor, 'prepare');
   assert.equal(afterMove.baton.status, 'running');
-  assert.deepEqual(afterMove.baton.state, beforeMove.baton.state);
+  assert.equal(Object.hasOwn(afterMove.baton.state, 'prepare'), false);
+  assert.deepEqual(afterMove.baton.state.results, beforeMove.baton.state.results);
+  assert.deepEqual(afterMove.baton.state.artifacts, beforeMove.baton.state.artifacts);
   assert.deepEqual(afterMove.baton.workerBindings, beforeMove.baton.workerBindings);
   assert.equal(afterMove.baton.user_prompt_injected, beforeMove.baton.user_prompt_injected);
   assert.equal(afterMove.history.startsWith(beforeMove.history), true);
   assert.match(afterMove.history.slice(beforeMove.history.length), /source: workflow-runner-move-pointer/);
   assert.match(afterMove.history.slice(beforeMove.history.length), /pointer move:/);
   assert.match(afterMove.history.slice(beforeMove.history.length), /target position id:/);
-  assert.match(afterMove.history.slice(beforeMove.history.length), /state preserved: true/);
   assert.equal(afterMove.authority.status, 'needs_host_actions');
+
+  await assert.rejects(
+    () => continueRun({ ...run, now: new Date('2026-06-01T10:04:30.000Z') }),
+    /missing completed output or non-blocking stop for workflow request prepare/,
+  );
 
   await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared again', now: new Date('2026-06-01T10:05:00.000Z') });
   assert.equal(snapshot(run.paths).baton.state.prepare.results[0].summary, 'prepared again');
@@ -279,6 +285,227 @@ test('runner pointer API moves to a state-bearing predecessor while preserving r
     now: new Date('2026-06-01T10:06:00.000Z'),
   });
   assert.equal(stopped.reported, true);
+});
+
+test('pointer rollback re-enters fanout with a fresh activation when upstream branch selection changes', async () => {
+  const selectionSchema = 'pointer-fanout-selection.schema.json';
+  const workerSchema = 'pointer-fanout-worker.schema.json';
+  writeJson(path.join(tempDir, selectionSchema), {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome', 'branch_ids'],
+    properties: {
+      outcome: { const: 'ready' },
+      branch_ids: {
+        type: 'array',
+        minItems: 1,
+        uniqueItems: true,
+        items: { enum: ['branch_a', 'branch_b'] },
+      },
+      results: { type: 'array' },
+    },
+    additionalProperties: false,
+  });
+  writeJson(path.join(tempDir, workerSchema), {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome'],
+    properties: {
+      outcome: { const: 'ready' },
+      results: { type: 'array' },
+    },
+    additionalProperties: false,
+  });
+  const output = { template: 'output.md', schema: workerSchema };
+  const workflow = {
+    name: 'pointer-fanout-reentry',
+    version: 1,
+    start: 'plan',
+    done: 'done',
+    steps: {
+      plan: {
+        name: 'Plan',
+        kind: 'worker',
+        input: { prompt: 'Select implementation branches.' },
+        output: { template: 'output.md', schema: selectionSchema },
+        next: 'implementation',
+      },
+      implementation: {
+        name: 'Implementation',
+        kind: 'fanout',
+        max_parallel: 1,
+        input: {
+          branches: '${{ input.plan.branch_ids }}',
+          prompt: 'Aggregate the current implementation activation.',
+        },
+        output,
+        branches: {
+          branch_a: { input: { prompt: 'Implement A.' }, output },
+          branch_b: { input: { prompt: 'Implement B.' }, output },
+        },
+        next: 'done',
+      },
+      done: { name: 'Done', kind: 'done' },
+    },
+  };
+  const run = await createClaimedRun('fanout-reentry-selection-change', workflow);
+
+  await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
+  await writeOutput({
+    ...run,
+    stepId: 'plan',
+    json: JSON.stringify({ outcome: 'ready', branch_ids: ['branch_a'], results: [] }),
+    debugSummaryFile: debugSummaryFileFor(run.paths, 'plan'),
+    now: new Date('2026-06-01T10:01:00.000Z'),
+  });
+  const firstActivation = await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
+  assert.deepEqual(firstActivation.requests.map((request) => request.stepId), [
+    'implementation__fanout__1__branch_a',
+  ]);
+
+  await writeOutput({
+    ...run,
+    stepId: 'implementation__fanout__1__branch_a',
+    json: JSON.stringify(workerOutput('stale branch A output')),
+    debugSummaryFile: debugSummaryFileFor(run.paths, 'implementation__fanout__1__branch_a'),
+    now: new Date('2026-06-01T10:03:00.000Z'),
+  });
+  const firstOwner = await continueRun({ ...run, now: new Date('2026-06-01T10:04:00.000Z') });
+  assert.equal(firstOwner.baton.state.fanouts.implementation.phase, 'owner');
+
+  const transitions = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:05:00.000Z') });
+  const planTransition = transitions.transitions.find((transition) => transition.to.cursor === 'plan');
+  assert.ok(planTransition);
+  await movePointer({
+    ...run,
+    transitionId: planTransition.id,
+    now: new Date('2026-06-01T10:06:00.000Z'),
+  });
+
+  await writeOutput({
+    ...run,
+    stepId: 'plan',
+    json: JSON.stringify({ outcome: 'ready', branch_ids: ['branch_b'], results: [] }),
+    debugSummaryFile: debugSummaryFileFor(run.paths, 'plan'),
+    now: new Date('2026-06-01T10:07:00.000Z'),
+  });
+  const secondActivation = await continueRun({ ...run, now: new Date('2026-06-01T10:08:00.000Z') });
+
+  assert.deepEqual(secondActivation.baton.state.fanouts.implementation.selected_branch_ids, ['branch_b']);
+  assert.equal(secondActivation.baton.state.fanouts.implementation.activation, 2);
+  assert.deepEqual(secondActivation.requests.map((request) => request.stepId), [
+    'implementation__fanout__2__branch_b',
+  ]);
+});
+
+test('pointer rollback re-enters shard work with fresh values from the new upstream output', async () => {
+  const selectionSchema = 'pointer-shard-selection.schema.json';
+  const workerSchema = 'pointer-shard-worker.schema.json';
+  writeJson(path.join(tempDir, selectionSchema), {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome', 'items'],
+    properties: {
+      outcome: { const: 'ready' },
+      items: {
+        type: 'array',
+        minItems: 1,
+        items: { type: 'string' },
+      },
+      results: { type: 'array' },
+    },
+    additionalProperties: false,
+  });
+  writeJson(path.join(tempDir, workerSchema), {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    required: ['outcome'],
+    properties: {
+      outcome: { const: 'ready' },
+      results: { type: 'array' },
+    },
+    additionalProperties: false,
+  });
+  const output = { template: 'output.md', schema: workerSchema };
+  const workflow = {
+    name: 'pointer-shard-reentry',
+    version: 1,
+    start: 'plan',
+    done: 'done',
+    steps: {
+      plan: {
+        name: 'Plan',
+        kind: 'worker',
+        input: { prompt: 'Select the current shard values.' },
+        output: { template: 'output.md', schema: selectionSchema },
+        next: 'parallel_work',
+      },
+      parallel_work: {
+        name: 'Parallel work',
+        kind: 'shard',
+        max_parallel: 1,
+        input: {
+          shards: '${{ input.plan.items }}',
+          prompt: 'Aggregate the current shard activation.',
+        },
+        output,
+        worker: {
+          input: { prompt: 'Process the current shard.' },
+          output,
+        },
+        next: 'done',
+      },
+      done: { name: 'Done', kind: 'done' },
+    },
+  };
+  const run = await createClaimedRun('shard-reentry-values-change', workflow);
+
+  await next({ ...run, now: new Date('2026-06-01T11:00:01.000Z') });
+  await writeOutput({
+    ...run,
+    stepId: 'plan',
+    json: JSON.stringify({ outcome: 'ready', items: ['old-value'], results: [] }),
+    debugSummaryFile: debugSummaryFileFor(run.paths, 'plan'),
+    now: new Date('2026-06-01T11:01:00.000Z'),
+  });
+  const firstActivation = await continueRun({ ...run, now: new Date('2026-06-01T11:02:00.000Z') });
+  assert.deepEqual(firstActivation.requests.map((request) => request.stepId), [
+    'parallel_work__shard__1__0',
+  ]);
+
+  await writeOutput({
+    ...run,
+    stepId: 'parallel_work__shard__1__0',
+    json: JSON.stringify(workerOutput('stale shard output')),
+    debugSummaryFile: debugSummaryFileFor(run.paths, 'parallel_work__shard__1__0'),
+    now: new Date('2026-06-01T11:03:00.000Z'),
+  });
+  const firstOwner = await continueRun({ ...run, now: new Date('2026-06-01T11:04:00.000Z') });
+  assert.equal(firstOwner.baton.state.shards.parallel_work.phase, 'worker');
+
+  const transitions = await listPointerTransitions({ ...run, now: new Date('2026-06-01T11:05:00.000Z') });
+  const planTransition = transitions.transitions.find((transition) => transition.to.cursor === 'plan');
+  assert.ok(planTransition);
+  await movePointer({
+    ...run,
+    transitionId: planTransition.id,
+    now: new Date('2026-06-01T11:06:00.000Z'),
+  });
+
+  await writeOutput({
+    ...run,
+    stepId: 'plan',
+    json: JSON.stringify({ outcome: 'ready', items: ['new-a', 'new-b'], results: [] }),
+    debugSummaryFile: debugSummaryFileFor(run.paths, 'plan'),
+    now: new Date('2026-06-01T11:07:00.000Z'),
+  });
+  const secondActivation = await continueRun({ ...run, now: new Date('2026-06-01T11:08:00.000Z') });
+
+  assert.deepEqual(secondActivation.baton.state.shards.parallel_work.values, ['new-a', 'new-b']);
+  assert.equal(secondActivation.baton.state.shards.parallel_work.activation, 2);
+  assert.deepEqual(secondActivation.requests.map((request) => request.stepId), [
+    'parallel_work__shard__2__0',
+  ]);
 });
 
 test('runner pointer API list is read-only for claimed runs without persisted state', async () => {

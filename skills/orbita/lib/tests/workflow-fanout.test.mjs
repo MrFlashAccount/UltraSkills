@@ -3,7 +3,7 @@ import { test } from 'bun:test';
 import { assertWorkflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import { applyWorkflowOutput } from '../runtime/workflow-output/apply.mjs';
 import { renderWorkerInstructions } from '../runtime/render-worker-instructions.mjs';
-import { runNext } from '../use-cases/RunNext.mjs';
+import { resumeCurrentStep, runNext } from '../use-cases/RunNext.mjs';
 import { validateWorkflow } from '../use-cases/ValidateWorkflow.mjs';
 
 const workerSchema = {
@@ -311,7 +311,8 @@ test('fanout freezes one activation selection and hides stale unselected branch 
     outputValue: { steps: { fanout__fanout__1__branch_a: { outcome: 'implemented', summary: 'CURRENT_BRANCH_A_VALUE' } } },
     resources,
   });
-  const renderedOwner = runNext({ workflowDoc, batonDoc: ownerResponse.baton, resources });
+  const renderedOwner = resumeCurrentStep({ workflowDoc, batonDoc: ownerResponse.baton, resources });
+  assert.equal(renderedOwner.baton.state.fanouts.fanout.activation, 1);
   const instructions = renderWorkerInstructions({ workflow: workflowDoc, baton: renderedOwner.baton, entry: renderedOwner.steps[0], resources });
   assert.match(instructions, /CURRENT_BRANCH_A_VALUE/);
   assert.doesNotMatch(instructions, /STALE_BRANCH_B_VALUE/);

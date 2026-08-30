@@ -124,10 +124,17 @@ export function createFanoutActivation({ ownerStepId, ownerStep, baton, previous
   };
 }
 
-export function fanoutActivationForBaton({ baton, ownerStepId, ownerStep }) {
+export function startFanoutActivation({ baton, ownerStepId, ownerStep }) {
   const previous = baton?.state?.[FANOUT_STATE_KEY]?.[ownerStepId];
-  if (previous && previous.phase !== 'completed') return clone(previous);
   return createFanoutActivation({ ownerStepId, ownerStep, baton, previousActivation: previous });
+}
+
+export function currentFanoutActivation({ baton, ownerStepId }) {
+  const activation = baton?.state?.[FANOUT_STATE_KEY]?.[ownerStepId];
+  if (!activation || activation.phase === 'completed') {
+    fail(`step '${ownerStepId}' has no active fanout activation`);
+  }
+  return clone(activation);
 }
 
 export function batonWithFanoutActivation(baton, ownerStepId, activation) {
@@ -201,8 +208,7 @@ function publicFanoutContext(activation, extra = {}) {
   };
 }
 
-export function fanoutStepEntries(ownerStepId, ownerStep, baton) {
-  const activation = activationWithCurrentRequests(fanoutActivationForBaton({ baton, ownerStepId, ownerStep }));
+export function fanoutStepEntries(ownerStepId, ownerStep, activation) {
   if (activation.phase === 'owner') {
     return [{
       id: ownerStepId,
@@ -223,8 +229,12 @@ export function fanoutStepEntries(ownerStepId, ownerStep, baton) {
   }));
 }
 
-export function fanoutActivationWithRequests({ baton, ownerStepId, ownerStep }) {
-  return activationWithCurrentRequests(fanoutActivationForBaton({ baton, ownerStepId, ownerStep }));
+export function startFanoutActivationWithRequests({ baton, ownerStepId, ownerStep }) {
+  return activationWithCurrentRequests(startFanoutActivation({ baton, ownerStepId, ownerStep }));
+}
+
+export function currentFanoutActivationWithRequests({ baton, ownerStepId }) {
+  return activationWithCurrentRequests(currentFanoutActivation({ baton, ownerStepId }));
 }
 
 export function branchRecordForRequest(activation, requestId) {
