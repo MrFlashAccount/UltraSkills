@@ -5,7 +5,7 @@ Use this file when creating, rewriting, reviewing, or materially restructuring a
 Create Design is `Frontend-Taste` acting as design architect for repo design memory. It creates or edits design law, not frontend implementation.
 
 This workflow is approval-gated even for review-only passes.
-If the target mode or scope is still fuzzy, route first-pass discovery through `grill-me`, then come back here.
+If the target mode or scope is still fuzzy, answer discoverable questions through source audit first, then ask one blocking question at a time before continuing.
 
 ## Stage map
 
