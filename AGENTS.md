@@ -18,7 +18,7 @@
 - `shared/` holds reusable reference packages, not runtime skills.
 - Shared packages must not contain `SKILL.md`; keep them discoverable from `README.md` instead.
 - Every skill listed in `README.md` must include compact guidance in this exact shape: `What it is`, `Use when`, `Do not use when`.
-- Skills are simple atomic tools (`caveman`/`forthright`/`hat` style); multi-stage processes are workflows that describe the high-level process and roles they invoke.
+- Skills are simple atomic tools (`forthright`/`humanizer`/`hat` style); multi-stage processes are workflows that describe the high-level process and roles they invoke.
 - Do not describe a role as the essence of a skill; workflows orchestrate roles, and reusable roles live under `roles/`.
 - Roles are self-contained knowledge/thinking containers.
 - Use `hat <role>` when you need to converse or work through a role lens.

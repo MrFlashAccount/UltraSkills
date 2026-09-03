@@ -37,9 +37,12 @@ A migration is complete only when the workflow:
 ## Not migration targets
 
 - `orbita` is the host adapter and runtime entrypoint, not a task workflow.
-- `improve-codebase-architecture` is a legacy donor/reference skill routed to
-  `create-architecture`.
-- `grill-me`, `hat`, `caveman`, `forthright`, `humanizer`, and `obsidian` are
-  atomic conversational/domain tools without a multi-role
+- `hat`, `forthright`, and `humanizer` are atomic conversational/domain tools without a multi-role
   workflow contract. They should stay skills unless their contracts gain real
   runner-owned stages, gates, or durable outputs.
+
+## Removed standalone skills
+
+- `improve-codebase-architecture` was removed after its active behavior and reusable architecture guidance moved into the `create-architecture` workflow and Architect role.
+- `grill-me` was removed as a standalone conversational mode; workflows now own their own source-first clarification and ask one blocking question at a time.
+- `caveman` and `obsidian` were removed because they are no longer part of the maintained runtime catalog.

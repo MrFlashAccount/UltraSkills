@@ -216,11 +216,6 @@ Fresh clones can use the committed schema-validation library dist artifact direc
   - Use when: text is bloated and needs sharper wording.
   - Do not use when: the real issue is missing structure or unclear task intent.
 
-- `skills/caveman`
-  - What it is: ultra-compressed reply mode.
-  - Use when: the user wants short, blunt, token-efficient output.
-  - Do not use when: the reply needs nuance, safety wording, or normal tone.
-
 ### Marketing and go-to-market
 
 - `roles/marketing`
@@ -237,19 +232,9 @@ Fresh clones can use the committed schema-validation library dist artifact direc
   - Use when: driving a workflow-runner run through CLI-returned host requests, worker delegation, approval waits, and exact embedded continuation commands.
   - Do not use when: the task is ordinary implementation, planning, research, or review that does not run through workflow-runner.
 
-- `skills/grill-me`
-  - What it is: scoping/interrogation helper for unclear tasks.
-  - Use when: the real problem is still figuring out what should be built.
-  - Do not use when: the work is already scoped enough for `workflows/create-skill` or implementation.
-
 ### Frontend and architecture specialties
 
 React/Next.js best-practice guidance now lives under `roles/frontend/references/react-ui-patterns.md` and is loaded through the `frontend` role rather than a standalone skill.
-
-- `skills/improve-codebase-architecture`
-  - What it is: architecture improvement guidance and artifacts.
-  - Use when: the task is reorganizing structure, boundaries, or architecture records.
-  - Do not use when: the task is a tiny local fix with no architecture effect.
 
 ### Workflow and repo utilities
 
@@ -257,11 +242,6 @@ React/Next.js best-practice guidance now lives under `roles/frontend/references/
   - What it is: intake structure for GitHub issue work.
   - Use when: the task is turning issue context into actionable scoped work.
   - Do not use when: the task is generic writing or implementation already in flight.
-
-- `skills/obsidian`
-  - What it is: Obsidian-oriented workflow support.
-  - Use when: the task touches Obsidian notes/workflows.
-  - Do not use when: the task has nothing to do with that environment.
 
 ## Shared reference packages
 
