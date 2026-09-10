@@ -23,7 +23,7 @@ query=$1
 role=$(normalize_slug "$query")
 
 case "$role" in
-  ""|.|..|*[^a-z0-9-]*)
+  ""|.|..|*[!a-z0-9-]*)
     echo "invalid role: $query" >&2
     exit 2
     ;;
