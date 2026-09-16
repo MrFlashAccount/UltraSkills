@@ -53,20 +53,23 @@ Select only from public identity, summary, status, timestamps, task fingerprint,
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" create --workflow <absolute-catalog-path> --title '<title>' --summary '<summary>'
 ```
 
-Claim it:
+Without a token, claim:
 
 ```bash
 lease_token=$(bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" claim --run-id <run-id> --owner <owner> --harness <harness> --session-id <session-id> --print-lease-token)
 ```
 
-If claim reports `occupied` or `stale`, stop and tell the user that the run
-already has a lease from another holder. Offer a forced takeover by rerunning
-that exact claim command with `--takeover`; never force takeover without user
-approval.
-After approval, preserve the newly issued token because takeover invalidates
-the previous holder's token.
+The exact token renews even a `stale` lease without rotation:
 
-Preserve exact `runId` and `lease_token`; never expose or retype them. Missing token means claim again or report missing authority.
+```bash
+bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" heartbeat --run-id <run-id> --lease-token "$lease_token"
+```
+
+Never use takeover with a matching token. Without one, `occupied` or `stale`
+requires explicit user approval before rerunning the tokenless claim with
+`--takeover`; preserve the new token; it invalidates the previous one.
+
+Preserve exact `runId` and `lease_token`; never expose them.
 
 Only on explicit release, and never while a worker owns work:
 
