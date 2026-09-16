@@ -135,9 +135,9 @@ Only on explicit rollback request:
 
 ```bash
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" list-pointer-transitions --run-id <run-id> --lease-token "$lease_token"
-bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" move-pointer --run-id <run-id> --transition-id <id> --lease-token "$lease_token"
+bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" move-pointer --run-id <run-id> --transition-id <id> --feedback '<why repeat>' --lease-token "$lease_token"
 ```
 
-The list contains every valid predecessor present in `baton.state`, resolved from the current workflow and baton, never debug history or downstream steps. Choose the target and move once. The move re-enters it without acknowledgement: only that step's prior output and stop are invalidated; append-only and unrelated state stay. No match: report and stop. Never edit baton/history.
+List contains every valid predecessor present in `baton.state`; never debug history or downstream steps. Choose the target and move once. Feedback survives resume; another move replaces it and warns. It re-enters the target without acknowledgement: only that step's prior output and stop are invalidated; unrelated state stays. No match: stop. Never edit baton/history.
 
 On `done`, stop and report the terminal embedded JSON using its workflow-specific baton/projection; do not assume a generic `result` field.

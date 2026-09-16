@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   continueRun,
   listPointerTransitions,
+  loadInstructions,
   movePointer,
   next,
   reportStop,
@@ -253,6 +254,7 @@ test('pointer rollback re-enters an ordinary worker without treating its previou
   const moved = await movePointer({
     ...run,
     transitionId: listed.transitions[0].id,
+    feedback: 'Rework preparation with the implementation constraint.',
     now: new Date('2026-06-01T10:04:00.000Z'),
   });
   const afterMove = snapshot(run.paths);
@@ -260,6 +262,11 @@ test('pointer rollback re-enters an ordinary worker without treating its previou
   assert.equal(moved.current.cursor, 'prepare');
   assert.equal(afterMove.baton.cursor, 'prepare');
   assert.equal(afterMove.baton.status, 'running');
+  assert.deepEqual(afterMove.baton.pointerTransition, {
+    id: listed.transitions[0].id,
+    feedback: 'Rework preparation with the implementation constraint.',
+  });
+  assert.deepEqual(moved.warnings, []);
   assert.equal(Object.hasOwn(afterMove.baton.state, 'prepare'), false);
   assert.deepEqual(afterMove.baton.state.results, beforeMove.baton.state.results);
   assert.deepEqual(afterMove.baton.state.artifacts, beforeMove.baton.state.artifacts);
@@ -269,6 +276,7 @@ test('pointer rollback re-enters an ordinary worker without treating its previou
   assert.match(afterMove.history.slice(beforeMove.history.length), /source: workflow-runner-move-pointer/);
   assert.match(afterMove.history.slice(beforeMove.history.length), /pointer move:/);
   assert.match(afterMove.history.slice(beforeMove.history.length), /target position id:/);
+  assert.doesNotMatch(afterMove.history.slice(beforeMove.history.length), /Rework preparation with the implementation constraint/);
   assert.equal(afterMove.authority.status, 'needs_host_actions');
 
   await assert.rejects(
@@ -379,6 +387,7 @@ test('pointer rollback re-enters fanout with a fresh activation when upstream br
   await movePointer({
     ...run,
     transitionId: planTransition.id,
+    feedback: 'Select the fanout branches again using the new constraint.',
     now: new Date('2026-06-01T10:06:00.000Z'),
   });
 
@@ -489,6 +498,7 @@ test('pointer rollback re-enters shard work with fresh values from the new upstr
   await movePointer({
     ...run,
     transitionId: planTransition.id,
+    feedback: 'Select the shard values again using the new constraint.',
     now: new Date('2026-06-01T11:06:00.000Z'),
   });
 
@@ -563,6 +573,7 @@ test('runner pointer API move does not initialize missing state on rejected move
     () => movePointer({
       ...run,
       transitionId: 'ptr_missing',
+      feedback: 'Retry after recovering the missing state.',
       now: new Date('2026-06-01T10:01:00.000Z'),
     }),
     /missing baton/,
@@ -580,11 +591,11 @@ test('runner pointer API rejects stale transition ids and wrong leases without m
   await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared stale' });
   await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
   const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });
-  await movePointer({ ...run, transitionId: listed.transitions[0].id, now: new Date('2026-06-01T10:04:00.000Z') });
+  await movePointer({ ...run, transitionId: listed.transitions[0].id, feedback: 'Rework the stale preparation.', now: new Date('2026-06-01T10:04:00.000Z') });
   const beforeRejected = snapshot(run.paths);
 
   await assert.rejects(
-    () => movePointer({ ...run, transitionId: listed.transitions[0].id, now: new Date('2026-06-01T10:05:00.000Z') }),
+    () => movePointer({ ...run, transitionId: listed.transitions[0].id, feedback: 'This transition is stale.', now: new Date('2026-06-01T10:05:00.000Z') }),
     /stale, unavailable, or not a state-bearing predecessor/,
   );
   const afterStaleRejected = snapshot(run.paths);
@@ -597,7 +608,7 @@ test('runner pointer API rejects stale transition ids and wrong leases without m
     /workflow run is occupied/,
   );
   await assert.rejects(
-    () => movePointer({ ...run, leaseToken: 'wrong-token', transitionId: 'ptr_wrong', now: new Date('2026-06-01T10:05:00.000Z') }),
+    () => movePointer({ ...run, leaseToken: 'wrong-token', transitionId: 'ptr_wrong', feedback: 'Wrong authority must fail first.', now: new Date('2026-06-01T10:05:00.000Z') }),
     /workflow run is occupied/,
   );
 
@@ -625,12 +636,76 @@ test('runner pointer API allows rollback from terminal cursors', async () => {
   const terminalMoved = await movePointer({
     ...terminalRun,
     transitionId: prepareMove.id,
+    feedback: 'Rework preparation after terminal review.',
     now: new Date('2026-06-01T10:06:00.000Z'),
   });
   assert.equal(terminalMoved.current.cursor, 'prepare');
   assert.equal(terminalMoved.current.status, 'running');
   assert.equal(snapshot(terminalRun.paths).authority.status, 'needs_host_actions');
 
+});
+
+test('pointer rollback feedback survives resume and clears only after the re-entered step completes', async () => {
+  const run = await createClaimedRun('api-feedback-lifecycle');
+  await next({ ...run, now: new Date('2026-06-01T12:00:01.000Z') });
+  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared before rollback', now: new Date('2026-06-01T12:01:00.000Z') });
+  await continueRun({ ...run, now: new Date('2026-06-01T12:02:00.000Z') });
+  const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T12:03:00.000Z') });
+  const feedback = 'The implementation requires a bounded retry path. Revise the preparation.';
+
+  await assert.rejects(
+    () => movePointer({ ...run, transitionId: listed.transitions[0].id, now: new Date('2026-06-01T12:03:30.000Z') }),
+    /pointer transition feedback is required/,
+  );
+
+  await movePointer({
+    ...run,
+    transitionId: listed.transitions[0].id,
+    feedback,
+    now: new Date('2026-06-01T12:04:00.000Z'),
+  });
+  await next({ ...run, now: new Date('2026-06-01T12:05:00.000Z') });
+  const resumedInstructions = await loadInstructions({
+    ...run,
+    stepId: 'prepare',
+    now: new Date('2026-06-01T12:06:00.000Z'),
+  });
+  assert.match(resumedInstructions, /## Pointer rollback feedback/);
+  assert.match(resumedInstructions, new RegExp(feedback.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared after rollback', now: new Date('2026-06-01T12:07:00.000Z') });
+  assert.equal(snapshot(run.paths).baton.pointerTransition.feedback, feedback);
+
+  await continueRun({ ...run, now: new Date('2026-06-01T12:08:00.000Z') });
+  assert.equal(Object.hasOwn(snapshot(run.paths).baton, 'pointerTransition'), false);
+});
+
+test('a second pointer rollback overwrites the active feedback and returns a warning', async () => {
+  const run = await createClaimedRun('api-feedback-overwrite');
+  await next({ ...run, now: new Date('2026-06-01T13:00:01.000Z') });
+  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared', now: new Date('2026-06-01T13:01:00.000Z') });
+  await continueRun({ ...run, now: new Date('2026-06-01T13:02:00.000Z') });
+  await acceptCurrentWorkerOutput({ ...run, stepId: 'review', summary: 'reviewed', now: new Date('2026-06-01T13:03:00.000Z') });
+  await continueRun({ ...run, now: new Date('2026-06-01T13:04:00.000Z') });
+
+  const fromFinalize = await listPointerTransitions({ ...run, now: new Date('2026-06-01T13:05:00.000Z') });
+  const reviewMove = fromFinalize.transitions.find((transition) => transition.to.cursor === 'review');
+  assert.ok(reviewMove);
+  await movePointer({ ...run, transitionId: reviewMove.id, feedback: 'First feedback must be replaced.', now: new Date('2026-06-01T13:06:00.000Z') });
+
+  const fromReview = await listPointerTransitions({ ...run, now: new Date('2026-06-01T13:07:00.000Z') });
+  const prepareMove = fromReview.transitions.find((transition) => transition.to.cursor === 'prepare');
+  assert.ok(prepareMove);
+  const moved = await movePointer({ ...run, transitionId: prepareMove.id, feedback: 'Use the final implementation constraint.', now: new Date('2026-06-01T13:08:00.000Z') });
+
+  assert.deepEqual(moved.warnings, [`overwrote active pointer transition '${reviewMove.id}'`]);
+  assert.deepEqual(snapshot(run.paths).baton.pointerTransition, {
+    id: prepareMove.id,
+    feedback: 'Use the final implementation constraint.',
+  });
+  const instructions = await loadInstructions({ ...run, stepId: 'prepare', now: new Date('2026-06-01T13:09:00.000Z') });
+  assert.doesNotMatch(instructions, /First feedback must be replaced/);
+  assert.match(instructions, /Use the final implementation constraint/);
 });
 
 

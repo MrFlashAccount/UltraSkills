@@ -85,8 +85,11 @@ Binding rules:
   run-state boundary for consistency, but it must not initialize missing run
   state, append history, renew authority, or mutate baton/current pointer
   state. `movePointer` must use the existing lease, lock, recover, validate,
-  durable writer, history append, and per-run authority renewal path; it may change only
-  baton cursor/status plus persistence metadata owned by that path.
+  durable writer, history append, and per-run authority renewal path; it changes
+  baton cursor/status plus the single active top-level
+  `pointerTransition = { id, feedback }`. Feedback is durable across resume and projected into every
+  current instruction load until successful completion of the re-entered step
+  removes it. A new move replaces an existing active value with a warning.
 - Pointer recovery must never edit private run files directly or use an
   alternate manual state writer. It must not roll back, prune, rewrite, or clean
   `baton.state`, accepted outputs, artifacts/results, worker bindings, prompt
@@ -96,7 +99,9 @@ Binding rules:
 - `continue` owns transition and terminal history, and those history writes must stay atomic with baton transition durability. Retry/recovery must not duplicate, corrupt, or advance misleading history entries ahead of baton state.
 - `movePointer` owns pointer-recovery history entries. They must be append-only
   and atomic with the cursor/status update, recording bounded before/after
-  cursor/status edge, transition id, direction, and state-preservation fact.
+  cursor/status edge, transition id, direction, state-preservation fact, and
+  whether prior active pointer feedback was replaced. History must not copy the
+  feedback text.
   Existing history is never rewritten by pointer recovery.
 - Public command failure history may be appended only when a safe run directory, matching lease context, and managed history path are available. Record only exact relevant public error text after host-safe redaction, bounded after normalization to 2 KiB or 40 lines with a truncation marker. Unsafe or missing context means no history write.
 - History must never scrape or persist hidden host transcripts, session registries, private prompts, lease tokens, instruction storage paths, worker lifecycle state, or other host control-plane metadata.

@@ -537,7 +537,7 @@ export function createWorkflowRunnerCommand({
     return publicApiCall(() => listPointerTransitionsInternal(options), { ...options, command: 'list-pointer-transitions', recordFailure: false });
   }
 
-  async function movePointerInternal({ runId, workflowPath, transitionId, leaseToken, now = new Date(), runsRoot } = {}) {
+  async function movePointerInternal({ runId, workflowPath, transitionId, feedback, leaseToken, now = new Date(), runsRoot } = {}) {
     await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
     const lockPaths = resolveRunPaths({ runId, runsRoot });
     await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
@@ -551,6 +551,7 @@ export function createWorkflowRunnerCommand({
         workflow: runtime.workflow,
         baton: runtime.baton,
         transitionId,
+        feedback,
       });
       const { persistedResponse, response } = await renderStepEntryHostResponse(paths, resolved.baton, { leaseToken });
       await writePersistedRunStateUpdate(paths, {
@@ -560,7 +561,10 @@ export function createWorkflowRunnerCommand({
           source: 'workflow-runner-move-pointer',
           baton: persistedResponse.baton,
           output: `pointer:${resolved.transition.id}`,
-          details: pointerMoveHistoryDetails({ transition: resolved.transition }),
+          details: pointerMoveHistoryDetails({
+            transition: resolved.transition,
+            previousPointerTransitionId: resolved.previousPointerTransitionId,
+          }),
         },
       }, { currentState: current });
       await persistRenewedRunAuthority(paths, authority, { leaseToken, now, status: response.status });
@@ -572,6 +576,9 @@ export function createWorkflowRunnerCommand({
           cursor: persistedResponse.baton.cursor,
           status: persistedResponse.baton.status,
         },
+        warnings: resolved.previousPointerTransitionId
+          ? [`overwrote active pointer transition '${resolved.previousPointerTransitionId}'`]
+          : [],
       };
     });
   }

@@ -71,9 +71,12 @@ test('Orbita skill explains direct rollback to state-bearing workflow predecesso
   assert.match(skillText, /every valid predecessor present in `baton\.state`/);
   assert.match(skillText, /never debug history or downstream steps/);
   assert.match(skillText, /Choose the target and move once/);
-  assert.match(skillText, /re-enters it without acknowledgement/);
+  assert.match(skillText, /--feedback '<why repeat>'/);
+  assert.match(skillText, /Feedback survives resume/);
+  assert.match(skillText, /another move replaces it and warns/);
+  assert.match(skillText, /re-enters the target without acknowledgement/);
   assert.match(skillText, /only that step's prior output and stop are invalidated/);
-  assert.match(skillText, /append-only and unrelated state stay/);
+  assert.match(skillText, /unrelated state stays/);
   assert.doesNotMatch(skillText, /acknowledge-retained-state/);
 });
 

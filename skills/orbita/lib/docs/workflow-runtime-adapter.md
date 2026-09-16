@@ -76,7 +76,7 @@ bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" write-output --
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" continue --lease-token <token> --run-id <run-id> [--bind-agent <step-id=agent-id>...] [--orchestrator-debug-json <json> | --orchestrator-debug-file <path>] [--workflow <workflow-file>]
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" instructions [--follow-up] --run-id <run-id> --step-id <id> --lease-token <token>
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" list-pointer-transitions --lease-token <token> --run-id <run-id> [--workflow <workflow-file>]
-bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" move-pointer --run-id <run-id> --transition-id <id> --lease-token <token> [--workflow <workflow-file>]
+bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" move-pointer --run-id <run-id> --transition-id <id> --feedback <text> --lease-token <token> [--workflow <workflow-file>]
 ```
 
 `--workflow` accepts either a TOML or JSON workflow file. `next` and `continue` also accept `--only-instructions`; with that flag stdout is exactly the `orchestratorInstruction` text instead of the full JSON host response. `next` creates the run files if needed and returns the current host work. `write-output` validates and accepts one current request output directly into baton/state, then returns only acceptance JSON or validation errors; it does not accept `--only-instructions`, does not drive orchestrator navigation, and must not accept or mutate worker binding metadata. `continue` can also accept repeatable `--bind-agent <step-id=agent-id>` values and one orchestrator debug note through `--orchestrator-debug-json` or `--orchestrator-debug-file`; it records those runner-owned host side effects, applies already-accepted outputs from baton/state, persists the new baton, and returns the next host work.
@@ -105,7 +105,8 @@ unsupported reasons; it must not initialize
 missing run state, append history, update the run index, mutate baton/current
 pointer state, or emit raw baton, raw history, private paths, lease data, or
 token-bearing commands. `movePointer` accepts one listed state-resolved transition id
-and mutates only baton cursor/status through the existing lease, lock,
+plus bounded non-empty feedback and atomically mutates baton cursor/status and
+the single active top-level `pointerTransition = { id, feedback }` through the existing lease, lock,
 validation, durable writer, history append, and run-index path. One move may
 target any state-bearing predecessor of the current cursor. Debug history is
 never a navigation source. It
@@ -114,6 +115,11 @@ artifacts/results, worker bindings, prompt markers, attempts, or existing
 history. Terminal `done` runs may move backward to a state-bearing non-terminal
 predecessor; array cursors are invalid persisted state. Baton state is preserved
 without a separate acknowledgement gate.
+Current instructions render active pointer feedback from baton on every load and
+resume. Accepted output does not clear it; successful completion of the
+re-entered step does. A new move before completion replaces the active value and
+returns a warning. No collection of active or historical pointer feedback is
+stored in baton.
 
 Commands returned in host responses are rendered with the absolute path to `workflow-runner.mjs` and an explicit absolute `--runs-root`, quoted for shell execution, so a worker or host can run them from any current working directory. For human-authored commands, set `ORBITA_SKILL_ROOT` to the directory containing `skills/orbita/SKILL.md` and invoke CLI entrypoints through `$ORBITA_SKILL_ROOT/lib/entrypoints/cli/...`; do not rely on the current working directory.
 
@@ -363,7 +369,8 @@ History entries must preserve the public boundary: no hidden transcripts, sessio
 
 Pointer recovery history is append-only and bounded. A successful `movePointer`
 entry records the transition id, direction, before/after cursor/status edge, and
-retained-output step ids or `none`. State preservation is enforced by the
+whether active pointer feedback was replaced, but never copies feedback text.
+State preservation is enforced by the
 pointer-only mutation boundary and validation, not by copying full state into the
 history entry. The entry must not copy full accepted outputs, raw baton/history,
 private paths, lease tokens, or token hashes. Existing history content is never

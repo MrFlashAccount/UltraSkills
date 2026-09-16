@@ -40,9 +40,11 @@ workflow predecessors. Their shell-facing CLI modes are `list-pointer-transition
 logical read: it may use the run-state boundary for consistency, but it must not
 initialize missing run state, append history, renew authority, or mutate the
 baton/current pointer. It is not an unleased public read because it exposes
-bounded pointer recovery metadata. `movePointer` mutates only
-baton cursor/status through the existing lease, lock, validation, durable writer,
-history, and per-run authority path, then re-enters the target step. Re-entry
+bounded pointer recovery metadata. `movePointer` requires bounded non-empty
+feedback and atomically writes baton cursor/status plus one top-level
+`pointerTransition = { id, feedback }` through the existing lease, lock,
+validation, durable writer, history, and per-run authority path, then re-enters
+the target step. Re-entry
 invalidates only that step's previous execution output and non-blocking stop;
 append-only artifacts/results/history and unrelated step state, worker bindings,
 prompt markers, attempts, and loop progress remain intact. A move may target any state-bearing
@@ -54,6 +56,12 @@ a state-bearing non-terminal predecessor; terminal status must not by itself mak
 recovery unsupported. Array cursors are rejected by the baton schema and cannot
 enter pointer recovery.
 Pointer moves re-enter the target without an extra acknowledgement gate.
+Every current instruction projection includes the active pointer feedback, so
+resume after any pause preserves the rollback reason. The accepted output alone
+does not clear it. Successful completion of the re-entered step removes
+`pointerTransition`. A new pointer move before completion replaces
+the existing value and returns a warning; the baton never retains multiple
+active pointer transitions or a pointer-transition event history.
 
 Retired surfaces:
 

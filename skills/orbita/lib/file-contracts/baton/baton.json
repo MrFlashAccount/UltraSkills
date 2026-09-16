@@ -109,6 +109,27 @@
       },
       "additionalProperties": false
     },
+    "pointerTransition": {
+      "description": "The single active pointer rollback context. A new move overwrites the previous value with a warning; successful completion of the re-entered step removes it.",
+      "type": "object",
+      "required": [
+        "id",
+        "feedback"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^ptr_[0-9a-f]{24}$"
+        },
+        "feedback": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        }
+      },
+      "additionalProperties": false
+    },
     "user_prompt": {
       "description": "Raw run-level startup user prompt captured when the workflow run is initialized. Immutable after start/resume.",
       "type": "string",

@@ -10,7 +10,9 @@ export function applyNextTransition({ workflow, baton, cursorStep, workerOutput,
     stepId,
   });
   const applied = cursor.applyOutput({ workflow, baton: batonWithPromptMarker, output: workerOutput });
-  const response = responseForStepEntry(applied.baton, workflow);
+  const completedBaton = { ...applied.baton };
+  delete completedBaton.pointerTransition;
+  const response = responseForStepEntry(completedBaton, workflow);
   const updatedBaton = validateSelectedStartupUserPromptTarget({
     workflow,
     baton: response.baton,
