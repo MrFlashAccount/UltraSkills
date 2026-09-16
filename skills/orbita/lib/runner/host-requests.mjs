@@ -11,6 +11,7 @@ import { publicNonBlockingStopDetails } from '../runtime/non-blocking-stop.mjs';
 import { projectHostActions, RESOLVE_NON_BLOCKING_STOP_ACTION } from '../runtime/host-action-plan.mjs';
 import { renderApprovalInstructions } from '../runtime/approval-contract.mjs';
 import { assertRunnerHostResponseSchema } from '../persistence/run-state/schema/runner-host-response-schema.mjs';
+import { appendPointerTransitionFeedback } from './pointer-transition-instructions.mjs';
 
 const TERMINAL_ACTIONS = new Set(['stop_done']);
 const SUPERSEDES_STDOUT_INSTRUCTION = 'Supersedes all previous workflow-runner stdout.';
@@ -201,7 +202,7 @@ export function approvalInstructionsForEntry(entry, {
   runsRoot,
   leaseToken,
 } = {}) {
-  return renderApprovalInstructions({
+  return appendPointerTransitionFeedback(renderApprovalInstructions({
     baton,
     stepId: entry.id,
     step: entry.step,
@@ -209,7 +210,7 @@ export function approvalInstructionsForEntry(entry, {
     writeOutputCommand: writeOutputCommandForStep(runId, entry.id, { runsRoot, leaseToken }),
     continueCommand: continueCommandForRequests(runId, requests, { runsRoot, leaseToken }),
     nonBlockingStop: nonBlockingStopForStep(baton, entry.id, { runsRoot }),
-  });
+  }), baton, workflowStepIdForExecutableStep(entry));
 }
 
 function inlineApprovalInstructions(interpreterResponse, requests, options) {

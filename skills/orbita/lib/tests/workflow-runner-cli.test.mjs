@@ -344,10 +344,22 @@ test('runner CLI: pointer commands validate mode-specific arguments', async () =
     '--workflow', workflowPath,
     '--lease-token', leaseToken,
     '--transition-id', listed.transitions[0].id,
+    '--feedback', 'Rework preparation.',
     '--acknowledge-retained-state',
   ], { cwd: root, encoding: 'utf8', env: process.env });
   assert.notEqual(removedAcknowledgement.status, 0);
   assert.match(removedAcknowledgement.stderr, /usage:/);
+
+  const missingFeedback = spawnSync(process.execPath, [
+    'skills/orbita/lib/entrypoints/cli/workflow-runner.mjs',
+    'move-pointer',
+    '--run-id', runId,
+    '--workflow', workflowPath,
+    '--lease-token', leaseToken,
+    '--transition-id', listed.transitions[0].id,
+  ], { cwd: root, encoding: 'utf8', env: process.env });
+  assert.notEqual(missingFeedback.status, 0);
+  assert.match(missingFeedback.stderr, /usage:/);
 
   const move = spawnSync(process.execPath, [
     'skills/orbita/lib/entrypoints/cli/workflow-runner.mjs',
@@ -356,6 +368,7 @@ test('runner CLI: pointer commands validate mode-specific arguments', async () =
     '--workflow', workflowPath,
     '--lease-token', leaseToken,
     '--transition-id', listed.transitions[0].id,
+    '--feedback', 'Rework preparation for the implementation constraint.',
   ], { cwd: root, encoding: 'utf8', env: process.env });
   assert.equal(move.status, 0, move.stderr);
   assert.equal(JSON.parse(move.stdout).current.cursor, 'prepare');
@@ -367,6 +380,7 @@ test('runner CLI: pointer commands validate mode-specific arguments', async () =
     '--workflow', workflowPath,
     '--lease-token', leaseToken,
     '--target-position-id', listed.transitions[0].id,
+    '--feedback', 'Rework preparation.',
   ], { cwd: root, encoding: 'utf8', env: process.env });
   assert.notEqual(targetAliasMove.status, 0);
   assert.match(targetAliasMove.stderr, /usage:/);

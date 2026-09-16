@@ -14,6 +14,24 @@ import { applyLoopPolicyTransition } from '../runtime/loop-policies.mjs';
 import { statusForStep } from '../runtime/step-status.mjs';
 
 const TERMINAL_STATUSES = new Set(['done']);
+const POINTER_TRANSITION_FEEDBACK_MAX_LENGTH = 4_096;
+
+function normalizePointerTransitionFeedback(feedback) {
+  if (typeof feedback !== 'string' || feedback.trim().length === 0) {
+    throw new WorkflowRuntimeError('pointer transition feedback is required');
+  }
+  const normalized = feedback.trim();
+  let characterCount = 0;
+  const characters = normalized[Symbol.iterator]();
+  while (!characters.next().done) {
+    characterCount += 1;
+    if (characterCount > POINTER_TRANSITION_FEEDBACK_MAX_LENGTH) break;
+  }
+  if (characterCount > POINTER_TRANSITION_FEEDBACK_MAX_LENGTH) {
+    throw new WorkflowRuntimeError(`pointer transition feedback must be at most ${POINTER_TRANSITION_FEEDBACK_MAX_LENGTH} characters`);
+  }
+  return normalized;
+}
 
 function cursorDisplay(cursor) {
   return cursor;
@@ -21,7 +39,7 @@ function cursorDisplay(cursor) {
 
 function pointerPosition(cursor, status) {
   return {
-    cursor: structuredClone(cursor),
+    cursor,
     status,
     display: cursorDisplay(cursor),
   };
@@ -115,7 +133,7 @@ export function projectPointerTransitions({ workflow, baton } = {}) {
   return { current, transitions };
 }
 
-export function resolvePointerMove({ workflow, baton, transitionId: requestedTransitionId } = {}) {
+export function resolvePointerMove({ workflow, baton, transitionId: requestedTransitionId, feedback } = {}) {
   if (typeof requestedTransitionId !== 'string' || requestedTransitionId.length === 0) {
     throw new Error('pointer transition id is required');
   }
@@ -127,14 +145,27 @@ export function resolvePointerMove({ workflow, baton, transitionId: requestedTra
   if (!transition) {
     throw new Error('pointer transition is stale, unavailable, or not a state-bearing predecessor of the current cursor');
   }
-  const nextBaton = structuredClone(baton);
-  nextBaton.cursor = structuredClone(transition.to.cursor);
-  nextBaton.status = transition.to.status;
+  const normalizedFeedback = normalizePointerTransitionFeedback(feedback);
+  const overwrittenPointerTransitionId = Object.hasOwn(baton.pointerTransitions ?? {}, transition.id)
+    ? transition.id
+    : undefined;
+  const nextBaton = {
+    ...baton,
+    cursor: transition.to.cursor,
+    status: transition.to.status,
+    pointerTransitions: {
+      ...(baton.pointerTransitions ?? {}),
+      [transition.id]: {
+        targetStepId: normalizeCursor(transition.to.cursor),
+        feedback: normalizedFeedback,
+      },
+    },
+  };
   new Baton(nextBaton).validateAgainst(workflow);
-  return { projection, transition, baton: nextBaton };
+  return { projection, transition, baton: nextBaton, overwrittenPointerTransitionId };
 }
 
-export function pointerMoveHistoryDetails({ transition } = {}) {
+export function pointerMoveHistoryDetails({ transition, overwrittenPointerTransitionId } = {}) {
   if (!transition) throw new WorkflowRuntimeError('pointer move history requires a transition');
   return [
     `- pointer move: id=${transition.id} direction=${transition.direction}`,
@@ -142,5 +173,7 @@ export function pointerMoveHistoryDetails({ transition } = {}) {
     `- pointer move edge: cursor=${transition.from.display} status=${transition.from.status} -> cursor=${transition.to.display} status=${transition.to.status}`,
     '- append-only history preserved: true',
     '- target step re-entered from current baton: true',
+    `- pointer feedback recorded in baton: true`,
+    ...(overwrittenPointerTransitionId ? [`- existing pointer transition overwritten: id=${overwrittenPointerTransitionId}`] : []),
   ];
 }

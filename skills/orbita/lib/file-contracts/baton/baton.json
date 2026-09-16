@@ -109,6 +109,34 @@
       },
       "additionalProperties": false
     },
+    "pointerTransitions": {
+      "description": "Unresolved pointer rollback contexts keyed by deterministic pointer transition id. Each target step receives only its entries; successful completion removes every entry targeting that step.",
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^ptr_[0-9a-f]{24}$": {
+          "type": "object",
+          "required": [
+            "targetStepId",
+            "feedback"
+          ],
+          "properties": {
+            "targetStepId": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+            },
+            "feedback": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "\\S"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "user_prompt": {
       "description": "Raw run-level startup user prompt captured when the workflow run is initialized. Immutable after start/resume.",
       "type": "string",

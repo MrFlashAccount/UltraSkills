@@ -12,6 +12,7 @@ import { resolveRunPaths } from '../persistence/run-state/paths.mjs';
 import { writePersistedRunStateUpdate } from '../persistence/run-state/PersistedRunStateWriter.mjs';
 import { withRunStateLock } from '../persistence/run-state/lock.mjs';
 import { durableFileSignature } from '../persistence/run-state/file-signature.mjs';
+import { Baton } from '../entities/Baton/index.mjs';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'persisted-run-state-'));
 
@@ -46,6 +47,17 @@ function response(nextBaton = baton()) {
     ],
   };
 }
+
+const workflow = {
+  name: 'persisted-state-test',
+  version: 1,
+  start: 'prepare',
+  done: 'done',
+  steps: {
+    prepare: { name: 'Prepare', kind: 'worker', next: 'done' },
+    done: { name: 'Done', kind: 'done' },
+  },
+};
 
 function setupRunDir(name, initialBaton = baton()) {
   const runId = `persisted-state-test-${process.pid}-${name}`;
@@ -87,6 +99,40 @@ test('persisted-state reader validates logical aggregate over split files', asyn
   assert.equal(persisted.storageTopology, 'split-files-v1');
   assert.equal(persisted.baton.cursor, 'prepare');
   assert.equal(persisted.history.mode, 'embedded-text');
+});
+
+test('persisted-state reader rejects a present empty pointer transition collection', async () => {
+  const paths = setupRunDir('empty_pointer_transitions', baton({ pointerTransitions: {} }));
+
+  await assert.rejects(() => readPersistedRunState(paths), /baton/);
+});
+
+test('persisted baton semantic validation rejects missing and terminal pointer transition targets', async () => {
+  const cases = [
+    {
+      name: 'missing_pointer_target',
+      transitionId: 'ptr_000000000000000000000001',
+      targetStepId: 'missing',
+      expected: /targetStepId 'missing' does not reference a workflow step/,
+    },
+    {
+      name: 'terminal_pointer_target',
+      transitionId: 'ptr_000000000000000000000002',
+      targetStepId: 'done',
+      expected: /targetStepId 'done' references a terminal workflow step/,
+    },
+  ];
+
+  for (const entry of cases) {
+    const paths = setupRunDir(entry.name, baton({
+      pointerTransitions: {
+        [entry.transitionId]: { targetStepId: entry.targetStepId, feedback: 'Persisted feedback.' },
+      },
+    }));
+    const persisted = await readPersistedRunState(paths);
+
+    assert.throws(() => new Baton(persisted.baton).validateAgainst(workflow), entry.expected);
+  }
 });
 
 test('persisted-state reader can retain only a file reference and byte size for history', async () => {

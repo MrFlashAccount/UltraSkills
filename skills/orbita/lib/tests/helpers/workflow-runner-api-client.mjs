@@ -110,6 +110,7 @@ export async function runWorkflowRunnerApi(args, options = {}) {
       const response = await movePointer({
         ...common,
         transitionId: valueAfter(args, '--transition-id'),
+        feedback: valueAfter(args, '--feedback'),
       });
       return { status: 0, stdout: jsonStdout(response), stderr: '' };
     }

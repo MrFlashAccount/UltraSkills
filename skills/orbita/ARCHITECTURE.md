@@ -40,9 +40,11 @@ workflow predecessors. Their shell-facing CLI modes are `list-pointer-transition
 logical read: it may use the run-state boundary for consistency, but it must not
 initialize missing run state, append history, renew authority, or mutate the
 baton/current pointer. It is not an unleased public read because it exposes
-bounded pointer recovery metadata. `movePointer` mutates only
-baton cursor/status through the existing lease, lock, validation, durable writer,
-history, and per-run authority path, then re-enters the target step. Re-entry
+bounded pointer recovery metadata. `movePointer` requires bounded non-empty
+feedback and atomically writes baton cursor/status plus one entry in top-level
+`pointerTransitions[transitionId] = { targetStepId, feedback }` through the existing lease, lock,
+validation, durable writer, history, and per-run authority path, then re-enters
+the target step. Re-entry
 invalidates only that step's previous execution output and non-blocking stop;
 append-only artifacts/results/history and unrelated step state, worker bindings,
 prompt markers, attempts, and loop progress remain intact. A move may target any state-bearing
@@ -54,6 +56,13 @@ a state-bearing non-terminal predecessor; terminal status must not by itself mak
 recovery unsupported. Array cursors are rejected by the baton schema and cannot
 enter pointer recovery.
 Pointer moves re-enter the target without an extra acknowledgement gate.
+Every current worker and inline-approval instruction projection includes only
+unresolved pointer feedback whose `targetStepId` matches that step, so nested
+rollbacks and resume after any pause preserve each rollback reason. Accepted
+output alone does not clear feedback. Successful completion of a target step
+removes all matching entries and preserves entries for other targets. Reusing
+an active transition id replaces only that entry and returns a warning.
+`pointerTransitions` is unresolved current state, not a transition event history.
 
 Retired surfaces:
 
@@ -448,8 +457,8 @@ transition projection, and returns bounded transition metadata
 without initializing missing run files, appending history, renewing authority,
 or mutating baton/current pointer state. `movePointer` checks the active lease
 before and inside the run-state lock, rebuilds the projection while locked,
-validates the requested state-resolved target, updates only baton
-cursor/status, validates persisted state, appends bounded pointer-move history,
+validates the requested state-resolved target, updates baton cursor/status and
+the addressed `pointerTransitions` entry, validates persisted state, appends bounded pointer-move history,
 and renews the canonical per-run authority record.
 
 ## Fanout Owner Step

@@ -253,6 +253,7 @@ test('pointer rollback re-enters an ordinary worker without treating its previou
   const moved = await movePointer({
     ...run,
     transitionId: listed.transitions[0].id,
+    feedback: 'Rework preparation with the implementation constraint.',
     now: new Date('2026-06-01T10:04:00.000Z'),
   });
   const afterMove = snapshot(run.paths);
@@ -260,6 +261,13 @@ test('pointer rollback re-enters an ordinary worker without treating its previou
   assert.equal(moved.current.cursor, 'prepare');
   assert.equal(afterMove.baton.cursor, 'prepare');
   assert.equal(afterMove.baton.status, 'running');
+  assert.deepEqual(afterMove.baton.pointerTransitions, {
+    [listed.transitions[0].id]: {
+      targetStepId: 'prepare',
+      feedback: 'Rework preparation with the implementation constraint.',
+    },
+  });
+  assert.deepEqual(moved.warnings, []);
   assert.equal(Object.hasOwn(afterMove.baton.state, 'prepare'), false);
   assert.deepEqual(afterMove.baton.state.results, beforeMove.baton.state.results);
   assert.deepEqual(afterMove.baton.state.artifacts, beforeMove.baton.state.artifacts);
@@ -269,6 +277,7 @@ test('pointer rollback re-enters an ordinary worker without treating its previou
   assert.match(afterMove.history.slice(beforeMove.history.length), /source: workflow-runner-move-pointer/);
   assert.match(afterMove.history.slice(beforeMove.history.length), /pointer move:/);
   assert.match(afterMove.history.slice(beforeMove.history.length), /target position id:/);
+  assert.doesNotMatch(afterMove.history.slice(beforeMove.history.length), /Rework preparation with the implementation constraint/);
   assert.equal(afterMove.authority.status, 'needs_host_actions');
 
   await assert.rejects(
@@ -379,6 +388,7 @@ test('pointer rollback re-enters fanout with a fresh activation when upstream br
   await movePointer({
     ...run,
     transitionId: planTransition.id,
+    feedback: 'Select the fanout branches again using the new constraint.',
     now: new Date('2026-06-01T10:06:00.000Z'),
   });
 
@@ -489,6 +499,7 @@ test('pointer rollback re-enters shard work with fresh values from the new upstr
   await movePointer({
     ...run,
     transitionId: planTransition.id,
+    feedback: 'Select the shard values again using the new constraint.',
     now: new Date('2026-06-01T11:06:00.000Z'),
   });
 
@@ -563,6 +574,7 @@ test('runner pointer API move does not initialize missing state on rejected move
     () => movePointer({
       ...run,
       transitionId: 'ptr_missing',
+      feedback: 'Retry after recovering the missing state.',
       now: new Date('2026-06-01T10:01:00.000Z'),
     }),
     /missing baton/,
@@ -574,17 +586,38 @@ test('runner pointer API move does not initialize missing state on rejected move
   }, before);
 });
 
+test('runner pointer API rejects whitespace-only feedback without mutating durable state or lease authority', async () => {
+  const run = await createClaimedRun('api-whitespace-feedback');
+  await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
+  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared whitespace check' });
+  await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
+  const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });
+  const beforeRejected = snapshot(run.paths);
+
+  await assert.rejects(
+    () => movePointer({
+      ...run,
+      transitionId: listed.transitions[0].id,
+      feedback: ' \n\t ',
+      now: new Date('2026-06-01T10:04:00.000Z'),
+    }),
+    /pointer transition feedback is required/,
+  );
+
+  assert.deepEqual(snapshot(run.paths), beforeRejected);
+});
+
 test('runner pointer API rejects stale transition ids and wrong leases without mutation', async () => {
   const run = await createClaimedRun('api-stale');
   await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
   await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared stale' });
   await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
   const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });
-  await movePointer({ ...run, transitionId: listed.transitions[0].id, now: new Date('2026-06-01T10:04:00.000Z') });
+  await movePointer({ ...run, transitionId: listed.transitions[0].id, feedback: 'Rework the stale preparation.', now: new Date('2026-06-01T10:04:00.000Z') });
   const beforeRejected = snapshot(run.paths);
 
   await assert.rejects(
-    () => movePointer({ ...run, transitionId: listed.transitions[0].id, now: new Date('2026-06-01T10:05:00.000Z') }),
+    () => movePointer({ ...run, transitionId: listed.transitions[0].id, feedback: 'This transition is stale.', now: new Date('2026-06-01T10:05:00.000Z') }),
     /stale, unavailable, or not a state-bearing predecessor/,
   );
   const afterStaleRejected = snapshot(run.paths);
@@ -597,7 +630,7 @@ test('runner pointer API rejects stale transition ids and wrong leases without m
     /workflow run is occupied/,
   );
   await assert.rejects(
-    () => movePointer({ ...run, leaseToken: 'wrong-token', transitionId: 'ptr_wrong', now: new Date('2026-06-01T10:05:00.000Z') }),
+    () => movePointer({ ...run, leaseToken: 'wrong-token', transitionId: 'ptr_wrong', feedback: 'Wrong authority must fail first.', now: new Date('2026-06-01T10:05:00.000Z') }),
     /workflow run is occupied/,
   );
 
@@ -625,6 +658,7 @@ test('runner pointer API allows rollback from terminal cursors', async () => {
   const terminalMoved = await movePointer({
     ...terminalRun,
     transitionId: prepareMove.id,
+    feedback: 'Rework preparation after terminal review.',
     now: new Date('2026-06-01T10:06:00.000Z'),
   });
   assert.equal(terminalMoved.current.cursor, 'prepare');
@@ -632,7 +666,6 @@ test('runner pointer API allows rollback from terminal cursors', async () => {
   assert.equal(snapshot(terminalRun.paths).authority.status, 'needs_host_actions');
 
 });
-
 
 test('dashboard boundary stays read-only and does not import pointer recovery commands', () => {
   const dashboardFiles = [

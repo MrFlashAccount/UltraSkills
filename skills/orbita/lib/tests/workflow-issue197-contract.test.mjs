@@ -68,12 +68,15 @@ test('Orbita skill releases a lease only through the explicit matching-token com
 
 test('Orbita skill explains direct rollback to state-bearing workflow predecessors', () => {
   const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
-  assert.match(skillText, /every valid predecessor present in `baton\.state`/);
-  assert.match(skillText, /never debug history or downstream steps/);
-  assert.match(skillText, /Choose the target and move once/);
-  assert.match(skillText, /re-enters it without acknowledgement/);
-  assert.match(skillText, /only that step's prior output and stop are invalidated/);
-  assert.match(skillText, /append-only and unrelated state stay/);
+  assert.match(skillText, /state-backed predecessors only/);
+  assert.match(skillText, /Choose once/);
+  assert.match(skillText, /--feedback '<why repeat>'/);
+  assert.match(skillText, /`pointerTransitions` keeps feedback by id across resume/);
+  assert.match(skillText, /Only its target gets it, including inline approvals/);
+  assert.match(skillText, /Same id replaces itself and warns/);
+  assert.match(skillText, /Target done removes its entries; other feedback stays/);
+  assert.match(skillText, /Re-entry needs no acknowledgement/);
+  assert.match(skillText, /invalidates only target output\/stop/);
   assert.doesNotMatch(skillText, /acknowledge-retained-state/);
 });
 

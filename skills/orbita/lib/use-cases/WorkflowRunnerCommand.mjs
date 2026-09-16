@@ -1,6 +1,7 @@
 import { createWorkflowRunnerCurrentState } from './WorkflowRunnerCommand/current-state.mjs';
 import { createWorkflowRunnerInputSupport } from './WorkflowRunnerCommand/input-support.mjs';
 import { createWorkflowRunnerPublicApi } from './WorkflowRunnerCommand/public-api.mjs';
+import { createWorkflowRunnerPointerRecovery } from './WorkflowRunnerCommand/pointer-recovery.mjs';
 
 export function createWorkflowRunnerCommand({
   readFile,
@@ -516,69 +517,24 @@ export function createWorkflowRunnerCommand({
     return publicApiCall(() => continueRunInternal(options), { ...options, command: 'continue' });
   }
 
-  async function listPointerTransitionsInternal({ runId, workflowPath, leaseToken, now = new Date(), runsRoot } = {}) {
-    await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
-    const lockPaths = resolveRunPaths({ runId, runsRoot });
-    await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
-    const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
-    await assertWorkerLeaseAuthority(paths, { leaseToken, now });
-    const current = await readPersistedRunState(paths, { includeHistoryText: false });
-    const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
-    return {
-      runId: paths.runId,
-      ...projectPointerTransitions({
-        workflow: runtime.workflow,
-        baton: runtime.baton,
-      }),
-    };
-  }
-
-  async function listPointerTransitions(options = {}) {
-    return publicApiCall(() => listPointerTransitionsInternal(options), { ...options, command: 'list-pointer-transitions', recordFailure: false });
-  }
-
-  async function movePointerInternal({ runId, workflowPath, transitionId, leaseToken, now = new Date(), runsRoot } = {}) {
-    await migrateLegacyWorkflowRunsRootIfNeeded(runsRoot);
-    const lockPaths = resolveRunPaths({ runId, runsRoot });
-    await assertPreLockWorkerLeaseAuthority(lockPaths, { leaseToken, now });
-    return withRunStateLock(lockPaths, async () => {
-      const paths = await resolveContinueRunPaths({ runId, workflowPath, runsRoot });
-      const authority = await assertWorkerLeaseAuthority(paths, { leaseToken, now });
-      await recoverDurableCommit(paths);
-      const current = await readPersistedRunState(paths, { includeHistoryText: false });
-      const runtime = loadWorkflowRuntime({ workflowPath: paths.workflowPath, batonPath: paths.batonPath, baton: current.baton });
-      const resolved = resolvePointerMove({
-        workflow: runtime.workflow,
-        baton: runtime.baton,
-        transitionId,
-      });
-      const { persistedResponse, response } = await renderStepEntryHostResponse(paths, resolved.baton, { leaseToken });
-      await writePersistedRunStateUpdate(paths, {
-        baton: persistedResponse.baton,
-        currentRequests: persistedResponse.requests ?? [],
-        history: {
-          source: 'workflow-runner-move-pointer',
-          baton: persistedResponse.baton,
-          output: `pointer:${resolved.transition.id}`,
-          details: pointerMoveHistoryDetails({ transition: resolved.transition }),
-        },
-      }, { currentState: current });
-      await persistRenewedRunAuthority(paths, authority, { leaseToken, now, status: response.status });
-      return {
-        ok: true,
-        runId: paths.runId,
-        moved: resolved.transition,
-        current: {
-          cursor: persistedResponse.baton.cursor,
-          status: persistedResponse.baton.status,
-        },
-      };
-    });
-  }
-
-  async function movePointer(options = {}) {
-    return publicApiCall(() => movePointerInternal(options), { ...options, command: 'move-pointer', recordFailure: false });
-  }
+  const { listPointerTransitions, movePointer } = createWorkflowRunnerPointerRecovery({
+    migrateLegacyWorkflowRunsRootIfNeeded,
+    resolveRunPaths,
+    assertPreLockWorkerLeaseAuthority,
+    resolveContinueRunPaths,
+    assertWorkerLeaseAuthority,
+    readPersistedRunState,
+    loadWorkflowRuntime,
+    projectPointerTransitions,
+    withRunStateLock,
+    recoverDurableCommit,
+    resolvePointerMove,
+    renderStepEntryHostResponse,
+    writePersistedRunStateUpdate,
+    pointerMoveHistoryDetails,
+    persistRenewedRunAuthority,
+    publicApiCall,
+  });
 
   const {
     applyWorkerBindingsForContinue,

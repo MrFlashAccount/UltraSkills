@@ -87,6 +87,34 @@ test('Baton schema and semantic validation accept loop counters only', () => {
   );
 });
 
+test('Baton semantic validation accepts only non-terminal pointer transition targets in the workflow', () => {
+  const transitionId = 'ptr_000000000000000000000001';
+  const valid = baton({
+    pointerTransitions: {
+      [transitionId]: { targetStepId: 'worker', feedback: 'Rework the worker step.' },
+    },
+  });
+  assert.doesNotThrow(() => assertBatonSchema(valid));
+  assert.deepEqual(new Baton(valid).validateAgainst(workflow), { ok: true });
+
+  assert.throws(
+    () => new Baton(baton({
+      pointerTransitions: {
+        [transitionId]: { targetStepId: 'missing', feedback: 'This target does not exist.' },
+      },
+    })).validateAgainst(workflow),
+    /pointerTransitions\.ptr_000000000000000000000001\.targetStepId 'missing' does not reference a workflow step/,
+  );
+  assert.throws(
+    () => new Baton(baton({
+      pointerTransitions: {
+        [transitionId]: { targetStepId: 'done', feedback: 'A terminal step cannot consume feedback.' },
+      },
+    })).validateAgainst(workflow),
+    /pointerTransitions\.ptr_000000000000000000000001\.targetStepId 'done' references a terminal workflow step/,
+  );
+});
+
 
 test('Baton aggregate artifact merge keys by producer step id and artifact id', () => {
   const entity = new Baton(baton({
