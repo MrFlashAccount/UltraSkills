@@ -106,7 +106,7 @@ missing run state, append history, update the run index, mutate baton/current
 pointer state, or emit raw baton, raw history, private paths, lease data, or
 token-bearing commands. `movePointer` accepts one listed state-resolved transition id
 plus bounded non-empty feedback and atomically mutates baton cursor/status and
-the single active top-level `pointerTransition = { id, feedback }` through the existing lease, lock,
+`pointerTransitions[transitionId] = { targetStepId, feedback }` through the existing lease, lock,
 validation, durable writer, history append, and run-index path. One move may
 target any state-bearing predecessor of the current cursor. Debug history is
 never a navigation source. It
@@ -115,11 +115,12 @@ artifacts/results, worker bindings, prompt markers, attempts, or existing
 history. Terminal `done` runs may move backward to a state-bearing non-terminal
 predecessor; array cursors are invalid persisted state. Baton state is preserved
 without a separate acknowledgement gate.
-Current instructions render active pointer feedback from baton on every load and
-resume. Accepted output does not clear it; successful completion of the
-re-entered step does. A new move before completion replaces the active value and
-returns a warning. No collection of active or historical pointer feedback is
-stored in baton.
+Current worker and inline-approval instructions render only unresolved pointer
+feedback targeting that workflow step on every load and resume. Accepted output
+does not clear it; successful completion removes all entries for that target and
+preserves entries for other targets. Reusing an active transition id replaces
+only that entry and returns a warning. The collection is current unresolved
+state, not historical pointer feedback.
 
 Commands returned in host responses are rendered with the absolute path to `workflow-runner.mjs` and an explicit absolute `--runs-root`, quoted for shell execution, so a worker or host can run them from any current working directory. For human-authored commands, set `ORBITA_SKILL_ROOT` to the directory containing `skills/orbita/SKILL.md` and invoke CLI entrypoints through `$ORBITA_SKILL_ROOT/lib/entrypoints/cli/...`; do not rely on the current working directory.
 
@@ -369,7 +370,7 @@ History entries must preserve the public boundary: no hidden transcripts, sessio
 
 Pointer recovery history is append-only and bounded. A successful `movePointer`
 entry records the transition id, direction, before/after cursor/status edge, and
-whether active pointer feedback was replaced, but never copies feedback text.
+whether that transition id's active feedback was replaced, but never copies feedback text.
 State preservation is enforced by the
 pointer-only mutation boundary and validation, not by copying full state into the
 history entry. The entry must not copy full accepted outputs, raw baton/history,

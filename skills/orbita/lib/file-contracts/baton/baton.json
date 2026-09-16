@@ -109,23 +109,30 @@
       },
       "additionalProperties": false
     },
-    "pointerTransition": {
-      "description": "The single active pointer rollback context. A new move overwrites the previous value with a warning; successful completion of the re-entered step removes it.",
+    "pointerTransitions": {
+      "description": "Unresolved pointer rollback contexts keyed by deterministic pointer transition id. Each target step receives only its entries; successful completion removes every entry targeting that step.",
       "type": "object",
-      "required": [
-        "id",
-        "feedback"
-      ],
-      "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^ptr_[0-9a-f]{24}$"
-        },
-        "feedback": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096,
-          "pattern": "\\S"
+      "minProperties": 1,
+      "patternProperties": {
+        "^ptr_[0-9a-f]{24}$": {
+          "type": "object",
+          "required": [
+            "targetStepId",
+            "feedback"
+          ],
+          "properties": {
+            "targetStepId": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+            },
+            "feedback": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "\\S"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

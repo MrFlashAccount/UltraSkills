@@ -8,7 +8,6 @@ import { fileURLToPath } from 'node:url';
 import {
   continueRun,
   listPointerTransitions,
-  loadInstructions,
   movePointer,
   next,
   reportStop,
@@ -262,9 +261,11 @@ test('pointer rollback re-enters an ordinary worker without treating its previou
   assert.equal(moved.current.cursor, 'prepare');
   assert.equal(afterMove.baton.cursor, 'prepare');
   assert.equal(afterMove.baton.status, 'running');
-  assert.deepEqual(afterMove.baton.pointerTransition, {
-    id: listed.transitions[0].id,
-    feedback: 'Rework preparation with the implementation constraint.',
+  assert.deepEqual(afterMove.baton.pointerTransitions, {
+    [listed.transitions[0].id]: {
+      targetStepId: 'prepare',
+      feedback: 'Rework preparation with the implementation constraint.',
+    },
   });
   assert.deepEqual(moved.warnings, []);
   assert.equal(Object.hasOwn(afterMove.baton.state, 'prepare'), false);
@@ -585,6 +586,27 @@ test('runner pointer API move does not initialize missing state on rejected move
   }, before);
 });
 
+test('runner pointer API rejects whitespace-only feedback without mutating durable state or lease authority', async () => {
+  const run = await createClaimedRun('api-whitespace-feedback');
+  await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
+  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared whitespace check' });
+  await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
+  const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });
+  const beforeRejected = snapshot(run.paths);
+
+  await assert.rejects(
+    () => movePointer({
+      ...run,
+      transitionId: listed.transitions[0].id,
+      feedback: ' \n\t ',
+      now: new Date('2026-06-01T10:04:00.000Z'),
+    }),
+    /pointer transition feedback is required/,
+  );
+
+  assert.deepEqual(snapshot(run.paths), beforeRejected);
+});
+
 test('runner pointer API rejects stale transition ids and wrong leases without mutation', async () => {
   const run = await createClaimedRun('api-stale');
   await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
@@ -644,70 +666,6 @@ test('runner pointer API allows rollback from terminal cursors', async () => {
   assert.equal(snapshot(terminalRun.paths).authority.status, 'needs_host_actions');
 
 });
-
-test('pointer rollback feedback survives resume and clears only after the re-entered step completes', async () => {
-  const run = await createClaimedRun('api-feedback-lifecycle');
-  await next({ ...run, now: new Date('2026-06-01T12:00:01.000Z') });
-  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared before rollback', now: new Date('2026-06-01T12:01:00.000Z') });
-  await continueRun({ ...run, now: new Date('2026-06-01T12:02:00.000Z') });
-  const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T12:03:00.000Z') });
-  const feedback = 'The implementation requires a bounded retry path. Revise the preparation.';
-
-  await assert.rejects(
-    () => movePointer({ ...run, transitionId: listed.transitions[0].id, now: new Date('2026-06-01T12:03:30.000Z') }),
-    /pointer transition feedback is required/,
-  );
-
-  await movePointer({
-    ...run,
-    transitionId: listed.transitions[0].id,
-    feedback,
-    now: new Date('2026-06-01T12:04:00.000Z'),
-  });
-  await next({ ...run, now: new Date('2026-06-01T12:05:00.000Z') });
-  const resumedInstructions = await loadInstructions({
-    ...run,
-    stepId: 'prepare',
-    now: new Date('2026-06-01T12:06:00.000Z'),
-  });
-  assert.match(resumedInstructions, /## Pointer rollback feedback/);
-  assert.match(resumedInstructions, new RegExp(feedback.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-
-  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared after rollback', now: new Date('2026-06-01T12:07:00.000Z') });
-  assert.equal(snapshot(run.paths).baton.pointerTransition.feedback, feedback);
-
-  await continueRun({ ...run, now: new Date('2026-06-01T12:08:00.000Z') });
-  assert.equal(Object.hasOwn(snapshot(run.paths).baton, 'pointerTransition'), false);
-});
-
-test('a second pointer rollback overwrites the active feedback and returns a warning', async () => {
-  const run = await createClaimedRun('api-feedback-overwrite');
-  await next({ ...run, now: new Date('2026-06-01T13:00:01.000Z') });
-  await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared', now: new Date('2026-06-01T13:01:00.000Z') });
-  await continueRun({ ...run, now: new Date('2026-06-01T13:02:00.000Z') });
-  await acceptCurrentWorkerOutput({ ...run, stepId: 'review', summary: 'reviewed', now: new Date('2026-06-01T13:03:00.000Z') });
-  await continueRun({ ...run, now: new Date('2026-06-01T13:04:00.000Z') });
-
-  const fromFinalize = await listPointerTransitions({ ...run, now: new Date('2026-06-01T13:05:00.000Z') });
-  const reviewMove = fromFinalize.transitions.find((transition) => transition.to.cursor === 'review');
-  assert.ok(reviewMove);
-  await movePointer({ ...run, transitionId: reviewMove.id, feedback: 'First feedback must be replaced.', now: new Date('2026-06-01T13:06:00.000Z') });
-
-  const fromReview = await listPointerTransitions({ ...run, now: new Date('2026-06-01T13:07:00.000Z') });
-  const prepareMove = fromReview.transitions.find((transition) => transition.to.cursor === 'prepare');
-  assert.ok(prepareMove);
-  const moved = await movePointer({ ...run, transitionId: prepareMove.id, feedback: 'Use the final implementation constraint.', now: new Date('2026-06-01T13:08:00.000Z') });
-
-  assert.deepEqual(moved.warnings, [`overwrote active pointer transition '${reviewMove.id}'`]);
-  assert.deepEqual(snapshot(run.paths).baton.pointerTransition, {
-    id: prepareMove.id,
-    feedback: 'Use the final implementation constraint.',
-  });
-  const instructions = await loadInstructions({ ...run, stepId: 'prepare', now: new Date('2026-06-01T13:09:00.000Z') });
-  assert.doesNotMatch(instructions, /First feedback must be replaced/);
-  assert.match(instructions, /Use the final implementation constraint/);
-});
-
 
 test('dashboard boundary stays read-only and does not import pointer recovery commands', () => {
   const dashboardFiles = [

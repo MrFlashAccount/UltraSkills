@@ -4,7 +4,7 @@
 - When an execution/implementation agent starts tests, lint, validation, typecheck, build checks, or similar long-running verification, it must wait at least 5 minutes before polling/reporting that the command is still running. Do not do short 30s/60s "still running" polling loops. If the command exits or produces an actionable failure sooner, handle that result immediately.
 - Avoid heavy subprocess-based tests when the same behavior can be exercised by importing the module/API directly. Use `spawn`/`spawnSync` for CLI coverage only when process boundaries, argument parsing, shell command portability, stdin/stdout/stderr, exit codes, environment/cwd behavior, or another CLI-only contract is the actual subject under test.
 - For Orbita dependency boundary changes, run `bun run depcruise:check`. Treat dependency-cruiser failures as real dependency-rule findings, not as checker flakiness.
-- Orbita pointer rollback must require feedback and persist at most one active top-level `baton.pointerTransition`. Resume must render that feedback into the re-entered step instructions. A later rollback overwrites the active value with a warning; successful completion of the re-entered step removes it.
+- Orbita pointer rollback must require feedback and persist unresolved entries in top-level `baton.pointerTransitions`, keyed by deterministic transition id with `targetStepId` and `feedback`. Resume must render only entries targeting the current step, including inline approvals. Reusing an active transition id overwrites only that entry with a warning; successful completion removes all entries targeting that completed step and preserves others.
 
 ## Repo rules
 - This repo is self-contained.

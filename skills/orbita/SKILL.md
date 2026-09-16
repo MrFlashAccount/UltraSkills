@@ -27,7 +27,7 @@ Runs default to `~/.orbita/workflow-runs/v1`, or `$ORBITA_HOME/workflow-runs/v1`
 
 If active runner stdout exists, skip bootstrap and follow it.
 
-List-only request:
+List:
 
 ```bash
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-catalog.mjs" list --human
@@ -53,7 +53,7 @@ Select only from public identity, summary, status, timestamps, task fingerprint,
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" create --workflow <absolute-catalog-path> --title '<title>' --summary '<summary>'
 ```
 
-Without a token, claim:
+Tokenless claim:
 
 ```bash
 lease_token=$(bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs" claim --run-id <run-id> --owner <owner> --harness <harness> --session-id <session-id> --print-lease-token)
@@ -138,6 +138,6 @@ bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" list-pointer-tr
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" move-pointer --run-id <run-id> --transition-id <id> --feedback '<why repeat>' --lease-token "$lease_token"
 ```
 
-List contains every valid predecessor present in `baton.state`; never debug history or downstream steps. Choose the target and move once. Feedback survives resume; another move replaces it and warns. It re-enters the target without acknowledgement: only that step's prior output and stop are invalidated; unrelated state stays. No match: stop. Never edit baton/history.
+List includes state-backed predecessors only. Choose once. `pointerTransitions` keeps feedback by id across resume. Only its target gets it, including inline approvals. Same id replaces itself and warns. Target done removes its entries; other feedback stays. Re-entry needs no acknowledgement and invalidates only target output/stop. No match: stop. Never edit baton/history.
 
 On `done`, stop and report the terminal embedded JSON using its workflow-specific baton/projection; do not assume a generic `result` field.

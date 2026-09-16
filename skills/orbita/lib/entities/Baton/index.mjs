@@ -54,6 +54,24 @@ function validateLoopProgress(state) {
   }
 }
 
+function validatePointerTransitions(batonData, workflow) {
+  if (batonData.pointerTransitions === undefined) return;
+  for (const [transitionId, transition] of Object.entries(batonData.pointerTransitions)) {
+    const targetStepId = transition.targetStepId;
+    const targetStep = workflow.steps?.[targetStepId];
+    if (!targetStep) {
+      throw new WorkflowRuntimeError(
+        `baton semantic validation failed: pointerTransitions.${transitionId}.targetStepId '${targetStepId}' does not reference a workflow step`,
+      );
+    }
+    if (statusForStep(workflow, targetStepId, targetStep) === 'done') {
+      throw new WorkflowRuntimeError(
+        `baton semantic validation failed: pointerTransitions.${transitionId}.targetStepId '${targetStepId}' references a terminal workflow step`,
+      );
+    }
+  }
+}
+
 export class Baton {
   constructor(batonData) {
     this.data = cloneBoundaryData(batonData);
@@ -102,6 +120,7 @@ export function validateBatonDataAgainstWorkflow(batonData, workflowInput) {
   }
   validateAggregateArtifacts(batonData.state);
   validateLoopProgress(batonData.state);
+  validatePointerTransitions(batonData, workflow);
   const stepId = normalizeCursor(batonData.cursor);
   const cursorStep = workflow.steps?.[stepId];
   if (!cursorStep) throw new WorkflowRuntimeError(`baton cursor not found in workflow: ${stepId}`);

@@ -21,7 +21,13 @@ function normalizePointerTransitionFeedback(feedback) {
     throw new WorkflowRuntimeError('pointer transition feedback is required');
   }
   const normalized = feedback.trim();
-  if (normalized.length > POINTER_TRANSITION_FEEDBACK_MAX_LENGTH) {
+  let characterCount = 0;
+  const characters = normalized[Symbol.iterator]();
+  while (!characters.next().done) {
+    characterCount += 1;
+    if (characterCount > POINTER_TRANSITION_FEEDBACK_MAX_LENGTH) break;
+  }
+  if (characterCount > POINTER_TRANSITION_FEEDBACK_MAX_LENGTH) {
     throw new WorkflowRuntimeError(`pointer transition feedback must be at most ${POINTER_TRANSITION_FEEDBACK_MAX_LENGTH} characters`);
   }
   return normalized;
@@ -33,7 +39,7 @@ function cursorDisplay(cursor) {
 
 function pointerPosition(cursor, status) {
   return {
-    cursor: structuredClone(cursor),
+    cursor,
     status,
     display: cursorDisplay(cursor),
   };
@@ -140,19 +146,26 @@ export function resolvePointerMove({ workflow, baton, transitionId: requestedTra
     throw new Error('pointer transition is stale, unavailable, or not a state-bearing predecessor of the current cursor');
   }
   const normalizedFeedback = normalizePointerTransitionFeedback(feedback);
-  const previousPointerTransitionId = baton.pointerTransition?.id;
-  const nextBaton = structuredClone(baton);
-  nextBaton.cursor = structuredClone(transition.to.cursor);
-  nextBaton.status = transition.to.status;
-  nextBaton.pointerTransition = {
-    id: transition.id,
-    feedback: normalizedFeedback,
+  const overwrittenPointerTransitionId = Object.hasOwn(baton.pointerTransitions ?? {}, transition.id)
+    ? transition.id
+    : undefined;
+  const nextBaton = {
+    ...baton,
+    cursor: transition.to.cursor,
+    status: transition.to.status,
+    pointerTransitions: {
+      ...(baton.pointerTransitions ?? {}),
+      [transition.id]: {
+        targetStepId: normalizeCursor(transition.to.cursor),
+        feedback: normalizedFeedback,
+      },
+    },
   };
   new Baton(nextBaton).validateAgainst(workflow);
-  return { projection, transition, baton: nextBaton, previousPointerTransitionId };
+  return { projection, transition, baton: nextBaton, overwrittenPointerTransitionId };
 }
 
-export function pointerMoveHistoryDetails({ transition, previousPointerTransitionId } = {}) {
+export function pointerMoveHistoryDetails({ transition, overwrittenPointerTransitionId } = {}) {
   if (!transition) throw new WorkflowRuntimeError('pointer move history requires a transition');
   return [
     `- pointer move: id=${transition.id} direction=${transition.direction}`,
@@ -161,6 +174,6 @@ export function pointerMoveHistoryDetails({ transition, previousPointerTransitio
     '- append-only history preserved: true',
     '- target step re-entered from current baton: true',
     `- pointer feedback recorded in baton: true`,
-    ...(previousPointerTransitionId ? [`- previous pointer transition overwritten: id=${previousPointerTransitionId}`] : []),
+    ...(overwrittenPointerTransitionId ? [`- existing pointer transition overwritten: id=${overwrittenPointerTransitionId}`] : []),
   ];
 }
