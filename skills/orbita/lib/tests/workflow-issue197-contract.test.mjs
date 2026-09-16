@@ -50,12 +50,14 @@ test('Orbita skill invokes bundled CLI entrypoints from the resolved skill root'
   assert.doesNotMatch(skillText, /bun \.\/lib\/entrypoints\/cli\//);
 });
 
-test('Orbita skill stops on lease conflicts and offers only an approved forced takeover', () => {
+test('Orbita skill reclaims matching leases and gates tokenless takeover', () => {
   const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
-  assert.match(skillText, /If claim reports `occupied` or `stale`, stop/);
-  assert.match(skillText, /rerunning\s+that exact claim command with `--takeover`/);
-  assert.match(skillText, /never force takeover without user\s+approval/);
-  assert.match(skillText, /takeover invalidates\s+the previous holder's token/);
+  assert.match(skillText, /The exact token renews even a `stale` lease without rotation/);
+  assert.match(skillText, /heartbeat --run-id <run-id> --lease-token "\$lease_token"/);
+  assert.match(skillText, /Never use takeover with a matching token/);
+  assert.match(skillText, /Without one, `occupied` or `stale`[\s\S]*requires explicit user approval/);
+  assert.match(skillText, /tokenless claim with\s+`--takeover`/);
+  assert.match(skillText, /new token; it invalidates the previous one/);
 });
 
 test('Orbita skill releases a lease only through the explicit matching-token command', () => {

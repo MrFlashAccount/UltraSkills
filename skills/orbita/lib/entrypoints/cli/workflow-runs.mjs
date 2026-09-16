@@ -103,8 +103,9 @@ try {
     });
     if (mode === 'claim' && values['print-lease-token']) {
       if (!response.ok) fail(`claim failed: ${response.reason ?? 'unknown reason'}`);
-      if (!response.leaseToken) fail('claim did not return a lease token');
-      process.stdout.write(`${response.leaseToken}\n`);
+      const leaseToken = response.leaseToken ?? values['lease-token'];
+      if (!leaseToken) fail('claim did not return a lease token');
+      process.stdout.write(`${leaseToken}\n`);
     } else {
       console.log(JSON.stringify(response, null, 2));
       if (!response.ok) process.exit(2);

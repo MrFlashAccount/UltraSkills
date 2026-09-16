@@ -748,7 +748,7 @@ test('workflow-runs CLI ignores stale WORKFLOW_RUN_TOKEN env when reclaiming sta
   assert.notEqual(response.leaseToken, 'wrong-stale-env-token');
 });
 
-test('workflow-runs CLI claim keeps JSON default and supports token-only stdout', async () => {
+test('workflow-runs CLI claim keeps JSON default and preserves token-only stdout on reclaim', async () => {
   const { spawnSync } = await import('node:child_process');
   const helperPath = path.join(root, 'skills/orbita/lib/entrypoints/cli/workflow-runs.mjs');
   const jsonRunId = `${runPrefix}cli-claim-json-default`;
@@ -770,10 +770,43 @@ test('workflow-runs CLI claim keeps JSON default and supports token-only stdout'
   assert.match(tokenResult.stdout, /^[A-Za-z0-9_-]+\n$/);
   assert.doesNotMatch(tokenResult.stdout, /[{}":]/);
 
-  const missingTokenResult = spawnSync(process.execPath, [helperPath, 'claim', '--run-id', tokenRunId, '--lease-token', tokenResult.stdout.trim(), '--print-lease-token'], { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUNS_ROOT: cliRunsRoot } });
-  assert.equal(missingTokenResult.status, 1);
-  assert.equal(missingTokenResult.stdout, '');
-  assert.match(missingTokenResult.stderr, /workflow-runs: claim did not return a lease token/);
+  const reclaimedTokenResult = spawnSync(process.execPath, [helperPath, 'claim', '--run-id', tokenRunId, '--lease-token', tokenResult.stdout.trim(), '--print-lease-token'], { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUNS_ROOT: cliRunsRoot } });
+  assert.equal(reclaimedTokenResult.status, 0, reclaimedTokenResult.stderr);
+  assert.equal(reclaimedTokenResult.stderr, '');
+  assert.equal(reclaimedTokenResult.stdout, tokenResult.stdout);
+});
+
+test('workflow-runs CLI reclaims a stale lease with its matching token', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const helperPath = path.join(root, 'skills/orbita/lib/entrypoints/cli/workflow-runs.mjs');
+  const runId = `${runPrefix}cli-stale-matching-token`;
+  removeDefaultRunsForTestPrefix();
+  const claim = await registerWorkflowRunAtRoot({
+    runsRoot: cliRunsRoot,
+    runId,
+    claim: true,
+    leaseMs: 1_000,
+    now: new Date('2026-06-01T10:00:00.000Z'),
+  });
+  const before = (await readRunAuthority(resolveRunPaths({ runId, runsRoot: cliRunsRoot }))).workerLease;
+
+  const result = spawnSync(process.execPath, [
+    helperPath,
+    'claim',
+    '--run-id',
+    runId,
+    '--lease-token',
+    claim.leaseToken,
+    '--print-lease-token',
+  ], { cwd: root, encoding: 'utf8', env: { ...process.env, WORKFLOW_RUNS_ROOT: cliRunsRoot } });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  assert.equal(result.stdout, `${claim.leaseToken}\n`);
+  const after = (await readRunAuthority(resolveRunPaths({ runId, runsRoot: cliRunsRoot }))).workerLease;
+  assert.equal(after.tokenHash, before.tokenHash);
+  assert.equal(after.tokenEpoch, before.tokenEpoch);
+  assert.equal(Date.parse(after.leaseExpiresAt) > Date.now(), true);
 });
 
 test('workflow-runs CLI release clears only the matching lease', async () => {
