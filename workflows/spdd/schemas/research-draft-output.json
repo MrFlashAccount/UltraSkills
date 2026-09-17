@@ -4,7 +4,9 @@
   "type": "object",
   "required": [
     "outcome",
-    "next_step"
+    "next_step",
+    "architecture_generation_mode",
+    "architecture_generation_step"
   ],
   "properties": {
     "outcome": {
@@ -18,10 +20,21 @@
     "next_step": {
       "enum": [
         "ui_intent_draft",
-        "architecture_draft"
+        "architecture_draft",
+        "architecture_dialectic_positions"
       ],
       "description": "Researcher-selected step after human research approval: UI design proposal for material user-facing UI work, otherwise architecture.",
       "x-usage": "Use ui_intent_draft when the research artifact says UI design is needed. Use architecture_draft when it says UI design is not needed. The approval step reads this field directly."
+    },
+    "architecture_generation_mode": {
+      "enum": ["direct", "dialectic"],
+      "description": "Conservative architecture-generation selector. Use dialectic only for an explicit dialectic request; omission or ambiguity is direct.",
+      "x-usage": "Preserve this discriminator through architecture canonicalization and use it to validate direct versus dialectic lineage."
+    },
+    "architecture_generation_step": {
+      "enum": ["architecture_draft", "architecture_dialectic_positions"],
+      "description": "Required closed route used after optional UI approval.",
+      "x-usage": "Route the research approval directly when no UI gate applies and route the UI approval to this step when it does."
     },
     "summary": {
       "type": "string",
@@ -63,6 +76,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/research-draft-output",
   "allOf": [
+    {
+      "if": {"properties": {"architecture_generation_mode": {"const": "direct"}}, "required": ["architecture_generation_mode"]},
+      "then": {
+        "properties": {
+          "architecture_generation_step": {"const": "architecture_draft"},
+          "next_step": {"enum": ["ui_intent_draft", "architecture_draft"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"architecture_generation_mode": {"const": "dialectic"}}, "required": ["architecture_generation_mode"]},
+      "then": {
+        "properties": {
+          "architecture_generation_step": {"const": "architecture_dialectic_positions"},
+          "next_step": {"enum": ["ui_intent_draft", "architecture_dialectic_positions"]}
+        }
+      }
+    },
     {
       "if": {
         "properties": {

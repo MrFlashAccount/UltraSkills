@@ -1,6 +1,6 @@
 name = "create-architecture"
 version = 1
-description = "Create, improve, align, or audit an architecture decision package through source audit, context recovery, option narrowing, proposal, Architect review, Critic pressure, explicit approval, implementation, and post-implementation review. Use for ARCHITECTURE.md, C4/DDD/ports-and-adapters decisions, module/interface/seam improvement, local CONTEXT.md ownership rules, and reviewable architecture migrations. Do not use for tiny local changes with no architecture decision or artifact impact."
+description = "Create, improve, align, or audit an architecture decision package through source audit, context recovery, option narrowing, direct-by-default or opt-in dialectic proposal generation, Architect review, Critic pressure, explicit approval, implementation, and post-implementation review. Use for ARCHITECTURE.md, C4/DDD/ports-and-adapters decisions, module/interface/seam improvement, local CONTEXT.md ownership rules, and reviewable architecture migrations. Do not use for tiny local changes with no architecture decision or artifact impact."
 start = "source_audit"
 done = "done"
 
@@ -28,6 +28,7 @@ role = "architect"
 prompt = '''This is a pre-approval, read-only source-audit phase. Work from the real repository, constraints, existing architecture docs and ADRs, local CONTEXT.md files, runtime/deployment shape when relevant, domain language, known pain, goals, and planned change surface. For improve work, also inspect module/interface/seam shape, adapter reality, module depth and locality, context-doc coverage, collocation, and whether source layout reveals the intended architecture. Use the deletion test for shallow modules, treat the interface as the test surface, and distinguish one hypothetical adapter from a seam proved by real variation. Reduce the task to 3-5 representative asks unless the scope is truly tiny. Decide whether the request needs an architecture/design change or only a local change.
 
 Select exactly one mode: audit, scaffold, or improve. Use align only as the default improve subtype when the need is reconciliation of code, docs, ownership, and seams rather than structural redesign. Record implementation_scope as implement only when the triggering request explicitly asks to create or revise canonical architecture artifacts; otherwise record proposal_only.
+Normalize architecture_generation_mode conservatively. Set dialectic only for an explicit dialectic proposal-generation request. Explicit direct, omission, or ambiguity means direct. Set proposal_generation_step to architecture_proposal for direct and proposal_dialectic_positions for dialectic. For non-audit work return next_step context_recovery. Direct audit returns next_step done; dialectic audit returns next_step proposal_dialectic_positions so the read-only diagnostic can produce a proposal-only candidate for the existing review and approval gates. For dialectic audit, also write exactly one immutable `create-architecture-dialectic-input` JSON artifact containing the accepted source-audit output used identically by both position branches. This is protocol input, not a canonical architecture artifact.
 
 For audit mode, return audit_complete with evidence-backed current-shape findings, missing artifacts, friction points, option pressure, and a recommendation to stop, scaffold next, or improve next. Make no edits. Otherwise return ready_for_context with the current shape, constraints, missing evidence, pressure points, selected mode/subtype, requested implementation scope, and whether an evolution/refactor slice is needed before feature work. Do not write canonical ADRs, C4, DDD, ports/adapters, ARCHITECTURE.md, or CONTEXT.md artifacts before option choice and approval. If material scope or done criteria remain ambiguous after repository inspection, report a non-blocking stop with one exact user-facing question in non_blocking_stop.needed and source_step_id source_audit.'''
 
@@ -36,11 +37,12 @@ template = "templates/stage-output-template.md"
 schema = "schemas/source-audit-output.json"
 
 [steps.source_audit.next]
-match = "${{ output.outcome }}"
+match = "${{ output.next_step }}"
 
 [steps.source_audit.next.cases]
-audit_complete = "done"
-ready_for_context = "context_recovery"
+done = "done"
+context_recovery = "context_recovery"
+proposal_dialectic_positions = "proposal_dialectic_positions"
 
 [steps.context_recovery]
 name = "Context recovery"
@@ -73,7 +75,7 @@ agent = "architect"
 role = "architect"
 prompt = '''This remains a pre-approval, read-only phase. Narrow the evidence-backed space to 2-3 serious options unless the repository genuinely has more equally credible directions. Consider only pressure-supported candidates from layered, Clean Architecture, hexagonal/ports-and-adapters, strategic or selective tactical DDD, context-first modular monolith, vertical slice, event-driven modular monolith, service-oriented/microservices, plugin/extension, and pipeline/job-worker shapes. For each serious option, state why it fits, what pain it addresses, what seams it makes explicit, what it forces the team to do differently, what complexity and likely failure mode it introduces, what it deliberately does not solve, and which artifacts it requires. Always recommend one and say why the other shortlisted options lost; reject obvious bad fits rather than leaving an unbounded menu.
 
-When source layout/module ownership, entities/records/schemas, ports/adapters/integrations, workflow state/gates/artifacts, compatibility wrappers/deprecated exports, or architecture docs/context maps are affected, add the skill's conditional proof sequence: domain/source classification and ownership, source/runtime/schema alignment, then adversarial pressure on fake modules, naming honesty, compatibility/deletion surfaces, and green-test false confidence. Do not turn that conditional sequence into a whole-repository DDD inventory. Return ready_for_proposal without presenting the recommendation as approved.
+When source layout/module ownership, entities/records/schemas, ports/adapters/integrations, workflow state/gates/artifacts, compatibility wrappers/deprecated exports, or architecture docs/context maps are affected, add the skill's conditional proof sequence: domain/source classification and ownership, source/runtime/schema alignment, then adversarial pressure on fake modules, naming honesty, compatibility/deletion surfaces, and green-test false confidence. Do not turn that conditional sequence into a whole-repository DDD inventory. Return ready_for_proposal without presenting the recommendation as approved. Copy source_audit.architecture_generation_mode into output and preserve source_audit.proposal_generation_step as the next route; do not reinterpret the selector. In dialectic mode, write exactly one immutable `create-architecture-dialectic-input` JSON artifact containing the accepted source audit, recovered context, and narrowed options used identically by both position branches. This is protocol input, not a canonical architecture artifact.
 
 Source audit:
 ${{ input.source_audit }}
@@ -86,19 +88,180 @@ template = "templates/stage-output-template.md"
 schema = "schemas/options-output.json"
 
 [steps.option_narrowing.next]
-match = "${{ output.outcome }}"
+match = "${{ input.source_audit.proposal_generation_step }}"
 
 [steps.option_narrowing.next.cases]
-ready_for_proposal = "architecture_proposal"
+architecture_proposal = "architecture_proposal"
+proposal_dialectic_positions = "proposal_dialectic_positions"
+
+[steps.proposal_dialectic_positions]
+name = "Proposal dialectic positions"
+kind = "fanout"
+agent = "create_architecture_dialectic_manifest"
+max_parallel = 2
+
+[steps.proposal_dialectic_positions.input]
+role = "architect"
+branches = ["proposal_visionary_position", "proposal_pragmatist_position"]
+prompt = '''Freeze both accepted architecture positions into the ordered schema-defined manifest. Do not synthesize, compare, review, write canonical repository artifacts, or create the approval proposal. Copy the already accepted `create-architecture-dialectic-input` artifact from source_audit in audit mode or option_narrowing otherwise as shared_input_artifact. Then copy each accepted branch artifact, fingerprint, and accepted branch step id in Visionary/Pragmatist order.
+
+Source audit: ${{ input.source_audit }}
+Recovered context: ${{ input.context_recovery | default: "Audit mode has no context recovery." }}
+Options: ${{ input.option_narrowing | default: "Audit mode has no option narrowing." }}
+Visionary position: ${{ input.proposal_visionary_position }}
+Pragmatist position: ${{ input.proposal_pragmatist_position }}'''
+
+[steps.proposal_dialectic_positions.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-frozen-pair-output.json"
+
+[steps.proposal_dialectic_positions.next]
+match = "${{ output.outcome }}"
+
+[steps.proposal_dialectic_positions.next.cases]
+frozen = "proposal_dialectic_syntheses"
+
+[steps.proposal_dialectic_positions.branches.proposal_visionary_position]
+name = "Visionary proposal position"
+agent = "create_architecture_visionary"
+
+[steps.proposal_dialectic_positions.branches.proposal_visionary_position.input]
+role = "architect"
+prompt = '''Produce one complete evidence-grounded Visionary architecture position from the identical typed source/context/options input. In audit mode, produce a diagnostic model and recommendation without authorizing implementation. Work in isolation and write exactly one `create-architecture-visionary-position` Markdown artifact. Cover every architecture fingerprint dimension and do not create canonical repository artifacts.
+
+Source audit: ${{ input.source_audit }}
+Recovered context: ${{ input.context_recovery | default: "Audit mode has no context recovery." }}
+Options: ${{ input.option_narrowing | default: "Audit mode has no option narrowing." }}'''
+
+[steps.proposal_dialectic_positions.branches.proposal_visionary_position.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-visionary-position-output.json"
+
+[steps.proposal_dialectic_positions.branches.proposal_pragmatist_position]
+name = "Pragmatist proposal position"
+agent = "create_architecture_pragmatist"
+
+[steps.proposal_dialectic_positions.branches.proposal_pragmatist_position.input]
+role = "architect"
+prompt = '''Produce one complete evidence-grounded Pragmatist counter-position from the identical typed source/context/options input. Change at least one material architecture axis or emit no_viable_antithesis with tested axes and evidence; do not return a critique list. In audit mode remain proposal-only and read-only. Work in isolation and write exactly one `create-architecture-pragmatist-position` Markdown artifact.
+
+Source audit: ${{ input.source_audit }}
+Recovered context: ${{ input.context_recovery | default: "Audit mode has no context recovery." }}
+Options: ${{ input.option_narrowing | default: "Audit mode has no option narrowing." }}'''
+
+[steps.proposal_dialectic_positions.branches.proposal_pragmatist_position.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-pragmatist-position-output.json"
+
+[steps.proposal_dialectic_syntheses]
+name = "Proposal dialectic syntheses"
+kind = "fanout"
+agent = "create_architecture_dialectic_comparator"
+max_parallel = 2
+
+[steps.proposal_dialectic_syntheses.input]
+role = "architect"
+branches = ["proposal_visionary_synthesis", "proposal_pragmatist_synthesis"]
+prompt = '''Compare the two accepted synthesis fingerprints across every package-owned architecture dimension. Compare decisions and evidence interpretation, never wording. Convergence selects exactly one candidate and routes to architecture_proposal. Divergence, a user-owned decision, or invalid protocol state routes exactly once to proposal_dialectic_adjudication. This comparison cannot replace Architect review or Critic pressure.
+
+Frozen pair: ${{ input.proposal_dialectic_positions }}
+Visionary synthesis: ${{ input.proposal_visionary_synthesis }}
+Pragmatist synthesis: ${{ input.proposal_pragmatist_synthesis }}'''
+
+[steps.proposal_dialectic_syntheses.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-convergence-output.json"
+
+[steps.proposal_dialectic_syntheses.next]
+match = "${{ output.next_step }}"
+
+[steps.proposal_dialectic_syntheses.next.cases]
+architecture_proposal = "architecture_proposal"
+proposal_dialectic_adjudication = "proposal_dialectic_adjudication"
+
+[steps.proposal_dialectic_syntheses.branches.proposal_visionary_synthesis]
+name = "Visionary proposal synthesis"
+agent = "create_architecture_visionary"
+
+[steps.proposal_dialectic_syntheses.branches.proposal_visionary_synthesis.input]
+role = "architect"
+prompt = '''Independently synthesize the accepted frozen pair as the Visionary logical role. A restored or fresh worker must be able to complete solely from the role contract and frozen artifact references. Read both position artifacts; never read peer synthesis, transcripts, or hidden state. Write exactly one `create-architecture-visionary-synthesis` artifact and emit the complete fingerprint.
+
+Frozen pair: ${{ input.proposal_dialectic_positions }}'''
+
+[steps.proposal_dialectic_syntheses.branches.proposal_visionary_synthesis.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-visionary-synthesis-output.json"
+
+[steps.proposal_dialectic_syntheses.branches.proposal_pragmatist_synthesis]
+name = "Pragmatist proposal synthesis"
+agent = "create_architecture_pragmatist"
+
+[steps.proposal_dialectic_syntheses.branches.proposal_pragmatist_synthesis.input]
+role = "architect"
+prompt = '''Independently synthesize the accepted frozen pair as the Pragmatist logical role. A restored or fresh worker must be able to complete solely from the role contract and frozen artifact references. Read both position artifacts; never read peer synthesis, transcripts, or hidden state. Write exactly one `create-architecture-pragmatist-synthesis` artifact and emit the complete fingerprint.
+
+Frozen pair: ${{ input.proposal_dialectic_positions }}'''
+
+[steps.proposal_dialectic_syntheses.branches.proposal_pragmatist_synthesis.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-pragmatist-synthesis-output.json"
+
+[steps.proposal_dialectic_adjudication]
+name = "Proposal dialectic adjudication"
+kind = "worker"
+agent = "create_architecture_adjudicator"
+
+[steps.proposal_dialectic_adjudication.input]
+role = "architect"
+prompt = '''Adjudicate this divergence exactly once. Select Visionary, select Pragmatist, or emit one traceable third-result artifact linked to both syntheses. Do not merge incompatible candidates or perform downstream hostile review. A concrete missing fact or user-owned value choice may use a non-blocking stop with source_step_id proposal_dialectic_adjudication only when one answer can resume this same request. Otherwise return unresolved_with_evidence and route to proposal_dialectic_exit.
+
+Frozen pair: ${{ input.proposal_dialectic_positions }}
+Convergence: ${{ input.proposal_dialectic_syntheses }}
+Visionary synthesis: ${{ input.proposal_visionary_synthesis }}
+Pragmatist synthesis: ${{ input.proposal_pragmatist_synthesis }}'''
+
+[steps.proposal_dialectic_adjudication.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-adjudication-output.json"
+
+[steps.proposal_dialectic_adjudication.next]
+match = "${{ output.next_step }}"
+
+[steps.proposal_dialectic_adjudication.next.cases]
+architecture_proposal = "architecture_proposal"
+proposal_dialectic_exit = "proposal_dialectic_exit"
+
+[steps.proposal_dialectic_exit]
+name = "Proposal dialectic unresolved exit"
+kind = "worker"
+agent = "create_architecture_dialectic_exit"
+
+[steps.proposal_dialectic_exit.input]
+role = "architect"
+prompt = '''Preserve the negative adjudication as one `create-architecture-unresolved-report` Markdown artifact. Project evidence without producing an architecture proposal or reaching Architect review, Critic pressure, approval, or implementation. This is a typed terminal result, not a non-blocking stop.
+
+Adjudication: ${{ input.proposal_dialectic_adjudication }}'''
+
+[steps.proposal_dialectic_exit.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-exit-output.json"
+
+[steps.proposal_dialectic_exit.next]
+match = "${{ output.next_step }}"
+
+[steps.proposal_dialectic_exit.next.cases]
+done = "done"
 
 [steps.architecture_proposal]
 name = "Architecture proposal"
 kind = "worker"
-agent = "architect"
+agent = "create_architecture_owner"
 
 [steps.architecture_proposal.input]
 role = "architect"
 prompt = '''This is a pre-approval proposal phase. Inspect the repository read-only and write exactly one first-class Markdown artifact named architecture-proposal inside the step artifact output directory; do not edit canonical repository artifacts.
+Preserve source_audit.architecture_generation_mode in output. In dialectic mode consume only the selected lineage from proposal_dialectic_syntheses or proposal_dialectic_adjudication, record complete dialectic_lineage, and do not merge rejected candidates. In direct mode preserve the existing proposal behavior and omit dialectic_lineage. Carry source_audit.mode and implementation_scope unchanged. Audit is permitted only for dialectic mode, remains proposal_only, routes to done after approval, and never authorizes canonical artifact implementation.
 
 Produce the approval-ready proposal required by the create-architecture skill: problem and representative asks; mode/subtype; shortlisted options and recommended direction; trade-offs and rejected alternatives; target artifact map; target architecture; what changes and does not change; structural entity delta; affected modules/relationships, ownership, boundaries, source-layout expectations, dependency/import-export direction and binding must_not_import rules when relevant; reviewable migration/PR slices and structural checks; and material open questions. When dependency direction matters, include inbound and outbound ports, real adapters, composition root/DI shape, and the dependency rule. Treat collocation as a hard architecture principle unless a strong contrary constraint is evidenced. Require screaming source layout only when the selected direction uses bounded contexts, ports/adapters, Clean Architecture, or equivalent responsibility zones.
 
@@ -110,10 +273,19 @@ Source audit:
 ${{ input.source_audit }}
 
 Recovered context:
-${{ input.context_recovery }}
+${{ input.context_recovery | default: "Dialectic audit mode has no context recovery." }}
 
 Options:
-${{ input.option_narrowing }}
+${{ input.option_narrowing | default: "Dialectic audit mode has no option narrowing." }}
+
+Dialectic frozen pair:
+${{ input.proposal_dialectic_positions | default: "Direct mode; no frozen pair." }}
+
+Dialectic convergence:
+${{ input.proposal_dialectic_syntheses | default: "Direct mode; no convergence result." }}
+
+Dialectic adjudication:
+${{ input.proposal_dialectic_adjudication | default: "No adjudication was required." }}
 
 Previous Architect findings:
 ${{ input.architect_review.verdict.findings | default: "No previous Architect findings." }}
@@ -150,10 +322,10 @@ Source audit:
 ${{ input.source_audit }}
 
 Recovered context:
-${{ input.context_recovery }}
+${{ input.context_recovery | default: "Dialectic audit mode has no context recovery." }}
 
 Option narrowing:
-${{ input.option_narrowing }}'''
+${{ input.option_narrowing | default: "Dialectic audit mode has no option narrowing." }}'''
 
 [steps.architect_review.output]
 template = "templates/review-output-template.md"
@@ -350,6 +522,10 @@ kind = "done"
 
 [steps.done.input]
 prompt = '''Project the architecture result for the selected mode and approved scope. For audit, report evidence-backed findings and confirm no edits. For proposal-only scaffold/improve, report the approved proposal and explicitly say canonical architecture implementation was not authorized or started. For implemented scaffold/improve, report the approved option, changed architecture artifacts, structural checks, migration slices, Critic verdict, and final Architect verdict. If either review loop reached its limit, preserve unresolved findings and do not claim a clean pass.
+If proposal_dialectic_exit exists, project that typed unresolved result and state that no proposal, review, approval, or implementation was reached. Do not claim normal audit/proposal completion and do not reinterpret the result as a pause.
 
 Proposal review exit:
-${{ input.proposal_review_exit | default: "The proposal review exit was not used." }}'''
+${{ input.proposal_review_exit | default: "The proposal review exit was not used." }}
+
+Dialectic unresolved exit:
+${{ input.proposal_dialectic_exit | default: "No dialectic unresolved exit." }}'''

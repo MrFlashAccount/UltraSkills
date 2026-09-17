@@ -642,6 +642,11 @@
         "name": {
           "type": "string"
         },
+        "displayName": {
+          "description": "Optional human-facing catalog label. Workflow identity, filesystem paths, and runtime routing continue to use name.",
+          "type": "string",
+          "minLength": 1
+        },
         "version": {
           "type": "integer",
           "minimum": 1

@@ -3,7 +3,8 @@
   "description": "Producer output contract for the execution-ready SPDD architecture draft and its implementation/review routing.",
   "type": "object",
   "required": [
-    "outcome"
+    "outcome",
+    "architecture_generation_mode"
   ],
   "properties": {
     "outcome": {
@@ -13,6 +14,12 @@
       ],
       "description": "Producer must use ready_for_attack for an initial or critic-requested draft and ready_for_approval for a correction requested at the user gate. Missing help is reported through the runner non-blocking stop control channel, never as an output outcome.",
       "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when it requires revision."
+    },
+    "architecture_generation_mode": {
+      "enum": ["direct", "dialectic"]
+    },
+    "dialectic_lineage": {
+      "$ref": "#/$defs/dialecticLineage"
     },
     "summary": {
       "type": "string",
@@ -237,6 +244,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/architecture-draft-output",
   "$defs": {
+    "dialecticLineage": {
+      "type": "object",
+      "required": ["position_artifact_ids", "synthesis_artifact_ids", "convergence_outcome", "selected_candidate", "canonical_logical_owner"],
+      "properties": {
+        "position_artifact_ids": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "synthesis_artifact_ids": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "convergence_outcome": {"enum": ["converged", "diverged", "needs_user_decision", "invalid"]},
+        "adjudication_id": {"type": "string", "minLength": 1},
+        "selected_candidate": {"enum": ["visionary", "pragmatist", "third_result"]},
+        "canonical_logical_owner": {"const": "spdd_architecture_owner"}
+      },
+      "additionalProperties": false
+    },
     "reviewStepId": {
       "enum": [
         "architect_review",
@@ -304,6 +324,14 @@
     }
   },
   "allOf": [
+    {
+      "if": {"properties": {"architecture_generation_mode": {"const": "direct"}}, "required": ["architecture_generation_mode"]},
+      "then": {"not": {"required": ["dialectic_lineage"]}}
+    },
+    {
+      "if": {"properties": {"architecture_generation_mode": {"const": "dialectic"}}, "required": ["architecture_generation_mode"]},
+      "then": {"required": ["dialectic_lineage"]}
+    },
     {
       "if": {
         "required": [

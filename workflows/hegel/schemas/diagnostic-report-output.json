@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/hegel/diagnostic-report-output",
+  "type": "object",
+  "required": ["outcome", "summary", "facts", "inferences", "unresolved_contradictions", "rejected_models", "canonical_synthesis", "confidence", "cheapest_falsifying_next_experiment", "dialectic_lineage", "artifacts"],
+  "properties": {
+    "outcome": {"enum": ["diagnosis_complete", "unresolved_with_evidence"]},
+    "summary": {"type": "string", "minLength": 1},
+    "facts": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "inferences": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "unresolved_contradictions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "rejected_models": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "canonical_synthesis": {"type": ["string", "null"], "minLength": 1},
+    "unresolved_reason": {"type": "string", "minLength": 1},
+    "confidence": {"type": "object", "required": ["level", "rationale"], "properties": {"level": {"enum": ["low", "medium", "high"]}, "rationale": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "cheapest_falsifying_next_experiment": {"type": "string", "minLength": 1},
+    "dialectic_lineage": {"type": "object", "required": ["position_artifact_ids", "synthesis_artifact_ids", "convergence_outcome", "resolution", "canonical_logical_owner"], "properties": {"position_artifact_ids": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}, "synthesis_artifact_ids": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}, "convergence_outcome": {"enum": ["converged", "diverged", "needs_user_decision", "invalid"]}, "adjudication_id": {"type": "string", "minLength": 1}, "resolution": {"enum": ["selected_visionary", "selected_pragmatist", "third_result", "reject_both", "irreparable_invalid"]}, "canonical_logical_owner": {"const": "hegel_diagnostic_owner"}}, "additionalProperties": false},
+    "artifacts": {"type": "array", "minItems": 1, "maxItems": 1, "prefixItems": [{"allOf": [{"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"}, {"type": "object", "required": ["id", "content_type"], "properties": {"id": {"const": "diagnostic-report"}, "content_type": {"const": "text/markdown"}}}]}], "items": false}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "diagnosis_complete"}}, "required": ["outcome"]}, "then": {"properties": {"canonical_synthesis": {"type": "string", "minLength": 1}}}},
+    {"if": {"properties": {"outcome": {"const": "unresolved_with_evidence"}}, "required": ["outcome"]}, "then": {"required": ["unresolved_reason"], "properties": {"canonical_synthesis": {"type": ["string", "null"], "minLength": 1}, "unresolved_contradictions": {"type": "array", "minItems": 1}, "rejected_models": {"type": "array", "minItems": 1}}}}
+  ]
+}

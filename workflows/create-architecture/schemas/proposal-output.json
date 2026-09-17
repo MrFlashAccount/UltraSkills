@@ -7,6 +7,8 @@
     "outcome",
     "summary",
     "selected_direction",
+    "mode",
+    "architecture_generation_mode",
     "artifact_scope",
     "implementation_scope",
     "next_step",
@@ -16,6 +18,9 @@
     "outcome": {"const": "ready_for_review"},
     "summary": {"type": "string", "minLength": 1},
     "selected_direction": {"type": "string", "minLength": 1},
+    "mode": {"enum": ["audit", "scaffold", "improve"]},
+    "architecture_generation_mode": {"enum": ["direct", "dialectic"]},
+    "dialectic_lineage": {"$ref": "#/$defs/dialecticLineage"},
     "artifact_scope": {
       "type": "array",
       "minItems": 1,
@@ -51,7 +56,34 @@
     }
   },
   "additionalProperties": false,
+  "$defs": {
+    "dialecticLineage": {
+      "type": "object",
+      "required": ["position_artifact_ids", "synthesis_artifact_ids", "convergence_outcome", "selected_candidate", "canonical_logical_owner"],
+      "properties": {
+        "position_artifact_ids": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "synthesis_artifact_ids": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "convergence_outcome": {"enum": ["converged", "diverged", "needs_user_decision", "invalid"]},
+        "adjudication_id": {"type": "string", "minLength": 1},
+        "selected_candidate": {"enum": ["visionary", "pragmatist", "third_result"]},
+        "canonical_logical_owner": {"const": "create_architecture_owner"}
+      },
+      "additionalProperties": false
+    }
+  },
   "allOf": [
+    {
+      "if": {"properties": {"architecture_generation_mode": {"const": "direct"}}, "required": ["architecture_generation_mode"]},
+      "then": {"not": {"required": ["dialectic_lineage"]}}
+    },
+    {
+      "if": {"properties": {"architecture_generation_mode": {"const": "dialectic"}}, "required": ["architecture_generation_mode"]},
+      "then": {"required": ["dialectic_lineage"]}
+    },
+    {
+      "if": {"properties": {"mode": {"const": "audit"}}, "required": ["mode"]},
+      "then": {"properties": {"implementation_scope": {"const": "proposal_only"}, "next_step": {"const": "done"}}}
+    },
     {
       "if": {"properties": {"implementation_scope": {"const": "proposal_only"}}, "required": ["implementation_scope"]},
       "then": {"properties": {"next_step": {"const": "done"}}}

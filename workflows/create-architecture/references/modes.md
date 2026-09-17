@@ -82,3 +82,12 @@ In that case stay in `improve`, narrow options, and run the full approval gate.
 - `improve` still runs option narrowing and approval when the change is materially architectural.
 - `align` is the default gentle path, not a loophole around approval.
 - If the task changes mode midstream, stop and get approval for the new scope.
+
+## Architecture generation selector
+
+Every mode is direct by default. Use `dialectic` only when the request explicitly asks for dialectic proposal generation; omission and ambiguity remain `direct`.
+
+- `scaffold`, `improve`, and `align`: source audit, context recovery, and option narrowing remain single-owner stages; dialectic positions begin only where proposal generation would otherwise start.
+- direct `audit`: preserve the existing evidence-only terminal result.
+- dialectic `audit`: run competing read-only diagnostic architecture models, rejoin `architecture_proposal` with `implementation_scope: proposal_only`, retain Architect/Critic review and approval, then end without canonical artifact implementation.
+- negative dialectic adjudication: terminate through the typed unresolved exit before proposal review, approval, or implementation.

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/hegel/dialectic-convergence-output",
+  "type": "object",
+  "required": ["outcome", "summary", "dimension_results", "material_divergences", "next_step"],
+  "properties": {"outcome": {"enum": ["converged", "diverged", "needs_user_decision", "invalid"]}, "summary": {"type": "string", "minLength": 1}, "dimension_results": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["dimension", "aligned", "evidence"], "properties": {"dimension": {"type": "string", "minLength": 1}, "aligned": {"type": "boolean"}, "evidence": {"type": "string", "minLength": 1}}, "additionalProperties": false}}, "material_divergences": {"type": "array", "items": {"type": "string", "minLength": 1}}, "decision_reasons": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}, "protocol_reasons": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}, "selected_candidate": {"enum": ["visionary", "pragmatist"]}, "canonical_lineage": {"$ref": "#/$defs/lineage"}, "next_step": {"enum": ["diagnostic_report", "diagnostic_adjudication"]}},
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "converged"}}, "required": ["outcome"]}, "then": {"required": ["selected_candidate", "canonical_lineage"], "properties": {"material_divergences": {"type": "array", "maxItems": 0}, "next_step": {"const": "diagnostic_report"}}}},
+    {"if": {"properties": {"outcome": {"enum": ["diverged", "needs_user_decision", "invalid"]}}, "required": ["outcome"]}, "then": {"not": {"required": ["selected_candidate"]}, "properties": {"material_divergences": {"type": "array", "minItems": 1}, "next_step": {"const": "diagnostic_adjudication"}}}},
+    {"if": {"properties": {"outcome": {"const": "needs_user_decision"}}, "required": ["outcome"]}, "then": {"required": ["decision_reasons"]}},
+    {"if": {"properties": {"outcome": {"const": "invalid"}}, "required": ["outcome"]}, "then": {"required": ["protocol_reasons"]}}
+  ],
+  "$defs": {"lineage": {"type": "object", "required": ["position_artifact_ids", "synthesis_artifact_ids", "selected_candidate"], "properties": {"position_artifact_ids": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}, "synthesis_artifact_ids": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}, "selected_candidate": {"enum": ["visionary", "pragmatist"]}}, "additionalProperties": false}}
+}

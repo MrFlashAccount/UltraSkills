@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-architecture/dialectic-pragmatist-position-output",
+  "type": "object",
+  "required": ["outcome", "logical_position", "position_kind", "summary", "evidence_refs", "fingerprint", "artifacts"],
+  "properties": {
+    "outcome": {"const": "ready_for_freeze"},
+    "logical_position": {"const": "pragmatist"},
+    "position_kind": {"enum": ["antithesis", "no_viable_antithesis"]},
+    "summary": {"type": "string", "minLength": 1},
+    "evidence_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "fingerprint": {"$ref": "#/$defs/fingerprint"},
+    "no_antithesis_reason": {"type": "string", "minLength": 1},
+    "axes_tested": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "artifacts": {"$ref": "#/$defs/artifacts"}
+  },
+  "additionalProperties": false,
+  "allOf": [{"if": {"properties": {"position_kind": {"const": "no_viable_antithesis"}}, "required": ["position_kind"]}, "then": {"required": ["no_antithesis_reason", "axes_tested"]}}],
+  "$defs": {
+    "fingerprint": {"type": "object", "required": ["boundaries", "ownership", "dependency_direction", "runtime_data_flow", "assumptions", "evidence_interpretation", "compatibility", "rejected_alternatives"], "properties": {"boundaries": {"type": "string", "minLength": 1}, "ownership": {"type": "string", "minLength": 1}, "dependency_direction": {"type": "string", "minLength": 1}, "runtime_data_flow": {"type": "string", "minLength": 1}, "assumptions": {"type": "string", "minLength": 1}, "evidence_interpretation": {"type": "string", "minLength": 1}, "compatibility": {"type": "string", "minLength": 1}, "rejected_alternatives": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "artifacts": {"type": "array", "minItems": 1, "maxItems": 1, "prefixItems": [{"allOf": [{"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"}, {"type": "object", "required": ["id", "content_type"], "properties": {"id": {"const": "create-architecture-pragmatist-position"}, "content_type": {"const": "text/markdown"}}}]}], "items": false}
+  }
+}

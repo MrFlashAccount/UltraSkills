@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/hegel/hostile-review-output",
+  "type": "object",
+  "required": ["outcome", "summary", "checked_evidence", "findings", "next_step"],
+  "properties": {
+    "outcome": {"enum": ["approved", "needs_revision"]},
+    "summary": {"type": "string", "minLength": 1},
+    "checked_evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "findings": {"type": "array", "items": {"type": "object", "required": ["category", "severity", "evidence", "action"], "properties": {"category": {"enum": ["source_support", "shared_blind_spot", "unsupported_inference", "false_convergence", "counterexample", "baseline"]}, "severity": {"enum": ["must_fix", "should_fix", "note"]}, "evidence": {"type": "string", "minLength": 1}, "action": {"type": "string", "minLength": 1}}, "additionalProperties": false}},
+    "next_step": {"enum": ["done", "diagnostic_report", "diagnostic_review_exit"]}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "approved"}}, "required": ["outcome"]}, "then": {"properties": {"next_step": {"const": "done"}, "findings": {"type": "array", "not": {"contains": {"type": "object", "required": ["severity"], "properties": {"severity": {"enum": ["must_fix", "should_fix"]}}}}}}}},
+    {"if": {"properties": {"outcome": {"const": "needs_revision"}}, "required": ["outcome"]}, "then": {"properties": {"next_step": {"const": "diagnostic_report"}, "findings": {"type": "array", "contains": {"type": "object", "required": ["severity"], "properties": {"severity": {"enum": ["must_fix", "should_fix"]}}}}}}}
+  ]
+}

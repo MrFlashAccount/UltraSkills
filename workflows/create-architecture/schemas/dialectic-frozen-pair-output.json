@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-architecture/dialectic-frozen-pair-output",
+  "type": "object",
+  "required": ["outcome", "shared_input_artifact", "positions"],
+  "properties": {
+    "outcome": {"const": "frozen"},
+    "shared_input_artifact": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"},
+    "positions": {"type": "array", "minItems": 2, "maxItems": 2, "prefixItems": [{"$ref": "#/$defs/visionary"}, {"$ref": "#/$defs/pragmatist"}], "items": false}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "fingerprint": {"type": "object", "required": ["boundaries", "ownership", "dependency_direction", "runtime_data_flow", "assumptions", "evidence_interpretation", "compatibility", "rejected_alternatives"], "properties": {"boundaries": {"type": "string", "minLength": 1}, "ownership": {"type": "string", "minLength": 1}, "dependency_direction": {"type": "string", "minLength": 1}, "runtime_data_flow": {"type": "string", "minLength": 1}, "assumptions": {"type": "string", "minLength": 1}, "evidence_interpretation": {"type": "string", "minLength": 1}, "compatibility": {"type": "string", "minLength": 1}, "rejected_alternatives": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "position": {"type": "object", "required": ["logical_position", "artifact", "fingerprint", "accepted_output_step_id"], "properties": {"logical_position": {"enum": ["visionary", "pragmatist"]}, "artifact": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"}, "fingerprint": {"$ref": "#/$defs/fingerprint"}, "accepted_output_step_id": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "visionary": {"type": "object", "allOf": [{"$ref": "#/$defs/position"}, {"type": "object", "properties": {"logical_position": {"const": "visionary"}}}]},
+    "pragmatist": {"type": "object", "allOf": [{"$ref": "#/$defs/position"}, {"type": "object", "properties": {"logical_position": {"const": "pragmatist"}}}]}
+  }
+}

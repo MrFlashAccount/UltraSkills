@@ -38,6 +38,7 @@ function workflowEntryForPath({ workflowPath, rootPath, sourceId, rootOrder }) {
   }
 
   const name = typeof workflow.name === 'string' ? workflow.name.trim() : '';
+  const configuredDisplayName = typeof workflow.displayName === 'string' ? workflow.displayName.trim() : '';
   const description = typeof workflow.description === 'string' ? workflow.description.trim() : '';
   if (!name) throw new Error(`workflow is missing top-level name: ${catalogPath}`);
   if (!description) throw new Error(`workflow is missing top-level description: ${catalogPath}`);
@@ -46,7 +47,7 @@ function workflowEntryForPath({ workflowPath, rootPath, sourceId, rootOrder }) {
   const relativePath = normalizedRelativePath(rootPath, workflowDir);
   return {
     name,
-    displayName: name,
+    displayName: configuredDisplayName || name,
     description,
     sourceId,
     rootOrder,

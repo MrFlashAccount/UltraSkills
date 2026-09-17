@@ -3,9 +3,10 @@
   "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-architecture/options-output",
   "title": "Create Architecture Option Narrowing Output",
   "type": "object",
-  "required": ["outcome", "summary", "options", "recommended_option"],
+  "required": ["outcome", "architecture_generation_mode", "summary", "options", "recommended_option"],
   "properties": {
     "outcome": {"const": "ready_for_proposal"},
+    "architecture_generation_mode": {"enum": ["direct", "dialectic"]},
     "summary": {"type": "string", "minLength": 1},
     "options": {
       "type": "array",
@@ -44,10 +45,30 @@
       }
     },
     "recommended_option": {"type": "string", "minLength": 1},
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "prefixItems": [
+        {
+          "allOf": [
+            {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"},
+            {"type": "object", "required": ["id", "content_type"], "properties": {"id": {"const": "create-architecture-dialectic-input"}, "content_type": {"const": "application/json"}}}
+          ]
+        }
+      ],
+      "items": false
+    },
     "results": {
       "type": "array",
       "items": {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"}
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"architecture_generation_mode": {"const": "dialectic"}}, "required": ["architecture_generation_mode"]},
+      "then": {"required": ["artifacts"]}
+    }
+  ]
 }
