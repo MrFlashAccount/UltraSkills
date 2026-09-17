@@ -6,7 +6,9 @@ export function executeSh({ argumentsValue }) {
   return runJsonSubprocess({
     command: '/bin/sh',
     args: ['-c', argumentsValue.script],
+    cwd: undefined,
     stdin: JSON.stringify(argumentsValue.input ?? null),
     timeoutMs: argumentsValue.timeout_ms ?? DEFAULT_TIMEOUT_MS,
+    captureStderr: false,
   });
 }

@@ -1,16 +1,18 @@
 import { spawn } from 'node:child_process';
 
-const MAX_STDOUT_BYTES = 10 * 1024 * 1024;
+const MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
 
-export function runJsonSubprocess({ command, args, stdin, timeoutMs }) {
+export function runSubprocess({ command, args, cwd, stdin, timeoutMs, captureStderr }) {
   return new Promise((resolve, reject) => {
     const ownsProcessGroup = process.platform !== 'win32';
     const child = spawn(command, args, {
+      cwd,
       detached: ownsProcessGroup,
-      stdio: ['pipe', 'pipe', 'ignore'],
+      stdio: captureStderr ? ['pipe', 'pipe', 'pipe'] : ['pipe', 'pipe', 'ignore'],
     });
     const stdout = [];
-    let stdoutBytes = 0;
+    const stderr = [];
+    let outputBytes = 0;
     let settled = false;
     const timer = setTimeout(() => {
       terminateProcessTree();
@@ -38,28 +40,31 @@ export function runJsonSubprocess({ command, args, stdin, timeoutMs }) {
       else resolve(value);
     }
 
-    child.on('error', (error) => finish(new Error(`failed to start call function process: ${error.message}`)));
-    child.stdout.on('data', (chunk) => {
-      stdoutBytes += chunk.length;
-      if (stdoutBytes > MAX_STDOUT_BYTES) {
+    function capture(chunks, chunk) {
+      if (settled) return;
+      outputBytes += chunk.length;
+      if (outputBytes > MAX_OUTPUT_BYTES) {
         terminateProcessTree();
-        finish(new Error(`call function output exceeded ${MAX_STDOUT_BYTES} bytes`));
+        finish(new Error(`call function output exceeded ${MAX_OUTPUT_BYTES} bytes`));
         return;
       }
-      stdout.push(chunk);
-    });
+      chunks.push(chunk);
+    }
+
+    child.on('error', (error) => finish(new Error(`failed to start call function process: ${error.message}`)));
+    child.stdout.on('data', (chunk) => capture(stdout, chunk));
+    if (captureStderr) child.stderr.on('data', (chunk) => capture(stderr, chunk));
     child.on('close', (code, signal) => {
       if (settled) return;
-      if (code !== 0) {
-        finish(new Error(`call function process failed with ${signal ? `signal ${signal}` : `exit code ${code}`}`));
+      if (code === null) {
+        finish(new Error(`call function process failed with ${signal ? `signal ${signal}` : 'no exit code'}`));
         return;
       }
-      const text = Buffer.concat(stdout).toString('utf8');
-      try {
-        finish(undefined, JSON.parse(text));
-      } catch {
-        finish(new Error('call function process did not return valid JSON'));
-      }
+      finish(undefined, {
+        exitCode: code,
+        stdout: Buffer.concat(stdout).toString('utf8'),
+        stderr: Buffer.concat(stderr).toString('utf8'),
+      });
     });
     child.stdin.on('error', (error) => {
       terminateProcessTree();
@@ -67,4 +72,16 @@ export function runJsonSubprocess({ command, args, stdin, timeoutMs }) {
     });
     child.stdin.end(stdin);
   });
+}
+
+export async function runJsonSubprocess(options) {
+  const result = await runSubprocess(options);
+  if (result.exitCode !== 0) {
+    throw new Error(`call function process failed with exit code ${result.exitCode}`);
+  }
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    throw new Error('call function process did not return valid JSON');
+  }
 }

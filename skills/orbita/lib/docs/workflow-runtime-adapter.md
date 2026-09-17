@@ -46,8 +46,9 @@ The built-in registry contains:
 - `ask_jeff`: sends `prompt` through an internal OpenAI Responses transport with strict JSON Schema output and `store: false`. `api_key_file` is absolute or relative to the workflow file; its trimmed content is used as a Bearer token and is never projected into host requests. `base_url` is optional, must use HTTPS without URL credentials, and defaults to `https://api.openai.com/v1`. Credential-read failures expose neither the resolved path nor the secret-file name.
 - `sh`: runs `script` through `/bin/sh -c`, sends `input` as JSON on stdin, and requires one JSON value on stdout.
 - `js`: runs `source` in a separate runtime process with `input` as its argument and requires the returned value to be JSON-serializable. The process boundary contains exits, crashes, and timeouts; it is not a security sandbox.
+- `exec`: starts `executable` directly with the string array `args`, optional string `stdin`, and no shell. Its fixed result is `{ exit_code, stdout, stderr }`, so a non-zero exit code is workflow data rather than a call failure. `cwd` defaults to the workflow directory; a relative value is resolved from that directory.
 
-All built-ins accept an optional bounded `timeout_ms`. For `ask_jeff`, it covers credential reading, the HTTP exchange, and response-body parsing. Subprocess stdout is bounded; timeout and output-limit failures terminate the whole spawned process group on POSIX instead of leaving descendants alive. Orbita performs no automatic retry: repeating `call-function` after an uncertain external side effect may duplicate that effect.
+All built-ins accept an optional bounded `timeout_ms`. For `ask_jeff`, it covers credential reading, the HTTP exchange, and response-body parsing. Captured subprocess output is bounded to 10 MiB in total; timeout and output-limit failures terminate the whole spawned process group on POSIX instead of leaving descendants alive. Orbita performs no automatic retry: repeating `call-function` after an uncertain external side effect may duplicate that effect.
 
 ## Semantic loop limits
 

@@ -8,7 +8,9 @@ export function executeJs({ argumentsValue }) {
   return runJsonSubprocess({
     command: process.execPath,
     args: [JS_WORKER_PATH],
+    cwd: undefined,
     stdin: JSON.stringify({ source: argumentsValue.source, input: argumentsValue.input ?? null }),
     timeoutMs: argumentsValue.timeout_ms ?? DEFAULT_TIMEOUT_MS,
+    captureStderr: false,
   });
 }

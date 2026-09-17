@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { test } from 'bun:test';
 import { executeCallFunction } from '../call-functions/execute.mjs';
 import { callFunctionDefinitions } from '../call-functions/registry.mjs';
@@ -51,6 +51,44 @@ test('sh and js call functions return structured JSON', async () => {
     workflowPath: '/tmp/workflow.json',
   }, { functions: callFunctionDefinitions });
   assert.deepEqual(js, { answer: 'javascript' });
+});
+
+test('exec preserves argv boundaries and returns a non-zero exit as fixed output', async () => {
+  const literalArgument = 'spaces ; $(not-a-shell)';
+  const result = await executeCallFunction({
+    functionName: 'exec',
+    argumentsValue: {
+      executable: process.execPath,
+      args: [
+        '-e',
+        'process.stdout.write(process.argv[1]); process.stderr.write("diagnostic"); process.exit(7);',
+        literalArgument,
+      ],
+    },
+    workflowPath: '/tmp/workflow.json',
+  }, { functions: callFunctionDefinitions });
+  assert.deepEqual(result, {
+    exit_code: 7,
+    stdout: literalArgument,
+    stderr: 'diagnostic',
+  });
+});
+
+test('exec resolves cwd from the workflow directory', async () => {
+  const dir = makeTestDir('call-exec-cwd');
+  mkdirSync(path.join(dir, 'nested'));
+  const result = await executeCallFunction({
+    functionName: 'exec',
+    argumentsValue: {
+      executable: process.execPath,
+      args: ['-e', 'process.stdout.write(process.cwd())'],
+      cwd: 'nested',
+    },
+    workflowPath: path.join(dir, 'workflow.json'),
+  }, { functions: callFunctionDefinitions });
+  assert.equal(result.exit_code, 0);
+  assert.equal(result.stdout, path.join(dir, 'nested'));
+  assert.equal(result.stderr, '');
 });
 
 test('ask_jeff uses the OpenAI transport without exposing the credential', async () => {
@@ -133,6 +171,40 @@ test('workflow semantics distinguish call-defined and fixed function output sche
     },
   };
   assert.equal(validateWorkflow({ workflowDTO: fixedWorkflow, outputSchemas: new Map(), externalSchemas: [], callFunctions: fixedFunctions }).toJSON().ok, true);
+});
+
+test('exec owns its fixed output schema', () => {
+  const workflow = {
+    name: 'exec-contract',
+    version: 1,
+    start: 'invoke',
+    done: 'done',
+    steps: {
+      invoke: {
+        name: 'Invoke executable',
+        kind: 'call',
+        function: 'exec',
+        arguments: { executable: process.execPath },
+        next: 'done',
+      },
+      done: { name: 'Done', kind: 'done' },
+    },
+  };
+  assert.equal(validateWorkflow({ workflowDTO: workflow, externalSchemas: [] }).toJSON().ok, true);
+  assert.throws(
+    () => validateWorkflow({
+      workflowDTO: {
+        ...workflow,
+        steps: {
+          ...workflow.steps,
+          invoke: { ...workflow.steps.invoke, output: { schema: 'output.schema.json' } },
+        },
+      },
+      outputSchemas: new Map([['output.schema.json', outputSchema]]),
+      externalSchemas: [],
+    }),
+    /owns its fixed output schema/,
+  );
 });
 
 test('fixed-output function definition owns its executable implementation', async () => {
