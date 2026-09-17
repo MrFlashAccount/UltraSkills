@@ -132,6 +132,7 @@ When a canonical label and folder path differ, the folder path is the source of 
 - create or refactor a skill -> `workflows/create-skill`
 - workflow-runner orchestration through CLI-returned instructions -> `skills/orbita`
 - `workflows/spdd` — **What it is:** the full staged research, design, execution-ready architecture, implementation, and review workflow. **Use when:** non-trivial code work needs evidence, approvals, delegated implementation, or coordinated review. **Do not use when:** a direct edit or one focused engineering workflow is sufficient.
+- `workflows/hegel` — **What it is:** read-only evidence-backed diagnosis through isolated Visionary/Pragmatist positions, independent synthesis, bounded adjudication, and hostile falsification. **Use when:** a consequential diagnostic question benefits from two complete competing models and a meaningful evidence budget. **Do not use when:** implementation, external mutation, or a simple fact lookup is required.
 - multi-role read-only review -> `workflows/code-review-orchestrator`
 - pre-implementation Researcher -> Critic research verdict -> `workflows/research-critic`
 - approved closed contract -> backend/frontend implementation + verification handoff -> `workflows/implementation-harness`
@@ -141,7 +142,7 @@ When a canonical label and folder path differ, the folder path is the source of 
 - `workflows/make-it-fast` — **What it is:** baseline-first, profile-guided optimization with comparable measurement. **Use when:** performance is the primary requirement and the workload is stable. **Do not use when:** the optimization or metric is speculative.
 - `workflows/deep-debugging` — **What it is:** bounded falsifiable diagnosis with independent evidence judgment and one hostile reset. **Use when:** an observable bug has no exact causal chain yet. **Do not use when:** the cause is already obvious or no reproduction can be defined.
 - design rationale and shared routing boundaries for those five workflows -> [`workflows/LIGHTWEIGHT_ENGINEERING_WORKFLOWS.md`](workflows/LIGHTWEIGHT_ENGINEERING_WORKFLOWS.md)
-- architecture audit/proposal/approval/implementation -> `workflows/create-architecture`
+- architecture audit/proposal/approval/implementation, with direct-by-default or opt-in dialectic proposal generation -> `workflows/create-architecture`
 - design-memory review/proposal/implementation -> `workflows/create-design`
 - create, audit, simplify, or restructure a skill -> `workflows/create-skill`
 - bounded repeated execution with explicit controller decisions -> `workflows/loop`

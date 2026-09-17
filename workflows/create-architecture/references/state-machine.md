@@ -55,3 +55,17 @@ Lightweight sketches are allowed only when clearly marked as proposal material r
 - the repo is tempting you to document the current state too early
 - multiple options are plausible
 - the architecture package is large enough that approval needs a stable proposal target
+
+## Dialectic transition overlay
+
+Direct mode preserves every transition above. Explicit dialectic mode adds:
+
+- non-audit `option-narrowing` -> `proposal-dialectic-positions`
+- dialectic audit `source-audit` -> `proposal-dialectic-positions`
+- `proposal-dialectic-positions` -> `proposal-dialectic-syntheses`
+- converged synthesis -> `proposal-ready`
+- diverged, user-decision, or invalid synthesis -> one `proposal-dialectic-adjudication`
+- positive adjudication -> `proposal-ready`
+- reject-both or irreparable invalidity -> `proposal-dialectic-exit` -> `done`
+
+The unresolved route must not pass through Architect review, Critic pressure, approval, or implementation. A dialectic audit that reaches proposal approval remains proposal-only and goes directly to `done` after approval.

@@ -7,6 +7,9 @@
     "outcome",
     "mode",
     "implementation_scope",
+    "architecture_generation_mode",
+    "proposal_generation_step",
+    "next_step",
     "summary",
     "representative_asks",
     "architecture_change_needed",
@@ -20,6 +23,9 @@
     "mode": {"enum": ["audit", "scaffold", "improve"]},
     "subtype": {"const": "align"},
     "implementation_scope": {"enum": ["proposal_only", "implement"]},
+    "architecture_generation_mode": {"enum": ["direct", "dialectic"]},
+    "proposal_generation_step": {"enum": ["architecture_proposal", "proposal_dialectic_positions"]},
+    "next_step": {"enum": ["done", "context_recovery", "proposal_dialectic_positions"]},
     "summary": {"type": "string", "minLength": 1},
     "representative_asks": {
       "type": "array",
@@ -32,6 +38,20 @@
     "missing_evidence": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "constraints": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "pressure_points": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "prefixItems": [
+        {
+          "allOf": [
+            {"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"},
+            {"type": "object", "required": ["id", "content_type"], "properties": {"id": {"const": "create-architecture-dialectic-input"}, "content_type": {"const": "application/json"}}}
+          ]
+        }
+      ],
+      "items": false
+    },
     "evolution_slice_needed": {"type": "boolean"},
     "findings": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "recommendation": {"enum": ["stop", "scaffold_next", "improve_next", "continue"]},
@@ -65,6 +85,26 @@
     {
       "if": {"properties": {"subtype": {"const": "align"}}, "required": ["subtype"]},
       "then": {"properties": {"mode": {"const": "improve"}}}
+    },
+    {
+      "if": {"properties": {"architecture_generation_mode": {"const": "direct"}}, "required": ["architecture_generation_mode"]},
+      "then": {"properties": {"proposal_generation_step": {"const": "architecture_proposal"}}}
+    },
+    {
+      "if": {"properties": {"architecture_generation_mode": {"const": "dialectic"}}, "required": ["architecture_generation_mode"]},
+      "then": {"properties": {"proposal_generation_step": {"const": "proposal_dialectic_positions"}}}
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "ready_for_context"}}, "required": ["outcome"]},
+      "then": {"properties": {"next_step": {"const": "context_recovery"}}}
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "audit_complete"}, "architecture_generation_mode": {"const": "direct"}}, "required": ["outcome", "architecture_generation_mode"]},
+      "then": {"properties": {"next_step": {"const": "done"}}}
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "audit_complete"}, "architecture_generation_mode": {"const": "dialectic"}}, "required": ["outcome", "architecture_generation_mode"]},
+      "then": {"required": ["artifacts"], "properties": {"next_step": {"const": "proposal_dialectic_positions"}}}
     }
   ]
 }

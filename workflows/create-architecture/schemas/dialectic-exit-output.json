@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/create-architecture/dialectic-exit-output",
+  "type": "object",
+  "required": ["outcome", "summary", "adjudication_ref", "evidence_refs", "canonical_proposal_created", "approval_reached", "implementation_reached", "artifacts", "next_step"],
+  "properties": {
+    "outcome": {"const": "unresolved_with_evidence"}, "summary": {"type": "string", "minLength": 1}, "adjudication_ref": {"type": "string", "minLength": 1}, "evidence_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "canonical_proposal_created": {"const": false}, "approval_reached": {"const": false}, "implementation_reached": {"const": false},
+    "artifacts": {"type": "array", "minItems": 1, "maxItems": 1, "prefixItems": [{"allOf": [{"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"}, {"type": "object", "required": ["id", "content_type"], "properties": {"id": {"const": "create-architecture-unresolved-report"}, "content_type": {"const": "text/markdown"}}}]}], "items": false},
+    "next_step": {"const": "done"}
+  },
+  "additionalProperties": false
+}

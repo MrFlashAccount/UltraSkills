@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/spdd/dialectic-adjudication-output",
+  "type": "object",
+  "required": ["outcome", "resolution", "summary", "synthesis_artifact_ids", "evidence_refs", "next_step"],
+  "properties": {
+    "outcome": {"enum": ["adjudicated", "unresolved_with_evidence"]},
+    "resolution": {"enum": ["select_visionary", "select_pragmatist", "third_result", "reject_both", "irreparable_invalid"]},
+    "summary": {"type": "string", "minLength": 1},
+    "decision_basis": {"type": "string", "minLength": 1},
+    "canonical_lineage": {"$ref": "#/$defs/lineage"},
+    "unresolved_reasons": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "synthesis_artifact_ids": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "evidence_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "prefixItems": [{"allOf": [{"$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"}, {"type": "object", "required": ["id", "content_type"], "properties": {"id": {"const": "spdd-architecture-adjudicated-third-result"}, "content_type": {"const": "text/markdown"}}}]}],
+      "items": false
+    },
+    "next_step": {"enum": ["architecture_draft", "architecture_dialectic_exit"]}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "adjudicated"}}, "required": ["outcome"]},
+      "then": {
+        "required": ["decision_basis", "canonical_lineage"],
+        "properties": {
+          "resolution": {"enum": ["select_visionary", "select_pragmatist", "third_result"]},
+          "next_step": {"const": "architecture_draft"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"resolution": {"const": "third_result"}}, "required": ["resolution"]},
+      "then": {"required": ["artifacts"]}
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "unresolved_with_evidence"}}, "required": ["outcome"]},
+      "then": {
+        "required": ["unresolved_reasons"],
+        "properties": {
+          "resolution": {"enum": ["reject_both", "irreparable_invalid"]},
+          "next_step": {"const": "architecture_dialectic_exit"}
+        },
+        "not": {"required": ["canonical_lineage"]}
+      }
+    }
+  ],
+  "$defs": {
+    "lineage": {
+      "type": "object",
+      "required": ["position_artifact_ids", "synthesis_artifact_ids", "selected_candidate"],
+      "properties": {
+        "position_artifact_ids": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "synthesis_artifact_ids": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "selected_candidate": {"enum": ["visionary", "pragmatist", "third_result"]}
+      },
+      "additionalProperties": false
+    }
+  }
+}

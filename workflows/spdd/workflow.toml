@@ -1,6 +1,6 @@
 name = "spdd"
 version = 1
-description = "End-to-end architecture and execution workflow for non-trivial code work: research attack, optional UI design proposal gate, one execution-ready architecture Canvas and approval, implementation and review fanout, and final user implementation approval. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, or workflow creation/design."
+description = "End-to-end architecture and execution workflow for non-trivial code work: research attack, optional UI design proposal gate, direct-by-default or opt-in dialectic architecture generation, one execution-ready architecture Canvas and approval, implementation and review fanout, and final user implementation approval. Use when a task needs structured evidence, staged approvals, role delegation, implementation slicing, or coordinated review before completion. Do not use when the user only needs a lightweight research verdict, a simple direct fix, a one-shot answer, research-only dialectic diagnosis, or workflow creation/design."
 start = "research_draft"
 done = "done"
 
@@ -48,7 +48,9 @@ Before creating the research artifact or moving toward a proposal, run a user di
 - Phrase every user-answerable non_blocking_stop.needed as a direct user-facing question; the orchestrator must route it to the user as a question, not answer it from inference or convert it into a summary.
 Do not create `reasons-canvas-research` before the needed user dialogue is complete or evidence shows no user dialogue is needed.
 Read the task context, gather local/project evidence, identify constraints, risks, open questions, and architecture-sensitive pressure.
-Decide whether this task needs the optional UI design proposal gate. Record the mandatory `UI design needed: yes | no` decision and its evidence-backed rationale in the Requirements section of `reasons-canvas-research`. Return output.next_step = ui_intent_draft when the approved slice materially changes a user-facing interface, interaction model, information hierarchy, responsive behavior, or visual/product direction and therefore needs a product-surface proposal before architecture. Return output.next_step = architecture_draft for backend, infrastructure, tooling, documentation, non-visual behavior, or truly trivial UI copy/bug work where architecture can proceed safely from research alone. Missing UI evidence is not a reason to skip the gate: if UI work is material but its design basis is missing, route to ui_intent_draft so that step can request the missing evidence. Include the selected next step in output.summary and preserve it across revisions unless new evidence changes the task surface.
+Normalize the architecture-generation selector conservatively. Set architecture_generation_mode = dialectic only when the user explicitly requests dialectic architecture generation. Explicit direct, omission, or ambiguity means direct. Set architecture_generation_step = architecture_draft for direct and architecture_dialectic_positions for dialectic. This selector changes architecture generation only; research and business-proposal generation remain the existing single-owner path.
+Decide whether this task needs the optional UI design proposal gate. Record the mandatory `UI design needed: yes | no` decision and its evidence-backed rationale in the Requirements section of `reasons-canvas-research`. Return output.next_step = ui_intent_draft when the approved slice materially changes a user-facing interface, interaction model, information hierarchy, responsive behavior, or visual/product direction and therefore needs a product-surface proposal before architecture. For backend, infrastructure, tooling, documentation, non-visual behavior, or truly trivial UI copy/bug work, return output.next_step = architecture_generation_step so the selected direct or dialectic architecture path starts immediately after research approval. Missing UI evidence is not a reason to skip the gate: if UI work is material but its design basis is missing, route to ui_intent_draft so that step can request the missing evidence. Include the selected next step in output.summary and preserve it across revisions unless new evidence changes the task surface.
+When UI design is not needed, use architecture_generation_step as output.next_step. When UI design is needed, route first to ui_intent_draft; the UI approval gate will then use architecture_generation_step. Preserve architecture_generation_mode and architecture_generation_step across research revisions unless the user changes the request.
 Create exactly one first-class human-facing research artifact named `reasons-canvas-research`. Do not create any separate legacy research artifact or structured legacy output.
 Fill only the research-owned depth in `reasons-canvas-research`: evidence-backed Requirements, observed domain Entities, and research-level constraints, candidate options, risks, norms, safeguards, and open tensions. Do not finalize architecture, file-level operations, or implementation work; mark those as questions or constraints for later phases. Emit artifact metadata for `reasons-canvas-research` in artifacts[].
 Emit a compact output.summary as the human-facing research proposal state for approval gates. Summarize the artifact's current proposal state, major decisions, unresolved tensions, and why it is ready for attack/approval without embedding the artifact body.
@@ -200,6 +202,8 @@ needs_revision = "ui_intent_draft"
 [steps.approve_ui_intent]
 name = "Approve UI design proposal"
 kind = "approval"
+next = "${{ input.research_draft.architecture_generation_step }}"
+onReject = "ui_intent_draft"
 
 [steps.approve_ui_intent.input]
 summary = "${{ input.ui_intent_draft.summary }}"
@@ -214,23 +218,175 @@ findings = "${{ input.ui_intent_attack.verdict.findings }}"
 selector = "${{ input.ui_intent_draft.outcome }}"
 equals = "ready_for_attack"
 
-[steps.approve_ui_intent.next]
-match = "${{ output.approval }}"
 
-[steps.approve_ui_intent.next.cases]
-approved = "architecture_draft"
-rejected = "ui_intent_draft"
+[steps.architecture_dialectic_positions]
+name = "Architecture dialectic positions"
+kind = "fanout"
+agent = "spdd_dialectic_manifest"
+max_parallel = 2
+
+[steps.architecture_dialectic_positions.input]
+role = "architect"
+branches = ["architecture_visionary_position", "architecture_pragmatist_position"]
+prompt = '''Freeze the two accepted architecture position outputs into the schema-defined ordered manifest. Do not synthesize, compare, review, or create the canonical architecture Canvas. Copy the approved research artifact metadata as shared_input_artifact, then copy full artifact metadata, package fingerprint, and accepted branch step id for Visionary followed by Pragmatist.
+
+Approved research artifacts: ${{ input.research_draft.artifacts }}
+Visionary position: ${{ input.architecture_visionary_position }}
+Pragmatist position: ${{ input.architecture_pragmatist_position }}'''
+
+[steps.architecture_dialectic_positions.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-frozen-pair-output.json"
+
+[steps.architecture_dialectic_positions.next]
+match = "${{ output.outcome }}"
+
+[steps.architecture_dialectic_positions.next.cases]
+frozen = "architecture_dialectic_syntheses"
+
+[steps.architecture_dialectic_positions.branches.architecture_visionary_position]
+name = "Visionary architecture position"
+agent = "spdd_architecture_visionary"
+
+[steps.architecture_dialectic_positions.branches.architecture_visionary_position.input]
+role = "architect"
+prompt = '''Produce one complete evidence-grounded Visionary architecture position from the approved research and, when applicable, approved UI proposal. Work in isolation: do not seek or infer a peer position, shared mutable draft, transcript, or hidden reasoning. Write exactly one `spdd-architecture-visionary-position` Markdown artifact. Cover all architecture fingerprint dimensions and preserve the existing downstream hostile review and approval boundary.
+
+Approved research artifacts: ${{ input.research_draft.artifacts }}
+Approved UI artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI proposal applies." }}
+UI approval: ${{ input.approve_ui_intent | default: "No UI approval applies." }}'''
+
+[steps.architecture_dialectic_positions.branches.architecture_visionary_position.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-visionary-position-output.json"
+
+[steps.architecture_dialectic_positions.branches.architecture_pragmatist_position]
+name = "Pragmatist architecture position"
+agent = "spdd_architecture_pragmatist"
+
+[steps.architecture_dialectic_positions.branches.architecture_pragmatist_position.input]
+role = "architect"
+prompt = '''Produce one complete evidence-grounded Pragmatist counter-position from the same approved research and, when applicable, approved UI proposal. Change at least one material architecture axis or explicitly emit no_viable_antithesis with the tested axes and evidence. Do not return a critique list. Work in isolation and write exactly one `spdd-architecture-pragmatist-position` Markdown artifact.
+
+Approved research artifacts: ${{ input.research_draft.artifacts }}
+Approved UI artifacts: ${{ input.ui_intent_draft.artifacts | default: "No UI proposal applies." }}
+UI approval: ${{ input.approve_ui_intent | default: "No UI approval applies." }}'''
+
+[steps.architecture_dialectic_positions.branches.architecture_pragmatist_position.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-pragmatist-position-output.json"
+
+[steps.architecture_dialectic_syntheses]
+name = "Architecture dialectic syntheses"
+kind = "fanout"
+agent = "spdd_dialectic_comparator"
+max_parallel = 2
+
+[steps.architecture_dialectic_syntheses.input]
+role = "architect"
+branches = ["architecture_visionary_synthesis", "architecture_pragmatist_synthesis"]
+prompt = '''Compare the two accepted synthesis fingerprints across every package-owned architecture dimension. Compare decisions and evidence interpretation, never wording. Return converged only when no material divergence remains; select exactly one candidate lineage and route to architecture_draft. Otherwise preserve divergences and route exactly once to architecture_dialectic_adjudication. This is comparison only, not hostile review.
+
+Frozen pair: ${{ input.architecture_dialectic_positions }}
+Visionary synthesis: ${{ input.architecture_visionary_synthesis }}
+Pragmatist synthesis: ${{ input.architecture_pragmatist_synthesis }}'''
+
+[steps.architecture_dialectic_syntheses.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-convergence-output.json"
+
+[steps.architecture_dialectic_syntheses.next]
+match = "${{ output.next_step }}"
+
+[steps.architecture_dialectic_syntheses.next.cases]
+architecture_draft = "architecture_draft"
+architecture_dialectic_adjudication = "architecture_dialectic_adjudication"
+
+[steps.architecture_dialectic_syntheses.branches.architecture_visionary_synthesis]
+name = "Visionary architecture synthesis"
+agent = "spdd_architecture_visionary"
+
+[steps.architecture_dialectic_syntheses.branches.architecture_visionary_synthesis.input]
+role = "architect"
+prompt = '''Independently synthesize the accepted frozen Visionary and Pragmatist positions as the Visionary logical role. A restored or fresh worker must be able to complete this solely from the explicit role contract and frozen artifact references. Read both artifacts; do not access peer synthesis, transcripts, or hidden state. Write exactly one `spdd-architecture-visionary-synthesis` Markdown artifact and emit the complete architecture fingerprint.
+
+Frozen pair: ${{ input.architecture_dialectic_positions }}'''
+
+[steps.architecture_dialectic_syntheses.branches.architecture_visionary_synthesis.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-visionary-synthesis-output.json"
+
+[steps.architecture_dialectic_syntheses.branches.architecture_pragmatist_synthesis]
+name = "Pragmatist architecture synthesis"
+agent = "spdd_architecture_pragmatist"
+
+[steps.architecture_dialectic_syntheses.branches.architecture_pragmatist_synthesis.input]
+role = "architect"
+prompt = '''Independently synthesize the accepted frozen Visionary and Pragmatist positions as the Pragmatist logical role. A restored or fresh worker must be able to complete this solely from the explicit role contract and frozen artifact references. Read both artifacts; do not access peer synthesis, transcripts, or hidden state. Write exactly one `spdd-architecture-pragmatist-synthesis` Markdown artifact and emit the complete architecture fingerprint.
+
+Frozen pair: ${{ input.architecture_dialectic_positions }}'''
+
+[steps.architecture_dialectic_syntheses.branches.architecture_pragmatist_synthesis.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-pragmatist-synthesis-output.json"
+
+[steps.architecture_dialectic_adjudication]
+name = "Architecture dialectic adjudication"
+kind = "worker"
+agent = "spdd_architecture_adjudicator"
+
+[steps.architecture_dialectic_adjudication.input]
+role = "architect"
+prompt = '''Adjudicate this divergence exactly once. Select the Visionary synthesis, select the Pragmatist synthesis, or create one traceable third-result artifact linked to both syntheses. Do not merge incompatible candidates paragraph by paragraph and do not perform hostile review. If one concrete missing fact or user-owned value decision can resume this same adjudication, report a non-blocking stop with source_step_id architecture_dialectic_adjudication and the smallest direct question. Otherwise reject both or mark irreparable invalidity as unresolved_with_evidence and route to architecture_dialectic_exit.
+
+Frozen pair: ${{ input.architecture_dialectic_positions }}
+Convergence result: ${{ input.architecture_dialectic_syntheses }}
+Visionary synthesis: ${{ input.architecture_visionary_synthesis }}
+Pragmatist synthesis: ${{ input.architecture_pragmatist_synthesis }}'''
+
+[steps.architecture_dialectic_adjudication.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-adjudication-output.json"
+
+[steps.architecture_dialectic_adjudication.next]
+match = "${{ output.next_step }}"
+
+[steps.architecture_dialectic_adjudication.next.cases]
+architecture_draft = "architecture_draft"
+architecture_dialectic_exit = "architecture_dialectic_exit"
+
+[steps.architecture_dialectic_exit]
+name = "Architecture dialectic unresolved exit"
+kind = "worker"
+agent = "spdd_dialectic_exit"
+
+[steps.architecture_dialectic_exit.input]
+role = "architect"
+prompt = '''Preserve the negative adjudication as one `spdd-architecture-unresolved-report` Markdown artifact and project the exact evidence without creating a Canvas or reaching architecture approval, implementation, or review. This is a typed terminal result, not a non-blocking stop.
+
+Adjudication: ${{ input.architecture_dialectic_adjudication }}'''
+
+[steps.architecture_dialectic_exit.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-exit-output.json"
+
+[steps.architecture_dialectic_exit.next]
+match = "${{ output.next_step }}"
+
+[steps.architecture_dialectic_exit.next.cases]
+done = "done_unresolved_architecture"
 
 [steps.architecture_draft]
 name = "Architecture draft"
 kind = "worker"
-agent = "architect"
+agent = "spdd_architecture_owner"
 
 [steps.architecture_draft.input]
 role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Read the approved/current `reasons-canvas-research` artifact from `research_draft` as the research source of truth and strictly follow it.
-Honor research_draft.next_step and the matching `UI design needed: yes | no` decision in the approved research artifact. When next_step is ui_intent_draft, read the approved/current `ui-design-proposal` artifact from `ui_intent_draft` as the UI/product-surface source of truth. Preserve its user task, product/surface route, screen/zones, first-read/action hierarchy, required states, interaction expectations, design-law basis, visual evidence/proof asset constraints, and open UI tensions. When next_step is architecture_draft, proceed directly without a UI artifact or UI approval and carry the research artifact's no-design rationale into the architecture artifact; do not invent a UI proposal or treat its absence as missing evidence. Do not rewrite visual hierarchy or UI taste in architecture; translate only the code/system implications needed to preserve an applicable approved UI design proposal.
+Preserve research_draft.architecture_generation_mode in output. In dialectic mode, consume only the selected lineage from architecture_dialectic_syntheses or architecture_dialectic_adjudication, record the complete dialectic_lineage, and materialize the sole canonical `reasons-canvas-architecture` artifact. Do not merge rejected candidates. In direct mode, preserve the existing behavior and omit dialectic_lineage.
+Honor research_draft.next_step and the matching `UI design needed: yes | no` decision in the approved research artifact. When next_step is ui_intent_draft, read the approved/current `ui-design-proposal` artifact from `ui_intent_draft` as the UI/product-surface source of truth. Preserve its user task, product/surface route, screen/zones, first-read/action hierarchy, required states, interaction expectations, design-law basis, visual evidence/proof asset constraints, and open UI tensions. Otherwise, after either direct or dialectic generation, proceed without a UI artifact or UI approval and carry the research artifact's no-design rationale into the architecture artifact; do not invent a UI proposal or treat its absence as missing evidence. Do not rewrite visual hierarchy or UI taste in architecture; translate only the code/system implications needed to preserve an applicable approved UI design proposal.
 Produce the minimal architecture decision and execution-ready structural contract required by the approved research in the `reasons-canvas-architecture` artifact and a compact output.summary as the human-facing architecture proposal state for approval gates. This REASONS Canvas is the only human-facing architecture/execution artifact; do not create a second planning artifact or embed the Canvas body in JSON.
 Before finalizing output.summary or `reasons-canvas-architecture`, explicitly identify the public contract and API surfaces affected by the task: exported APIs, CLI/user-facing commands, schemas, workflow interfaces, integration boundaries, compatibility promises, and observable behavior. If code, docs, or existing contracts answer a question, inspect them instead of asking the user.
 When user-owned choices remain about public contract shape, API compatibility, naming, migration behavior, or accepted breakage, report a non-blocking stop with non_blocking_stop.source_step_id = architecture_draft and the smallest focused non_blocking_stop.needed question for the orchestrator to resolve through the non-blocking stop flow; include your recommended answer in non_blocking_stop.summary or non_blocking_stop.needed.
@@ -260,7 +416,11 @@ Input context:
 - Human UI design proposal approval: ${{ input.approve_ui_intent | default: "No UI design proposal approval is available." }}
 - Previous architecture artifacts: ${{ input.architecture_draft.artifacts | default: "No previous architecture_draft artifacts in input context." }}
 - Architecture attack feedback to address: ${{ input.architecture_attack.verdict | default: "No prior architecture_attack feedback." }}
-- Human architecture gate feedback to address: ${{ input.approve_architecture.feedback | default: "No prior approve_architecture feedback." }}'''
+- Human architecture gate feedback to address: ${{ input.approve_architecture.feedback | default: "No prior approve_architecture feedback." }}
+- Architecture generation mode: ${{ input.research_draft.architecture_generation_mode }}
+- Dialectic frozen pair: ${{ input.architecture_dialectic_positions | default: "Direct mode; no frozen pair." }}
+- Dialectic convergence: ${{ input.architecture_dialectic_syntheses | default: "Direct mode; no convergence result." }}
+- Dialectic adjudication: ${{ input.architecture_dialectic_adjudication | default: "No adjudication was required." }}'''
 
 [steps.architecture_draft.output]
 template = "../../shared/templates/reasons/reasons-canvas-template.md"
@@ -764,4 +924,16 @@ Input context:
 - Latest implementation summary: ${{ input.implementation.summary }}
 - Final review outcome: ${{ input.review.outcome }}
 - Final review verdict: ${{ input.review.verdict }}
+'''
+
+[steps.done_unresolved_architecture]
+name = "Done: unresolved architecture"
+kind = "done"
+
+[steps.done_unresolved_architecture.input]
+prompt = '''This is a non-implementation phase. Inspect prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
+Project only the typed architecture_dialectic_exit result and its artifact evidence. State that no canonical architecture Canvas was created and architecture approval, implementation, review, and implementation approval were not reached. Do not claim normal SPDD completion, user approval, implementation, review completion, or reinterpret the unresolved result as a pause.
+
+Input context:
+- Dialectic unresolved exit: ${{ input.architecture_dialectic_exit }}
 '''

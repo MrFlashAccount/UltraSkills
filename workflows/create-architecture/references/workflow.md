@@ -176,3 +176,9 @@ Check:
 - are deprecated wrappers/re-exports deleted or explicitly justified with expiry, and do negative checks prove absent forbidden imports/paths?
 
 Do not call the result done until both the architect lens and critic lens are clean enough.
+
+## Optional dialectic proposal generation
+
+An explicit dialectic selector inserts one bounded package-local protocol between the existing evidence stages and `architecture_proposal`: isolated Visionary/Pragmatist positions, a frozen artifact manifest, independent synthesis by the same logical role ids, semantic fingerprint comparison, and at most one adjudication. Fresh-worker fallback must be equivalent to restored-worker execution because only typed artifacts cross phases.
+
+`architecture_proposal` remains the sole approval artifact producer. Convergence and adjudication cannot replace Architect review, Critic pressure, or human approval. Reject-both and irreparable invalidity produce an evidence-preserving unresolved exit; they never enter proposal review or implementation.

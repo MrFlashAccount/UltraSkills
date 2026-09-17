@@ -1,0 +1,249 @@
+name = "hegel"
+displayName = "Hegel"
+version = 1
+description = "Run evidence-backed diagnostic research on an arbitrary topic through isolated Visionary/Pragmatist positions, independent synthesis, semantic convergence or one adjudication, and hostile falsification. Use when a consequential diagnostic question benefits from two complete competing models and a bounded synthesis. Do not use for implementation, external mutation, simple fact lookup, or work without a meaningful evidence budget."
+start = "diagnostic_intake"
+done = "done"
+
+[loopPolicies.diagnostic_report_review]
+steps = ["diagnostic_report", "diagnostic_hostile_review"]
+entry = "diagnostic_report"
+boundary = "diagnostic_hostile_review"
+maxIterations = 2
+onLimit = "diagnostic_review_exit"
+
+[steps.diagnostic_intake]
+name = "Diagnostic intake"
+kind = "worker"
+agent = "hegel_intake"
+
+[steps.diagnostic_intake.input]
+role = "researcher"
+prompt = '''This is a read-only diagnostic intake. Inspect available evidence without editing source, running implementation, posting messages, publishing, or mutating external systems. Produce one immutable `hegel-diagnostic-brief` Markdown artifact with the topic, one diagnostic question, known constraints, concrete evidence and source requirements, and the fixed stopping budget: one dialectic cycle, at most one adjudication, and at most two hostile reviews. Set mutation_policy to read_only.
+
+If one concrete missing fact, source permission, or user-owned value choice can resume the same request, report a non-blocking stop with source_step_id diagnostic_intake and the smallest direct question. If evidence is simply weak or unavailable and no obtainable answer can resume the request, preserve that limitation in the brief instead of pausing indefinitely.'''
+
+[steps.diagnostic_intake.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/intake-output.json"
+
+[steps.diagnostic_intake.next]
+match = "${{ output.outcome }}"
+
+[steps.diagnostic_intake.next.cases]
+ready_for_positions = "diagnostic_positions"
+
+[steps.diagnostic_positions]
+name = "Diagnostic positions"
+kind = "fanout"
+agent = "hegel_dialectic_manifest"
+max_parallel = 2
+
+[steps.diagnostic_positions.input]
+role = "researcher"
+branches = ["diagnostic_visionary_position", "diagnostic_pragmatist_position"]
+prompt = '''Freeze the two accepted diagnostic position outputs into the ordered schema-defined manifest. Copy the accepted diagnostic brief artifact as shared_input_artifact, then copy full artifact metadata, fingerprint, and accepted branch step id for Visionary followed by Pragmatist. Do not synthesize, compare, review, or alter the positions.
+
+Diagnostic brief: ${{ input.diagnostic_intake.artifacts }}
+Visionary position: ${{ input.diagnostic_visionary_position }}
+Pragmatist position: ${{ input.diagnostic_pragmatist_position }}'''
+
+[steps.diagnostic_positions.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-frozen-pair-output.json"
+
+[steps.diagnostic_positions.next]
+match = "${{ output.outcome }}"
+
+[steps.diagnostic_positions.next.cases]
+frozen = "diagnostic_syntheses"
+
+[steps.diagnostic_positions.branches.diagnostic_visionary_position]
+name = "Visionary diagnostic position"
+agent = "hegel_visionary"
+
+[steps.diagnostic_positions.branches.diagnostic_visionary_position.input]
+role = "researcher"
+prompt = '''Read the immutable diagnostic brief and produce one complete evidence-grounded Visionary model. State the causal model, recommendation, assumptions, evidence interpretation, no-action/simple baseline, and counterexamples. Work in isolation: no peer output, shared mutable draft, transcript, or hidden reasoning. Write exactly one `hegel-visionary-position` Markdown artifact. Stay read-only.
+
+Diagnostic brief: ${{ input.diagnostic_intake }}'''
+
+[steps.diagnostic_positions.branches.diagnostic_visionary_position.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-visionary-position-output.json"
+
+[steps.diagnostic_positions.branches.diagnostic_pragmatist_position]
+name = "Pragmatist diagnostic position"
+agent = "hegel_pragmatist"
+
+[steps.diagnostic_positions.branches.diagnostic_pragmatist_position.input]
+role = "researcher"
+prompt = '''Read the same immutable diagnostic brief and produce one complete evidence-grounded Pragmatist counter-model. Change at least one material causal or recommendation axis, or emit no_viable_antithesis with evidence and axes tested. Do not return a critique list. Work in isolation and write exactly one `hegel-pragmatist-position` Markdown artifact. Stay read-only.
+
+Diagnostic brief: ${{ input.diagnostic_intake }}'''
+
+[steps.diagnostic_positions.branches.diagnostic_pragmatist_position.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-pragmatist-position-output.json"
+
+[steps.diagnostic_syntheses]
+name = "Diagnostic syntheses"
+kind = "fanout"
+agent = "hegel_dialectic_comparator"
+max_parallel = 2
+
+[steps.diagnostic_syntheses.input]
+role = "researcher"
+branches = ["diagnostic_visionary_synthesis", "diagnostic_pragmatist_synthesis"]
+prompt = '''Compare the two accepted synthesis fingerprints across causal model, recommendation, assumptions, evidence interpretation, baseline, and counterexamples. Compare decisions and evidence, never prose similarity. Convergence selects one candidate and routes to diagnostic_report. Divergence, a user-owned decision, or invalid protocol state routes exactly once to diagnostic_adjudication. Do not perform hostile review.
+
+Frozen pair: ${{ input.diagnostic_positions }}
+Visionary synthesis: ${{ input.diagnostic_visionary_synthesis }}
+Pragmatist synthesis: ${{ input.diagnostic_pragmatist_synthesis }}'''
+
+[steps.diagnostic_syntheses.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-convergence-output.json"
+
+[steps.diagnostic_syntheses.next]
+match = "${{ output.next_step }}"
+
+[steps.diagnostic_syntheses.next.cases]
+diagnostic_report = "diagnostic_report"
+diagnostic_adjudication = "diagnostic_adjudication"
+
+[steps.diagnostic_syntheses.branches.diagnostic_visionary_synthesis]
+name = "Visionary diagnostic synthesis"
+agent = "hegel_visionary"
+
+[steps.diagnostic_syntheses.branches.diagnostic_visionary_synthesis.input]
+role = "researcher"
+prompt = '''Independently synthesize the accepted frozen pair as the Visionary logical role. A restored or fresh worker must be able to complete solely from this role contract and accepted artifacts. Read both position artifacts, never peer synthesis, transcript, or hidden state. Write exactly one `hegel-visionary-synthesis` Markdown artifact with the full diagnostic fingerprint. Stay read-only.
+
+Frozen pair: ${{ input.diagnostic_positions }}'''
+
+[steps.diagnostic_syntheses.branches.diagnostic_visionary_synthesis.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-visionary-synthesis-output.json"
+
+[steps.diagnostic_syntheses.branches.diagnostic_pragmatist_synthesis]
+name = "Pragmatist diagnostic synthesis"
+agent = "hegel_pragmatist"
+
+[steps.diagnostic_syntheses.branches.diagnostic_pragmatist_synthesis.input]
+role = "researcher"
+prompt = '''Independently synthesize the accepted frozen pair as the Pragmatist logical role. A restored or fresh worker must be able to complete solely from this role contract and accepted artifacts. Read both position artifacts, never peer synthesis, transcript, or hidden state. Write exactly one `hegel-pragmatist-synthesis` Markdown artifact with the full diagnostic fingerprint. Stay read-only.
+
+Frozen pair: ${{ input.diagnostic_positions }}'''
+
+[steps.diagnostic_syntheses.branches.diagnostic_pragmatist_synthesis.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-pragmatist-synthesis-output.json"
+
+[steps.diagnostic_adjudication]
+name = "Diagnostic adjudication"
+kind = "worker"
+agent = "hegel_adjudicator"
+
+[steps.diagnostic_adjudication.input]
+role = "researcher"
+prompt = '''Adjudicate this divergence once. Select Visionary, select Pragmatist, create one traceable third-result artifact linked to both syntheses, or reject both with evidence. Do not merge incompatible models or perform hostile review. If one concrete missing fact, source permission, or user-owned value choice can resume this adjudication, report a non-blocking stop with source_step_id diagnostic_adjudication and the smallest direct question. Explicit refusal, unavailable non-obtainable evidence, reject-both, or irreparable invalidity completes unresolved_with_evidence and routes to the report. Stay read-only.
+
+Frozen pair: ${{ input.diagnostic_positions }}
+Convergence: ${{ input.diagnostic_syntheses }}
+Visionary synthesis: ${{ input.diagnostic_visionary_synthesis }}
+Pragmatist synthesis: ${{ input.diagnostic_pragmatist_synthesis }}'''
+
+[steps.diagnostic_adjudication.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/dialectic-adjudication-output.json"
+
+[steps.diagnostic_adjudication.next]
+match = "${{ output.next_step }}"
+
+[steps.diagnostic_adjudication.next.cases]
+diagnostic_report = "diagnostic_report"
+
+[steps.diagnostic_report]
+name = "Diagnostic report"
+kind = "worker"
+agent = "hegel_diagnostic_owner"
+
+[steps.diagnostic_report.input]
+role = "researcher"
+prompt = '''Materialize or revise the sole immutable `diagnostic-report` Markdown artifact. Separate facts, inferences, unresolved contradictions, rejected models, canonical synthesis, confidence rationale, and the cheapest falsifying next experiment. Consume only the selected convergence/adjudication lineage. Reject-both and irreparable invalidity must produce unresolved_with_evidence with a nullable synthesis and preserved evidence; never invent consensus. On review revision, address the latest hostile findings without replaying positions, synthesis, or adjudication. Stay read-only and do not mutate source or external systems.
+
+Diagnostic brief: ${{ input.diagnostic_intake }}
+Frozen pair: ${{ input.diagnostic_positions }}
+Convergence: ${{ input.diagnostic_syntheses }}
+Adjudication: ${{ input.diagnostic_adjudication | default: "No adjudication was required." }}
+Latest hostile review: ${{ input.diagnostic_hostile_review | default: "No prior hostile review." }}'''
+
+[steps.diagnostic_report.output]
+template = "templates/diagnostic-report-template.md"
+schema = "schemas/diagnostic-report-output.json"
+
+[steps.diagnostic_report.next]
+match = "${{ output.outcome }}"
+
+[steps.diagnostic_report.next.cases]
+diagnosis_complete = "diagnostic_hostile_review"
+unresolved_with_evidence = "diagnostic_hostile_review"
+
+[steps.diagnostic_hostile_review]
+name = "Diagnostic hostile review"
+kind = "worker"
+agent = "hegel_hostile_reviewer"
+
+[steps.diagnostic_hostile_review.input]
+role = "critic"
+prompt = '''Start from a hostile prior and independently falsify the latest diagnostic report. Check source support, shared blind spots, unsupported inference, false convergence, counterexamples, and whether no action or a simpler baseline wins. Do not edit the report, soften unresolved evidence, or replay the dialectic cycle. Return approved only with no actionable must_fix or should_fix finding; otherwise return needs_revision with actionable evidence and route to the same logical report owner. Stay read-only.
+
+Diagnostic report: ${{ input.diagnostic_report }}
+Dialectic convergence: ${{ input.diagnostic_syntheses }}
+Adjudication: ${{ input.diagnostic_adjudication | default: "No adjudication was required." }}'''
+
+[steps.diagnostic_hostile_review.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/hostile-review-output.json"
+
+[steps.diagnostic_hostile_review.next]
+match = "${{ output.next_step }}"
+
+[steps.diagnostic_hostile_review.next.cases]
+done = "done"
+diagnostic_report = "diagnostic_report"
+diagnostic_review_exit = "diagnostic_review_exit"
+
+[steps.diagnostic_review_exit]
+name = "Diagnostic review exhaustion exit"
+kind = "worker"
+agent = "hegel_review_exit"
+
+[steps.diagnostic_review_exit.input]
+role = "researcher"
+prompt = '''Project bounded hostile-review exhaustion without changing, reviewing, or softening the latest report or findings. Copy the latest `diagnostic-report` artifact metadata, preserve every latest hostile finding, set review_iteration_count to 2 and final_classification to unresolved_with_evidence, then route to done. Do not run another review, another dialectic round, or a non-blocking stop.
+
+Latest diagnostic report: ${{ input.diagnostic_report }}
+Latest hostile review: ${{ input.diagnostic_hostile_review }}'''
+
+[steps.diagnostic_review_exit.output]
+template = "templates/dialectic-stage-template.md"
+schema = "schemas/review-exit-output.json"
+
+[steps.diagnostic_review_exit.next]
+match = "${{ output.next_step }}"
+
+[steps.diagnostic_review_exit.next.cases]
+done = "done"
+
+[steps.done]
+name = "Done"
+kind = "done"
+
+[steps.done.input]
+prompt = '''Project the final read-only diagnostic result. If diagnostic_review_exit exists, report unresolved_with_evidence with the latest report and preserved hostile findings; do not claim review passed. Otherwise project the latest diagnostic_report and approved hostile review. State that Hegel performed no source edit, implementation, approval side effect, publication, message, or external mutation.
+
+Diagnostic report: ${{ input.diagnostic_report }}
+Hostile review: ${{ input.diagnostic_hostile_review }}
+Review exhaustion exit: ${{ input.diagnostic_review_exit | default: "Review did not exhaust." }}'''

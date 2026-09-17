@@ -82,7 +82,28 @@ describe("RunsRootObserverReader", () => {
     const page = await new RunsRootObserverReader(runsRoot).getWorkflowPage("healthy");
 
     expect(page?.complete).toBe(true);
-    expect(page?.nodes).toHaveLength(13);
+    const stepIds = page?.nodes.map((node) => node.stepId) ?? [];
+    expect(new Set(stepIds).size).toBe(stepIds.length);
+    expect(
+      page?.nodes.some(
+        (node) => node.stepId === "architecture_dialectic_positions" && node.kind === "fanout",
+      ),
+    ).toBe(true);
+    expect(
+      page?.nodes.some(
+        (node) => node.stepId === "architecture_dialectic_syntheses" && node.kind === "fanout",
+      ),
+    ).toBe(true);
+    expect(
+      page?.nodes.some(
+        (node) => node.stepId === "architecture_dialectic_adjudication" && node.kind === "worker",
+      ),
+    ).toBe(true);
+    expect(
+      page?.nodes.some(
+        (node) => node.stepId === "architecture_dialectic_exit" && node.kind === "worker",
+      ),
+    ).toBe(true);
     expect(page?.nodes.some((node) => node.stepId === "done" && node.kind === "done")).toBe(true);
   });
 

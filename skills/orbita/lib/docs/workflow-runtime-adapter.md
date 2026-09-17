@@ -414,6 +414,10 @@ OpenClaw is one possible host adapter:
 
 This mapping is not part of the portable workflow contract. Other hosts can execute the same requests differently as long as they accept compatible JSON through `write-output` before `continue`. If a host action produces markdown or a report, the wrapper should wrap it in the step's expected JSON output or store it as a referenced artifact; it should not pass arbitrary markdown as runner output unless the step schema/runtime explicitly expects that.
 
+## Workflow catalog display metadata
+
+Workflow identity and routing use top-level `name`. A workflow may additionally declare a non-empty top-level `displayName` for human catalog presentation. Catalog readers expose `displayName` when present and fall back exactly to `name` for every existing workflow. The optional label does not rename workflow ids, filesystem paths, workflow refs, run state, or resolver inputs.
+
 ## Not final in this draft
 
 - The runner request schema is not yet split into a standalone JSON schema.

@@ -1,6 +1,6 @@
 {
   "name": "skills",
-  "version": "0.1.0",
+  "version": "0.1.0+codex.20260907151755",
   "description": "Ultra Skills packages a sharper local Codex skill arsenal for workflows, reviews, docs, and role-driven execution.",
   "author": {
     "name": "MrFlashAccount"
