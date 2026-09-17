@@ -10,6 +10,7 @@ import { readWorkflowDocument } from './workflow-document-reader.mjs';
 import { assertBatonSchema, batonSchema } from '../../file-contracts/baton/baton-schema.mjs';
 import { compileWorkflowForRuntime } from '../../runtime/compiled-workflow.mjs';
 import { isValidatedPersistedBaton } from '../validated-baton.mjs';
+import { callFunctionDefinitions } from '../../call-functions/registry.mjs';
 
 const compiledRuntimeCache = new Map();
 const COMPILED_RUNTIME_CACHE_MAX_ENTRIES = 64;
@@ -225,6 +226,7 @@ export function loadWorkflowResources({ workflow, workflowPath, repositoryRoot =
     roleMaterials: loadRoleMaterials({ workflow, repositoryRoot }),
     inputResources: loadInputResources({ workflow, workflowPath, repositoryRoot }),
     allowedRoles: listAllowedWorkflowRoles({ repositoryRoot }),
+    callFunctions: callFunctionDefinitions,
     runDir: runDir ? path.resolve(runDir) : undefined,
     readRunArtifact: artifactReaderForRunDir(runDir),
     resolveRunArtifactPath: artifactPathResolverForRunDir(runDir),
@@ -249,6 +251,7 @@ function loadWorkflowStaticResources({ workflow, workflowPath, repositoryRoot = 
     roleMaterials: loadRoleMaterials({ workflow, repositoryRoot }),
     inputResources: loadInputResources({ workflow, workflowPath, repositoryRoot }),
     allowedRoles: listAllowedWorkflowRoles({ repositoryRoot }),
+    callFunctions: callFunctionDefinitions,
   };
 }
 

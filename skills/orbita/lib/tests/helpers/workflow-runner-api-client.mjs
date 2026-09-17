@@ -1,4 +1,5 @@
 import {
+  callFunction,
   continueRun,
   listPointerTransitions,
   loadInstructions,
@@ -90,6 +91,13 @@ export async function runWorkflowRunnerApi(args, options = {}) {
         stepId: valueAfter(args, '--step-id'),
         json: valueAfter(args, '--json') ?? options.input ?? '',
         debugSummaryFile: valueAfter(args, '--debug-summary-file'),
+      });
+      return { status: 0, stdout: jsonStdout(response), stderr: '' };
+    }
+    if (mode === 'call-function') {
+      const response = await callFunction({
+        ...common,
+        stepId: valueAfter(args, '--step-id'),
       });
       return { status: 0, stdout: jsonStdout(response), stderr: '' };
     }

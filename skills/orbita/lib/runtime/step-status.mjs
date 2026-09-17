@@ -3,6 +3,7 @@ const STEP_ACTIONS = Object.freeze({
   fanout: 'run_worker',
   shard: 'run_worker',
   approval: 'wait_for_approval',
+  call: 'call_function',
   done: 'stop_done',
 });
 

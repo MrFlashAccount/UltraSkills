@@ -19,6 +19,36 @@ Deterministic code owns the workflow loop:
 
 The host adapter is thin. It executes requests with whatever capabilities the environment provides, writes each host action result through the runner's validating writer, and calls the runner again after outputs are accepted. It does not choose transitions, select a normal consumer ahead of the runner, or compile instructions.
 
+## Call steps
+
+A `kind = "call"` step invokes one registered function without creating a worker. The function owns its parameter JSON Schema. `arguments` may contain literals or whole-string `${{ input.<step>.<field> }}` selectors; selectors preserve the selected JSON value instead of interpolating it into text. Arguments are resolved from baton state and validated immediately before execution.
+
+```toml
+[steps.review]
+name = "Review change"
+kind = "call"
+function = "ask_jeff"
+next = "done"
+
+[steps.review.arguments]
+model = "gpt-5"
+api_key_file = ".secrets/openai-api-key"
+prompt = "${{ input.prepare.review_request }}"
+
+[steps.review.output]
+schema = "schemas/review.schema.json"
+```
+
+Output ownership is part of the function definition. A `call-defined` function requires `steps.<id>.output.schema`; a `fixed` function supplies its own schema and forbids workflow output-schema authoring. In both cases Orbita validates the returned JSON before storing it at `baton.state.<step-id>` and applying `next`.
+
+The built-in registry contains:
+
+- `ask_jeff`: sends `prompt` through an internal OpenAI Responses transport with strict JSON Schema output and `store: false`. `api_key_file` is absolute or relative to the workflow file; its trimmed content is used as a Bearer token and is never projected into host requests. `base_url` is optional, must use HTTPS without URL credentials, and defaults to `https://api.openai.com/v1`. Credential-read failures expose neither the resolved path nor the secret-file name.
+- `sh`: runs `script` through `/bin/sh -c`, sends `input` as JSON on stdin, and requires one JSON value on stdout.
+- `js`: runs `source` in a separate runtime process with `input` as its argument and requires the returned value to be JSON-serializable. The process boundary contains exits, crashes, and timeouts; it is not a security sandbox.
+
+All built-ins accept an optional bounded `timeout_ms`. For `ask_jeff`, it covers credential reading, the HTTP exchange, and response-body parsing. Subprocess stdout is bounded; timeout and output-limit failures terminate the whole spawned process group on POSIX instead of leaving descendants alive. Orbita performs no automatic retry: repeating `call-function` after an uncertain external side effect may duplicate that effect.
+
 ## Semantic loop limits
 
 Workflow loop limits are interpreter-owned. When a workflow declares validated
@@ -79,7 +109,7 @@ bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" list-pointer-tr
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" move-pointer --run-id <run-id> --transition-id <id> --feedback <text> --lease-token <token> [--workflow <workflow-file>]
 ```
 
-`--workflow` accepts either a TOML or JSON workflow file. `next` and `continue` also accept `--only-instructions`; with that flag stdout is exactly the `orchestratorInstruction` text instead of the full JSON host response. `next` creates the run files if needed and returns the current host work. `write-output` validates and accepts one current request output directly into baton/state, then returns only acceptance JSON or validation errors; it does not accept `--only-instructions`, does not drive orchestrator navigation, and must not accept or mutate worker binding metadata. `continue` can also accept repeatable `--bind-agent <step-id=agent-id>` values and one orchestrator debug note through `--orchestrator-debug-json` or `--orchestrator-debug-file`; it records those runner-owned host side effects, applies already-accepted outputs from baton/state, persists the new baton, and returns the next host work.
+`--workflow` accepts either a TOML or JSON workflow file. `next` and `continue` also accept `--only-instructions`; with that flag stdout is exactly the `orchestratorInstruction` text instead of the full JSON host response. `next` creates the run files if needed and returns the current host work. `call-function --step-id` executes one current `call_function` request and performs its validating output write without navigating. `write-output` validates and accepts one current request output directly into baton/state, then returns only acceptance JSON or validation errors; it does not accept `--only-instructions`, does not drive orchestrator navigation, and must not accept or mutate worker binding metadata. `continue` can also accept repeatable `--bind-agent <step-id=agent-id>` values and one orchestrator debug note through `--orchestrator-debug-json` or `--orchestrator-debug-file`; it records those runner-owned host side effects, applies already-accepted outputs from baton/state, persists the new baton, and returns the next host work.
 
 `instructions --step-id` recomputes the current effective host request before lease renewal. For `run_worker`, it prints the worker-only Template projection. For a normal current `wait_for_approval`, it prints the same dedicated approval projection used by `next`/`continue`. It does not accept `--only-instructions`; unresolved-stop, terminal, missing-request, and old approval commands superseded by `resolve_non_blocking_stop` are stale and fail without falling back to Template. Current requests and instructions are rendered from the indexed workflow plus `baton.json`; executable-step records do not store `compiledPrompt`. Durable runner state is baton plus history plus advisory top-level worker bindings. Every write-capable, bind-capable, or instruction-loading command validates a fresh explicit `--lease-token` before creating run directories, locks, index entries, baton/history, binding metadata, or durable commit files; `runId` is identity only, and durable lease state keeps only token hash, token epoch, and lease expiry.
 
@@ -259,6 +289,8 @@ The runner first projects the effective action for every current executable entr
 
 `wait_for_approval` requests are executed by the orchestrator itself and never enter Template. The dedicated projection is the complete human gate source: current producer summary, declared safe artifact links, optional route-applicable current verdict, optional bounded recovery context, the exact `{ approval, feedback? }` response shape, its validating `write-output` command, and one `continue --only-instructions` command. Artifact links preserve declaration order, are deduplicated by producer/id/path identity after existing containment/realpath/symlink checks, and are rendered once without reading bodies. The approval text excludes worker bootstrap sections, arbitrary prompt interpolation, full critic evidence, previous approval decisions, generic attachment instructions, and inapplicable verdicts. A realistic SPDD `approve_research` projection should remain approximately 1–2 KB. A request reports missing help through `report-stop`; this never becomes step output or advances the cursor.
 
+`call_function` requests expose only the function name and an exact `executeCommand`. Arguments, prompts, schemas, credential paths, credential contents, and results are not projected. The host executes the command once; the command rechecks that the request is current before resolving arguments and again before accepting the result. Public `write-output` rejects `call_function` requests; call results can enter state only through the atomic `call-function` execution boundary.
+
 Runner stdout commands include the explicit lease token when the runner was called with one. Persisted current requests, history, and pending durable commits use a separately rendered tokenless request projection; a raw lease token exists only in the public response. If a runner-returned command still contains a `<lease-token>` placeholder, hosts must substitute the fresh explicit lease token before executing it; the runner does not read a token from environment variables.
 
 The public host request contract is intentionally narrow: requested action identity and step identity are always public. `resolve_non_blocking_stop` requests additionally expose only bounded `nonBlockingStop` details and `resolveStopCommand`; they must not expose worker reuse fields. `run_worker` requests additionally expose only `loadInstructionsCommand`, `loadFollowupInstructionsCommand`, `preferredAgentId`, optional `agentRuntime`, and bounded `nonBlockingStop` details when a resolved recovery is being continued; they must not expose `attemptId`, agent objects, lifecycle state, session registries, transcripts, output paths, or other control-plane metadata. `preferredAgentId` is either an opaque worker id from top-level `baton.workerBindings[stepId]` or `null` when no binding exists. `agentRuntime` is an advisory `{ model, thinkingLevel }` fresh-spawn preference selected from the executable source worker's case-insensitively matched per-harness profile; provider-specific interpretation belongs to the harness. `wait_for_approval` requests must not expose worker reuse/runtime fields, `outputSchema`, `resolvedOutputSchema`, workflow-authored prompt/template fields, or instruction-storage paths. Output paths are not part of any request contract.
@@ -279,7 +311,7 @@ A CLI failure is an execution error and should be reported by the host adapter i
 
 ## Output capture
 
-The host wrapper writes completed `run_worker` and `wait_for_approval` results through `workflow-runner write-output`. Worker output keeps its workflow-authored schema validation and retry behavior. Approval output branches by step kind before any workflow output-schema loader and validates against the runner-owned closed decision contract. The normalized value is accepted directly into baton/state only after validation. A `resolve_non_blocking_stop` request is control-plane work instead: submit its structured `resolution` object plus the exact current `nonBlockingStop.stop_id` through the generated `resolveStopCommand` / `workflow-runner resolve-stop`; it records recovery metadata without advancing the workflow step. Exact retries are idempotent, while conflicting or stale resolution ids are rejected. For `run_worker` requests, `write-output` also requires the generated `--debug-summary-file` path and reads that side-channel only after the JSON output validates. It is a pure task-output path: it must not accept, store, emit, or mutate worker binding/control-plane metadata. There is no output-path handoff from worker to orchestrator, and `workflow-runner continue` does not accept output paths.
+The host wrapper writes completed `run_worker` and `wait_for_approval` results through `workflow-runner write-output`. A `call_function` result reaches the shared validation and persistence machinery only through the private acceptance path inside `workflow-runner call-function`; the public writer cannot forge it. Worker output keeps its workflow-authored schema validation and retry behavior. Approval output branches by step kind before any workflow output-schema loader and validates against the runner-owned closed decision contract. The normalized value is accepted directly into baton/state only after validation. A `resolve_non_blocking_stop` request is control-plane work instead: submit its structured `resolution` object plus the exact current `nonBlockingStop.stop_id` through the generated `resolveStopCommand` / `workflow-runner resolve-stop`; it records recovery metadata without advancing the workflow step. Exact retries are idempotent, while conflicting or stale resolution ids are rejected. For `run_worker` requests, `write-output` also requires the generated `--debug-summary-file` path and reads that side-channel only after the JSON output validates. It is a pure task-output path: it must not accept, store, emit, or mutate worker binding/control-plane metadata. There is no output-path handoff from worker to orchestrator, and `workflow-runner continue` does not accept output paths.
 
 Retained accepted-output detection for pointer recovery uses the same per-step
 accepted-output surface in `baton.state[stepId]` that `continue` reads. Pointer

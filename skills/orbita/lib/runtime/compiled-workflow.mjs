@@ -43,13 +43,15 @@ function semanticInputs(options = {}) {
     allowedRoles: allowedRolesKey(options.allowedRoles),
     outputSchemas: outputSchemasKey(options.outputSchemas),
     externalSchemas: (options.externalSchemas ?? []).map(semanticObjectKey).join('\u001f'),
+    callFunctions: semanticObjectKey(options.callFunctions),
   };
 }
 
 function sameSemanticInputs(left = {}, right = {}) {
   return left.allowedRoles === right.allowedRoles
     && left.outputSchemas === right.outputSchemas
-    && left.externalSchemas === right.externalSchemas;
+    && left.externalSchemas === right.externalSchemas
+    && left.callFunctions === right.callFunctions;
 }
 
 export function compileWorkflowForRuntime(workflow, options = {}) {

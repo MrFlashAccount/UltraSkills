@@ -182,7 +182,7 @@ export class Step {
     return { workflow: workflowData(workflow), baton, stepId: this.id, step: this.toJSON(), input: this.resolveInputs(baton), userPrompt };
   }
 
-  applyOutput({ baton, output, workflow, attempts, storeStepOutput = ['worker', 'fanout', 'shard', 'approval'].includes(this.data.kind) } = {}) {
+  applyOutput({ baton, output, workflow, attempts, storeStepOutput = ['worker', 'fanout', 'shard', 'approval', 'call'].includes(this.data.kind) } = {}) {
     const wf = workflowData(workflow);
     const resolvedTransition = this.resolveConcreteTargets(baton, wf, output);
     const { transition, loopProgress } = applyLoopPolicyTransition({

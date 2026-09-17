@@ -753,6 +753,33 @@ function assertApprovalProjectionSemantics(workflow, schemasByStep, routeEdges) 
   }
 }
 
+function assertCallArgumentExpressions(workflow, schemasByStep, { requireSchemaCoverage }) {
+  function visit(value, stepId, step, field) {
+    if (typeof value === 'string') {
+      if (!value.includes('${{')) return;
+      let expression;
+      try {
+        expression = parsePathExpression(value, { allowedRoots: ['input'] });
+      } catch (error) {
+        if (error instanceof WorkflowRuntimeError) fail(`step '${stepId}' ${field} ${error.message}`);
+        throw error;
+      }
+      assertExpressionSchemaAvailable({ workflow, schemasByStep, stepId, step, expression, field, requireSchemaCoverage });
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visit(item, stepId, step, `${field}[${index}]`));
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    for (const [key, item] of Object.entries(value)) visit(item, stepId, step, `${field}.${key}`);
+  }
+
+  for (const [stepId, step] of Object.entries(workflow.steps)) {
+    if (step.kind === 'call') visit(step.arguments, stepId, step, 'arguments');
+  }
+}
+
 function validateWorkflowDocument(workflow, options = {}) {
   assertWorkflowIdentity(workflow);
   assertWorkflowStepIds(workflow);
@@ -762,6 +789,7 @@ function validateWorkflowDocument(workflow, options = {}) {
   const schemasByStep = normalizeStepOutputSchemas({
     workflow,
     outputSchemas: options.outputSchemas,
+    callFunctions: options.callFunctions,
     warnings,
     requireSchemaPresence: options.requireSchemaPresence ?? true,
     requireWorkerOutcomeContract: options.requireWorkerOutcomeContract ?? true,
@@ -769,6 +797,9 @@ function validateWorkflowDocument(workflow, options = {}) {
   });
   assertWorkflowShardPolicies(workflow, schemasByStep);
   assertWorkflowFanoutPolicies(workflow, schemasByStep);
+  assertCallArgumentExpressions(workflow, schemasByStep, {
+    requireSchemaCoverage: options.requireSchemaCoverage ?? true,
+  });
   assertApprovalRoutingSemantics(workflow);
   assertTransitionSemantics(workflow, schemasByStep, {
     requireSchemaCoverage: options.requireSchemaCoverage ?? true,
@@ -829,6 +860,7 @@ export class Workflow {
     const schemasByStep = normalizeStepOutputSchemas({
       workflow: this.data,
       outputSchemas,
+      callFunctions: options.callFunctions,
       warnings,
       requireSchemaPresence: options.requireSchemaPresence ?? true,
       requireWorkerOutcomeContract: options.requireWorkerOutcomeContract ?? true,

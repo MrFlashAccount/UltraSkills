@@ -30,6 +30,9 @@ import { assertAbsoluteWorkflowPath } from '../workflow-path-boundary.mjs';
 import { createWorkflowStartupValidator } from '../workflow-startup-validation.mjs';
 import { validateWorkflowFile } from './validate-workflow-file.mjs';
 import { publicNonBlockingStopDetails, publicStopResolutionDetails } from '../runtime/non-blocking-stop.mjs';
+import { executeCallFunction } from '../call-functions/execute.mjs';
+import { callFunctionDefinition, outputSchemaForCallStep } from '../call-functions/contract.mjs';
+import { resolveCallArguments, validateCallArguments } from '../call-functions/arguments.mjs';
 
 const validateWorkflowStartup = createWorkflowStartupValidator({
   validateWorkflowFile,
@@ -93,9 +96,15 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   validateWorkflowStartup,
   publicNonBlockingStopDetails,
   publicStopResolutionDetails,
+  executeCallFunction,
+  callFunctionDefinition,
+  resolveCallArguments,
+  validateCallArguments,
+  outputSchemaForCallStep,
 });
 
 export const {
+  callFunction,
   continueRun,
   listPointerTransitions,
   loadInstructions,

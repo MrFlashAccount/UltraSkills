@@ -35,6 +35,9 @@ import { publicNonBlockingStopDetails, publicStopResolutionDetails } from '../..
 import { read, readAllowedRoles, readOutputSchemas } from '../../persistence/workflow-resources/workflow-file-reader.mjs';
 import { defaultRepositoryRootForWorkflow } from '../../persistence/workflow-resources/resource-resolver.mjs';
 import { createWorkflowStartupValidator } from '../../workflow-startup-validation.mjs';
+import { executeCallFunction } from '../../call-functions/execute.mjs';
+import { callFunctionDefinition, outputSchemaForCallStep } from '../../call-functions/contract.mjs';
+import { resolveCallArguments, validateCallArguments } from '../../call-functions/arguments.mjs';
 
 export const validateWorkflowFile = createValidateWorkflowFile({
   readWorkflow: read,
@@ -106,6 +109,11 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   validateWorkflowStartup,
   publicNonBlockingStopDetails,
   publicStopResolutionDetails,
+  executeCallFunction,
+  callFunctionDefinition,
+  resolveCallArguments,
+  validateCallArguments,
+  outputSchemaForCallStep,
 });
 
 const workflowRuns = createWorkflowRuns({
@@ -123,6 +131,7 @@ const workflowRuns = createWorkflowRuns({
 });
 
 export const {
+  callFunction,
   continueRun,
   listPointerTransitions,
   loadInstructions,

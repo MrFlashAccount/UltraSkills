@@ -42,7 +42,7 @@ export function createWorkflowRunnerInputSupport({
   }
 
   function validateAcceptedOutputForRequest({ workflow, resources, request, output, runsRoot }) {
-    if (!['run_worker', 'wait_for_approval'].includes(request.action)) {
+    if (!['run_worker', 'wait_for_approval', 'call_function'].includes(request.action)) {
       throw new Error(`workflow request '${stepIdForRequest(request)}' does not accept completed output while action is '${request.action}'`);
     }
     const requestStepId = stepIdForRequest(request);

@@ -17,10 +17,12 @@ node_modules/
 coverage/
 .nyc_output/
 .cache/
+__pycache__/
 skills/orbita/lib/dashboard/ui/.output/
 tmp/
 temp/
 .worktrees/
+/~/
 
 # Private local drafts
 skills/cover-letter-writer/private/*

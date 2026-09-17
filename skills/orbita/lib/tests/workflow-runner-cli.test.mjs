@@ -153,6 +153,41 @@ test('runner CLI: generated load-instructions command works from another cwd', a
   assert.match(loadedFromOtherCwd.stdout, /# Prepare/);
 });
 
+test('runner CLI: generated call-function command works from another cwd', async () => {
+  const workflowPath = path.join(tempDir, 'portable-call-function-workflow.json');
+  writeJson(workflowPath, {
+    name: 'portable-call-function',
+    version: 1,
+    start: 'invoke',
+    done: 'done',
+    steps: {
+      invoke: {
+        name: 'Invoke shell',
+        kind: 'call',
+        function: 'sh',
+        arguments: { script: "printf '%s' '{\"outcome\":\"ready\"}'" },
+        output: { schema: 'output.schema.json' },
+        next: 'done',
+      },
+      done: { name: 'Done', kind: 'done' },
+    },
+  });
+  const { runId } = await runCase('portable-call-function', workflowPath);
+
+  const first = await runRunnerCli(['next', '--run-id', runId, '--workflow', workflowPath]);
+  assert.equal(first.status, 0, first.stderr);
+  const request = JSON.parse(first.stdout).requests[0];
+  assert.equal(request.action, 'call_function');
+
+  const executed = spawnSync(request.executeCommand, { cwd: tempDir, encoding: 'utf8', shell: true });
+  assert.equal(executed.status, 0, executed.stderr);
+  assert.equal(JSON.parse(executed.stdout).accepted, true);
+
+  const done = await runRunnerCli(['continue', '--run-id', runId, '--workflow', workflowPath]);
+  assert.equal(done.status, 0, done.stderr);
+  assert.equal(JSON.parse(done.stdout).status, 'done');
+});
+
 test('runner CLI: next --only-instructions prints only orchestrator instruction text', async () => {
   const workflowPath = path.join(tempDir, 'only-instructions-workflow.json');
   writeJson(workflowPath, workflowDoc);

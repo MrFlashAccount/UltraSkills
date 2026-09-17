@@ -5,7 +5,7 @@ description: Use Orbita for workflow-runner host-adapter jobs when the user says
 
 # Orbita
 
-Portable host adapter for `workflow-runner`. The runner owns state, navigation, current requests, validating writers, and terminal projection. This skill bootstraps/resumes runs and supplies host-only safety rules.
+Host adapter for `workflow-runner`; the runner owns state, navigation, requests, validating writes, and terminal projection.
 
 ## Contract
 
@@ -21,7 +21,7 @@ Portable host adapter for `workflow-runner`. The runner owns state, navigation, 
   - `$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runs.mjs`
   - `$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs`
 
-Runs default to `~/.orbita/workflow-runs/v1`, or `$ORBITA_HOME/workflow-runs/v1`. Set `WORKFLOW_RUNS_ROOT` only for an explicit non-default root.
+Runs use `$ORBITA_HOME/workflow-runs/v1`, otherwise `~/.orbita/workflow-runs/v1`. Override only explicitly.
 
 ## Start or resume
 
@@ -120,6 +120,10 @@ Treat bootstrap/instruction-load silence separately from active implementation p
 Allow 30 minutes for load/progress. None: interrupt once for focused status, then wait 2 minutes. Concrete progress: keep the worker. Vague/missed checkpoint: require immediate validating `write-output` or an exact non-blocking stop. Still nothing: close and retry the same request once with the same 30+2-minute bound. Retry failure: use the request's current `report-stop` command with the smallest concrete help request.
 
 After every current request is accepted, run stdout's exact `continue` once with actual worker ids and safe debug value.
+
+### Function call
+
+For `call_function`, run exact `execute`; never inspect secrets or delegate. Then exact `continue`.
 
 ### User gate
 
