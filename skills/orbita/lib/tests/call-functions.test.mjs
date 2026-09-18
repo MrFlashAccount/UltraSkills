@@ -92,12 +92,28 @@ test('exec resolves cwd from the workflow directory', async () => {
 });
 
 test('ask_jev evaluates typed questions with the fixed Jev gateway model', async () => {
-  const questions = {
-    review_required: {
+  const questions = [
+    {
+      id: 'review_required',
       type: 'boolean',
       instructions: 'Does this change require manual review?',
     },
-  };
+    {
+      id: 'category',
+      type: 'choice',
+      instructions: 'Which area does the change affect?',
+      criteria: {
+        billing: 'Billing behavior',
+        technical: 'Technical implementation',
+      },
+    },
+    {
+      id: 'risk',
+      type: 'score',
+      instructions: 'How risky is the change?',
+      criteria: ['No meaningful risk', 'Limited risk', 'High risk'],
+    },
+  ];
   let request;
   const result = await executeCallFunction({
     functionName: 'ask_jev',
@@ -118,6 +134,16 @@ test('ask_jev evaluates typed questions with the fixed Jev gateway model', async
       return new Response(JSON.stringify({
         answers: {
           review_required: { type: 'boolean', probability: 0.82 },
+          category: {
+            type: 'choice',
+            choice: 'technical',
+            probabilities: { billing: 0.08, technical: 0.92 },
+          },
+          risk: {
+            type: 'score',
+            score: 1.7,
+            probabilities: { 0: 0.05, 1: 0.2, 2: 0.75 },
+          },
         },
         usage: { inputTokens: 120, outputTokens: 1 },
       }), {
@@ -128,6 +154,16 @@ test('ask_jev evaluates typed questions with the fixed Jev gateway model', async
   });
   assert.deepEqual(result, {
     review_required: { type: 'boolean', probability: 0.82 },
+    category: {
+      type: 'choice',
+      choice: 'technical',
+      probabilities: { billing: 0.08, technical: 0.92 },
+    },
+    risk: {
+      type: 'score',
+      score: 1.7,
+      probabilities: { 0: 0.05, 1: 0.2, 2: 0.75 },
+    },
   });
   assert.equal(request.url, 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model');
   const headers = new Headers(request.options.headers);
@@ -136,7 +172,25 @@ test('ask_jev evaluates typed questions with the fixed Jev gateway model', async
   assert.equal(headers.get('ai-evaluation-model-specification-version'), '4');
   assert.deepEqual(JSON.parse(request.options.body), {
     state: { diff: 'example' },
-    questions,
+    questions: {
+      review_required: {
+        type: 'boolean',
+        instructions: 'Does this change require manual review?',
+      },
+      category: {
+        type: 'choice',
+        instructions: 'Which area does the change affect?',
+        criteria: {
+          billing: 'Billing behavior',
+          technical: 'Technical implementation',
+        },
+      },
+      risk: {
+        type: 'score',
+        instructions: 'How risky is the change?',
+        criteria: ['No meaningful risk', 'Limited risk', 'High risk'],
+      },
+    },
     providerOptions: {},
   });
   assert.doesNotMatch(request.options.body, /top-secret/);
@@ -235,12 +289,13 @@ test('ask_jev owns its typed answer-map output schema', () => {
         arguments: {
           api_key_file: '.secrets/vercel-ai-gateway-key',
           state: { change: 'example' },
-          questions: {
-            review_required: {
+          questions: [
+            {
+              id: 'review_required',
               type: 'boolean',
               instructions: 'Does this change require manual review?',
             },
-          },
+          ],
         },
         next: 'done',
       },
@@ -287,12 +342,13 @@ test('ask_jev rejects generic model and endpoint parameters', () => {
     () => validateCallArguments(callFunctionDefinitions.ask_jev, {
       api_key_file: 'secret.txt',
       state: 'Review this change',
-      questions: {
-        review_required: {
+      questions: [
+        {
+          id: 'review_required',
           type: 'boolean',
           instructions: 'Does this require review?',
         },
-      },
+      ],
       model: 'arbitrary-model',
       base_url: 'https://example.test/v1',
     }),
@@ -306,12 +362,13 @@ test('ask_jev timeout covers credential reads and response bodies', async () => 
     argumentsValue: {
       api_key_file: 'secret.txt',
       state: 'Review this change',
-      questions: {
-        review_required: {
+      questions: [
+        {
+          id: 'review_required',
           type: 'boolean',
           instructions: 'Does this require review?',
         },
-      },
+      ],
       timeout_ms: 20,
     },
     workflowPath: '/workflow/workflow.json',
@@ -334,6 +391,32 @@ test('ask_jev timeout covers credential reads and response bodies', async () => 
     }),
     /exceeded timeout of 20ms/,
   );
+});
+
+test('ask_jev rejects duplicate question ids before reading credentials', async () => {
+  let readAttempted = false;
+  await assert.rejects(
+    executeCallFunction({
+      functionName: 'ask_jev',
+      argumentsValue: {
+        api_key_file: 'secret.txt',
+        state: 'Review this change',
+        questions: [
+          { id: 'risk', type: 'boolean', instructions: 'Is this risky?' },
+          { id: 'risk', type: 'boolean', instructions: 'Is this safe?' },
+        ],
+      },
+      workflowPath: '/workflow/workflow.json',
+    }, {
+      functions: callFunctionDefinitions,
+      readFileImpl: async () => {
+        readAttempted = true;
+        return 'top-secret';
+      },
+    }),
+    /Jev question id 'risk' is duplicated/,
+  );
+  assert.equal(readAttempted, false);
 });
 
 test('subprocess timeout terminates descendants', async () => {
@@ -450,12 +533,13 @@ test('credential read failures do not expose paths in errors or durable history'
         arguments: {
           api_key_file: credentialPath,
           state: 'Review this change',
-          questions: {
-            review_required: {
+          questions: [
+            {
+              id: 'review_required',
               type: 'boolean',
               instructions: 'Does this require review?',
             },
-          },
+          ],
         },
         next: 'done',
       },

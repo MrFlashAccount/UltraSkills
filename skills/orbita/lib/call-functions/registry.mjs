@@ -25,6 +25,59 @@ const probabilityMapSchema = {
   minProperties: 1,
   additionalProperties: probabilitySchema,
 };
+const jevQuestionSchema = {
+  oneOf: [
+    {
+      type: 'object',
+      required: ['id', 'type', 'instructions'],
+      properties: {
+        id: { type: 'string', minLength: 1 },
+        type: { const: 'boolean' },
+        instructions: jsonContentSchema,
+        criteria: {
+          type: 'object',
+          minProperties: 1,
+          properties: {
+            true: jsonDescriptionSchema,
+            false: jsonDescriptionSchema,
+          },
+          additionalProperties: false,
+        },
+      },
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      required: ['id', 'type', 'instructions', 'criteria'],
+      properties: {
+        id: { type: 'string', minLength: 1 },
+        type: { const: 'choice' },
+        instructions: jsonContentSchema,
+        criteria: {
+          type: 'object',
+          minProperties: 1,
+          additionalProperties: jsonDescriptionSchema,
+        },
+      },
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      required: ['id', 'type', 'instructions', 'criteria'],
+      properties: {
+        id: { type: 'string', minLength: 1 },
+        type: { const: 'score' },
+        instructions: jsonContentSchema,
+        criteria: {
+          type: 'array',
+          minItems: 2,
+          items: jsonDescriptionSchema,
+        },
+      },
+      additionalProperties: false,
+    },
+  ],
+};
 const jevOutput = {
   kind: 'fixed',
   schema: {
@@ -89,59 +142,9 @@ export const callFunctionDefinitions = {
         api_key_file: { type: 'string', minLength: 1 },
         state: jsonContentSchema,
         questions: {
-          type: 'object',
-          minProperties: 1,
-          propertyNames: { minLength: 1 },
-          additionalProperties: {
-            oneOf: [
-              {
-                type: 'object',
-                required: ['type', 'instructions'],
-                properties: {
-                  type: { const: 'boolean' },
-                  instructions: jsonContentSchema,
-                  criteria: {
-                    type: 'object',
-                    minProperties: 1,
-                    properties: {
-                      true: jsonDescriptionSchema,
-                      false: jsonDescriptionSchema,
-                    },
-                    additionalProperties: false,
-                  },
-                },
-                additionalProperties: false,
-              },
-              {
-                type: 'object',
-                required: ['type', 'instructions', 'criteria'],
-                properties: {
-                  type: { const: 'choice' },
-                  instructions: jsonContentSchema,
-                  criteria: {
-                    type: 'object',
-                    minProperties: 1,
-                    additionalProperties: jsonDescriptionSchema,
-                  },
-                },
-                additionalProperties: false,
-              },
-              {
-                type: 'object',
-                required: ['type', 'instructions', 'criteria'],
-                properties: {
-                  type: { const: 'score' },
-                  instructions: jsonContentSchema,
-                  criteria: {
-                    type: 'array',
-                    minItems: 2,
-                    items: jsonDescriptionSchema,
-                  },
-                },
-                additionalProperties: false,
-              },
-            ],
-          },
+          type: 'array',
+          minItems: 1,
+          items: jevQuestionSchema,
         },
         timeout_ms: { type: 'integer', minimum: 1, maximum: 600000 },
       },

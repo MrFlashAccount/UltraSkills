@@ -12,6 +12,17 @@ function isAbortError(error) {
   return error?.name === 'AbortError';
 }
 
+function indexQuestions(questions) {
+  const entries = [];
+  const questionIds = new Set();
+  for (const { id, ...question } of questions) {
+    if (questionIds.has(id)) throw new Error(`Jev question id '${id}' is duplicated`);
+    questionIds.add(id);
+    entries.push([id, question]);
+  }
+  return Object.fromEntries(entries);
+}
+
 async function readApiKey(credentialPath, { readFileImpl, signal }) {
   let content;
   try {
@@ -32,6 +43,7 @@ async function requestEvaluation({ argumentsValue, credentialPath }, {
   fetchImpl,
   readFileImpl,
 }) {
+  const questions = indexQuestions(argumentsValue.questions);
   const apiKey = await readApiKey(credentialPath, { readFileImpl, signal: controller.signal });
   try {
     const { createGateway, experimental_evaluate: evaluate } = await loadAiSdk();
@@ -39,7 +51,7 @@ async function requestEvaluation({ argumentsValue, credentialPath }, {
     const result = await evaluate({
       model: gateway.evaluationModel(JEV_MODEL_ID),
       state: argumentsValue.state,
-      questions: argumentsValue.questions,
+      questions,
       maxRetries: 0,
       abortSignal: controller.signal,
     });
