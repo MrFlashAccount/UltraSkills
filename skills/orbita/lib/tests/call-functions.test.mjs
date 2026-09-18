@@ -91,16 +91,21 @@ test('exec resolves cwd from the workflow directory', async () => {
   assert.equal(result.stderr, '');
 });
 
-test('ask_jev uses the OpenAI transport without exposing the credential', async () => {
+test('ask_jev evaluates typed questions with the fixed Jev gateway model', async () => {
+  const questions = {
+    review_required: {
+      type: 'boolean',
+      instructions: 'Does this change require manual review?',
+    },
+  };
   let request;
   const result = await executeCallFunction({
     functionName: 'ask_jev',
     argumentsValue: {
-      model: 'example-model',
       api_key_file: 'secret.txt',
-      prompt: 'Review this change',
+      state: { diff: 'example' },
+      questions,
     },
-    outputSchema,
     workflowPath: '/workflow/workflow.json',
   }, {
     functions: callFunctionDefinitions,
@@ -109,22 +114,31 @@ test('ask_jev uses the OpenAI transport without exposing the credential', async 
       return 'top-secret\n';
     },
     fetchImpl: async (url, options) => {
-      request = { url, options };
-      return {
-        ok: true,
+      request = { url: String(url), options };
+      return new Response(JSON.stringify({
+        answers: {
+          review_required: { type: 'boolean', probability: 0.82 },
+        },
+        usage: { inputTokens: 120, outputTokens: 1 },
+      }), {
         status: 200,
-        json: async () => ({ output: [{ content: [{ type: 'output_text', text: '{"answer":"ok"}' }] }] }),
-      };
+        headers: { 'content-type': 'application/json' },
+      });
     },
   });
-  assert.deepEqual(result, { answer: 'ok' });
-  assert.equal(request.url, 'https://api.openai.com/v1/responses');
-  assert.equal(request.options.headers.authorization, 'Bearer top-secret');
-  const body = JSON.parse(request.options.body);
-  assert.equal(body.store, false);
-  assert.equal(body.input, 'Review this change');
-  assert.deepEqual(body.text.format.schema, outputSchema);
-  assert.equal(body.text.format.strict, true);
+  assert.deepEqual(result, {
+    review_required: { type: 'boolean', probability: 0.82 },
+  });
+  assert.equal(request.url, 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model');
+  const headers = new Headers(request.options.headers);
+  assert.equal(headers.get('authorization'), 'Bearer top-secret');
+  assert.equal(headers.get('ai-model-id'), 'typesafe-ai/jev');
+  assert.equal(headers.get('ai-evaluation-model-specification-version'), '4');
+  assert.deepEqual(JSON.parse(request.options.body), {
+    state: { diff: 'example' },
+    questions,
+    providerOptions: {},
+  });
   assert.doesNotMatch(request.options.body, /top-secret/);
   assert.equal(callFunctionDefinitions.openai, undefined);
 });
@@ -207,6 +221,49 @@ test('exec owns its fixed output schema', () => {
   );
 });
 
+test('ask_jev owns its typed answer-map output schema', () => {
+  const workflow = {
+    name: 'jev-contract',
+    version: 1,
+    start: 'review',
+    done: 'done',
+    steps: {
+      review: {
+        name: 'Ask Jev',
+        kind: 'call',
+        function: 'ask_jev',
+        arguments: {
+          api_key_file: '.secrets/vercel-ai-gateway-key',
+          state: { change: 'example' },
+          questions: {
+            review_required: {
+              type: 'boolean',
+              instructions: 'Does this change require manual review?',
+            },
+          },
+        },
+        next: 'done',
+      },
+      done: { name: 'Done', kind: 'done' },
+    },
+  };
+  assert.equal(validateWorkflow({ workflowDTO: workflow, externalSchemas: [] }).toJSON().ok, true);
+  assert.throws(
+    () => validateWorkflow({
+      workflowDTO: {
+        ...workflow,
+        steps: {
+          ...workflow.steps,
+          review: { ...workflow.steps.review, output: { schema: 'output.schema.json' } },
+        },
+      },
+      outputSchemas: new Map([['output.schema.json', outputSchema]]),
+      externalSchemas: [],
+    }),
+    /owns its fixed output schema/,
+  );
+});
+
 test('fixed-output function definition owns its executable implementation', async () => {
   const fixedFunctions = {
     fixed: {
@@ -225,24 +282,21 @@ test('fixed-output function definition owns its executable implementation', asyn
   assert.deepEqual(result, { answer: 'fixed' });
 });
 
-test('ask_jev requires HTTPS before attaching a credential', async () => {
-  await assert.rejects(
-    executeCallFunction({
-      functionName: 'ask_jev',
-      argumentsValue: {
-        base_url: 'http://gateway.example/v1',
-        model: 'example-model',
-        api_key_file: 'secret.txt',
-        prompt: 'Review this change',
+test('ask_jev rejects generic model and endpoint parameters', () => {
+  assert.throws(
+    () => validateCallArguments(callFunctionDefinitions.ask_jev, {
+      api_key_file: 'secret.txt',
+      state: 'Review this change',
+      questions: {
+        review_required: {
+          type: 'boolean',
+          instructions: 'Does this require review?',
+        },
       },
-      outputSchema,
-      workflowPath: '/workflow/workflow.json',
-    }, {
-      functions: callFunctionDefinitions,
-      readFileImpl: async () => 'top-secret',
-      fetchImpl: async () => { throw new Error('fetch must not run'); },
+      model: 'arbitrary-model',
+      base_url: 'https://example.test/v1',
     }),
-    /must use HTTPS/,
+    /must NOT have additional properties/,
   );
 });
 
@@ -250,12 +304,16 @@ test('ask_jev timeout covers credential reads and response bodies', async () => 
   const invocation = {
     functionName: 'ask_jev',
     argumentsValue: {
-      model: 'example-model',
       api_key_file: 'secret.txt',
-      prompt: 'Review this change',
+      state: 'Review this change',
+      questions: {
+        review_required: {
+          type: 'boolean',
+          instructions: 'Does this require review?',
+        },
+      },
       timeout_ms: 20,
     },
-    outputSchema,
     workflowPath: '/workflow/workflow.json',
   };
   await assert.rejects(
@@ -269,11 +327,8 @@ test('ask_jev timeout covers credential reads and response bodies', async () => 
     executeCallFunction(invocation, {
       functions: callFunctionDefinitions,
       readFileImpl: async () => 'top-secret',
-      fetchImpl: async () => ({
-        ok: true,
-        status: 200,
-        json: async () => new Promise(() => {}),
-      }),
+      createGatewayImpl: () => ({ evaluationModel: () => ({}) }),
+      evaluateImpl: async () => new Promise(() => {}),
     }),
     /exceeded timeout of 20ms/,
   );
@@ -379,8 +434,7 @@ test('credential read failures do not expose paths in errors or durable history'
   const dir = makeTestDir('call-credential-path');
   const runsRoot = makeTestDir('call-credential-path-runs');
   const workflowPath = path.join(dir, 'workflow.json');
-  const credentialPath = path.join(dir, 'private', 'missing-openai-key');
-  writeFileSync(path.join(dir, 'output.schema.json'), `${JSON.stringify(outputSchema)}\n`);
+  const credentialPath = path.join(dir, 'private', 'missing-jev-key');
   writeFileSync(workflowPath, `${JSON.stringify({
     name: 'call-credential-path',
     version: 1,
@@ -392,11 +446,15 @@ test('credential read failures do not expose paths in errors or durable history'
         kind: 'call',
         function: 'ask_jev',
         arguments: {
-          model: 'example-model',
           api_key_file: credentialPath,
-          prompt: 'Review this change',
+          state: 'Review this change',
+          questions: {
+            review_required: {
+              type: 'boolean',
+              instructions: 'Does this require review?',
+            },
+          },
         },
-        output: { schema: 'output.schema.json' },
         next: 'done',
       },
       done: { name: 'Done', kind: 'done' },
@@ -409,11 +467,11 @@ test('credential read failures do not expose paths in errors or durable history'
     callFunction({ runId, workflowPath, runsRoot, stepId: 'invoke', leaseToken: registered.leaseToken }),
     (error) => {
       assert.match(error.message, /API key file could not be read/);
-      assert.doesNotMatch(error.message, /missing-openai-key|call-credential-path/);
+      assert.doesNotMatch(error.message, /missing-jev-key|call-credential-path/);
       return true;
     },
   );
   const history = readFileSync(path.join(runsRoot, runId, 'history.md'), 'utf8');
   assert.match(history, /API key file could not be read/);
-  assert.doesNotMatch(history, /missing-openai-key|call-credential-path-/);
+  assert.doesNotMatch(history, /missing-jev-key|call-credential-path-/);
 });

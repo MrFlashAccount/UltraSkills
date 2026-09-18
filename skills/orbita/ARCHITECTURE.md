@@ -49,9 +49,10 @@ and executable implementation together, and declare output ownership as either
 `lib/call-functions/contract.mjs` and `arguments.mjs` own deterministic schema
 and argument policy. `registry.mjs` is the composition point that binds each
 public function definition to exactly one implementation. Transport and process
-adapters (`openai.mjs`, `sh.mjs`, `js.mjs`, `exec.mjs`, and `subprocess.mjs`) may perform
-their bounded external work but must not depend on runner state, persistence,
-entrypoints, or use cases. Dependency-cruiser enforces these directions.
+adapters (`jev.mjs`, `sh.mjs`, `js.mjs`, `exec.mjs`, and `subprocess.mjs`) may
+perform their bounded external work but must not depend on runner state,
+persistence, entrypoints, or use cases. Dependency-cruiser enforces these
+directions.
 
 `listPointerTransitions` and `movePointer` are runner API control-plane recovery
 surfaces for repositioning only the current baton pointer among state-bearing

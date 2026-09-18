@@ -7,7 +7,7 @@ module.exports = {
       comment: 'Call argument and schema policy must not depend on execution adapters, runner state, persistence, entrypoints, or Node IO.',
       from: { path: '^skills/orbita/lib/call-functions/(?:arguments|contract)[.]mjs$' },
       to: {
-        path: '^(?:skills/orbita/lib/call-functions/(?:execute|registry|openai|sh|js|js-worker|exec|subprocess)[.]mjs$|skills/orbita/lib/(?:entrypoints|persistence|runner|use-cases)/|(?:node:)?(?:child_process|fs|path|url)(?:/|$))',
+        path: '^(?:skills/orbita/lib/call-functions/(?:execute|registry|jev|sh|js|js-worker|exec|subprocess)[.]mjs$|skills/orbita/lib/(?:entrypoints|persistence|runner|use-cases)/|(?:node:)?(?:child_process|fs|path|url)(?:/|$))',
       },
     },
     {
@@ -22,7 +22,7 @@ module.exports = {
       severity: 'error',
       comment: 'Workflow entities may use the pure call contract but never load the executable registry or execution adapters.',
       from: { path: '^skills/orbita/lib/entities/' },
-      to: { path: '^skills/orbita/lib/call-functions/(?:execute|registry|openai|sh|js|js-worker|exec|subprocess)[.]mjs$' },
+      to: { path: '^skills/orbita/lib/call-functions/(?:execute|registry|jev|sh|js|js-worker|exec|subprocess)[.]mjs$' },
     },
     {
       name: 'orbita-host-action-plan-stays-pure',

@@ -31,19 +31,25 @@ function = "ask_jev"
 next = "done"
 
 [steps.review.arguments]
-model = "gpt-5"
-api_key_file = ".secrets/openai-api-key"
-prompt = "${{ input.prepare.review_request }}"
+api_key_file = ".secrets/vercel-ai-gateway-key"
+state = "${{ input.prepare.review_request }}"
 
-[steps.review.output]
-schema = "schemas/review.schema.json"
+[steps.review.arguments.questions.review_required]
+type = "boolean"
+instructions = "Does this change require manual review?"
+
+[steps.review.arguments.questions.review_required.criteria]
+true = "A human must inspect the change before merge"
+false = "Automated checks are sufficient"
 ```
 
 Output ownership is part of the function definition. A `call-defined` function requires `steps.<id>.output.schema`; a `fixed` function supplies its own schema and forbids workflow output-schema authoring. In both cases Orbita validates the returned JSON before storing it at `baton.state.<step-id>` and applying `next`.
 
+For the example above, Jev stores an answer such as `baton.state.review.review_required = { type: "boolean", probability: 0.82 }`. Choice answers contain the selected `choice` and may contain `probabilities`; score answers contain the fractional `score` and may contain `probabilities`.
+
 The built-in registry contains:
 
-- `ask_jev`: sends `prompt` through an internal OpenAI Responses transport with strict JSON Schema output and `store: false`. `api_key_file` is absolute or relative to the workflow file; its trimmed content is used as a Bearer token and is never projected into host requests. `base_url` is optional, must use HTTPS without URL credentials, and defaults to `https://api.openai.com/v1`. Credential-read failures expose neither the resolved path nor the secret-file name.
+- `ask_jev`: evaluates `state` against named `boolean`, `choice`, or `score` questions with the specific Jev model (`typesafe-ai/jev`) through Vercel AI Gateway. It is not a generic text-generation or OpenAI-compatible call: neither the model nor the endpoint is workflow-configurable. The function owns its answer-map schema, so the workflow must not declare `output.schema`. `api_key_file` is absolute or relative to the workflow file; its trimmed content is passed only to the gateway provider and is never projected into host requests. Credential-read failures expose neither the resolved path nor the secret-file name.
 - `sh`: runs `script` through `/bin/sh -c`, sends `input` as JSON on stdin, and requires one JSON value on stdout.
 - `js`: runs `source` in a separate runtime process with `input` as its argument and requires the returned value to be JSON-serializable. The process boundary contains exits, crashes, and timeouts; it is not a security sandbox.
 - `exec`: starts `executable` directly with the string array `args`, optional string `stdin`, and no shell. Its fixed result is `{ exit_code, stdout, stderr }`, so a non-zero exit code is workflow data rather than a call failure. `cwd` defaults to the workflow directory; a relative value is resolved from that directory.
