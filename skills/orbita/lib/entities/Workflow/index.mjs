@@ -3,7 +3,7 @@
  * It accepts boundary DTO data and never reads files or parses CLI arguments.
  */
 import { WorkflowRuntimeError } from '../../errors.mjs';
-import { parsePathExpression } from '../../runtime/expression.mjs';
+import { isExpressionString, parsePathExpression } from '../../runtime/expression.mjs';
 import { normalizePromptText } from '../../runtime/prompt-text.mjs';
 import { extractPromptInterpolations } from '../../runtime/prompt-interpolation.mjs';
 import { assertRoleDirectoryName } from '../../runtime/role-ref.mjs';
@@ -756,7 +756,7 @@ function assertApprovalProjectionSemantics(workflow, schemasByStep, routeEdges) 
 function assertCallArgumentExpressions(workflow, schemasByStep, { requireSchemaCoverage }) {
   function visit(value, stepId, step, field) {
     if (typeof value === 'string') {
-      if (!value.includes('${{')) return;
+      if (!isExpressionString(value)) return;
       let expression;
       try {
         expression = parsePathExpression(value, { allowedRoots: ['input'] });
