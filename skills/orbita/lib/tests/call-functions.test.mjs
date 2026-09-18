@@ -91,10 +91,10 @@ test('exec resolves cwd from the workflow directory', async () => {
   assert.equal(result.stderr, '');
 });
 
-test('ask_jeff uses the OpenAI transport without exposing the credential', async () => {
+test('ask_jev uses the OpenAI transport without exposing the credential', async () => {
   let request;
   const result = await executeCallFunction({
-    functionName: 'ask_jeff',
+    functionName: 'ask_jev',
     argumentsValue: {
       model: 'example-model',
       api_key_file: 'secret.txt',
@@ -225,10 +225,10 @@ test('fixed-output function definition owns its executable implementation', asyn
   assert.deepEqual(result, { answer: 'fixed' });
 });
 
-test('ask_jeff requires HTTPS before attaching a credential', async () => {
+test('ask_jev requires HTTPS before attaching a credential', async () => {
   await assert.rejects(
     executeCallFunction({
-      functionName: 'ask_jeff',
+      functionName: 'ask_jev',
       argumentsValue: {
         base_url: 'http://gateway.example/v1',
         model: 'example-model',
@@ -246,9 +246,9 @@ test('ask_jeff requires HTTPS before attaching a credential', async () => {
   );
 });
 
-test('ask_jeff timeout covers credential reads and response bodies', async () => {
+test('ask_jev timeout covers credential reads and response bodies', async () => {
   const invocation = {
-    functionName: 'ask_jeff',
+    functionName: 'ask_jev',
     argumentsValue: {
       model: 'example-model',
       api_key_file: 'secret.txt',
@@ -388,9 +388,9 @@ test('credential read failures do not expose paths in errors or durable history'
     done: 'done',
     steps: {
       invoke: {
-        name: 'Ask Jeff',
+        name: 'Ask Jev',
         kind: 'call',
-        function: 'ask_jeff',
+        function: 'ask_jev',
         arguments: {
           model: 'example-model',
           api_key_file: credentialPath,

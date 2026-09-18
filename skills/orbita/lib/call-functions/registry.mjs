@@ -24,8 +24,8 @@ const execOutput = {
 };
 
 export const callFunctionDefinitions = {
-  ask_jeff: {
-    name: 'ask_jeff',
+  ask_jev: {
+    name: 'ask_jev',
     parameters: {
       ...objectSchema,
       required: ['model', 'api_key_file', 'prompt'],

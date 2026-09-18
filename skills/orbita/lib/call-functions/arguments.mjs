@@ -1,12 +1,10 @@
-import { parsePathExpression } from '../runtime/expression.mjs';
+import { isExpressionString, parsePathExpression } from '../runtime/expression.mjs';
 import { readPath } from '../entities/Step/expressions/index.mjs';
 import { formatSchemaErrors, validateJsonSchema } from '../../../../shared/scripts/schema-validation/schema-validation.mjs';
 
-const EXPRESSION_START = '${{';
-
 function resolveValue(value, input) {
   if (typeof value === 'string') {
-    if (!value.includes(EXPRESSION_START)) return value;
+    if (!isExpressionString(value)) return value;
     const expression = parsePathExpression(value, { allowedRoots: ['input'] });
     return readPath({ input }, expression);
   }
