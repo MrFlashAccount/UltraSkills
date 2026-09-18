@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import { createGateway, evaluate } from './vendor/ai-evaluation.mjs';
 
 const DEFAULT_TIMEOUT_MS = 120000;
 const JEV_MODEL_ID = 'typesafe-ai/jev';
@@ -29,15 +28,15 @@ async function readApiKey(credentialPath, { readFileImpl, signal }) {
 
 async function requestEvaluation({ argumentsValue, credentialPath }, {
   controller,
-  createGatewayImpl,
-  evaluateImpl,
+  loadAiSdk,
   fetchImpl,
   readFileImpl,
 }) {
   const apiKey = await readApiKey(credentialPath, { readFileImpl, signal: controller.signal });
   try {
-    const gateway = createGatewayImpl({ apiKey, fetch: fetchImpl });
-    const result = await evaluateImpl({
+    const { createGateway, experimental_evaluate: evaluate } = await loadAiSdk();
+    const gateway = createGateway({ apiKey, fetch: fetchImpl });
+    const result = await evaluate({
       model: gateway.evaluationModel(JEV_MODEL_ID),
       state: argumentsValue.state,
       questions: argumentsValue.questions,
@@ -52,9 +51,8 @@ async function requestEvaluation({ argumentsValue, credentialPath }, {
 }
 
 export async function executeJev({ argumentsValue, workflowPath }, {
-  createGatewayImpl = createGateway,
-  evaluateImpl = evaluate,
   fetchImpl = fetch,
+  loadAiSdk = () => import('ai'),
   readFileImpl = readFile,
 } = {}) {
   const credentialPath = isAbsolute(argumentsValue.api_key_file)
@@ -75,8 +73,7 @@ export async function executeJev({ argumentsValue, workflowPath }, {
     return await Promise.race([
       requestEvaluation({ argumentsValue, credentialPath }, {
         controller,
-        createGatewayImpl,
-        evaluateImpl,
+        loadAiSdk,
         fetchImpl,
         readFileImpl,
       }),

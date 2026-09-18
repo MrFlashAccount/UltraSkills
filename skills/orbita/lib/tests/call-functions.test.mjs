@@ -327,8 +327,10 @@ test('ask_jev timeout covers credential reads and response bodies', async () => 
     executeCallFunction(invocation, {
       functions: callFunctionDefinitions,
       readFileImpl: async () => 'top-secret',
-      createGatewayImpl: () => ({ evaluationModel: () => ({}) }),
-      evaluateImpl: async () => new Promise(() => {}),
+      loadAiSdk: async () => ({
+        createGateway: () => ({ evaluationModel: () => ({}) }),
+        experimental_evaluate: async () => new Promise(() => {}),
+      }),
     }),
     /exceeded timeout of 20ms/,
   );
