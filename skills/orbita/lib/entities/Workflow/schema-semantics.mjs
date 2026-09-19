@@ -3,6 +3,7 @@ import { WorkflowRuntimeError } from '../../errors.mjs';
 import { isShardStep } from '../../runtime/shard.mjs';
 import { isFanoutStep } from '../../runtime/fanout.mjs';
 import { compileWorkflowOutputSchema } from './schema-ref-validation.mjs';
+import { callFunctionDefinition } from '../../call-functions/contract.mjs';
 
 const APPROVAL_OUTPUT_SCHEMA = Object.freeze({
   type: 'object',
@@ -179,13 +180,39 @@ function outputSchemaForStep(outputSchemas, stepId, schemaRef) {
   return loaded?.schema ?? loaded;
 }
 
-export function normalizeStepOutputSchemas({ workflow, outputSchemas = new Map(), warnings, requireSchemaPresence = true, requireWorkerOutcomeContract = true, externalSchemas = [] }) {
+export function normalizeStepOutputSchemas({ workflow, outputSchemas = new Map(), callFunctions, warnings, requireSchemaPresence = true, requireWorkerOutcomeContract = true, externalSchemas = [] }) {
   const schemasByStep = new Map();
   for (const [stepId, step] of Object.entries(workflow.steps)) {
     if (step.kind === 'approval') {
       if (step.output !== undefined) fail(`step '${stepId}' approval output is runner-owned; remove output/approvalOutput and use output.approval in next`);
       schemasByStep.set(stepId, APPROVAL_OUTPUT_SCHEMA);
       continue;
+    }
+    if (step.kind === 'call') {
+      let definition;
+      try {
+        definition = callFunctionDefinition(callFunctions, step.function);
+      } catch (error) {
+        fail(`step '${stepId}' ${error.message}`);
+      }
+      try {
+        compileWorkflowOutputSchema(definition.parameters);
+      } catch (error) {
+        fail(`call function '${definition.name}' parameters is not a valid JSON Schema: ${error.message}`);
+      }
+      if (definition.output.kind === 'fixed') {
+        if (step.output !== undefined) fail(`step '${stepId}' call function '${definition.name}' owns its fixed output schema; remove step output`);
+        const normalizedSchema = validateOutputSchemaDocument(definition.output.schema, `call-function:${definition.name}`, workflow, undefined, warnings, {
+          stepId,
+          step,
+          requireWorkerOutcomeContract: false,
+          externalSchemas,
+        });
+        schemasByStep.set(stepId, normalizedSchema);
+        continue;
+      }
+      if (definition.output.kind !== 'call-defined') fail(`call function '${definition.name}' has unsupported output contract '${definition.output.kind}'`);
+      if (!step.output?.schema) fail(`step '${stepId}' call function '${definition.name}' requires output.schema`);
     }
     const schemaRef = step.output?.schema;
     if (!schemaRef) continue;
@@ -194,7 +221,12 @@ export function normalizeStepOutputSchemas({ workflow, outputSchemas = new Map()
       if (requireSchemaPresence) fail(`step '${stepId}' output.schema '${schemaRef}' was not provided to Workflow.validate()`);
       continue;
     }
-    const normalizedSchema = validateOutputSchemaDocument(schema, schemaRef, workflow, undefined, warnings, { stepId, step, requireWorkerOutcomeContract, externalSchemas });
+    const normalizedSchema = validateOutputSchemaDocument(schema, schemaRef, workflow, undefined, warnings, {
+      stepId,
+      step,
+      requireWorkerOutcomeContract: step.kind === 'call' ? false : requireWorkerOutcomeContract,
+      externalSchemas,
+    });
     schemasByStep.set(stepId, normalizedSchema);
   }
   for (const [stepId, step] of Object.entries(workflow.steps)) {

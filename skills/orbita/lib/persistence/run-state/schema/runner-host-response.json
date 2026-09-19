@@ -48,6 +48,7 @@
             "enum": [
               "run_worker",
               "wait_for_approval",
+              "call_function",
               "resolve_non_blocking_stop"
             ]
           },
@@ -106,6 +107,14 @@
             "type": "string",
             "minLength": 1
           },
+          "function": {
+            "type": "string",
+            "minLength": 1
+          },
+          "executeCommand": {
+            "type": "string",
+            "minLength": 1
+          },
           "parentStepId": {
             "type": "string",
             "minLength": 1
@@ -113,6 +122,38 @@
         },
         "additionalProperties": false,
         "allOf": [
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "call_function"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "required": [
+                "function",
+                "executeCommand"
+              ],
+              "not": {
+                "anyOf": [
+                  { "required": ["loadInstructionsCommand"] },
+                  { "required": ["preferredAgentId"] },
+                  { "required": ["loadFollowupInstructionsCommand"] },
+                  { "required": ["nonBlockingStop"] },
+                  { "required": ["agentRuntime"] },
+                  { "required": ["resolveStopCommand"] },
+                  { "required": ["shard"] },
+                  { "required": ["fanout"] },
+                  { "required": ["parentStepId"] },
+                  { "required": ["ownerStepId"] }
+                ]
+              }
+            }
+          },
           {
             "if": {
               "properties": {
@@ -129,7 +170,13 @@
                 "loadInstructionsCommand",
                 "preferredAgentId",
                 "loadFollowupInstructionsCommand"
-              ]
+              ],
+              "not": {
+                "anyOf": [
+                  { "required": ["function"] },
+                  { "required": ["executeCommand"] }
+                ]
+              }
             }
           },
           {
@@ -167,6 +214,16 @@
                   {
                     "required": [
                       "agentRuntime"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "function"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "executeCommand"
                     ]
                   }
                 ]
@@ -209,6 +266,16 @@
                   {
                     "required": [
                       "agentRuntime"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "function"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "executeCommand"
                     ]
                   }
                 ]

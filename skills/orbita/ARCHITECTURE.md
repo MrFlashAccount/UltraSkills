@@ -15,6 +15,7 @@ The canonical workflow-runner command surface is:
 
 - `next`
 - `instructions`
+- `call-function`
 - `write-output`
 - `continue`
 - API `listPointerTransitions` / CLI `list-pointer-transitions`
@@ -32,6 +33,26 @@ returns Template-compiled worker instructions. A current
 by `next` and `continue`. A request superseded by an unresolved non-blocking
 stop, a terminal response, or a missing/stale current request has no loadable
 step instructions and must fail before lease renewal.
+
+`call-function --step-id` handles only a current `call_function` request. The
+runner resolves arguments from baton state, validates them against the selected
+registered function's parameter schema, releases the run lock while the host
+function executes, then re-enters a private validating output-acceptance path.
+Public `write-output` rejects `call_function` requests, so only the atomic
+`call-function` command can claim that a registered function ran. The
+public request exposes only function identity and the executable runner command;
+arguments, schemas, credential paths, credentials, and response bodies remain
+inside the command boundary. Function definitions own their parameter schemas
+and executable implementation together, and declare output ownership as either
+`fixed` or `call-defined`.
+
+`lib/call-functions/contract.mjs` and `arguments.mjs` own deterministic schema
+and argument policy. `registry.mjs` is the composition point that binds each
+public function definition to exactly one implementation. Transport and process
+adapters (`jev.mjs`, `sh.mjs`, `js.mjs`, `exec.mjs`, and `subprocess.mjs`) may
+perform their bounded external work but must not depend on runner state,
+persistence, entrypoints, or use cases. Dependency-cruiser enforces these
+directions.
 
 `listPointerTransitions` and `movePointer` are runner API control-plane recovery
 surfaces for repositioning only the current baton pointer among state-bearing

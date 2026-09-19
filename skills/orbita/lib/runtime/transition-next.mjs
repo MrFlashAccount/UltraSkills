@@ -1,5 +1,5 @@
 import { invariant } from '../errors.mjs';
-import { parsePathExpression } from './expression.mjs';
+import { isExpressionString, parsePathExpression } from './expression.mjs';
 import { assertTransitionTarget } from './transition-targets.mjs';
 
 const NEXT_KIND = Object.freeze({
@@ -15,7 +15,7 @@ function workflowData(workflow) {
 function normalizeTransitionItem(item) {
   invariant(!Array.isArray(item), 'workflow transition must be one scalar target or match/cases object');
   if (typeof item === 'string') {
-    if (item.includes('${{')) return { kind: NEXT_KIND.DYNAMIC_TARGET, expression: parsePathExpression(item) };
+    if (isExpressionString(item)) return { kind: NEXT_KIND.DYNAMIC_TARGET, expression: parsePathExpression(item) };
     return { kind: NEXT_KIND.STATIC_TARGET, target: item };
   }
 

@@ -1,6 +1,7 @@
 /** Public host-request projection from neutral executable runtime entries. */
 import {
   assertSafeStepId,
+  callFunctionCommandForStep,
   continueInstructionCommandForRun,
   loadFollowupInstructionsCommandForStep,
   loadInstructionsCommandForStep,
@@ -48,6 +49,12 @@ function requestInstructionBlock(request) {
   if (request.action === 'wait_for_approval') {
     lines.push(`  current approval instruction-loader command: ${request.loadInstructionsCommand}`);
     lines.push('  execute the dedicated approval projection in this stdout; do not send it to a worker');
+    return lines.join('\n');
+  }
+
+  if (request.action === 'call_function') {
+    lines.push(`  function: ${request.function}`);
+    lines.push(`  execute: ${request.executeCommand}`);
     return lines.join('\n');
   }
 
@@ -148,6 +155,17 @@ function requestForPlan(plan, interpreterResponse, { runId, workflow, runsRoot, 
       action: RESOLVE_NON_BLOCKING_STOP_ACTION,
       nonBlockingStop,
       resolveStopCommand: resolveStopCommandForStep(runId, step.id, { runsRoot, leaseToken }),
+    };
+  }
+
+  if (plan.action === 'call_function') {
+    const sourceStep = workflow.steps?.[workflowStepIdForExecutableStep(step)];
+    return {
+      id: step.id,
+      stepId: step.id,
+      action: plan.action,
+      function: sourceStep.function,
+      executeCommand: callFunctionCommandForStep(runId, step.id, { runsRoot, leaseToken }),
     };
   }
 

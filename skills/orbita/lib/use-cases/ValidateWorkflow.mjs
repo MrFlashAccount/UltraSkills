@@ -5,7 +5,7 @@ import { WorkflowRuntimeError } from '../errors.mjs';
 import { assertWorkflowSchema } from '../file-contracts/workflow-document-schema.mjs';
 import { workflowSemanticValidationOptions } from '../runtime/workflow-semantic-validation.mjs';
 
-export function validateWorkflow({ workflowDTO, outputSchemas = new Map(), allowedRoles, externalSchemas } = {}) {
+export function validateWorkflow({ workflowDTO, outputSchemas = new Map(), allowedRoles, externalSchemas, callFunctions } = {}) {
   const workflowDoc = typeof workflowDTO?.toJSON === 'function' ? workflowDTO.toJSON() : workflowDTO;
   try {
     assertWorkflowSchema(workflowDoc);
@@ -14,7 +14,7 @@ export function validateWorkflow({ workflowDTO, outputSchemas = new Map(), allow
     throw error;
   }
   const workflow = new Workflow(workflowDTO);
-  return new WorkflowResultDTO(workflow.validate(workflowSemanticValidationOptions({ outputSchemas, allowedRoles, externalSchemas })));
+  return new WorkflowResultDTO(workflow.validate(workflowSemanticValidationOptions({ outputSchemas, allowedRoles, externalSchemas, callFunctions })));
 }
 
 export const ValidateWorkflow = { execute: validateWorkflow };

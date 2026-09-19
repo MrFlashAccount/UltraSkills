@@ -21,6 +21,9 @@
           "$ref": "#/$defs/fanoutStep"
         },
         {
+          "$ref": "#/$defs/callStep"
+        },
+        {
           "$ref": "#/$defs/doneStep"
         }
       ]
@@ -389,6 +392,39 @@
       },
       "additionalProperties": false
     },
+    "callStep": {
+      "type": "object",
+      "required": [
+        "name",
+        "kind",
+        "function",
+        "arguments",
+        "next"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "const": "call"
+        },
+        "function": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$"
+        },
+        "arguments": {
+          "type": "object"
+        },
+        "output": {
+          "$ref": "#/$defs/callOutput"
+        },
+        "next": {
+          "$ref": "#/$defs/next"
+        }
+      },
+      "additionalProperties": false
+    },
     "approvalInput": {
       "description": "Runner-owned typed approval projection. Every selector is a whole-string path expression rooted at input; approval prompt/template and output schema authoring are intentionally unsupported.",
       "type": "object",
@@ -553,6 +589,19 @@
           "type": "string",
           "minLength": 1
         },
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "callOutput": {
+      "type": "object",
+      "required": [
+        "schema"
+      ],
+      "properties": {
         "schema": {
           "type": "string",
           "minLength": 1

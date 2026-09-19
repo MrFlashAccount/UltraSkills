@@ -3,6 +3,7 @@ import { validateAgainstOutputSchema } from '../runtime/output/output-schema-val
 import { workerOutputSchema } from '../runtime/output/worker-output-schema.mjs';
 import { assertCompletedStepOutput } from '../runtime/output/worker-output.mjs';
 import { validateApprovalDecision } from '../runtime/approval-contract.mjs';
+import { outputSchemaForCallStep } from '../call-functions/contract.mjs';
 
 export function validateRunnerAcceptedOutput({
   requestStepId,
@@ -19,6 +20,15 @@ export function validateRunnerAcceptedOutput({
       throw new Error(`workflow request '${requestStepId}' action/step kind mismatch for approval output`);
     }
     return validateApprovalDecision(output);
+  }
+  if (requestAction === 'call_function' || step.kind === 'call') {
+    if (requestAction !== 'call_function' || step.kind !== 'call') {
+      throw new Error(`workflow request '${requestStepId}' action/step kind mismatch for call output`);
+    }
+    const { schema, schemaRef } = outputSchemaForCallStep(step, resources);
+    const validation = validateAgainstOutputSchema({ schemaRef, schema, output, artifactPathErrors });
+    if (!validation.ok) throw new Error(`output schema validation failed for step '${requestStepId}': ${validation.errors}`);
+    return validation.output;
   }
   const schemaRef = step.output?.schema;
   const loaded = schemaRef

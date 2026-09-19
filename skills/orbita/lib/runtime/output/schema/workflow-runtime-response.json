@@ -41,6 +41,7 @@
           "enum": [
             "run_worker",
             "wait_for_approval",
+            "call_function",
             "stop_done"
           ]
         },

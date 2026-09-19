@@ -2,6 +2,29 @@
 module.exports = {
   forbidden: [
     {
+      name: 'orbita-call-contract-stays-pure',
+      severity: 'error',
+      comment: 'Call argument and schema policy must not depend on execution adapters, runner state, persistence, entrypoints, or Node IO.',
+      from: { path: '^skills/orbita/lib/call-functions/(?:arguments|contract)[.]mjs$' },
+      to: {
+        path: '^(?:skills/orbita/lib/call-functions/(?:execute|registry|jev|sh|js|js-worker|exec|subprocess)[.]mjs$|skills/orbita/lib/(?:entrypoints|persistence|runner|use-cases)/|(?:node:)?(?:child_process|fs|path|url)(?:/|$))',
+      },
+    },
+    {
+      name: 'orbita-call-execution-does-not-own-runner-state',
+      severity: 'error',
+      comment: 'Function implementations own only their transport or subprocess work and never runner state, persistence, entrypoints, or use cases.',
+      from: { path: '^skills/orbita/lib/call-functions/' },
+      to: { path: '^skills/orbita/lib/(?:entrypoints|persistence|runner|use-cases)/' },
+    },
+    {
+      name: 'orbita-entities-not-to-call-execution',
+      severity: 'error',
+      comment: 'Workflow entities may use the pure call contract but never load the executable registry or execution adapters.',
+      from: { path: '^skills/orbita/lib/entities/' },
+      to: { path: '^skills/orbita/lib/call-functions/(?:execute|registry|jev|sh|js|js-worker|exec|subprocess)[.]mjs$' },
+    },
+    {
       name: 'orbita-host-action-plan-stays-pure',
       severity: 'error',
       comment: 'Effective host-action selection is a pure runtime projection over executable entries and baton control state.',

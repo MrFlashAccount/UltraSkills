@@ -92,6 +92,15 @@ export function writeOutputCommandForStep(
   ].join("\n");
 }
 
+export function callFunctionCommandForStep(runId, stepId, { runsRoot, leaseToken } = {}) {
+  assertSafeStepId(stepId);
+  const runsRootArg = runsRoot ? ` --runs-root ${shellQuote(runsRoot)}` : "";
+  const token = typeof leaseToken === "string" && leaseToken.length > 0
+    ? shellQuote(leaseToken)
+    : "<lease-token>";
+  return `${WORKFLOW_RUNNER_COMMAND} call-function --run-id ${shellQuote(runId)} --step-id ${shellQuote(stepId)}${runsRootArg} --lease-token ${token}`;
+}
+
 function controlJsonCommandForStep(mode, runId, stepId, { runsRoot, leaseToken } = {}) {
   assertSafeStepId(stepId);
   const runsRootArg = runsRoot ? ` --runs-root ${shellQuote(runsRoot)}` : "";
