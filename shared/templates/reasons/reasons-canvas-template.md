@@ -1,218 +1,122 @@
-# <Derived Requirement Title>
+# REASONS Canvas
 
-Use this template as construction guidance for a complete REASONS Canvas prompt/spec artifact. A completed artifact should render as only the title and the seven REASONS sections below. The authoring guidance inside each section exists to help fill that section; do not preserve guidance labels unless they contain actual artifact content. Do not add lifecycle/state fields, approval metadata, generation timestamps, framework metadata, or routing instructions.
+Write one Markdown artifact with a specific feature title and the seven sections
+below. Use the user's language and familiar words; retain exact technical names
+when they carry a contract. Remove this construction guidance from the result.
+The section identities remain Requirements, Entities, Approach, Structure,
+Operations, Norms and Safeguards; their display titles below explain their job.
 
-## Requirements
+The reader should understand the feature through annotated Mermaid views and a
+source/component tree. Text supplies decisions, exact conditions, evidence and
+unknowns that diagrams cannot express. Do not narrate the arrows again, copy
+generic standards, repeat constraints across sections, set a diagram quota or
+give the reader a menu of formatting choices. Keep one rule or check per short
+item; do not compress a whole contract into a dense paragraph.
 
-Objective: extract the essential problem, value, and boundary.
+Preserve approved requirements, selected dependencies, public APIs, exact errors,
+permission boundaries, state/order invariants, compatibility and resource limits.
+A shorter Canvas must not become a weaker contract. Explain a necessary term
+briefly; use plain language around it. Label facts, proposed decisions, deductions
+and unknowns honestly. Cite source evidence next to claims that depend on it.
 
-Output:
-- One concise requirement statement in verb-phrase form.
-- Key capabilities needed to satisfy the requirement.
-- Scope boundaries, explicit non-goals, compatibility expectations, and acceptance signals.
-- Requirement tensions or unresolved ambiguity, if any.
-- For research artifacts, an explicit `UI design needed: yes | no` decision with an evidence-backed reason. This is required research evidence, not workflow routing metadata.
+Use the producing phase's depth. Research shows observed behavior, domain terms,
+candidate directions, risks and unresolved questions; it does not finalize
+architecture, file-level changes or implementation order. Architecture owns the
+selected structure, planned source changes and assembly contract. Do not invent
+paths, fields, states, guarantees or executed checks to fill a section. A section
+with no additional evidence can be one honest sentence.
 
-Construction guidance:
-- Abstract the fundamental problem before listing features.
-- Focus on business, user, product, or operational value before implementation.
-- Make boundaries and constraints visible.
-- Avoid feature stacking: do not turn this section into a task list.
+Artifact identity, lifecycle, approval, routing, reviewer roster and machine
+handoff fields remain outside the human Canvas. Do not add a second planning
+report. Markdown is the Canvas; this format does not require HTML export,
+raster images, screenshots, a new renderer dependency or extra verification.
+The calling phase decides which checks are authorized.
 
-Quality bar:
-- The core requirement can be summarized in one sentence.
-- The section explains why the change matters.
-- The section is clear enough to judge whether later sections drift from the intent.
+Write valid Mermaid. Label arrows with actions or data and keep each view focused
+on one question. Escape reserved punctuation without changing visible text:
+a sequence-message semicolon uses `#59;`, not a literal `;` separator.
+Inspect syntax when rendering is unavailable; report that verification limit in
+the worker handoff. Claim parsed/rendered proof only after an actual check.
 
-## Entities
+## R — Что должно получиться
 
-Objective: model the domain and data objects the implementation must preserve or introduce.
+Requirements: state the goal in one sentence. Show the meaningful user/caller
+journey in Mermaid: actions, visible result and material failure or permission
+branches. For internal work, use the actual caller/operator, not an invented UI.
+Add only acceptance signals, scope boundaries, compatibility or unresolved choices
+not visible in the journey. In research, label candidate behavior rather than
+presenting an unresolved option as selected.
 
-Output:
-```mermaid
-classDiagram
-direction TB
+For research artifacts, retain the exact UI applicability decision
+`UI design needed: yes | no` marker and an evidence-backed reason here.
+The marker is product evidence; routing remains in the producer's output.
 
-class CoreEntity {
-  +Type attribute
-  +method()
-}
+## E — Данные и состояния
 
-class RelatedEntity {
-  +Type attribute
-}
+Entities: show meaningful data relationships and lifecycle transitions in focused
+Mermaid views. Include identity, ownership, cardinality and contract-bearing
+fields when they affect behavior. Preserve distinct states and validation
+boundaries. Avoid empty class skeletons, every-method inventories and wrappers
+created only for the diagram. Research names observed domain concepts; proposed
+architecture records are not presented as existing facts.
 
-class RequestDTO {
-  +Type field
-}
+## A — Как это работает
 
-class ResponseDTO {
-  +Type field
-}
+Approach: explain the central end-to-end collaboration through an annotated
+Mermaid sequence: real participants, trigger, meaningful messages, outcome and
+material failure/cancellation branches. Add the reason for the chosen approach
+and a rejected alternative only when that trade-off matters. Research instead
+shows observed collaboration or bounded candidate approaches with open decisions;
+it must not silently select the final solution. Keep the user's journey in R
+and component collaboration here.
 
-CoreEntity "1" -- "0..*" RelatedEntity : relationship
-RequestDTO --> CoreEntity : creates or updates
-CoreEntity --> ResponseDTO : maps to
-```
+## S — Где что находится
 
-Construction guidance:
-- Identify core business entities, supporting entities, DTOs, records, events, and states.
-- Show key attributes in type-plus-name form when the type matters.
-- Show relationships, cardinality, ownership, and request-processing-response flow.
-- Include interfaces or key methods only when they clarify the model.
-- Prefer existing domain objects and data structures when they can satisfy the requirement.
+Structure: draw responsibility and dependency boundaries in Mermaid, including
+allowed calls and important forbidden shortcuts. Explain each component's job.
 
-Conservative constraints:
-- Do not invent wrapper entities or abstractions unless the requirement forces them.
-- Do not rebuild existing simple structures when extension is enough.
-- Preserve backward compatibility for existing entities and contracts.
-- Prefer gradual extension over broad restructuring.
+Architecture adds an annotated ASCII tree of the affected source: existing paths
+and planned additions, with `добавить`, `изменить` or `убрать`, responsibility
+and owner where needed. Show changed areas, not the whole repository. Clearly
+label proposed paths; an uninspected path is not evidence of an existing file.
+When paths are unknown, use a labelled component tree and state that uncertainty.
 
-Quality bar:
-- The diagram covers the current task flow.
-- Entity relationships are explicit and reviewable.
-- The model avoids unnecessary complexity.
+Research may map observed components and ownership questions. It does not create
+a final change tree or settle structural ownership before architecture.
 
-## Approach
+## O — Как соберём
 
-Objective: define the solution strategy and the trade-offs behind it.
+Operations: architecture shows a Mermaid dependency/outcome graph. Nodes are
+completed feature parts with observable results; arrows are actual prerequisites.
+Independent parts stay parallel. Keep the workstream owner, source zone,
+completion signal and verification clear through tree/node annotations and short
+captions. Do not force a serial route where no dependency exists.
 
-Output:
-1. Solution strategy:
-   - High-level approach.
-   - Main architecture or design pattern, if any.
-   - Key decisions and rationale.
-2. Technical approach:
-   - Framework, library, integration, persistence, API, or runtime choices.
-   - Performance, security, reliability, and compatibility considerations.
-   - Error-handling strategy.
-3. Business logic:
-   - Core business rules.
-   - Validation strategy.
-   - Workflow or lifecycle behavior.
+Research shows known work implications, evidence dependencies, blockers and
+validation questions only. Unknown assembly order remains unknown; no code edits,
+final workstreams or implementation plan are manufactured.
 
-Construction guidance:
-- Organize by solution categories rather than file order.
-- Explain why the chosen strategy fits the requirement and current system.
-- Name rejected alternatives when the trade-off matters.
-- Surface risks and assumptions instead of hiding them.
+Add only migration, intermediate proof or sequencing conditions the graph cannot
+show. No human-facing changes table, ownership matrix, method-by-method
+pseudocode, patch recipe, command sequence or separate planning report.
 
-Quality bar:
-- The approach is operable and testable.
-- Key technical decisions have reasons.
-- The section creates a clear bridge from requirements/entities to structure.
+## N — Какие правила соблюдаем
 
-## Structure
+Norms: keep only concrete rules that constrain this feature. Name their target:
+who owns state, where validation belongs or which dependency is forbidden.
+Reference existing local conventions instead of copying generic checklists.
+Do not repeat rules already clear in the diagrams or other sections.
 
-Objective: define the system shape, component responsibilities, and dependency relationships.
+## S — Что нельзя сломать и как проверяем
 
-Output:
-### Ownership and boundaries
-1. Component or module: responsibility and owner.
-2. Interface, port, API, schema, or storage boundary: responsibility and caller.
+Safeguards: pair each must-preserve behavior with an observable acceptance check.
+Keep exact failure/cancellation conditions, permissions, privacy, compatibility,
+resource budgets, rollback triggers and the smallest safe rollback explicit.
+Use a compact failure/recovery view when it answers a new question.
 
-### Dependencies
-1. Component A may call or depend on Component B because <reason>.
-2. Component C must not call or depend on Component D because <boundary>.
-
-### Architecture shape
-1. Entry point layer: responsibility.
-2. Application/service layer: responsibility.
-3. Domain layer: responsibility.
-4. Infrastructure/integration/persistence layer: responsibility.
-5. Error handling, validation, or policy layer: responsibility.
-
-Construction guidance:
-- Clarify inheritance, interface, implementation, and adapter relationships when relevant.
-- Define dependency direction and forbidden shortcuts.
-- Show where the change fits into the existing architecture.
-- Preserve responsibility separation and existing extension points.
-
-Quality bar:
-- Ownership and dependency direction are unambiguous.
-- The structure supports extension without unnecessary rewrites.
-- Reviewers can detect misplaced code from this section.
-
-## Operations
-
-Objective: convert the abstract strategy into concrete, ordered, verifiable implementation work.
-
-Output:
-### Create/Update <ComponentType> - <ComponentName>
-1. Responsibility: <clear responsibility>
-2. Location: `<file/package/module if known>`
-3. Attributes/configuration:
-   - `<name>`: <type> - <meaning>
-4. Methods/contracts:
-   - `<methodName>(<parameters>): <ReturnType>`
-   - Logic:
-     1. <step>
-     2. <branch or edge case>
-     3. <error handling>
-5. Dependencies: <required collaborators>
-6. Constraints: <validation or business constraints>
-7. Verification: <test/check/observable behavior>
-
-Construction guidance:
-- Base operations strictly on Requirements, Entities, Approach, and Structure.
-- Group work by component or responsibility.
-- Keep execution order explicit when dependencies exist.
-- Make each operation single-responsibility and verifiable.
-- Include method signatures, parameters, return types, and logic when the artifact is implementation-ready.
-- If this artifact is intentionally earlier than implementation planning, mark unknowns explicitly instead of fabricating precision.
-
-Quality bar:
-- A capable implementer can execute the operations without rediscovering the whole problem.
-- Each operation has clear completion evidence.
-- The operation set covers the full requirement without widening scope.
-
-## Norms
-
-Objective: define reusable implementation standards and common patterns that must constrain the work.
-
-Output:
-1. Naming and organization standards.
-2. Dependency injection, wiring, or composition patterns.
-3. Error handling and response format standards.
-4. Validation and input-handling standards.
-5. Logging, observability, and diagnostics standards.
-6. Testing standards.
-7. Documentation and comment standards.
-
-Construction guidance:
-- Prefer repo-local conventions over generic best practices.
-- Extract common patterns that should be reused across operations.
-- Make norms concrete enough to check in review.
-- Mark inferred norms when evidence is weak.
-
-Quality bar:
-- Norms are specific and executable.
-- Norms improve consistency rather than adding ceremony.
-- Reviewers can point to a violated norm.
-
-## Safeguards
-
-Objective: define hard constraints, quality gates, and forbidden outcomes.
-
-Output:
-1. Functional constraints: exact behavior that must or must not happen.
-2. Performance constraints: measurable thresholds or known limits.
-3. Security and privacy constraints: sensitive data, permission, or exposure boundaries.
-4. Integration constraints: API, schema, protocol, migration, and compatibility limits.
-5. Business-rule constraints: invariant business conditions.
-6. Error-handling constraints: required error classes, messages, status codes, or redaction rules.
-7. Technical constraints: forbidden imports, placements, dependencies, or runtime assumptions.
-8. Data constraints: validation, persistence, serialization, or migration rules.
-9. Review and rollback constraints: checks, approvals, rollback triggers, or recoverable pause conditions.
-
-Construction guidance:
-- State what cannot be compromised.
-- Prefer verifiable constraints over vague warnings.
-- Cover functional, technical, security, data, integration, and operational boundaries.
-- Quantify thresholds when possible.
-- If current evidence does not support implementation-ready detail, state the uncertainty in the relevant safeguard and name what evidence would resolve it.
-
-Quality bar:
-- Safeguards are clear, testable, and enforceable.
-- The section prevents common AI overreach and silent drift.
-- The implementation can be rejected for violating a listed safeguard.
+Group short checks by the behavior they prove. Do not turn them into a dense
+technical inventory or weaken them to vague success claims. Research records
+risks, evidence gaps and what needs validation; architecture makes applicable
+checks and rollback executable at contract depth. Mark missing evidence and
+unresolved limits. Proposed checks are not test results, and absent measurements
+are not proof.

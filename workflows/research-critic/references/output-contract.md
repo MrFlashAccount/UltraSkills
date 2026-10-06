@@ -25,6 +25,12 @@ Reference or embed the canonical `reasons-canvas-research` artifact from `../../
 - `Norms`
 - `Safeguards`
 
+These are canonical section identities. Display titles and visual presentation
+follow the shared Markdown template supplied by the draft step. Research views
+show known behavior, bounded candidates and open questions; they do not finalize
+architecture, file changes or assembly order. No human-facing changes table is
+required.
+
 Canvas content must not include critic findings, final verdict, approval language, final structural contract, or implementation entity map.
 
 ## Wrapper-level fields

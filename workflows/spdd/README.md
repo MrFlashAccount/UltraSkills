@@ -37,7 +37,26 @@ Attack, review, and implementation workers continue to consume the artifact or s
 
 ## Single execution-ready architecture Canvas
 
-`reasons-canvas-architecture` is the only human-facing architecture/execution artifact. Its `Operations` section owns ordered workstreams, owner roles, non-overlapping file or module zones, dependencies, completion signals, and verification. Its `Safeguards` section owns compatibility limits, rollback triggers, and the smallest safe rollback path. Applicable non-trivial UI records its frontend composition contract in `Structure` and `Operations` while preserving the separately approved `ui-design-proposal` by reference.
+Research and architecture use the shared visual-first Markdown
+[`REASONS template`](../../shared/templates/reasons/reasons-canvas-template.md).
+The seven canonical section identities remain unchanged; their display titles
+use plain language. Annotated Mermaid views explain user/caller behavior,
+data/state, collaboration and dependencies. Architecture adds an annotated ASCII
+change tree. Text supplies exact decisions, constraints, evidence and unknowns
+instead of repeating the diagrams. No HTML Canvas/export phase is required.
+
+Research stays at research depth: observed facts, candidate directions and open
+questions. It does not invent selected architecture, file changes or assembly
+order to fill the shared sections.
+
+`reasons-canvas-architecture` is the only human-facing architecture/execution
+artifact. Its `Operations` section shows a dependency/outcome diagram with owner
+roles, non-overlapping file/module zones, completion signals and verification
+in concise annotations. It does not use a changes table or method-by-method
+pseudocode. Its `Safeguards` section keeps compatibility, exact limits, rollback
+triggers and the smallest safe rollback path. Applicable non-trivial UI records
+its frontend composition in `Structure` and `Operations` while preserving the
+separately approved `ui-design-proposal` and its captures by reference.
 
 `architecture_draft` JSON keeps only compact runner state beside the Canvas: `outcome`, `summary`, artifact metadata, selected implementation branches, selected review branches, reviewer rationale, skipped reviewers, and evidence-backed escalation when more than three reviewers are required. The architecture hostile review checks both the Canvas and this routing contract before the single architecture approval gate. No separate implementation-planning draft, attack, approval, or artifact exists.
 
