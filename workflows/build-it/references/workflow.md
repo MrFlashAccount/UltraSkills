@@ -5,7 +5,7 @@
 3. Bounded revisions preserve exact decisions; unresolved findings remain visible
    when the limit routes to the user gate.
 4. User approves the architecture or gives feedback for a revised Canvas.
-5. Delegate approved disjoint zones to backend and/or frontend workers using
+5. Delegate approved disjoint zones to backend, frontend and/or architecture-document workers using
    `../../shared/delegate/delegated-role-task-template.md` and the compact focus
    from `references/roles/implementers.md`. Never implement their work in the parent.
 6. Verify all selected work against the exact approved Canvas and hand off for

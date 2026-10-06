@@ -10,7 +10,7 @@ flowchart LR
     Attack -->|bounded revision| Design
     Attack --> Approval[User architecture approval]
     Approval -->|feedback| Design
-    Approval -->|approved| Build[Backend / frontend implementation]
+    Approval -->|approved| Build[Code / architecture-document implementation]
     Build --> Verify[Meaningful verification]
     Verify --> Handoff[Ready for separate code review]
 ```
@@ -33,7 +33,7 @@ passes. At the loop limit, unresolved findings stay visible at the user gate;
 reaching the gate is not a pass. User rejection returns to the author and then
 to the same approval gate. Only explicit approval unlocks implementation.
 
-The approved Canvas supplies disjoint backend/frontend owner zones. Parallel
+The approved Canvas supplies disjoint backend/frontend/architect owner zones. Parallel
 branches work independently from that Canvas and repository state. Workers fix
 in-scope failed checks; contradictions or required redesign stop for resolution.
 

@@ -14,7 +14,7 @@ fact uses a focused non-blocking stop. Unknowns are not fabricated. The architec
 produces the executable design and the user approves it before code changes.
 
 Implementation consumes that approved Canvas, actual gate decision and disjoint
-backend/frontend owner zones. The parent orchestrates delegated workers rather
+backend/frontend/architect owner zones. The parent orchestrates delegated workers rather
 than implementing their zones. Missing delegation or required role material
 uses the runner's non-blocking-stop channel; it does not authorize fallback.
 

@@ -1,6 +1,6 @@
 name = "build-it"
 version = 1
-description = "Design and build a known task without a separate research phase or a prepared execution plan: visual Markdown architecture Canvas, independent architecture challenge, explicit user approval, delegated backend/frontend implementation and verification. Use when the task direction is known and the missing piece is an executable design. Do not use for broad discovery, product-direction exploration, full SPDD review orchestration, or a simple direct fix. Returns ready_for_review; independent code review and publication remain separate."
+description = "Design and build a known task without a separate research phase or a prepared execution plan: visual Markdown architecture Canvas, independent architecture challenge, explicit user approval, delegated implementation and verification. Use when the task direction is known and the missing piece is an executable design. Do not use for broad discovery, product-direction exploration, full SPDD review orchestration, or a simple direct fix. Returns ready_for_review; independent code review and publication remain separate."
 start = "architecture_draft"
 done = "done"
 
@@ -25,7 +25,7 @@ Write exactly one immutable reasons-canvas-architecture Markdown artifact using 
 
 Make the Canvas sufficient to implement: chosen libraries/public contracts; existing vs proposed paths; component/state owners; compatibility and allowed/forbidden dependencies; permissions, errors, cancellation and exact resource limits; completion checks, rollback triggers and the smallest safe rollback. Applicable domain/source proofs belong next to the affected boundary/check, not in a second inventory. For UI, preserve supplied design/reference constraints and explain components, state and interaction; if product direction is unresolved, stop rather than inventing it. No HTML export or screenshot phase is required for this Canvas.
 
-Select one backend worker, one frontend worker, or both, with disjoint zones. Each selected branch must be independently executable from this Canvas and repository state; no dependency on a sibling's output or future handoff. Collapse overlapping work only when one owner can own it; otherwise stop for the smallest decision. Assign required docs/artifact changes within these zones or report the unsupported ownership need. Keep route/owner/reviewer metadata in JSON, with only readable responsibility annotations in the Canvas. Record a concrete separate code-review roster; do not claim that review has run.
+Select backend_implementation, frontend_implementation and/or architecture_artifact_update only for actual owned work, with disjoint zones. Canonical owner labels are backend, frontend and architect. Each selected branch must be independently executable from this Canvas and repository state; no dependency on a sibling's output or future handoff. Collapse overlapping work only when one owner can own it; otherwise stop for the smallest decision. Assign architecture-only documents to the architect branch when that ownership is required; derive their complete target state from the Canvas, never from a sibling code handoff. Do not map Architect-owned work to backend/frontend merely to fit routing. Keep route/owner/reviewer metadata in JSON, with only readable responsibility annotations in the Canvas. Record a concrete separate code-review roster; do not claim that review has run.
 
 Return ready_for_attack for an initial or architecture_attack-requested revision. Address each evidence-backed finding using a new immutable Canvas. When the latest approve_architecture decision is rejected, address its feedback and return ready_for_approval directly to that same user gate; do not silently add another automatic attack cycle. Keep output.summary short and attach only the Canvas.
 
@@ -55,7 +55,7 @@ prompt = '''Independently challenge the actual Canvas and its routing against th
 
 Read the shared REASONS template and follow its visual presentation rules. Require understandable behavior/collaboration views, an honest annotated source tree and a dependency/outcome view retaining exact owner zones and checks. Any Markdown/HTML table in the Canvas, copied research dossier, duplicated proof inventory, giant disguised row list, fabricated path/state or weakened exact contract needs revision. A missing lifecycle can stay explicitly inapplicable; do not invent one to fill a section. Inspect Mermaid syntax, and distinguish inspection from rendered proof.
 
-Verify selected backend/frontend routes match the owner map and Canvas: one owner per zone, disjoint parallel branches, no cross-branch output/completion/handoff prerequisites. The approved Canvas must contain the target docs/artifact state when required. Verify a concrete separate code-review roster, without presenting architecture challenge as post-implementation review.
+Verify selected backend/frontend/architect routes match the owner map and Canvas: one owner per zone, disjoint parallel branches, no cross-branch output/completion/handoff prerequisites. The approved Canvas must contain the target docs/artifact state when required. Verify a concrete separate code-review roster, without presenting architecture challenge as post-implementation review.
 Return approved only with no actionable must-fix or should-fix finding; otherwise needs_revision with bounded evidence and required action. Missing critical evidence or authority uses a non-blocking stop from architecture_attack. Keep machine metadata and the review verdict outside the Canvas.
 
 Architecture: ${{ input.architecture_draft }}'''
@@ -98,12 +98,12 @@ rejected = "architecture_draft"
 [steps.implementation]
 name = "Implement and verify"
 kind = "fanout"
-max_parallel = 2
+max_parallel = 3
 next = "done"
 
 [steps.implementation.input]
 branches = "${{ input.architecture_draft.selected_implementation_steps }}"
-prompt = '''Aggregate only the delegated backend/frontend branches selected by the approved architecture. Do not edit implementation files yourself. Require explicit approve_architecture approval, complete disjoint zones, meaningful passing verification and satisfaction of loaded role material's additional/output requirements. Treat the approved Canvas and its exact constraints as the execution contract, not a separately prepared research/plan packet. Do not invent scope or accept a branch's confidence as proof.
+prompt = '''Aggregate only the delegated implementation branches selected by the approved architecture. Do not edit implementation files yourself. Require explicit approve_architecture approval, complete disjoint zones, meaningful passing verification and satisfaction of loaded role material's additional/output requirements. Treat the approved Canvas and its exact constraints as the execution contract, not a separately prepared research/plan packet. Do not invent scope or accept a branch's confidence as proof.
 
 Fix in-scope failures through the same owner and reverify. Missing branches, overlapping scope, unapproved deviations or unsafe external verification needs use a non-blocking stop from implementation with the smallest concrete help request. No completed handoff while mandatory coverage is partial.
 
@@ -112,7 +112,8 @@ Return ready_for_review with the existing development-packet fields. execution_c
 Architecture: ${{ input.architecture_draft }}
 Approval: ${{ input.approve_architecture }}
 Backend: ${{ input.backend_implementation | default: "Backend was not selected." }}
-Frontend: ${{ input.frontend_implementation | default: "Frontend was not selected." }}'''
+Frontend: ${{ input.frontend_implementation | default: "Frontend was not selected." }}
+Architecture documents: ${{ input.architecture_artifact_update | default: "Architecture documents were not selected." }}'''
 
 [steps.implementation.output]
 template = "../../shared/templates/visual-implementation-handoff-template.md"
@@ -149,6 +150,23 @@ Architecture: ${{ input.architecture_draft }}
 Approval: ${{ input.approve_architecture }}'''
 
 [steps.implementation.branches.frontend_implementation.output]
+template = "../../shared/templates/visual-implementation-handoff-template.md"
+schema = "schemas/implementation-output.json"
+
+[steps.implementation.branches.architecture_artifact_update]
+name = "Architecture document update"
+agent = "build_it_architecture_artifact_writer"
+
+[steps.implementation.branches.architecture_artifact_update.input]
+role = "architect"
+template = "templates/implementation-branch-instructions.md"
+prompt = '''Implement only the approved architecture-document zones in reasons-canvas-architecture. Read the Canvas artifact and explicit approve_architecture decision. Apply the Architect artifact-implementation phase contract from required role material. Derive the complete target document state directly from the Canvas and repository evidence; do not wait for a sibling backend/frontend output or edit its code/test zones. No new research report, architecture proposal or execution plan.
+Create/update only the exact selected durable artifacts. Verify their contract fidelity and run the smallest applicable documentation/repository checks. Preserve exact source ownership, allowed/forbidden dependencies, compatibility and rollback decisions. A missing target contract, required redesign or unsafe external verification uses a non-blocking stop from architecture_artifact_update, rather than inventing a new design. Return implemented with implementer_owner architect, exact changed files, meaningful verification, role-material evidence and warnings. No publication, commit or push.
+
+Architecture: ${{ input.architecture_draft }}
+Approval: ${{ input.approve_architecture }}'''
+
+[steps.implementation.branches.architecture_artifact_update.output]
 template = "../../shared/templates/visual-implementation-handoff-template.md"
 schema = "schemas/implementation-output.json"
 

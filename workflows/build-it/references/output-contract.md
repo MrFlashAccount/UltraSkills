@@ -31,7 +31,7 @@ Field intent:
 - `repo`: repo name or canonical repo identifier.
 - `issue_url`: source issue/task URL, or empty string if none.
 - `status`: current handoff state.
-- `implementer_owners`: owner-to-zone map using only `backend` and `frontend`.
+- `implementer_owners`: owner-to-zone map using only `backend`, `frontend` and `architect`.
 - `execution_contract_basis`: short reference to the approved architecture Canvas and actual gate decision used for development.
 - `branch_name`: working branch used or prepared for transport.
 - `pr_url`: published PR URL when transport already supplied one; otherwise empty.

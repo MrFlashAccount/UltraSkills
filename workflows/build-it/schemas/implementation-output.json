@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/build-it/implementation-output",
   "title": "Build It Delegated Implementer Output",
-  "description": "Completed backend or frontend implementation slice with meaningful verification and role-material evidence.",
+  "description": "Completed delegated code or architecture-document slice with meaningful verification and role-material evidence.",
   "type": "object",
   "required": [
     "outcome",
@@ -19,7 +19,11 @@
       "const": "implemented"
     },
     "implementer_owner": {
-      "enum": ["backend", "frontend"]
+      "enum": [
+        "backend",
+        "frontend",
+        "architect"
+      ]
     },
     "summary": {
       "type": "string",
@@ -28,47 +32,85 @@
     "change_summary": {
       "type": "array",
       "minItems": 1,
-      "items": { "type": "string", "minLength": 1 }
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "changed_files": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
       "uniqueItems": true
     },
     "verification_results": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/verificationResult" }
+      "items": {
+        "$ref": "#/$defs/verificationResult"
+      }
     },
     "role_material": {
       "type": "object",
-      "required": ["role", "loaded", "requirements_satisfied"],
+      "required": [
+        "role",
+        "loaded",
+        "requirements_satisfied"
+      ],
       "properties": {
-        "role": { "enum": ["backend", "frontend"] },
+        "role": {
+          "enum": [
+            "backend",
+            "frontend",
+            "architect"
+          ]
+        },
         "loaded": {
           "type": "array",
           "minItems": 2,
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "uniqueItems": true
         },
-        "requirements_satisfied": { "const": true }
+        "requirements_satisfied": {
+          "const": true
+        }
       },
       "additionalProperties": false
     },
     "warnings": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 }
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     }
   },
   "additionalProperties": false,
   "$defs": {
     "verificationResult": {
       "type": "object",
-      "required": ["check", "result", "evidence"],
+      "required": [
+        "check",
+        "result",
+        "evidence"
+      ],
       "properties": {
-        "check": { "type": "string", "minLength": 1 },
-        "result": { "const": "passed" },
-        "evidence": { "type": "string", "minLength": 1 }
+        "check": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "const": "passed"
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1
+        }
       },
       "additionalProperties": false
     }

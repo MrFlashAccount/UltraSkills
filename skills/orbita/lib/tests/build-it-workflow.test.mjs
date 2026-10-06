@@ -143,6 +143,22 @@ test('Build It rejects a selected implementation branch without its matching own
   await assert.rejects(() => submit(context, 'architecture_draft', output));
 });
 
+test('Build It preserves an Architect-owned document slice without assigning it to a code worker', async () => {
+  const context = await start('architecture-docs');
+  const output = draft(context, 'ready_for_attack', 1);
+  output.task_context.goal = 'Update the declared durable architecture contract.';
+  output.implementer_owners = { architect: ['src/feature/CONTEXT.md'] };
+  output.selected_implementation_steps = ['architecture_artifact_update'];
+  output.reviewer_plan = { architect: ['Check the durable boundary contract.'] };
+  await submit(context, 'architecture_draft', output);
+  await submit(context, 'architecture_attack', verdict('approved'));
+  const implementation = await submit(context, 'approve_architecture', { approval: 'approved' });
+  assert.equal(implementation.requests.length, 1);
+  const instructions = await loadInstructions({ ...context, stepId: implementation.requests[0].stepId });
+  assert.match(instructions, /Implement only the approved architecture-document zones/);
+  assert.match(instructions, /implementer_owner architect/);
+});
+
 test('Build It attack limit retains unresolved findings at the user gate without starting implementation', async () => {
   const context = await start('limit');
   for (const revision of [1, 2]) {
