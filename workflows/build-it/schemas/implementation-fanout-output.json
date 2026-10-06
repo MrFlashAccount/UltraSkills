@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/implementation-harness/implementation-fanout-output",
-  "title": "Implementation Harness Development Packet",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/build-it/implementation-fanout-output",
+  "title": "Build It Development Packet",
   "description": "Verified development handoff for a separate hostile-prior review stage. Outcome is the runner discriminator; the remaining required fields translate the source skill output packet.",
   "type": "object",
   "required": [

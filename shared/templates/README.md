@@ -18,6 +18,8 @@ These files are reusable output templates. Workflow descriptors reference them w
 - [`implementer-handoff-template.md`](implementer-handoff-template.md): implementation handoff packet for an assigned slice, including source-of-truth context, todo checklist, contract rows, evidence expectations, and output fields.
 - [`reviewer-handoff-template.md`](reviewer-handoff-template.md): review handoff packet with source-of-truth context, implementation evidence, review checklist, contract-trace rows, and verdict fields.
 - [`review-verdict-template.md`](review-verdict-template.md): compact critic/reviewer worker output for review gates, with verdict, evidence, findings, and transition output.
+- [`visual-implementation-handoff-template.md`](visual-implementation-handoff-template.md): short, table-free behavior/evidence handoff for Build It and SPDD.
+- [`visual-review-verdict-template.md`](visual-review-verdict-template.md): short findings with location, evidence and action; routing stays in the workflow schema.
 - [`reviewer-to-implementer-handoff-template.md`](reviewer-to-implementer-handoff-template.md): narrow fix-pass packet from reviewer findings back to implementers, with source-of-truth context, todo checklist, must-fix gap rows, and verification expectations.
 
 ## Usage notes

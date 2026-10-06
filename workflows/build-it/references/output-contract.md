@@ -2,6 +2,7 @@
 
 Return one structured packet with these top-level fields exactly:
 
+- `outcome` (runner discriminator)
 - `summary`
 - `repo`
 - `issue_url`
@@ -17,10 +18,8 @@ Return one structured packet with these top-level fields exactly:
 - `next_action`
 - `issue_comment`
 
-`status` allowed values:
-
-- `in_progress`
-- `ready_for_review`
+`outcome` and `status` are both `ready_for_review` for a completed packet.
+An in-progress request does not submit a completed packet.
 
 Conditional rules:
 
@@ -33,7 +32,7 @@ Field intent:
 - `issue_url`: source issue/task URL, or empty string if none.
 - `status`: current handoff state.
 - `implementer_owners`: owner-to-zone map using only `backend` and `frontend`.
-- `execution_contract_basis`: short reference to the approved research + execution-plan basis used for development.
+- `execution_contract_basis`: short reference to the approved architecture Canvas and actual gate decision used for development.
 - `branch_name`: working branch used or prepared for transport.
 - `pr_url`: published PR URL when transport already supplied one; otherwise empty.
 - `change_summary`: concise user-visible changes.
@@ -46,10 +45,10 @@ If progress requires help because of a concrete execution blocker, contradiction
 
 `review_handoff` minimum shape:
 
-- `reviewer_plan`: concise reviewer roster and scope from the approved execution plan
+- `reviewer_plan`: concise reviewer roster and scope from the approved architecture Canvas
 - `hotspots`: ordered list of files/areas that deserve close review attention
 - `contract_gaps`: empty list when none; otherwise any remaining caveats the review stage should explicitly judge
-- `resolved_proof_obligations`: architecture proof-map obligations satisfied, or empty when not applicable
+- `resolved_proof_obligations`: applicable architecture proof obligations satisfied, or empty when not applicable
 - `architecture_contract_deviations`: deviations from Architect contract with approval/status, or empty when none
 - `unresolved_compatibility_surfaces`: remaining wrappers/deprecated exports/aliases/legacy imports, or empty when none
 - `negative_checks_run`: negative checks for forbidden imports/paths, deletion proof, compatibility absence, naming honesty, and schema/domain alignment, or empty when not applicable
@@ -58,6 +57,6 @@ Packet rules:
 
 - Keep values concise and factual.
 - Do not include raw agent transcripts.
-- If work is still active, use `in_progress`.
+- While work is active, continue the same request; use a non-blocking stop only when concrete help is required.
 - Use `ready_for_review` when code and verification are complete and the next correct step is the separate review stage.
 - Do not imply that independent review already passed inside this packet.

@@ -7,7 +7,9 @@ Use [`reasons-canvas-template.md`](reasons-canvas-template.md) for any REASONS C
 The seven section identities stay Requirements, Entities, Approach, Structure,
 Operations, Norms, and Safeguards. Reader-facing titles use plain language;
 Mermaid views and an annotated ASCII change tree explain behavior and structure.
-Operations shows dependencies and completed outcomes instead of a changes table.
+Operations shows dependencies and completed outcomes. No Markdown/HTML tables
+are allowed anywhere in the Canvas; diagrams, trees and short exact items carry
+API, entity, evidence and safeguard contracts without copied inventories.
 
 The shared format applies at the producing phase's depth: research shows observed
 facts, candidate directions and unknowns; architecture adds the selected

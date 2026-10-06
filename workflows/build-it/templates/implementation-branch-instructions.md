@@ -8,11 +8,11 @@ If required material cannot be read, or its additional/output requirements canno
 
 ## Delegated task contract
 
-Treat the workflow step prompt and its normalized implementation-intake context as the complete approved task packet. It supplies the concrete role, task, assigned file zones, scope, constraints, non-goals, acceptance criteria, source-contract rows, and verification expectations.
+Treat the workflow step prompt and its approved architecture Canvas and gate decision as the complete approved task packet. It supplies the concrete role, task, assigned file zones, scope, constraints, non-goals, acceptance criteria, source-contract constraints, and verification expectations.
 
 - Stay inside the assigned disjoint file zones.
-- Treat binding proposal, plan, and source-contract rows as hard gates; do not approximate, rename, or improvise around them.
-- When a required row cannot be covered or a deviation or contradiction is discovered, report a `NON_BLOCKING_STOP` with the smallest concrete approval question and resume the same task after resolution.
+- Treat binding proposal, plan, and source-contract constraints as hard gates; do not approximate, rename, or improvise around them.
+- When a required constraint cannot be covered or a deviation or contradiction is discovered, report a `NON_BLOCKING_STOP` with the smallest concrete approval question and resume the same task after resolution.
 - Do not reopen discovery, change the approved direction, perform independent review, publish, commit, or push.
 - Keep role-specific implementation rules in the loaded role material; do not replace them with generic assumptions.
 

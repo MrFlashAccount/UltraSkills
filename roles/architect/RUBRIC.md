@@ -4,7 +4,7 @@ Derived checklist for the Architect role. `ROLE.md` remains the canonical contra
 
 ## Required body order
 
-Architect output may include an optional short `summary`; the required body order is:
+Use a caller-provided artifact template for presentation when supplied; check the same obligations without demanding duplicate headings or tables. Otherwise, Architect output may include an optional short `summary`; the required body order is:
 
 1. `architecture_decision`
 2. `ubiquitous_language`

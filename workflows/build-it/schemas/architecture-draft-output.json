@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/build-it/architecture-draft-output",
+  "title": "Build It architecture and execution contract",
+  "type": "object",
+  "required": [
+    "outcome",
+    "summary",
+    "task_context",
+    "implementer_owners",
+    "selected_implementation_steps",
+    "reviewer_plan",
+    "artifacts"
+  ],
+  "properties": {
+    "outcome": {
+      "enum": [
+        "ready_for_attack",
+        "ready_for_approval"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_context": {
+      "type": "object",
+      "required": [
+        "goal",
+        "non_goals",
+        "acceptance_criteria",
+        "repo",
+        "issue_url"
+      ],
+      "properties": {
+        "goal": {
+          "type": "string",
+          "minLength": 1
+        },
+        "non_goals": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "acceptance_criteria": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "repo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "issue_url": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "implementer_owners": {
+      "$ref": "#/$defs/ownerMap"
+    },
+    "selected_implementation_steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {
+        "enum": [
+          "backend_implementation",
+          "frontend_implementation"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "reviewer_plan": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": true
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "allOf": [
+          {
+            "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "reasons-canvas-architecture"
+              },
+              "content_type": {
+                "const": "text/markdown"
+              }
+            },
+            "required": [
+              "id",
+              "content_type"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "nonEmptyStringArray": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "ownerMap": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 2,
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "frontend": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "selected_implementation_steps": {
+            "contains": {
+              "const": "backend_implementation"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected_implementation_steps"
+        ]
+      },
+      "then": {
+        "properties": {
+          "implementer_owners": {
+            "required": [
+              "backend"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "implementer_owners": {
+            "not": {
+              "required": [
+                "backend"
+              ],
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "selected_implementation_steps": {
+            "contains": {
+              "const": "frontend_implementation"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected_implementation_steps"
+        ]
+      },
+      "then": {
+        "properties": {
+          "implementer_owners": {
+            "required": [
+              "frontend"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "implementer_owners": {
+            "not": {
+              "required": [
+                "frontend"
+              ],
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

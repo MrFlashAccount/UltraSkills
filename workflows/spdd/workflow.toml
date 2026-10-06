@@ -53,7 +53,7 @@ Decide whether this task needs the optional UI design proposal gate. Record the 
 When UI design is not needed, use architecture_generation_step as output.next_step. When UI design is needed, route first to ui_intent_draft; the UI approval gate will then use architecture_generation_step. Preserve architecture_generation_mode and architecture_generation_step across research revisions unless the user changes the request.
 Create exactly one first-class human-facing research artifact named `reasons-canvas-research`. Do not create any separate legacy research artifact or structured legacy output.
 Fill only the research-owned depth in `reasons-canvas-research`: evidence-backed Requirements, observed domain Entities, and research-level constraints, candidate options, risks, norms, safeguards, and open tensions. Do not finalize architecture, file-level operations, or implementation work; mark those as questions or constraints for later phases. Emit artifact metadata for `reasons-canvas-research` in artifacts[].
-Render this artifact as Markdown using the shared visual-first REASONS template and its plain-language display titles. Show observed/candidate journeys, data/state and evidence dependencies in annotated Mermaid where meaningful; keep exact evidence, constraints and unknowns in short items. Research Structure and Operations do not invent an architecture change tree, final workstreams or assembly order. Do not create an HTML Canvas, rendering/export pass, human-facing changes table or second report. Retain `UI design needed: yes | no` and its reason in R / Requirements.
+Render this artifact as Markdown using the shared visual-first REASONS template and its plain-language display titles. Show observed/candidate journeys, data/state and evidence dependencies in annotated Mermaid where meaningful; keep exact evidence, constraints and unknowns in short items. Research Structure and Operations do not invent an architecture change tree, final workstreams or assembly order. Do not create an HTML Canvas, rendering/export pass, any Markdown/HTML table or second report. Retain `UI design needed: yes | no` and its reason in R / Requirements.
 Emit a compact output.summary as the human-facing research proposal state for approval gates. Summarize the artifact's current proposal state, major decisions, unresolved tensions, and why it is ready for attack/approval without embedding the artifact body.
 Do not create arbitrary temp/export files for handoff; the artifact metadata/path accepted into baton is the source of truth.
 Return outcome ready_for_attack when the initial draft or a research_attack-requested revision is ready for attack.
@@ -90,7 +90,7 @@ role = "researcher"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Start from a hostile prior: assume the change, proposal, draft, or Canvas is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed must-fix finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
 Read artifact `reasons-canvas-research` from `research_draft` and attack it for missing evidence, unsafe assumptions, scope drift, sensitive surfaces, unclear approval questions, and fake architecture/implementation certainty. Also attack research_draft.next_step against the artifact's mandatory `UI design needed: yes | no` decision and rationale: fail architecture_draft when the slice materially changes a user-facing interface, interaction model, information hierarchy, responsive behavior, or visual/product direction, and fail ui_intent_draft when there is no evidence-backed UI surface. Treat missing or unsupported UI-gate routing as a research failure, not a downstream UI-worker decision. Treat a missing `reasons-canvas-research` artifact as a blocking research failure.
-Check the shared visual-first Markdown presentation as well as evidence. Diagrams must clarify observed behavior or explicitly labelled candidates without fabricating final architecture, file changes or implementation order. Require short, exact constraints and explicit unknowns; reject a human-facing changes table, repeated diagram narration or machine metadata in the Canvas. Inspect Mermaid syntax, including escaped reserved punctuation; do not claim rendered proof when only source was inspected.
+Check the shared visual-first Markdown presentation as well as evidence. Diagrams must clarify observed behavior or explicitly labelled candidates without fabricating final architecture, file changes or implementation order. Require short, exact constraints and explicit unknowns; reject any Markdown/HTML table, a copied dossier, repeated diagram narration or machine metadata in the Canvas. Inspect Mermaid syntax, including escaped reserved punctuation; do not claim rendered proof when only source was inspected.
 Return approved or needs_revision as completed output; otherwise report a non-blocking stop.
 When reporting it, set non_blocking_stop.source_step_id = research_attack.
 
@@ -99,7 +99,7 @@ Input context:
 - Researcher-selected next step: ${{ input.research_draft.next_step }}'''
 
 [steps.research_attack.output]
-template = "../../shared/templates/review-verdict-template.md"
+template = "../../shared/templates/visual-review-verdict-template.md"
 schema = "schemas/gate-attack-verdict-output.json"
 
 [steps.research_attack.next]
@@ -191,7 +191,7 @@ Input context:
 - Research artifacts: ${{ input.research_draft.artifacts | default: "No research artifacts are available in input context." }}'''
 
 [steps.ui_intent_attack.output]
-template = "../../shared/templates/review-verdict-template.md"
+template = "../../shared/templates/visual-review-verdict-template.md"
 schema = "schemas/gate-attack-verdict-output.json"
 
 [steps.ui_intent_attack.next]
@@ -390,12 +390,12 @@ Read the approved/current `reasons-canvas-research` artifact from `research_draf
 Preserve research_draft.architecture_generation_mode in output. In dialectic mode, consume only the selected lineage from architecture_dialectic_syntheses or architecture_dialectic_adjudication, record the complete dialectic_lineage, and materialize the sole canonical `reasons-canvas-architecture` artifact. Do not merge rejected candidates. In direct mode, preserve the existing behavior and omit dialectic_lineage.
 Honor research_draft.next_step and the matching `UI design needed: yes | no` decision in the approved research artifact. When next_step is ui_intent_draft, read the approved/current `ui-design-proposal` artifact from `ui_intent_draft` as the UI/product-surface source of truth. Preserve its user task, product/surface route, screen/zones, first-read/action hierarchy, required states, interaction expectations, design-law basis, visual evidence/proof asset constraints, and open UI tensions. Otherwise, after either direct or dialectic generation, proceed without a UI artifact or UI approval and carry the research artifact's no-design rationale into the architecture artifact; do not invent a UI proposal or treat its absence as missing evidence. Do not rewrite visual hierarchy or UI taste in architecture; translate only the code/system implications needed to preserve an applicable approved UI design proposal.
 Produce the minimal architecture decision and execution-ready structural contract required by the approved research in the `reasons-canvas-architecture` artifact and a compact output.summary as the human-facing architecture proposal state for approval gates. This REASONS Canvas is the only human-facing architecture/execution artifact; do not create a second planning artifact or embed the Canvas body in JSON.
-Use the shared visual-first Markdown REASONS template with plain-language display titles. Explain user/caller behavior, meaningful data/state and end-to-end collaboration through annotated Mermaid views. Structure owns a responsibility/dependency view and an annotated ASCII change tree; Operations owns a dependency/outcome diagram with concise completion/verification conditions. Keep selected libraries, exact public contracts, compatibility decisions, permission/failure/cancellation conditions, resource limits and applicable approved UI constraints recoverable. Preserve structural proof obligations through the views and exact constraints instead of a copied ownership matrix. Do not duplicate arrows in prose, write a human-facing changes table or add an HTML Canvas/export phase. This does not replace the separately approved UI proposal and its captures.
+Use the shared visual-first Markdown REASONS template with plain-language display titles. Explain user/caller behavior, meaningful data/state and end-to-end collaboration through annotated Mermaid views. Structure owns a responsibility/dependency view and an annotated ASCII change tree; Operations owns a dependency/outcome diagram with concise completion/verification conditions. Keep selected libraries, exact public contracts, compatibility decisions, permission/failure/cancellation conditions, resource limits and applicable approved UI constraints recoverable. Preserve structural proof obligations through the views and exact constraints instead of a copied ownership matrix. No Markdown/HTML tables anywhere in the Canvas, including API inventories, proof maps, entity/ownership matrices or coverage. Do not disguise rows as a giant list, duplicate arrows in prose or add an HTML Canvas/export phase. This does not replace the separately approved UI proposal and its captures.
 Before finalizing output.summary or `reasons-canvas-architecture`, explicitly identify the public contract and API surfaces affected by the task: exported APIs, CLI/user-facing commands, schemas, workflow interfaces, integration boundaries, compatibility promises, and observable behavior. If code, docs, or existing contracts answer a question, inspect them instead of asking the user.
 When user-owned choices remain about public contract shape, API compatibility, naming, migration behavior, or accepted breakage, report a non-blocking stop with non_blocking_stop.source_step_id = architecture_draft and the smallest focused non_blocking_stop.needed question for the orchestrator to resolve through the non-blocking stop flow; include your recommended answer in non_blocking_stop.summary or non_blocking_stop.needed.
 For any user-answerable architecture non-blocking stop, non_blocking_stop.needed must be the exact user-facing question to ask; the orchestrator must route it to the user as a question, not answer it from inference or convert it into a summary.
 After the orchestrator resolves the recoverable non-blocking stop, continue the same architecture step from the resolved public contract/API decision and proceed only when the needed decisions are resolved or evidence shows no such discussion is needed.
-When `reasons-canvas-research` exists, derive one new immutable human-facing workflow artifact named `reasons-canvas-architecture`. Copy forward research-owned Requirements and observed domain Entities as frozen input unless new evidence proves a conflict; record any correction in the new architecture artifact instead of editing the research artifact. Own the architecture-depth sections: structural Entities, Approach, Structure, execution-ready Operations, Norms, Safeguards, and remaining open tensions.
+When `reasons-canvas-research` exists, derive one new immutable human-facing workflow artifact named `reasons-canvas-architecture`. Preserve approved research-owned Requirements and observed domain Entities semantically as frozen input unless new evidence proves a conflict; record any correction in the new architecture artifact instead of editing the research artifact. Re-express the approved contracts in the visual format; do not copy tables, source layout, the whole dossier or repeated inventories into the architecture Canvas. Link source evidence where needed. Frozen decisions do not imply frozen presentation. Own the architecture-depth sections: structural Entities, Approach, Structure, execution-ready Operations, Norms, Safeguards, and remaining open tensions.
 Make Operations directly executable without a second planning artifact: show workstreams as completed-outcome nodes, real dependencies as arrows, and independent work as parallel parts. Keep each workstream's owner role, non-overlapping file/module zone, additions/changes, completion signal and verification explicit through node/tree annotations and short captions, not a changes table. Put compatibility limits, rollback triggers and the smallest safe rollback path in Safeguards. Keep this at planning depth: do not emit code, diffs, shell command sequences, method-by-method pseudocode or patch recipes.
 Treat selected implementation branches as parallel and independently executable from the approved `reasons-canvas-architecture` artifact and repository state. Do not make one selected branch depend on another selected branch's output, completion, changed files, or implementation handoff. In particular, architecture or documentation updates assigned to architecture_artifact_update must derive their target state directly from the approved Canvas; if the Canvas does not contain enough information, complete or revise it before approval instead of planning a backend or frontend handoff dependency.
 When frontend_implementation is selected for non-trivial user-facing UI, include the frontend composition contract in Structure and Operations: page/screen containers, feature and layout components, primitives/UI-kit usage, overlays/composites, state surfaces, hooks/selectors/adapters, file zones, state ownership, and responsibility boundaries. Preserve the approved `ui-design-proposal` by reference; do not duplicate or rewrite its visual/product contract in the Canvas. If the frontend slice is non-UI, trivial, or intentionally preserves an existing component shape, record that reason instead of inventing components.
@@ -446,7 +446,7 @@ role = "architect"
 prompt = '''This is a non-implementation phase. Inspect code, diffs, docs, artifacts, and prior evidence read-only; do not run tests, lint, validation, typecheck, build checks, `git diff --check`, or equivalent verification commands.
 Start from a hostile prior: assume the change, proposal, draft, or packet is wrong, incomplete, overcomplicated, or under-evidenced until the artifact proves otherwise. Do not give credit for intent, author confidence, green self-reports, or plausible-sounding structure. PASS is allowed only after serious attack finds no evidence-backed must-fix finding. Do not invent bugs. Any FAIL must be evidence-backed with file/function/line or equivalent precise location, and explain why existing tests/checks did not catch it. Prefer small, evidence-backed blockers over broad commentary.
 Attack the required `reasons-canvas-architecture` artifact for ownership seams, dependency direction, contract surfaces, frozen research carry-forward, architecture-owned decisions, execution-ready Operations, one-owner-per-file-zone, ordered workstreams, verification and rollback coverage, frontend composition when applicable, and compatibility risk. Treat a missing `reasons-canvas-architecture` artifact as a blocking architecture failure.
-Check fidelity and reader comprehension in the visual-first Markdown Canvas. Require meaningful Mermaid behavior/state/collaboration views where those surfaces exist, an annotated source change tree and a dependency/outcome view whose annotations retain ownership, zones and completion checks. Accept a concise evidence-backed absence or unknown instead of inventing a lifecycle or dependency to fill a section. Reject missing selected libraries, weakened keyboard/UI/permission contracts, hidden exact limits, fabricated paths/order, a human-facing changes table, method-by-method pseudocode or repeated graph narration. Inspect Mermaid syntax and escaped reserved punctuation; distinguish source inspection from actual rendering proof. No HTML Canvas/export pass is required.
+Check fidelity and reader comprehension in the visual-first Markdown Canvas. Require meaningful Mermaid behavior/state/collaboration views where those surfaces exist, an annotated source change tree and a dependency/outcome view whose annotations retain ownership, zones and completion checks. Accept a concise evidence-backed absence or unknown instead of inventing a lifecycle or dependency to fill a section. Reject missing selected libraries, weakened keyboard/UI/permission contracts, hidden exact limits, fabricated paths/order, any Markdown/HTML table, copied research dossier, duplicated proof inventory, giant disguised row list, method-by-method pseudocode or repeated graph narration. Inspect Mermaid syntax and escaped reserved punctuation; distinguish source inspection from actual rendering proof. No HTML Canvas/export pass is required.
 Attack selected_implementation_steps, selected_review_steps, review_plan, skipped_review_steps, and review_escalation for faithful routing from the Canvas: unique canonical branches, independently executable parallel implementation branches, no cross-branch output/completion/handoff dependencies, no overlapping same-role work, no optional or absence-confirmation reviewers in the active fan-out, no missing mandatory reviewer, no recomputed downstream selection, and no more than three reviewers without independent material risk classes. For architecture or documentation work assigned to architecture_artifact_update, require the approved Canvas itself to contain the target state; fail any plan that waits for a backend or frontend implementation handoff. For applicable non-trivial UI, require both frontend_review and frontend_taste_review and a concrete frontend composition contract in the Canvas. Treat any missing execution or review routing field as an architecture failure.
 Return approved or needs_revision as completed output; otherwise report a non-blocking stop.
 When reporting it, set non_blocking_stop.source_step_id = architecture_attack.
@@ -462,7 +462,7 @@ Input context:
 - UI design proposal approval when applicable: ${{ input.approve_ui_intent | default: "No UI design proposal approval is available." }}'''
 
 [steps.architecture_attack.output]
-template = "../../shared/templates/review-verdict-template.md"
+template = "../../shared/templates/visual-review-verdict-template.md"
 schema = "schemas/gate-attack-verdict-output.json"
 
 [steps.architecture_attack.next]
@@ -525,7 +525,7 @@ Input context:
 - Architecture artifact update: ${{ input.architecture_artifact_update | default: "architecture_artifact_update was not selected in this activation." }}'''
 
 [steps.implementation.output]
-template = "../../shared/templates/reviewer-handoff-template.md"
+template = "../../shared/templates/visual-implementation-handoff-template.md"
 schema = "schemas/implementation-fanout-output.json"
 
 [steps.implementation.next]
@@ -569,7 +569,7 @@ Input context:
 - User-requested implementation feedback: ${{ input.approve_implementation.feedback | default: "No user-requested rework feedback." }}'''
 
 [steps.implementation.branches.backend_implementation.output]
-template = "../../shared/templates/implementer-handoff-template.md"
+template = "../../shared/templates/visual-implementation-handoff-template.md"
 schema = "schemas/implementation-output.json"
 
 [steps.implementation.branches.frontend_implementation]
@@ -618,7 +618,7 @@ Input context:
 - User-requested implementation feedback: ${{ input.approve_implementation.feedback | default: "No user-requested rework feedback." }}'''
 
 [steps.implementation.branches.frontend_implementation.output]
-template = "../../shared/templates/implementer-handoff-template.md"
+template = "../../shared/templates/visual-implementation-handoff-template.md"
 schema = "schemas/implementation-output.json"
 
 [steps.implementation.branches.architecture_artifact_update]
@@ -652,7 +652,7 @@ Input context:
 - User-requested implementation feedback: ${{ input.approve_implementation.feedback | default: "No user-requested rework feedback." }}'''
 
 [steps.implementation.branches.architecture_artifact_update.output]
-template = "../../shared/templates/implementer-handoff-template.md"
+template = "../../shared/templates/visual-implementation-handoff-template.md"
 schema = "schemas/implementation-output.json"
 
 [steps.review]
@@ -683,7 +683,7 @@ Input context:
 - QA review: ${{ input.qa_review | default: "qa_review was not selected in this activation." }}'''
 
 [steps.review.output]
-template = "../../shared/templates/review-verdict-template.md"
+template = "../../shared/templates/visual-review-verdict-template.md"
 schema = "schemas/review-fanout-output.json"
 
 [steps.review.next]
@@ -721,7 +721,7 @@ Input context:
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.review.branches.architect_review.output]
-template = "../../shared/templates/review-verdict-template.md"
+template = "../../shared/templates/visual-review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
 [steps.review.branches.backend_review]
@@ -747,7 +747,7 @@ Input context:
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.review.branches.backend_review.output]
-template = "../../shared/templates/review-verdict-template.md"
+template = "../../shared/templates/visual-review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
 [steps.review.branches.frontend_review]
@@ -777,7 +777,7 @@ Input context:
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.review.branches.frontend_review.output]
-template = "../../shared/templates/review-verdict-template.md"
+template = "../../shared/templates/visual-review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
 [steps.review.branches.frontend_taste_review]
@@ -807,7 +807,7 @@ Input context:
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.review.branches.frontend_taste_review.output]
-template = "../../shared/templates/review-verdict-template.md"
+template = "../../shared/templates/visual-review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
 [steps.review.branches.security_review]
@@ -833,7 +833,7 @@ Input context:
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.review.branches.security_review.output]
-template = "../../shared/templates/review-verdict-template.md"
+template = "../../shared/templates/visual-review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
 [steps.review.branches.privacy_review]
@@ -859,7 +859,7 @@ Input context:
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.review.branches.privacy_review.output]
-template = "../../shared/templates/review-verdict-template.md"
+template = "../../shared/templates/visual-review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
 [steps.review.branches.qa_review]
@@ -885,7 +885,7 @@ Input context:
 - Architecture artifact changed files: ${{ input.architecture_artifact_update.changed_files | default: "architecture_artifact_update changed files are not available in input context." }}'''
 
 [steps.review.branches.qa_review.output]
-template = "../../shared/templates/review-verdict-template.md"
+template = "../../shared/templates/visual-review-verdict-template.md"
 schema = "schemas/gate-review-verdict-output.json"
 
 [steps.approve_implementation]
