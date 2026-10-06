@@ -43,9 +43,10 @@ The seven canonical section identities remain unchanged; their display titles
 use plain language. Annotated Mermaid views explain user/caller behavior,
 data/state, collaboration and dependencies. Architecture adds an annotated ASCII
 change tree. Text supplies exact decisions, constraints, evidence and unknowns
-instead of repeating the diagrams. No Markdown/HTML tables are allowed in the
-Canvas, including API/entity/proof/coverage inventories. No HTML Canvas/export
-phase is required. Approved research decisions are preserved semantically, not
+instead of repeating the diagrams. A compact Markdown table is allowed only for
+a bounded comparison with short atomic cells; behavior, ownership, dependencies,
+workstreams and proof maps stay visual. No HTML Canvas/export phase is required.
+Approved research decisions are preserved semantically, not
 by copying their old tables or full dossier.
 
 Implementation handoffs and review findings use short table-free visual adapters;
