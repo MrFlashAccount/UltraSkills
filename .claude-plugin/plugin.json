@@ -1,6 +1,5 @@
 {
   "name": "ultra-skills",
-  "version": "0.1.0",
   "description": "Ultra Skills packages a sharper local Claude Code skill arsenal for workflows, reviews, docs, and role-driven execution.",
   "author": {
     "name": "MrFlashAccount"
