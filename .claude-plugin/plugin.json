@@ -1,0 +1,34 @@
+{
+  "name": "ultra-skills",
+  "version": "0.1.0",
+  "description": "Ultra Skills packages a sharper local Claude Code skill arsenal for workflows, reviews, docs, and role-driven execution.",
+  "author": {
+    "name": "MrFlashAccount"
+  },
+  "repository": "https://github.com/MrFlashAccount/UltraSkills",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "skills",
+    "ultra-skills",
+    "workflow",
+    "review",
+    "agents"
+  ],
+  "skills": "./skills/",
+  "agents": [
+    "./claude-agents/architect.md",
+    "./claude-agents/backend.md",
+    "./claude-agents/critic.md",
+    "./claude-agents/dev-rel.md",
+    "./claude-agents/frontend.md",
+    "./claude-agents/frontend-taste.md",
+    "./claude-agents/marketing.md",
+    "./claude-agents/performance.md",
+    "./claude-agents/privacy-data-safety.md",
+    "./claude-agents/qa-reliability.md",
+    "./claude-agents/researcher.md",
+    "./claude-agents/security.md",
+    "./claude-agents/tech-writer.md"
+  ]
+}

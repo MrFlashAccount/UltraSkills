@@ -1,0 +1,16 @@
+{
+  "name": "ultra-skills",
+  "owner": {
+    "name": "MrFlashAccount"
+  },
+  "metadata": {
+    "description": "Ultra Skills: skills, Orbita workflow packages, and role-based subagents for Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "ultra-skills",
+      "source": "./",
+      "description": "Skills, Orbita workflow packages, and role-based subagents from the Ultra Skills repo."
+    }
+  ]
+}

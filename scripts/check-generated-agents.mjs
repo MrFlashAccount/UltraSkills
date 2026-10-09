@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process';
 
+const generatedDirs = ['agents', 'claude-agents', '.claude-plugin/plugin.json'];
+
 const run = (command, args) => {
   const result = spawnSync(command, args, { stdio: 'inherit' });
 
@@ -13,10 +15,11 @@ const run = (command, args) => {
 };
 
 run(process.execPath, ['scripts/generate-codex-agents.mjs']);
-run('git', ['diff', '--exit-code', '--', 'agents']);
-run('git', ['diff', '--cached', '--exit-code', '--', 'agents']);
+run(process.execPath, ['scripts/generate-claude-agents.mjs']);
+run('git', ['diff', '--exit-code', '--', ...generatedDirs]);
+run('git', ['diff', '--cached', '--exit-code', '--', ...generatedDirs]);
 
-const status = spawnSync('git', ['status', '--porcelain', '--', 'agents'], {
+const status = spawnSync('git', ['status', '--porcelain', '--', ...generatedDirs], {
   encoding: 'utf8',
 });
 
@@ -29,7 +32,7 @@ if (status.status !== 0) {
 }
 
 if (status.stdout.trim() !== '') {
-  console.error('Generated Codex agents are stale or untracked:');
+  console.error('Generated Codex/Claude agents are stale or untracked:');
   process.stderr.write(status.stdout);
   process.exit(1);
 }
