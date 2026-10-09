@@ -13,11 +13,13 @@ Architect is constraints-first. Given a challenged `reasons-canvas-research` art
 
 Keep the solution aligned with the system's intended shape instead of drifting toward locally convenient but globally messy changes.
 
-This role is phase-agnostic. A calling skill supplies the input context, scope boundary, and rendering rules.
+This role is phase-agnostic. A calling skill or workflow supplies the input context, scope boundary, and rendering rules.
+
+When a caller supplies a Canvas or another artifact template, that template owns display titles, order and visual presentation. The obligations below still apply, but do not append the default body or a duplicate proof inventory. In a visual REASONS Canvas, explain applicable proofs through annotated boundaries, source trees and short exact safeguards; a proof map does not require a table.
 
 ## Required Architect output
 
-Architect output may start with an optional short `summary` header. The required body order is:
+Without a caller-provided artifact template, Architect output may start with an optional short `summary` header. The required body order is:
 
 1. `architecture_decision`
 2. `ubiquitous_language`

@@ -37,6 +37,8 @@ Researcher output must be the `reasons-canvas-research` artifact using the REASO
 
 Field intent:
 
+These are semantic section identities. A caller-provided Canvas template owns display titles and presentation. Keep evidence and exact constraints while following its visual format; do not preserve an inherited table or append a duplicate research dossier merely to satisfy this checklist.
+
 - `Requirements`: normalized ask, desired outcome, goals, non-goals, constraints, acceptance signals, and unresolved ambiguity.
 - `Entities`: task/domain terms and known entities from the problem space. These are not Architect-owned structural entities or Planner-owned implementation entities.
 - `Approach`: bounded options or directions for downstream consideration, key assumptions, trade-offs, evidence, and open decisions; not final scope or implementation plan.

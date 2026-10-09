@@ -1,0 +1,78 @@
+{
+  "title": "Build It architecture challenge verdict",
+  "description": "Independent challenge before the architecture approval gate.",
+  "type": "object",
+  "required": [
+    "outcome",
+    "verdict"
+  ],
+  "properties": {
+    "outcome": {
+      "enum": [
+        "approved",
+        "needs_revision"
+      ],
+      "description": "Producer must emit the single enum value that reflects the completed stage state. Report missing help through the runner non-blocking stop control channel, never as an output outcome.",
+      "x-usage": "Treat this as the authoritative workflow state for this output. Do not infer success from other populated fields when it requires revision."
+    },
+    "verdict": {
+      "type": "object",
+      "required": [
+        "summary",
+        "evidence_checked",
+        "findings"
+      ],
+      "properties": {
+        "summary": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Producer must summarize the relevant decision or handoff in concise human-readable form without adding new scope.",
+          "x-usage": "Use this as concise human-readable context only. Do not route, approve, or expand scope from this text."
+        },
+        "evidence_checked": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Producer must list the concrete sources, artifacts, commands, or state inspected before issuing the verdict.",
+          "x-usage": "Use this as the list of sources actually checked before the verdict. Do not assume any unlisted source or surface was checked."
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Producer must list actionable findings, concerns, or reasons behind the verdict; leave empty only for a clean pass.",
+          "x-usage": "Treat these as the actionable reasons behind the verdict. Apply them when the outcome requires rework; do not use them to add unplanned scope."
+        }
+      },
+      "additionalProperties": true,
+      "description": "Producer must emit the gate decision payload, including summary, checked evidence, and findings supporting the outcome.",
+      "x-usage": "Use this with outcome as the authoritative decision. Advance only on approved, revise only on needs_revision,. Report missing help through the runner control channel without completing the step."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
+      },
+      "description": "Producer may emit named structured artifacts created by this stage when they are part of the handoff.",
+      "x-usage": "Use these only as supporting named artifacts to preserve or pass along. Do not treat them as routing decisions unless another field explicitly references them."
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
+      },
+      "description": "Producer may emit compact structured results, decisions, or evidence summaries created by this stage.",
+      "x-usage": "Use these as supporting evidence or compact summaries. Do not let them override outcome, selected steps or approved contracts."
+    }
+  },
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/build-it/architecture-attack-output"
+}

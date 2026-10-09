@@ -32,8 +32,8 @@ DELEGATION_DOCS = (
     "workflows/code-review-orchestrator/references/role-prompts.md",
     "workflows/create-architecture/references/workflow.md",
     "workflows/create-design/references/workflow.md",
-    "workflows/implementation-harness/references/roles/implementers.md",
-    "workflows/implementation-harness/references/workflow.md",
+    "workflows/build-it/references/roles/implementers.md",
+    "workflows/build-it/references/workflow.md",
 )
 DUPLICATED_DELEGATION_SNIPPETS = (
     "load selected role material;\n- follow all instructions in loaded role material;",
@@ -120,7 +120,7 @@ def scan_delegated_role_wrapper_smells(errors: list[str]) -> None:
 
 
 def scan_implementer_prompt_compactness(errors: list[str]) -> None:
-    rel = "workflows/implementation-harness/references/roles/implementers.md"
+    rel = "workflows/build-it/references/roles/implementers.md"
     path = ROOT / rel
     if not path.exists():
         errors.append(f"{rel}: missing implementer role overlay")

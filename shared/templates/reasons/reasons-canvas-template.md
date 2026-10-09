@@ -13,6 +13,24 @@ generic standards, repeat constraints across sections, set a diagram quota or
 give the reader a menu of formatting choices. Keep one rule or check per short
 item; do not compress a whole contract into a dense paragraph.
 
+Use a compact Markdown table only when the reader needs to compare the same few
+short attributes across a bounded set of alternatives, API cases or literals.
+Every cell must stay atomic and scannable; when a cell needs a paragraph,
+multiple rules, nested lists or implementation narrative, the table is the wrong
+view. Behavior, state, sequence, dependency, ownership, workstreams and proof
+maps belong in diagrams, an annotated tree and short behavior-specific items.
+Do not split a sprawling table into a giant disguised bullet list or turn a
+diagram into boxes full of prose. Preserve source decisions and evidence, not
+their old layout: never copy an inherited table automatically. Each exact rule
+belongs once, next to the behavior it constrains. HTML tables, copied research
+dossiers, coverage matrices, ownership matrices and proof-map appendices are
+not part of the human Canvas.
+
+The caller's Canvas template owns presentation. Role checklists and proof-map
+names describe coverage obligations, not mandatory headings or extra inventories.
+Express applicable proofs beside their boundary, source tree and safeguard;
+keep routing, rosters and machine records in the structured worker output.
+
 Preserve approved requirements, selected dependencies, public APIs, exact errors,
 permission boundaries, state/order invariants, compatibility and resource limits.
 A shorter Canvas must not become a weaker contract. Explain a necessary term
