@@ -1,7 +1,8 @@
 # Build It
 
-Design and build a known task without a separate research report or a prepared
-plan. This replaces Implementation Harness, whose entry point required both.
+Design, build, and internally review a known task without a separate research
+report or prepared plan. This replaces Implementation Harness, whose entry point
+required both.
 
 ```mermaid
 flowchart LR
@@ -12,7 +13,11 @@ flowchart LR
     Approval -->|feedback| Design
     Approval -->|approved| Build[Code / architecture-document implementation]
     Build --> Verify[Meaningful verification]
-    Verify --> Handoff[Ready for separate code review]
+    Verify --> Review[Independent internal review]
+    Review -->|changes required, max 3 cycles| Build
+    Review -->|passed or cycle limit| ResultApproval[User implementation approval]
+    ResultApproval -->|feedback| Build
+    ResultApproval -->|approved| Done[Done]
 ```
 
 The architect inspects only the code/docs needed to design the slice. Broad
@@ -33,10 +38,18 @@ passes. At the loop limit, unresolved findings stay visible at the user gate;
 reaching the gate is not a pass. User rejection returns to the author and then
 to the same approval gate. Only explicit approval unlocks implementation.
 
-The approved Canvas supplies disjoint backend/frontend/architect owner zones. Parallel
-branches work independently from that Canvas and repository state. Workers fix
-in-scope failed checks; contradictions or required redesign stop for resolution.
+The approved Canvas supplies disjoint backend/frontend/architect owner zones and
+the initial reviewer fanout. Parallel implementation branches work independently
+from that Canvas and repository state. Workers fix in-scope failed checks;
+contradictions or required redesign stop for resolution.
 
-The final packet is `ready_for_review`, with independent code review explicitly
-`not_run`. Build It does not publish, commit, push, release or run the separate
-review stage. Use SPDD for broad discovery and end-to-end review orchestration.
+Independent reviewers inspect the completed implementation read-only. Actionable
+findings are grouped by implementation owner and return only the affected branches
+to implementation, followed by the required re-review fanout. The loop is bounded
+at three review cycles. A clean review or the loop limit reaches the user
+implementation gate; the limit preserves unresolved findings and is never treated
+as a pass. User-requested rework returns directly to that same gate without an
+unannounced fourth review cycle.
+
+Build It does not publish, commit, push or release. Use SPDD when broad discovery
+or the full research/design process is required.

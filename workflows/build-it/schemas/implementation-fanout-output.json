@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/build-it/implementation-fanout-output",
   "title": "Build It Development Packet",
-  "description": "Verified development handoff for a separate hostile-prior review stage. Outcome is the runner discriminator; the remaining required fields translate the source skill output packet.",
+  "description": "Verified development handoff routed either to internal hostile-prior review or directly back to the implementation approval gate after user-requested rework.",
   "type": "object",
   "required": [
     "outcome",
@@ -23,7 +23,10 @@
   ],
   "properties": {
     "outcome": {
-      "const": "ready_for_review",
+      "enum": [
+        "ready_for_review",
+        "ready_for_user_approval"
+      ],
       "description": "Runner routing discriminator required for worker output."
     },
     "summary": {
@@ -38,7 +41,10 @@
       "type": "string"
     },
     "status": {
-      "const": "ready_for_review"
+      "enum": [
+        "ready_for_review",
+        "ready_for_user_approval"
+      ]
     },
     "implementer_owners": {
       "$ref": "#/$defs/ownerMap"
@@ -68,6 +74,14 @@
         "$ref": "#/$defs/verificationResult"
       }
     },
+    "review_branches": {
+      "$ref": "#/$defs/reviewBranches",
+      "description": "Exact reviewer branches for the next internal review activation."
+    },
+    "reviewer_handoffs": {
+      "$ref": "#/$defs/reviewerHandoffs",
+      "description": "Reviewer-specific evidence keyed by selected review branch id."
+    },
     "review_handoff": {
       "type": "object",
       "required": [
@@ -86,7 +100,10 @@
           "const": "hostile_prior"
         },
         "review_status": {
-          "const": "not_run"
+          "enum": [
+            "pending",
+            "user_rework_not_reviewed"
+          ]
         },
         "reviewer_plan": {
           "type": "object",
@@ -126,6 +143,255 @@
     }
   },
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "ready_for_review"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "review_branches",
+          "reviewer_handoffs"
+        ],
+        "properties": {
+          "status": {
+            "const": "ready_for_review"
+          },
+          "review_handoff": {
+            "type": "object",
+            "properties": {
+              "review_status": {
+                "const": "pending"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "ready_for_user_approval"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "review_branches"
+              ]
+            },
+            {
+              "required": [
+                "reviewer_handoffs"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "status": {
+            "const": "ready_for_user_approval"
+          },
+          "review_handoff": {
+            "type": "object",
+            "properties": {
+              "review_status": {
+                "const": "user_rework_not_reviewed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "review_branches": {
+            "type": "array",
+            "contains": {
+              "const": "architect_review"
+            }
+          }
+        },
+        "required": [
+          "review_branches"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reviewer_handoffs": {
+            "type": "object",
+            "required": [
+              "architect_review"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "review_branches": {
+            "type": "array",
+            "contains": {
+              "const": "backend_review"
+            }
+          }
+        },
+        "required": [
+          "review_branches"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reviewer_handoffs": {
+            "type": "object",
+            "required": [
+              "backend_review"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "review_branches": {
+            "type": "array",
+            "contains": {
+              "const": "frontend_review"
+            }
+          }
+        },
+        "required": [
+          "review_branches"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reviewer_handoffs": {
+            "type": "object",
+            "required": [
+              "frontend_review"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "review_branches": {
+            "type": "array",
+            "contains": {
+              "const": "frontend_taste_review"
+            }
+          }
+        },
+        "required": [
+          "review_branches"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reviewer_handoffs": {
+            "type": "object",
+            "required": [
+              "frontend_taste_review"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "review_branches": {
+            "type": "array",
+            "contains": {
+              "const": "security_review"
+            }
+          }
+        },
+        "required": [
+          "review_branches"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reviewer_handoffs": {
+            "type": "object",
+            "required": [
+              "security_review"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "review_branches": {
+            "type": "array",
+            "contains": {
+              "const": "privacy_review"
+            }
+          }
+        },
+        "required": [
+          "review_branches"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reviewer_handoffs": {
+            "type": "object",
+            "required": [
+              "privacy_review"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "review_branches": {
+            "type": "array",
+            "contains": {
+              "const": "qa_review"
+            }
+          }
+        },
+        "required": [
+          "review_branches"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reviewer_handoffs": {
+            "type": "object",
+            "required": [
+              "qa_review"
+            ]
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "stringArray": {
       "type": "array",
@@ -141,6 +407,55 @@
         "type": "string",
         "minLength": 1
       }
+    },
+    "reviewBranches": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "architect_review",
+          "backend_review",
+          "frontend_review",
+          "frontend_taste_review",
+          "security_review",
+          "privacy_review",
+          "qa_review"
+        ]
+      }
+    },
+    "reviewerHandoffs": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "architect_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "backend_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "frontend_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "frontend_taste_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "security_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "privacy_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        },
+        "qa_review": {
+          "$ref": "#/$defs/reviewerHandoff"
+        }
+      },
+      "additionalProperties": false
+    },
+    "reviewerHandoff": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": true
     },
     "ownerMap": {
       "type": "object",
