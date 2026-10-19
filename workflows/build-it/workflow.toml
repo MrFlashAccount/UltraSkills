@@ -1,6 +1,6 @@
 name = "build-it"
 version = 1
-description = "Design and build a known task without a separate research phase or a prepared execution plan: visual Markdown architecture Canvas, independent architecture challenge, explicit user approval, delegated implementation and verification. Use when the task direction is known and the missing piece is an executable design. Do not use for broad discovery, product-direction exploration, full SPDD review orchestration, or a simple direct fix. Returns ready_for_review; independent code review and publication remain separate."
+description = "Design, build, and internally review a known task without a separate research phase or prepared execution plan: visual Markdown architecture Canvas, independent architecture challenge, explicit user approval, delegated implementation, verification, and a bounded three-cycle implementation/review loop. Use when the task direction is known and the missing piece is an executable design. Do not use for broad discovery, product-direction exploration, or a simple direct fix. Publication remains separate."
 start = "architecture_draft"
 done = "done"
 
@@ -10,6 +10,13 @@ entry = "architecture_draft"
 boundary = "architecture_attack"
 maxIterations = 2
 onLimit = "approve_architecture"
+
+[loopPolicies.code_review]
+steps = ["implementation", "review"]
+entry = "implementation"
+boundary = "review"
+maxIterations = 3
+onLimit = "approve_implementation"
 
 [steps.architecture_draft]
 name = "Design the feature"
@@ -25,7 +32,7 @@ Write exactly one immutable reasons-canvas-architecture Markdown artifact using 
 
 Make the Canvas sufficient to implement: chosen libraries/public contracts; existing vs proposed paths; component/state owners; compatibility and allowed/forbidden dependencies; permissions, errors, cancellation and exact resource limits; completion checks, rollback triggers and the smallest safe rollback. Applicable domain/source proofs belong next to the affected boundary/check, not in a second inventory. For UI, preserve supplied design/reference constraints and explain components, state and interaction; if product direction is unresolved, stop rather than inventing it. No HTML export or screenshot phase is required for this Canvas.
 
-Select backend_implementation, frontend_implementation and/or architecture_artifact_update only for actual owned work, with disjoint zones. Canonical owner labels are backend, frontend and architect. Each selected branch must be independently executable from this Canvas and repository state; no dependency on a sibling's output or future handoff. Collapse overlapping work only when one owner can own it; otherwise stop for the smallest decision. Assign architecture-only documents to the architect branch when that ownership is required; derive their complete target state from the Canvas, never from a sibling code handoff. Do not map Architect-owned work to backend/frontend merely to fit routing. Keep route/owner/reviewer metadata in JSON, with only readable responsibility annotations in the Canvas. Record a concrete separate code-review roster; do not claim that review has run.
+Select backend_implementation, frontend_implementation and/or architecture_artifact_update only for actual owned work, with disjoint zones. Canonical owner labels are backend, frontend and architect. Each selected branch must be independently executable from this Canvas and repository state; no dependency on a sibling's output or future handoff. Collapse overlapping work only when one owner can own it; otherwise stop for the smallest decision. Assign architecture-only documents to the architect branch when that ownership is required; derive their complete target state from the Canvas, never from a sibling code handoff. Do not map Architect-owned work to backend/frontend merely to fit routing. Keep route/owner/reviewer metadata in JSON, with only readable responsibility annotations in the Canvas. Select exact review branches from architect_review, backend_review, frontend_review, frontend_taste_review, security_review, privacy_review and qa_review, and record a concrete reviewer_plan for their owned surfaces. Do not claim that review has run.
 
 Return ready_for_attack for an initial or architecture_attack-requested revision. Address each evidence-backed finding using a new immutable Canvas. When the latest approve_architecture decision is rejected, address its feedback and return ready_for_approval directly to that same user gate; do not silently add another automatic attack cycle. Keep output.summary short and attach only the Canvas.
 
@@ -55,7 +62,7 @@ prompt = '''Independently challenge the actual Canvas and its routing against th
 
 Read the shared REASONS template and follow its visual presentation rules. Require understandable behavior/collaboration views, an honest annotated source tree and a dependency/outcome view retaining exact owner zones and checks. Reject HTML tables, prose-heavy or multi-purpose Markdown tables, tables used for behavior/ownership/dependencies/workstreams/coverage/proof maps, copied research dossiers, duplicated proof inventories and giant disguised row lists. A small uniform lookup/comparison table with short atomic cells is acceptable when it is clearer than a diagram. Fabricated paths/states and weakened exact contracts need revision. A missing lifecycle can stay explicitly inapplicable; do not invent one to fill a section. Inspect Mermaid syntax, and distinguish inspection from rendered proof.
 
-Verify selected backend/frontend/architect routes match the owner map and Canvas: one owner per zone, disjoint parallel branches, no cross-branch output/completion/handoff prerequisites. The approved Canvas must contain the target docs/artifact state when required. Verify a concrete separate code-review roster, without presenting architecture challenge as post-implementation review.
+Verify selected backend/frontend/architect routes match the owner map and Canvas: one owner per zone, disjoint parallel branches, no cross-branch output/completion/handoff prerequisites. The approved Canvas must contain the target docs/artifact state when required. Verify selected_review_steps and reviewer_plan cover the changed contracts and risk surfaces without presenting architecture challenge as post-implementation review.
 Return approved only with no actionable must-fix or should-fix finding; otherwise needs_revision with bounded evidence and required action. Missing critical evidence or authority uses a non-blocking stop from architecture_attack. Keep machine metadata and the review verdict outside the Canvas.
 
 Architecture: ${{ input.architecture_draft }}'''
@@ -99,18 +106,23 @@ rejected = "architecture_draft"
 name = "Implement and verify"
 kind = "fanout"
 max_parallel = 3
-next = "done"
 
 [steps.implementation.input]
-branches = "${{ input.architecture_draft.selected_implementation_steps }}"
+branches = { first_of = ["${{ input.review.implementation_branches }}", "${{ input.architecture_draft.selected_implementation_steps }}"] }
 prompt = '''Aggregate only the delegated implementation branches selected by the approved architecture. Do not edit implementation files yourself. Require explicit approve_architecture approval, complete disjoint zones, meaningful passing verification and satisfaction of loaded role material's additional/output requirements. Treat the approved Canvas and its exact constraints as the execution contract, not a separately prepared research/plan packet. Do not invent scope or accept a branch's confidence as proof.
 
-Fix in-scope failures through the same owner and reverify. Missing branches, overlapping scope, unapproved deviations or unsafe external verification needs use a non-blocking stop from implementation with the smallest concrete help request. No completed handoff while mandatory coverage is partial.
+Fix in-scope failures through the same owner and reverify. On the first pass, architecture_draft.selected_review_steps is the mandatory review baseline. After reviewer-requested rework, review.review_branches is the mandatory re-review baseline. You may widen that baseline when actual changed files require another approved reviewer, but never remove a mandatory reviewer. Missing branches, overlapping scope, unapproved deviations or unsafe external verification needs use a non-blocking stop from implementation with the smallest concrete help request. No completed handoff while mandatory coverage is partial.
 
-Return ready_for_review with the existing development-packet fields. execution_contract_basis references the approved Canvas and actual approval. Preserve architecture_draft.implementer_owners and reviewer_plan in the handoff; list hotspots, proof obligations satisfied, approved deviations, unresolved compatibility and negative checks. Set review_handoff.prior to hostile_prior and review_status to not_run. The next action is separate independent code review; do not imply it passed. Use the supplied short table-free handoff format, without copying the Canvas or creating a second plan. No commits, pushes or publication.
+When the latest approve_implementation decision is rejected, verify that the selected branches addressed the user feedback within their owned scopes, then return outcome and status ready_for_user_approval with review_handoff.review_status user_rework_not_reviewed and without review_branches or reviewer_handoffs. Do not silently insert another automated review cycle for user-requested rework.
+
+Otherwise return ready_for_review with the existing development-packet fields, review_branches as the exact next fanout, and one reviewer_handoffs.<review_branch_id> entry per selected reviewer. execution_contract_basis references the approved Canvas and actual approval. Preserve architecture_draft.implementer_owners and reviewer_plan in the handoff; list hotspots, proof obligations satisfied, approved deviations, unresolved compatibility and negative checks. Set review_handoff.prior to hostile_prior and review_status to pending. The next action is internal independent review; do not imply it passed. Use the supplied short table-free handoff format, without copying the Canvas or creating a second plan. No commits, pushes or publication.
 
 Architecture: ${{ input.architecture_draft }}
 Approval: ${{ input.approve_architecture }}
+Review rework handoffs: ${{ input.review.implementer_handoffs | default: "No review rework; this is the first implementation pass." }}
+Aggregate review verdict: ${{ input.review.verdict | default: "No aggregate review verdict; this is the first implementation pass." }}
+Mandatory re-review baseline: ${{ input.review.review_branches | default: "No prior re-review baseline." }}
+User-requested implementation feedback: ${{ input.approve_implementation.feedback | default: "No user-requested rework feedback." }}
 Backend: ${{ input.backend_implementation | default: "Backend was not selected." }}
 Frontend: ${{ input.frontend_implementation | default: "Frontend was not selected." }}
 Architecture documents: ${{ input.architecture_artifact_update | default: "Architecture documents were not selected." }}'''
@@ -118,6 +130,13 @@ Architecture documents: ${{ input.architecture_artifact_update | default: "Archi
 [steps.implementation.output]
 template = "../../shared/templates/visual-implementation-handoff-template.md"
 schema = "schemas/implementation-fanout-output.json"
+
+[steps.implementation.next]
+match = "${{ output.outcome }}"
+
+[steps.implementation.next.cases]
+ready_for_review = "review"
+ready_for_user_approval = "approve_implementation"
 
 [steps.implementation.branches.backend_implementation]
 name = "Backend implementation"
@@ -128,9 +147,14 @@ role = "backend"
 template = "templates/implementation-branch-instructions.md"
 prompt = '''Implement only backend-owned zones in the approved reasons-canvas-architecture. Read the Canvas artifact and explicit approve_architecture decision. Follow required role material and the common branch contract. No research report or second plan is required. Preserve exact contracts, scope, non-goals and frontend zones.
 Follow IMPLEMENT -> VALIDATE -> HANDOFF FOR REVIEW. Fix in-scope verification failures before completion. Missing authority, a contradiction, scope growth/redesign or unsafe external verification uses a non-blocking stop from backend_implementation with the smallest focused question. Never fall back to parent-session implementation. Return implemented with exact changed files, non-empty meaningful verification, role-material evidence and warnings.
+On review rework, consume only review.implementer_handoffs.backend_implementation as the branch-specific instructions; use the aggregate verdict and mandatory re-review baseline only as shared context. On user-requested rework, treat approve_implementation.feedback as mandatory when it applies to this owned slice and record an evidence-backed no-change determination when it does not.
 
 Architecture: ${{ input.architecture_draft }}
-Approval: ${{ input.approve_architecture }}'''
+Approval: ${{ input.approve_architecture }}
+Previous backend result: ${{ input.backend_implementation | default: "No previous backend implementation." }}
+Review rework: ${{ input.review.implementer_handoffs.backend_implementation | default: "No backend review rework." }}
+Aggregate review verdict: ${{ input.review.verdict | default: "No prior review verdict." }}
+User feedback: ${{ input.approve_implementation.feedback | default: "No user-requested rework." }}'''
 
 [steps.implementation.branches.backend_implementation.output]
 template = "../../shared/templates/visual-implementation-handoff-template.md"
@@ -145,9 +169,14 @@ role = "frontend"
 template = "templates/implementation-branch-instructions.md"
 prompt = '''Implement only frontend-owned zones in the approved reasons-canvas-architecture. Read the Canvas artifact, explicit approve_architecture decision and any applicable supplied UI design references. Follow required role material and the common branch contract. No research report or second plan is required. Preserve exact contracts, scope, non-goals and backend zones.
 Follow IMPLEMENT -> VALIDATE -> HANDOFF FOR REVIEW. Include component/state ownership, reused primitives and actual rendered evidence when required by the approved UI contract. Fix in-scope verification failures before completion. Missing authority, a contradiction, scope growth/redesign or unsafe external verification uses a non-blocking stop from frontend_implementation with the smallest focused question. Never fall back to parent-session implementation. Return implemented with exact changed files, non-empty meaningful verification, role-material evidence and warnings.
+On review rework, consume only review.implementer_handoffs.frontend_implementation as the branch-specific instructions; use the aggregate verdict and mandatory re-review baseline only as shared context. Treat routed current-scope must-fix and should-fix findings as mandatory. On user-requested rework, treat approve_implementation.feedback as mandatory when it applies to this owned slice and record an evidence-backed no-change determination when it does not.
 
 Architecture: ${{ input.architecture_draft }}
-Approval: ${{ input.approve_architecture }}'''
+Approval: ${{ input.approve_architecture }}
+Previous frontend result: ${{ input.frontend_implementation | default: "No previous frontend implementation." }}
+Review rework: ${{ input.review.implementer_handoffs.frontend_implementation | default: "No frontend review rework." }}
+Aggregate review verdict: ${{ input.review.verdict | default: "No prior review verdict." }}
+User feedback: ${{ input.approve_implementation.feedback | default: "No user-requested rework." }}'''
 
 [steps.implementation.branches.frontend_implementation.output]
 template = "../../shared/templates/visual-implementation-handoff-template.md"
@@ -162,19 +191,198 @@ role = "architect"
 template = "templates/implementation-branch-instructions.md"
 prompt = '''Implement only the approved architecture-document zones in reasons-canvas-architecture. Read the Canvas artifact and explicit approve_architecture decision. Apply the Architect artifact-implementation phase contract from required role material. Derive the complete target document state directly from the Canvas and repository evidence; do not wait for a sibling backend/frontend output or edit its code/test zones. No new research report, architecture proposal or execution plan.
 Create/update only the exact selected durable artifacts. Verify their contract fidelity and run the smallest applicable documentation/repository checks. Preserve exact source ownership, allowed/forbidden dependencies, compatibility and rollback decisions. A missing target contract, required redesign or unsafe external verification uses a non-blocking stop from architecture_artifact_update, rather than inventing a new design. Return implemented with implementer_owner architect, exact changed files, meaningful verification, role-material evidence and warnings. No publication, commit or push.
+On review rework, consume only review.implementer_handoffs.architecture_artifact_update as the branch-specific instructions; use the aggregate verdict and mandatory re-review baseline only as shared context. On user-requested rework, treat approve_implementation.feedback as mandatory when it applies to this owned slice and record an evidence-backed no-change determination when it does not.
 
 Architecture: ${{ input.architecture_draft }}
-Approval: ${{ input.approve_architecture }}'''
+Approval: ${{ input.approve_architecture }}
+Previous architecture-document result: ${{ input.architecture_artifact_update | default: "No previous architecture-document implementation." }}
+Review rework: ${{ input.review.implementer_handoffs.architecture_artifact_update | default: "No architecture-document review rework." }}
+Aggregate review verdict: ${{ input.review.verdict | default: "No prior review verdict." }}
+User feedback: ${{ input.approve_implementation.feedback | default: "No user-requested rework." }}'''
 
 [steps.implementation.branches.architecture_artifact_update.output]
 template = "../../shared/templates/visual-implementation-handoff-template.md"
 schema = "schemas/implementation-output.json"
 
+[steps.review]
+name = "Independent implementation review"
+kind = "fanout"
+max_parallel = 7
+
+[steps.review.input]
+branches = { first_of = ["${{ input.implementation.review_branches }}", "${{ input.architecture_draft.selected_review_steps }}"] }
+prompt = '''Aggregate only the review branches selected for this activation. Use the approved reasons-canvas-architecture, current implementation packet, delegated implementation outputs and reviewer outputs as evidence. Do not edit files or run replacement implementation.
+
+Return approved only when every selected reviewer passed with no actionable current-scope must-fix or should-fix finding. Otherwise return needs_changes with exact implementation_branches, one implementer_handoffs.<implementation_branch_id> entry per required owner, and review_branches as the mandatory re-review baseline. That baseline must include failed reviewers and reviewers whose surfaces the prescribed rework will touch. The next implementation owner may widen it after actual changes but may not narrow it. Preserve every actionable finding in verdict.findings. If review cannot finish safely, report a non-blocking stop from review.
+
+Architecture: ${{ input.architecture_draft }}
+Implementation packet: ${{ input.implementation }}
+Architect review: ${{ input.architect_review | default: "Not selected." }}
+Backend review: ${{ input.backend_review | default: "Not selected." }}
+Frontend review: ${{ input.frontend_review | default: "Not selected." }}
+Frontend taste review: ${{ input.frontend_taste_review | default: "Not selected." }}
+Security review: ${{ input.security_review | default: "Not selected." }}
+Privacy review: ${{ input.privacy_review | default: "Not selected." }}
+QA review: ${{ input.qa_review | default: "Not selected." }}'''
+
+[steps.review.output]
+template = "../../shared/templates/visual-review-verdict-template.md"
+schema = "schemas/review-fanout-output.json"
+
+[steps.review.next]
+match = "${{ output.outcome }}"
+
+[steps.review.next.cases]
+approved = "approve_implementation"
+needs_changes = "implementation"
+
+[steps.review.branches.architect_review]
+name = "Architect review"
+agent = "architecture_critic"
+
+[steps.review.branches.architect_review.input]
+role = "architect"
+prompt = '''Review the current implementation read-only against the approved reasons-canvas-architecture. Attack source ownership, cohesion, dependency direction, public contracts, compatibility, exact safeguards, rollback, and drift across implementation, tests, schemas and durable docs. Do not redesign the approved solution. Return passed only with no actionable current-scope must-fix or should-fix finding; otherwise return needs_changes with exact required_implementation_steps. Missing evidence uses a non-blocking stop from architect_review.
+
+Architecture: ${{ input.architecture_draft }}
+Reviewer handoff: ${{ input.implementation.reviewer_handoffs.architect_review | default: "No architect handoff." }}
+Backend result: ${{ input.backend_implementation | default: "Not selected." }}
+Frontend result: ${{ input.frontend_implementation | default: "Not selected." }}
+Architecture-document result: ${{ input.architecture_artifact_update | default: "Not selected." }}'''
+
+[steps.review.branches.architect_review.output]
+template = "../../shared/templates/visual-review-verdict-template.md"
+schema = "schemas/gate-review-verdict-output.json"
+
+[steps.review.branches.backend_review]
+name = "Backend review"
+agent = "backend_critic"
+
+[steps.review.branches.backend_review.input]
+role = "backend"
+prompt = '''Review the current implementation read-only for backend correctness, validated external boundaries, error handling and full structured Error logging, identifier/privacy-safe observability, concurrency and lifecycle behavior, resource limits, type precision, cohesion, and durable tests. Enforce the approved Canvas and repository contracts; do not invent scope. Return passed only with no actionable current-scope must-fix or should-fix finding; otherwise return needs_changes with exact required_implementation_steps. Missing evidence uses a non-blocking stop from backend_review.
+
+Architecture: ${{ input.architecture_draft }}
+Reviewer handoff: ${{ input.implementation.reviewer_handoffs.backend_review | default: "No backend handoff." }}
+Backend result: ${{ input.backend_implementation | default: "Not selected." }}
+Other implementation results: ${{ input.implementation }}'''
+
+[steps.review.branches.backend_review.output]
+template = "../../shared/templates/visual-review-verdict-template.md"
+schema = "schemas/gate-review-verdict-output.json"
+
+[steps.review.branches.frontend_review]
+name = "Frontend review"
+agent = "frontend_critic"
+
+[steps.review.branches.frontend_review.input]
+role = "frontend"
+prompt = '''Review the current implementation read-only for frontend correctness, data/state ownership, framework integration, accessibility behavior, component decomposition, colocation, design-system reuse, duplication, edge states, and durable tests. Enforce the approved Canvas and supplied design references; do not invent scope. Return passed only with no actionable current-scope must-fix or should-fix finding; otherwise return needs_changes with exact required_implementation_steps. Missing evidence uses a non-blocking stop from frontend_review.
+
+Architecture: ${{ input.architecture_draft }}
+Reviewer handoff: ${{ input.implementation.reviewer_handoffs.frontend_review | default: "No frontend handoff." }}
+Frontend result: ${{ input.frontend_implementation | default: "Not selected." }}
+Other implementation results: ${{ input.implementation }}'''
+
+[steps.review.branches.frontend_review.output]
+template = "../../shared/templates/visual-review-verdict-template.md"
+schema = "schemas/gate-review-verdict-output.json"
+
+[steps.review.branches.frontend_taste_review]
+name = "Frontend taste review"
+agent = "frontend_taste_critic"
+
+[steps.review.branches.frontend_taste_review.input]
+role = "frontend-taste"
+prompt = '''Review the current user-facing implementation read-only for visual hierarchy, typography and rhythm, spacing and composition, emphasis and contrast, focus-visible and target affordance, responsive containment, motion/reduced-motion, copy fit, and generic UI slop. Inspect actual rendered proof and compare it with supplied approved visual references when applicable; filenames or self-report are not visual evidence. Return passed only with no actionable current-scope must-fix or should-fix finding; otherwise return needs_changes with exact required_implementation_steps. Missing obtainable visual evidence uses a non-blocking stop from frontend_taste_review.
+
+Architecture: ${{ input.architecture_draft }}
+Reviewer handoff: ${{ input.implementation.reviewer_handoffs.frontend_taste_review | default: "No frontend-taste handoff." }}
+Frontend result: ${{ input.frontend_implementation | default: "Not selected." }}'''
+
+[steps.review.branches.frontend_taste_review.output]
+template = "../../shared/templates/visual-review-verdict-template.md"
+schema = "schemas/gate-review-verdict-output.json"
+
+[steps.review.branches.security_review]
+name = "Security review"
+agent = "security_critic"
+
+[steps.review.branches.security_review.input]
+role = "security"
+prompt = '''Review the current implementation read-only for trust boundaries, injection surfaces, authentication and authorization, secret handling, unsafe automation, dependency and supply-chain exposure, and fail-open behavior. Enforce the approved Canvas without inventing threats unrelated to the changed slice. Return passed only with no actionable current-scope must-fix or should-fix finding; otherwise return needs_changes with exact required_implementation_steps. Missing evidence uses a non-blocking stop from security_review.
+
+Architecture: ${{ input.architecture_draft }}
+Reviewer handoff: ${{ input.implementation.reviewer_handoffs.security_review | default: "No security handoff." }}
+Implementation results: ${{ input.implementation }}'''
+
+[steps.review.branches.security_review.output]
+template = "../../shared/templates/visual-review-verdict-template.md"
+schema = "schemas/gate-review-verdict-output.json"
+
+[steps.review.branches.privacy_review]
+name = "Privacy review"
+agent = "privacy_critic"
+
+[steps.review.branches.privacy_review.input]
+role = "privacy-data-safety"
+prompt = '''Review the current implementation read-only for data minimization, sensitive content exposure, logging and telemetry, retention, durable memory, user-context handling, and unsafe artifact contents. Opaque correlation identifiers are allowed unless they carry meaningful user data. Enforce the approved Canvas without inventing scope. Return passed only with no actionable current-scope must-fix or should-fix finding; otherwise return needs_changes with exact required_implementation_steps. Missing evidence uses a non-blocking stop from privacy_review.
+
+Architecture: ${{ input.architecture_draft }}
+Reviewer handoff: ${{ input.implementation.reviewer_handoffs.privacy_review | default: "No privacy handoff." }}
+Implementation results: ${{ input.implementation }}'''
+
+[steps.review.branches.privacy_review.output]
+template = "../../shared/templates/visual-review-verdict-template.md"
+schema = "schemas/gate-review-verdict-output.json"
+
+[steps.review.branches.qa_review]
+name = "QA review"
+agent = "qa_critic"
+
+[steps.review.branches.qa_review.input]
+role = "qa-reliability"
+prompt = '''Review the current implementation read-only for acceptance-criteria coverage, regression risk, edge and failure states, cancellation and resource limits, deterministic behavior, meaningful test oracles, and verification gaps. Tests must prove observable contracts rather than incidental serialization or implementation shape. Return passed only with no actionable current-scope must-fix or should-fix finding; otherwise return needs_changes with exact required_implementation_steps. Missing evidence uses a non-blocking stop from qa_review.
+
+Architecture: ${{ input.architecture_draft }}
+Reviewer handoff: ${{ input.implementation.reviewer_handoffs.qa_review | default: "No QA handoff." }}
+Implementation results: ${{ input.implementation }}'''
+
+[steps.review.branches.qa_review.output]
+template = "../../shared/templates/visual-review-verdict-template.md"
+schema = "schemas/gate-review-verdict-output.json"
+
+[steps.approve_implementation]
+name = "Approve implementation result"
+kind = "approval"
+
+[steps.approve_implementation.input]
+summary = "${{ input.implementation.summary }}"
+artifacts = ["${{ input.architecture_draft.artifacts }}"]
+
+[steps.approve_implementation.input.verdict]
+outcome = "${{ input.review.outcome }}"
+summary = "${{ input.review.verdict.summary }}"
+findings = "${{ input.review.verdict.findings }}"
+
+[steps.approve_implementation.input.verdict.include_when]
+selector = "${{ input.implementation.outcome }}"
+equals = "ready_for_review"
+
+[steps.approve_implementation.next]
+match = "${{ output.approval }}"
+
+[steps.approve_implementation.next.cases]
+approved = "done"
+rejected = "implementation"
+
 [steps.done]
-name = "Ready for independent code review"
+name = "Done"
 kind = "done"
 
 [steps.done.input]
-prompt = '''Return the verified development packet with status ready_for_review. Architecture challenge is complete or explicitly overridden at the user gate; independent post-implementation code review has not run. Keep that distinction and the separate review next action explicit. Do not publish, commit, push or claim the task fully reviewed.
+prompt = '''Project the explicitly approved implementation result, latest independent review verdict, and verification evidence. If review still needs changes, state that the configured three-cycle implementation/review limit ended with unresolved findings and the user explicitly accepted the result; never claim review passed. If implementation.outcome is ready_for_user_approval, state that user-requested rework was implemented and approved without another automated review cycle. Do not publish, commit, push or release.
 
-Development packet: ${{ input.implementation }}'''
+Implementation approval: ${{ input.approve_implementation }}
+Implementation packet: ${{ input.implementation }}
+Review result: ${{ input.review | default: "No new review after user-requested rework." }}'''

@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/build-it/gate-review-verdict-output",
+  "title": "Build It Review Branch Verdict",
+  "description": "Read-only reviewer result for one selected implementation-review surface.",
+  "type": "object",
+  "required": [
+    "outcome",
+    "verdict"
+  ],
+  "properties": {
+    "outcome": {
+      "enum": [
+        "passed",
+        "needs_changes"
+      ]
+    },
+    "verdict": {
+      "type": "object",
+      "required": [
+        "summary",
+        "evidence_checked",
+        "findings"
+      ],
+      "properties": {
+        "summary": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "evidence_checked": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "required_implementation_steps": {
+      "$ref": "#/$defs/implementationBranches"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/result"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "passed"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "required_implementation_steps"
+          ]
+        },
+        "properties": {
+          "verdict": {
+            "type": "object",
+            "properties": {
+              "findings": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "needs_changes"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "required_implementation_steps"
+        ],
+        "properties": {
+          "verdict": {
+            "type": "object",
+            "properties": {
+              "findings": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "implementationBranches": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "backend_implementation",
+          "frontend_implementation",
+          "architecture_artifact_update"
+        ]
+      }
+    }
+  }
+}

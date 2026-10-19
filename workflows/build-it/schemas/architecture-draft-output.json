@@ -9,6 +9,7 @@
     "task_context",
     "implementer_owners",
     "selected_implementation_steps",
+    "selected_review_steps",
     "reviewer_plan",
     "artifacts"
   ],
@@ -68,6 +69,23 @@
         ]
       },
       "uniqueItems": true
+    },
+    "selected_review_steps": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "architect_review",
+          "backend_review",
+          "frontend_review",
+          "frontend_taste_review",
+          "security_review",
+          "privacy_review",
+          "qa_review"
+        ]
+      },
+      "description": "Exact review branches that must run after implementation."
     },
     "reviewer_plan": {
       "type": "object",

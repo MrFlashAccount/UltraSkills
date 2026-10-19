@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MrFlashAccount/Skills/schemas/workflow/build-it/review-fanout-output",
+  "title": "Build It Review Fanout Owner Output",
+  "description": "Aggregate decision after all selected internal review branches finish.",
+  "type": "object",
+  "required": [
+    "outcome",
+    "verdict"
+  ],
+  "properties": {
+    "outcome": {
+      "enum": [
+        "approved",
+        "needs_changes"
+      ]
+    },
+    "implementation_branches": {
+      "$ref": "#/$defs/implementationBranches"
+    },
+    "review_branches": {
+      "$ref": "#/$defs/reviewBranches"
+    },
+    "implementer_handoffs": {
+      "$ref": "#/$defs/implementerHandoffs"
+    },
+    "verdict": {
+      "type": "object",
+      "required": [
+        "summary",
+        "reviewed_branches",
+        "failed_review_branches",
+        "findings"
+      ],
+      "properties": {
+        "summary": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "reviewed_branches": {
+          "$ref": "#/$defs/reviewBranches"
+        },
+        "failed_review_branches": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "architect_review",
+              "backend_review",
+              "frontend_review",
+              "frontend_taste_review",
+              "security_review",
+              "privacy_review",
+              "qa_review"
+            ]
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/MrFlashAccount/Skills/schemas/workflow/baton#/$defs/artifact"
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "approved"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "implementation_branches"
+              ]
+            },
+            {
+              "required": [
+                "review_branches"
+              ]
+            },
+            {
+              "required": [
+                "implementer_handoffs"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "verdict": {
+            "type": "object",
+            "properties": {
+              "failed_review_branches": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "findings": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "needs_changes"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "implementation_branches",
+          "review_branches",
+          "implementer_handoffs"
+        ],
+        "properties": {
+          "verdict": {
+            "type": "object",
+            "properties": {
+              "failed_review_branches": {
+                "type": "array",
+                "minItems": 1
+              },
+              "findings": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "implementation_branches": {
+            "type": "array",
+            "contains": {
+              "const": "backend_implementation"
+            }
+          }
+        },
+        "required": [
+          "implementation_branches"
+        ]
+      },
+      "then": {
+        "properties": {
+          "implementer_handoffs": {
+            "type": "object",
+            "required": [
+              "backend_implementation"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "implementation_branches": {
+            "type": "array",
+            "contains": {
+              "const": "frontend_implementation"
+            }
+          }
+        },
+        "required": [
+          "implementation_branches"
+        ]
+      },
+      "then": {
+        "properties": {
+          "implementer_handoffs": {
+            "type": "object",
+            "required": [
+              "frontend_implementation"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "implementation_branches": {
+            "type": "array",
+            "contains": {
+              "const": "architecture_artifact_update"
+            }
+          }
+        },
+        "required": [
+          "implementation_branches"
+        ]
+      },
+      "then": {
+        "properties": {
+          "implementer_handoffs": {
+            "type": "object",
+            "required": [
+              "architecture_artifact_update"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "implementationBranches": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "backend_implementation",
+          "frontend_implementation",
+          "architecture_artifact_update"
+        ]
+      }
+    },
+    "reviewBranches": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "architect_review",
+          "backend_review",
+          "frontend_review",
+          "frontend_taste_review",
+          "security_review",
+          "privacy_review",
+          "qa_review"
+        ]
+      }
+    },
+    "implementerHandoffs": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "backend_implementation": {
+          "$ref": "#/$defs/handoff"
+        },
+        "frontend_implementation": {
+          "$ref": "#/$defs/handoff"
+        },
+        "architecture_artifact_update": {
+          "$ref": "#/$defs/handoff"
+        }
+      },
+      "additionalProperties": false
+    },
+    "handoff": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": true
+    }
+  }
+}

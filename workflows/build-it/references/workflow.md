@@ -8,12 +8,18 @@
 5. Delegate approved disjoint zones to backend, frontend and/or architecture-document workers using
    `../../shared/delegate/delegated-role-task-template.md` and the compact focus
    from `references/roles/implementers.md`. Never implement their work in the parent.
-6. Verify all selected work against the exact approved Canvas and hand off for
-   separate independent code review. Review status is `not_run`.
+6. Verify all selected work against the exact approved Canvas and prepare the
+   selected reviewer handoffs.
+7. Run the independent internal review fanout. Any actionable must-fix or
+   should-fix finding returns exact owner-scoped handoffs to implementation.
+8. Repeat implementation and the mandatory re-review fanout for at most three
+   review cycles. Reaching the limit preserves unresolved findings at the user gate.
+9. User approves the reviewed result or requests scoped rework. User-requested
+   rework returns directly to the same gate without another automatic review cycle.
 
-No separate research, prepared execution-plan dependency, code-review execution
-or transport. The Canvas explains behavior/structure through diagrams and a
-source tree; machine routing stays in structured output. No human tables.
+No separate research, prepared execution-plan dependency or transport. The Canvas
+explains behavior/structure through diagrams and a source tree; machine routing
+stays in structured output. No human tables.
 
 In-scope failed verification is work to fix and rerun. Missing authority, unsafe
 external verification, ambiguous ownership, contradictions and required redesign

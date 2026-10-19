@@ -13,9 +13,10 @@ A missing user-owned direction, API/compatibility choice or implementation-criti
 fact uses a focused non-blocking stop. Unknowns are not fabricated. The architect
 produces the executable design and the user approves it before code changes.
 
-Implementation consumes that approved Canvas, actual gate decision and disjoint
-backend/frontend/architect owner zones. The parent orchestrates delegated workers rather
-than implementing their zones. Missing delegation or required role material
-uses the runner's non-blocking-stop channel; it does not authorize fallback.
+Implementation consumes that approved Canvas, actual gate decision, disjoint
+backend/frontend/architect owner zones, and exact selected review branches. The
+parent orchestrates delegated workers rather than implementing their zones.
+Missing delegation or required role material uses the runner's non-blocking-stop
+channel; it does not authorize fallback.
 
-Publication and post-implementation independent review stay outside Build It.
+Independent post-implementation review is part of Build It. Publication stays outside.
