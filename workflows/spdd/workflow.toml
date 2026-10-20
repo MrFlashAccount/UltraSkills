@@ -504,15 +504,14 @@ max_parallel = 3
 
 [steps.implementation.input]
 branches = { first_of = ["${{ input.review.implementation_branches }}", "${{ input.architecture_draft.selected_implementation_steps }}"] }
-prompt = '''This is the implementation fanout owner phase. Inspect only outputs from implementation branches selected for the current activation.
-Use the `reasons-canvas-architecture` artifact from `architecture_draft` as the approved execution contract.
-Confirm every selected branch completed, supplied verification evidence, and stayed within scope.
+prompt = '''This is the implementation fanout owner routing phase. Aggregate only schema-accepted outputs from implementation branches selected for the current activation.
+The runner has already accepted every selected branch output before this owner runs. Treat each output as that branch's completed implementation claim; do not independently inspect the repository, run checks, open artifact bodies, compare implementation against the architecture contract, or judge correctness, completeness, verification sufficiency, or scope compliance. Those judgments belong to the review fanout.
+Preserve each branch's stated limitations, missing evidence, unverified claims, changed files, verification summary, and artifact metadata accurately in the aggregate summary and reviewer handoffs so reviewers can evaluate them. Do not request implementation rework from this owner phase.
 On the first pass, architecture_draft.selected_review_steps is the mandatory review baseline. After rework, review.review_branches is the mandatory re-review baseline.
-You may widen that baseline when actual changed files or touched surfaces require another planned or previously skipped reviewer. Never remove a mandatory reviewer.
+You may widen that baseline only when changed files or touched surfaces explicitly reported by branch handoffs require another planned or previously skipped reviewer. Never remove a mandatory reviewer.
 Always emit a concise user-facing summary of the current implementation state and copy every selected branch's `implementation-handoff` artifact metadata into artifacts[] without embedding or merging artifact bodies.
-When the latest approve_implementation decision is rejected, verify that every selected branch addressed the user feedback within its owned scope, then return outcome ready_for_user_approval without review_branches or reviewer_handoffs. This user-requested rework returns directly to the same user gate; do not silently insert another automated review cycle.
+When the latest approve_implementation decision is rejected, aggregate what each selected branch reports about the user feedback, then return outcome ready_for_user_approval without review_branches or reviewer_handoffs. Do not independently verify those claims or silently insert another automated review cycle.
 Otherwise return outcome ready_for_review with review_branches as the exact next review fanout and one reviewer_handoffs.<review_branch_id> entry per selected reviewer.
-If incomplete, report a non-blocking stop with non_blocking_stop.source_step_id = implementation.
 
 Input context:
 - Approved architecture Canvas artifacts: ${{ input.architecture_draft.artifacts | default: "No architecture Canvas artifacts are available in input context." }}
