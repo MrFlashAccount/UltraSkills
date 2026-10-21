@@ -165,6 +165,19 @@ does not clear it; successful completion removes all entries for that target and
 preserves entries for other targets. Reusing an active transition id replaces
 only that entry and returns a warning. The collection is current unresolved
 state, not historical pointer feedback.
+Pointer moves to fanout targets preflight owner prompt dependencies that are not
+produced by the selected branches and validate referenced persisted inputs
+against their current output schemas before any mutation is committed. Active
+pointer feedback targeting the current cursor is listed as a resumable
+transition. Resuming it keeps the existing activation id and accepted outputs;
+it does not replay fanout creation. When its current fanout batch is fully
+accepted, resume applies that batch to the same activation and renders only the
+owner request.
+When a legacy pointer-recovered activation is already in progress and the
+primary `input.branches.first_of` path is absent, fanout owner rendering
+transiently projects the durable `selected_branch_ids` at that path. The
+projection requires unresolved pointer feedback targeting that owner, is
+render-only, and does not mutate the persisted producer output.
 
 Commands returned in host responses are rendered with the absolute path to `workflow-runner.mjs` and an explicit absolute `--runs-root`, quoted for shell execution, so a worker or host can run them from any current working directory. For human-authored commands, set `ORBITA_SKILL_ROOT` to the directory containing `skills/orbita/SKILL.md` and invoke CLI entrypoints through `$ORBITA_SKILL_ROOT/lib/entrypoints/cli/...`; do not rely on the current working directory.
 

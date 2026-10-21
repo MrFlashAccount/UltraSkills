@@ -607,23 +607,25 @@ test('runner pointer API rejects whitespace-only feedback without mutating durab
   assert.deepEqual(snapshot(run.paths), beforeRejected);
 });
 
-test('runner pointer API rejects stale transition ids and wrong leases without mutation', async () => {
+test('runner pointer API resumes an active transition id and rejects wrong leases without mutation', async () => {
   const run = await createClaimedRun('api-stale');
   await next({ ...run, now: new Date('2026-06-01T10:00:01.000Z') });
   await acceptCurrentWorkerOutput({ ...run, stepId: 'prepare', summary: 'prepared stale' });
   await continueRun({ ...run, now: new Date('2026-06-01T10:02:00.000Z') });
   const listed = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:03:00.000Z') });
   await movePointer({ ...run, transitionId: listed.transitions[0].id, feedback: 'Rework the stale preparation.', now: new Date('2026-06-01T10:04:00.000Z') });
-  const beforeRejected = snapshot(run.paths);
-
-  await assert.rejects(
-    () => movePointer({ ...run, transitionId: listed.transitions[0].id, feedback: 'This transition is stale.', now: new Date('2026-06-01T10:05:00.000Z') }),
-    /stale, unavailable, or not a state-bearing predecessor/,
-  );
-  const afterStaleRejected = snapshot(run.paths);
-  assert.deepEqual(afterStaleRejected.baton, beforeRejected.baton);
-  assert.deepEqual(afterStaleRejected.index, beforeRejected.index);
-  assert.equal(afterStaleRejected.history, beforeRejected.history);
+  const active = await listPointerTransitions({ ...run, now: new Date('2026-06-01T10:04:30.000Z') });
+  const resume = active.transitions.find((transition) => transition.id === listed.transitions[0].id);
+  assert.equal(resume?.direction, 'resume');
+  const resumed = await movePointer({
+    ...run,
+    transitionId: resume.id,
+    feedback: 'Resume the same preparation activation.',
+    now: new Date('2026-06-01T10:05:00.000Z'),
+  });
+  assert.deepEqual(resumed.warnings, [`overwrote active pointer transition '${resume.id}'`]);
+  assert.equal(snapshot(run.paths).baton.pointerTransitions[resume.id].feedback, 'Resume the same preparation activation.');
+  const afterResume = snapshot(run.paths);
 
   await assert.rejects(
     () => listPointerTransitions({ ...run, leaseToken: 'wrong-token', now: new Date('2026-06-01T10:05:00.000Z') }),
@@ -634,7 +636,7 @@ test('runner pointer API rejects stale transition ids and wrong leases without m
     /workflow run is occupied/,
   );
 
-  assert.deepEqual(snapshot(run.paths), afterStaleRejected);
+  assert.deepEqual(snapshot(run.paths), afterResume);
 });
 
 test('runner pointer API allows rollback from terminal cursors', async () => {

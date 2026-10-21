@@ -4,6 +4,7 @@ import { applyWorkflowOutput } from '../use-cases/ApplyWorkflowOutput.mjs';
 import { validateRunnerAcceptedOutput } from '../use-cases/WorkflowRunnerOutputValidation.mjs';
 import { acceptedOutputHistoryDetails, orchestratorDebugHistoryDetails, publicFailureHistoryDetails, transitionHistoryDetails } from '../runner/history-projection.mjs';
 import { pointerMoveHistoryDetails, projectPointerTransitions, resolvePointerMove } from '../runner/pointer-transition-projection.mjs';
+import { assertPointerMoveTargetPreflight } from '../runner/pointer-transition-preflight.mjs';
 import { renderAppliedResponse } from '../use-cases/ContinueRun.mjs';
 import { resumeCurrentStep, runNext } from '../use-cases/RunNext.mjs';
 import { createWorkflowRunnerCommand } from '../use-cases/WorkflowRunnerCommand.mjs';
@@ -52,6 +53,7 @@ const workflowRunnerCommand = createWorkflowRunnerCommand({
   pointerMoveHistoryDetails,
   projectPointerTransitions,
   resolvePointerMove,
+  assertPointerMoveTargetPreflight,
   renderAppliedResponse,
   resumeCurrentStep,
   runNext,
