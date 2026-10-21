@@ -106,6 +106,20 @@ function backwardStateTransitions({ workflow, current, baton }) {
   return transitions;
 }
 
+function activeCurrentTransitions({ current, baton }) {
+  const transitions = [];
+  for (const [id, pointerTransition] of Object.entries(baton.pointerTransitions ?? {})) {
+    if (pointerTransition.targetStepId !== current.cursor) continue;
+    transitions.push({
+      id,
+      direction: 'resume',
+      from: current,
+      to: current,
+    });
+  }
+  return transitions;
+}
+
 function transitionIsRunningSingleStep(workflow, transition) {
   const toStepId = normalizeCursor(transition.to.cursor);
   const step = workflow.steps?.[toStepId];
@@ -124,7 +138,10 @@ function uniqueTransitions(transitions) {
 export function projectPointerTransitions({ workflow, baton } = {}) {
   new Baton(baton).validateAgainst(workflow);
   const current = pointerPosition(baton.cursor, baton.status);
-  const projected = backwardStateTransitions({ workflow, current, baton });
+  const projected = [
+    ...activeCurrentTransitions({ current, baton }),
+    ...backwardStateTransitions({ workflow, current, baton }),
+  ];
 
   const transitions = uniqueTransitions(projected
     .filter((transition) => transitionIsRunningSingleStep(workflow, transition))
@@ -172,7 +189,7 @@ export function pointerMoveHistoryDetails({ transition, overwrittenPointerTransi
     `- target position id: ${transition.id}`,
     `- pointer move edge: cursor=${transition.from.display} status=${transition.from.status} -> cursor=${transition.to.display} status=${transition.to.status}`,
     '- append-only history preserved: true',
-    '- target step re-entered from current baton: true',
+    `- target step ${transition.direction === 'resume' ? 'resumed without a new activation' : 're-entered from current baton'}: true`,
     `- pointer feedback recorded in baton: true`,
     ...(overwrittenPointerTransitionId ? [`- existing pointer transition overwritten: id=${overwrittenPointerTransitionId}`] : []),
   ];

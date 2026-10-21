@@ -18,6 +18,7 @@ export function createWorkflowRunnerCommand({
   pointerMoveHistoryDetails,
   projectPointerTransitions,
   resolvePointerMove,
+  assertPointerMoveTargetPreflight,
   renderAppliedResponse,
   resumeCurrentStep,
   runNext,
@@ -525,6 +526,8 @@ export function createWorkflowRunnerCommand({
   }
 
   const { listPointerTransitions, movePointer } = createWorkflowRunnerPointerRecovery({
+    applyWorkflowOutput,
+    outputForCurrentState,
     migrateLegacyWorkflowRunsRootIfNeeded,
     resolveRunPaths,
     assertPreLockWorkerLeaseAuthority,
@@ -537,6 +540,8 @@ export function createWorkflowRunnerCommand({
     recoverDurableCommit,
     resolvePointerMove,
     renderStepEntryHostResponse,
+    renderCurrentHostResponse,
+    assertPointerMoveTargetPreflight,
     writePersistedRunStateUpdate,
     pointerMoveHistoryDetails,
     persistRenewedRunAuthority,

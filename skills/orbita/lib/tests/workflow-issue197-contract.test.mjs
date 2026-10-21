@@ -66,17 +66,16 @@ test('Orbita skill releases a lease only through the explicit matching-token com
   assert.match(skillText, /workflow-runs\.mjs" release --run-id <run-id> --lease-token "\$lease_token"/);
 });
 
-test('Orbita skill explains direct rollback to state-bearing workflow predecessors', () => {
+test('Orbita skill explains direct rollback and current-target resume transitions', () => {
   const skillText = readFileSync(path.join(REPO_ROOT, 'skills/orbita/SKILL.md'), 'utf8');
-  assert.match(skillText, /state-backed predecessors only/);
-  assert.match(skillText, /Choose once/);
+  assert.match(skillText, /state-backed predecessors and unresolved current-target `resume` entries/);
+  assert.match(skillText, /Resume keeps activation and accepted outputs/);
   assert.match(skillText, /--feedback '<why repeat>'/);
-  assert.match(skillText, /`pointerTransitions` keeps feedback by id across resume/);
-  assert.match(skillText, /Only its target gets it, including inline approvals/);
-  assert.match(skillText, /Same id replaces itself and warns/);
-  assert.match(skillText, /Target done removes its entries; other feedback stays/);
+  assert.match(skillText, /Feedback reaches only its target/);
+  assert.match(skillText, /same id replaces with warning/);
+  assert.match(skillText, /Completion clears its\s+entries, preserving others/);
   assert.match(skillText, /Re-entry needs no acknowledgement/);
-  assert.match(skillText, /invalidates only target output\/stop/);
+  assert.match(skillText, /invalidates\s+only target output\/stop/);
   assert.doesNotMatch(skillText, /acknowledge-retained-state/);
 });
 

@@ -76,6 +76,20 @@ single-cursor positions, including a completed `done` run, may move backward to
 a state-bearing non-terminal predecessor; terminal status must not by itself make pointer
 recovery unsupported. Array cursors are rejected by the baton schema and cannot
 enter pointer recovery.
+Before persisting a move to a fanout, the runner preflights every owner prompt
+dependency except outputs deferred to branches selected for that activation. A
+missing upstream input or referenced persisted output that no longer satisfies
+the current workflow schema rejects the move without mutating baton, requests,
+history, or authority. An unresolved pointer transition targeting the current
+cursor remains publicly listable as a `resume` transition; selecting it resumes
+the durable activation instead of incrementing its activation id. If every
+current fanout output is already accepted, resume applies that durable batch to
+the same activation and renders its owner instead of reissuing branch requests.
+For an already-active legacy pointer-recovered fanout whose primary
+`input.branches.first_of` path is absent, owner prompt rendering transiently
+projects the activation's durable `selected_branch_ids` into that path. This
+compatibility projection is gated by unresolved pointer feedback for the owner,
+exists only in the render clone, and never rewrites accepted workflow state.
 Pointer moves re-enter the target without an extra acknowledgement gate.
 Every current worker and inline-approval instruction projection includes only
 unresolved pointer feedback whose `targetStepId` matches that step, so nested

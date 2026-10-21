@@ -5,7 +5,9 @@
  */
 import { WorkflowRuntimeError } from '../errors.mjs';
 import { evaluatePathExpression } from '../entities/Step/expressions/index.mjs';
-import { appendPromptText } from './prompt-text.mjs';
+import { parsePathExpression } from './expression.mjs';
+import { appendPromptText, normalizePromptText } from './prompt-text.mjs';
+import { extractPromptInterpolations } from './prompt-interpolation.mjs';
 import { isDangerousObjectKey, isReservedStateKey } from './state-keys.mjs';
 
 export const FANOUT_STATE_KEY = 'fanouts';
@@ -254,5 +256,66 @@ export function batonForFanoutPrompt({ workflow, baton, entry }) {
   for (const branchId of Object.keys(ownerStep.branches ?? {})) {
     if (!selected.has(branchId)) delete projected.state[branchId];
   }
+  projectSelectedBranchIdsForLegacyPointerOwnerInput({
+    projected,
+    ownerStepId,
+    ownerStep,
+    selectedBranchIds: [...selected],
+  });
   return projected;
+}
+
+function primaryFirstOfExpression(ownerStep) {
+  const selection = ownerStep?.input?.branches;
+  if (!selection || typeof selection !== 'object' || Array.isArray(selection)) return undefined;
+  const [primary] = selection.first_of ?? [];
+  return typeof primary === 'string' ? primary : undefined;
+}
+
+function ownerPromptReferencesExpression(ownerStep, expression) {
+  const prompt = normalizePromptText(ownerStep?.input?.prompt);
+  return extractPromptInterpolations(prompt).some((interpolation) => (
+    interpolation.expression.root === expression.root
+    && interpolation.expression.path.join('.') === expression.path.join('.')
+  ));
+}
+
+function pathResolution(value, pathSegments) {
+  let current = value;
+  for (const segment of pathSegments) {
+    if (!current || typeof current !== 'object' || Array.isArray(current) || !Object.hasOwn(current, segment)) {
+      return { found: false };
+    }
+    current = current[segment];
+  }
+  return { found: true, value: current };
+}
+
+function writeProjectedPath(target, pathSegments, value) {
+  let current = target;
+  for (const segment of pathSegments.slice(0, -1)) {
+    const existing = current[segment];
+    if (!existing || typeof existing !== 'object' || Array.isArray(existing)) current[segment] = {};
+    else current[segment] = { ...existing };
+    current = current[segment];
+  }
+  current[pathSegments.at(-1)] = [...value];
+}
+
+function hasActivePointerTransition(projected, ownerStepId) {
+  return Object.values(projected.pointerTransitions ?? {}).some(
+    (transition) => transition.targetStepId === ownerStepId,
+  );
+}
+
+function projectSelectedBranchIdsForLegacyPointerOwnerInput({ projected, ownerStepId, ownerStep, selectedBranchIds }) {
+  if (!hasActivePointerTransition(projected, ownerStepId)) return;
+  const source = primaryFirstOfExpression(ownerStep);
+  if (!source) return;
+  const expression = parsePathExpression(source);
+  if (expression.root !== 'input' || expression.path.length < 2) return;
+  if (!ownerPromptReferencesExpression(ownerStep, expression)) return;
+  const existing = pathResolution(projected.state, expression.path);
+  if (existing.found && (!Array.isArray(existing.value) || existing.value.length > 0)) return;
+  writeProjectedPath(projected.state, expression.path, selectedBranchIds);
 }

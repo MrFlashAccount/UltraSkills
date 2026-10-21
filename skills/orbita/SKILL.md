@@ -142,6 +142,10 @@ bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" list-pointer-tr
 bun "$ORBITA_SKILL_ROOT/lib/entrypoints/cli/workflow-runner.mjs" move-pointer --run-id <run-id> --transition-id <id> --feedback '<why repeat>' --lease-token "$lease_token"
 ```
 
-List includes state-backed predecessors only. Choose once. `pointerTransitions` keeps feedback by id across resume. Only its target gets it, including inline approvals. Same id replaces itself and warns. Target done removes its entries; other feedback stays. Re-entry needs no acknowledgement and invalidates only target output/stop. No match: stop. Never edit baton/history.
+List state-backed predecessors and unresolved current-target `resume` entries.
+Resume keeps activation and accepted outputs. Feedback reaches only its target,
+including inline approvals; same id replaces with warning. Completion clears its
+entries, preserving others. Re-entry needs no acknowledgement and invalidates
+only target output/stop. No match: stop. Never edit baton/history.
 
 On `done`, stop and report the terminal embedded JSON using its workflow-specific baton/projection; do not assume a generic `result` field.
